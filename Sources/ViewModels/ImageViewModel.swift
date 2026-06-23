@@ -11,6 +11,8 @@ class ImageViewModel: ObservableObject {
     @Published var showExportSheet: Bool = false
     @Published var inspectorVisible: Bool = false
     @Published var isSavingMetadata: Bool = false
+    @Published var navSidebarVisible: Bool = true
+    @Published var selectedNavItem: NavItem? = .mediathek
 
     private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()

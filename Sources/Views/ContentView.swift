@@ -6,6 +6,12 @@ struct ContentView: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            if viewModel.navSidebarVisible {
+                NavSidebarView()
+                    .environmentObject(viewModel)
+                Divider()
+            }
+
             VStack(spacing: 0) {
                 DetailView()
                     .environmentObject(viewModel)
@@ -90,6 +96,12 @@ struct DetailView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
+                Button(action: { viewModel.navSidebarVisible.toggle() }) {
+                    Image(systemName: "sidebar.left")
+                        .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
+                }
+                .help("Navigation ein-/ausblenden")
+
                 Button(action: { viewModel.previous() }) {
                     Image(systemName: "chevron.left")
                 }
