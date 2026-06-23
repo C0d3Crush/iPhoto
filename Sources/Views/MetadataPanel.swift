@@ -2,16 +2,26 @@ import SwiftUI
 
 struct MetadataPanel: View {
     @EnvironmentObject var viewModel: ImageViewModel
+
+    var body: some View {
+        MetadataPanelContent()
+            .environmentObject(viewModel)
+            .id(viewModel.collection.currentDocument?.id)
+    }
+}
+
+private struct MetadataPanelContent: View {
+    @EnvironmentObject var viewModel: ImageViewModel
     @State private var editedEntries: [MetadataEntry] = []
     @State private var saveError: String? = nil
 
-    private var entries: [MetadataEntry] {
+    private var sourceEntries: [MetadataEntry] {
         viewModel.collection.currentDocument?.metadata ?? []
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            if entries.isEmpty {
+            if editedEntries.isEmpty {
                 Spacer()
                 Text(viewModel.currentImage == nil ? "Kein Bild geöffnet" : "Keine Metadaten")
                     .foregroundColor(.secondary)
@@ -19,25 +29,21 @@ struct MetadataPanel: View {
                 Spacer()
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
                         ForEach(MetadataCategory.allCases, id: \.self) { category in
-                            let catEntries = editedEntries.filter { $0.category == category }
-                            if !catEntries.isEmpty {
-                                Section(header:
-                                    Text(category.rawValue)
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.secondary)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color(NSColor.windowBackgroundColor))
-                                ) {
-                                    ForEach(catEntries.indices, id: \.self) { i in
-                                        let globalIndex = editedEntries.firstIndex(where: { $0.id == catEntries[i].id })!
-                                        MetadataRowView(entry: $editedEntries[globalIndex])
-                                        Divider().padding(.leading, 8)
-                                    }
+                            let indices = editedEntries.indices.filter { editedEntries[$0].category == category }
+                            if !indices.isEmpty {
+                                Text(category.rawValue)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                ForEach(indices, id: \.self) { idx in
+                                    MetadataRowView(entry: $editedEntries[idx])
+                                    Divider().padding(.leading, 8)
                                 }
                             }
                         }
@@ -71,12 +77,12 @@ struct MetadataPanel: View {
                 }
             }
         }
-        .onChange(of: entries.map { $0.id }) { _ in
-            editedEntries = entries
+        .onChange(of: sourceEntries.count) { _ in
+            editedEntries = sourceEntries
             saveError = nil
         }
         .onAppear {
-            editedEntries = entries
+            editedEntries = sourceEntries
         }
     }
 
