@@ -6,7 +6,7 @@ struct SidebarView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: true) {
-                LazyHStack(spacing: 4) {
+                LazyHStack(spacing: 12) {
                     ForEach(Array(viewModel.collection.documents.enumerated()), id: \.element.id) { index, doc in
                         ThumbnailCell(document: doc, isSelected: index == viewModel.collection.currentIndex)
                             .id(index)
