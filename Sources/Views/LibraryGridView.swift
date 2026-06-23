@@ -3,7 +3,7 @@ import SwiftUI
 struct LibraryGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
-    private let columns = [GridItem(.adaptive(minimum: 88, maximum: 88), spacing: 12)]
+    private let columns = [GridItem(.adaptive(minimum: 80, maximum: 80), spacing: 12)]
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -23,7 +23,7 @@ struct LibraryGridView: View {
                         ForEach(Array(viewModel.collection.documents.enumerated()), id: \.element.id) { index, doc in
                             ThumbnailCell(document: doc, isSelected: index == viewModel.collection.currentIndex)
                                 .id(index)
-                                .frame(width: 88)
+                                .frame(width: 80)
                                 .contentShape(Rectangle())
                                 .onTapGesture { viewModel.selectDocument(at: index) }
                         }

@@ -10,7 +10,7 @@ struct SidebarView: View {
                     ForEach(Array(viewModel.collection.documents.enumerated()), id: \.element.id) { index, doc in
                         ThumbnailCell(document: doc, isSelected: index == viewModel.collection.currentIndex)
                             .id(index)
-                            .frame(width: 88)
+                            .frame(width: 80)
                             .contentShape(Rectangle())
                             .onTapGesture { viewModel.selectDocument(at: index) }
                     }
