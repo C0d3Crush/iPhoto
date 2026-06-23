@@ -5,15 +5,23 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
     var body: some View {
-        NavigationView {
-            SidebarView()
-                .environmentObject(viewModel)
-                .frame(minWidth: 140, idealWidth: 160, maxWidth: 220)
-
+        VStack(spacing: 0) {
             DetailView()
                 .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            SidebarView()
+                .environmentObject(viewModel)
+                .frame(height: 130)
         }
-        .navigationTitle(viewModel.windowTitle)
+        .onChange(of: viewModel.windowTitle) { title in
+            NSApp.mainWindow?.title = title
+        }
+        .onAppear {
+            NSApp.mainWindow?.title = viewModel.windowTitle
+        }
         .sheet(isPresented: $viewModel.showExportSheet) {
             ExportSheet(
                 documents: viewModel.collection.documents,
@@ -73,7 +81,6 @@ struct DetailView: View {
             DropTargetView()
                 .environmentObject(viewModel)
         }
-        .navigationSubtitle(subtitleText)
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button(action: { viewModel.previous() }) {
