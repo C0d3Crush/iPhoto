@@ -8,7 +8,6 @@ struct ZoomableScrollView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> PanScrollView {
         let scrollView = PanScrollView()
-        scrollView.setupGestures()
         scrollView.allowsMagnification = true
         scrollView.minMagnification = 0.01
         scrollView.maxMagnification = 32.0
@@ -16,7 +15,6 @@ struct ZoomableScrollView: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
 
-        // CenteredClipView keeps the document centered whenever it's smaller than the viewport
         let clipView = CenteredClipView()
         clipView.drawsBackground = true
         clipView.backgroundColor = .windowBackgroundColor
@@ -47,7 +45,13 @@ struct ZoomableScrollView: NSViewRepresentable {
 
         NotificationCenter.default.addObserver(
             context.coordinator,
-            selector: #selector(Coordinator.magnificationChanged(_:)),
+            selector: #selector(Coordinator.liveMagnifyBegan(_:)),
+            name: NSScrollView.willStartLiveMagnifyNotification,
+            object: scrollView
+        )
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.liveMagnifyEnded(_:)),
             name: NSScrollView.didEndLiveMagnifyNotification,
             object: scrollView
         )
@@ -74,24 +78,22 @@ struct ZoomableScrollView: NSViewRepresentable {
                 coordinator.fitToWindow()
                 self.fitToWindow = false
             }
-        } else if abs(scrollView.magnification - zoomFactor) > 0.001 {
+        } else if !scrollView.isLiveMagnifying,
+                  abs(scrollView.magnification - zoomFactor) > 0.001 {
+            // Only push zoomFactor → scrollView when not mid-gesture (prevents fighting the pinch)
             scrollView.magnification = zoomFactor
         }
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(zoomFactor: $zoomFactor)
-    }
+    func makeCoordinator() -> Coordinator { Coordinator(zoomFactor: $zoomFactor) }
 
     class Coordinator: NSObject {
         var zoomFactor: Binding<CGFloat>
         weak var imageView: NSImageView?
-        weak var scrollView: NSScrollView?
+        weak var scrollView: PanScrollView?
         var lastCGImage: CGImage?
 
-        init(zoomFactor: Binding<CGFloat>) {
-            self.zoomFactor = zoomFactor
-        }
+        init(zoomFactor: Binding<CGFloat>) { self.zoomFactor = zoomFactor }
 
         func fitToWindow() {
             guard let scrollView = scrollView,
@@ -100,38 +102,35 @@ struct ZoomableScrollView: NSViewRepresentable {
             let viewSize = scrollView.contentSize
             let imgSize = img.size
             guard imgSize.width > 0, imgSize.height > 0 else { return }
-
-            // Layout not complete yet — retry next runloop until size is available
             guard viewSize.width > 0, viewSize.height > 0 else {
                 DispatchQueue.main.async { [weak self] in self?.fitToWindow() }
                 return
             }
-
             let scale = min(viewSize.width / imgSize.width, viewSize.height / imgSize.height)
             let clamped = min(max(scale, scrollView.minMagnification), scrollView.maxMagnification)
             scrollView.magnification = clamped
             zoomFactor.wrappedValue = clamped
         }
 
-        @objc func magnificationChanged(_ notification: Notification) {
-            guard let sv = notification.object as? NSScrollView else { return }
+        @objc func liveMagnifyBegan(_ n: Notification) {
+            (n.object as? PanScrollView)?.isLiveMagnifying = true
+        }
+
+        @objc func liveMagnifyEnded(_ n: Notification) {
+            guard let sv = n.object as? PanScrollView else { return }
+            sv.isLiveMagnifying = false
             zoomFactor.wrappedValue = sv.magnification
         }
     }
 }
 
-// Automatically centers the document view when it is smaller than the visible area
 private class CenteredClipView: NSClipView {
     override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
         var rect = super.constrainBoundsRect(proposedBounds)
         guard let doc = documentView else { return rect }
         let docFrame = doc.frame
-        if rect.width > docFrame.width {
-            rect.origin.x = (docFrame.width - rect.width) / 2
-        }
-        if rect.height > docFrame.height {
-            rect.origin.y = (docFrame.height - rect.height) / 2
-        }
+        if rect.width > docFrame.width  { rect.origin.x = (docFrame.width  - rect.width)  / 2 }
+        if rect.height > docFrame.height { rect.origin.y = (docFrame.height - rect.height) / 2 }
         return rect
     }
 }
@@ -139,48 +138,29 @@ private class CenteredClipView: NSClipView {
 class PanScrollView: NSScrollView {
     var onMagnificationChange: ((CGFloat) -> Void)?
     var onSmartZoom: (() -> Void)?
+    var isLiveMagnifying = false
 
     private var dragStart: NSPoint?
     private var scrollOrigin: NSPoint?
-
-    override func awakeFromNib() {
-        super.awakeFromNib()
-        setupGestures()
-    }
-
-    func setupGestures() {
-        let pinch = NSMagnificationGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
-        addGestureRecognizer(pinch)
-    }
-
-    @objc private func handlePinch(_ gesture: NSMagnificationGestureRecognizer) {
-        if gesture.state == .changed || gesture.state == .ended {
-            let newMag = min(max(magnification * (1 + gesture.magnification),
-                                minMagnification), maxMagnification)
-            magnification = newMag
-            gesture.magnification = 0
-            onMagnificationChange?(magnification)
-        }
-    }
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .openHand)
     }
 
-    // Trackpad pinch-to-zoom via NSEvent (backup path)
+    // Pinch-to-zoom — live update during gesture
     override func magnify(with event: NSEvent) {
         super.magnify(with: event)
         onMagnificationChange?(magnification)
     }
 
-    // Trackpad smart zoom (double-tap with two fingers)
+    // Double-tap with two fingers → smart zoom
     override func smartMagnify(with event: NSEvent) {
         onSmartZoom?()
     }
 
     override func scrollWheel(with event: NSEvent) {
-        // Mouse wheel (no trackpad phase) → zoom centered on cursor
         if event.phase == [] && event.momentumPhase == [] {
+            // Mouse wheel → zoom centered on cursor
             let factor: CGFloat = event.deltaY > 0 ? 1.1 : (1.0 / 1.1)
             let newMag = min(max(magnification * factor, minMagnification), maxMagnification)
             let mouseInView = convert(event.locationInWindow, from: nil)
@@ -200,16 +180,14 @@ class PanScrollView: NSScrollView {
 
     override func mouseDragged(with event: NSEvent) {
         guard let start = dragStart, let origin = scrollOrigin else { return }
-        let current = event.locationInWindow
-        let dx = current.x - start.x
-        let dy = current.y - start.y
+        let dx = event.locationInWindow.x - start.x
+        let dy = event.locationInWindow.y - start.y
         contentView.scroll(to: NSPoint(x: origin.x - dx, y: origin.y - dy))
         reflectScrolledClipView(contentView)
     }
 
     override func mouseUp(with event: NSEvent) {
-        dragStart = nil
-        scrollOrigin = nil
+        dragStart = nil; scrollOrigin = nil
         NSCursor.pop()
     }
 }
