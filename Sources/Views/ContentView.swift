@@ -19,9 +19,15 @@ struct ContentView: View {
 
                 Divider()
 
-                SidebarView()
-                    .environmentObject(viewModel)
-                    .frame(height: 130)
+                if viewModel.selectedNavItem == .library {
+                    LibraryGridView()
+                        .environmentObject(viewModel)
+                        .frame(height: 220)
+                } else {
+                    SidebarView()
+                        .environmentObject(viewModel)
+                        .frame(height: 130)
+                }
             }
 
             if viewModel.inspectorVisible {

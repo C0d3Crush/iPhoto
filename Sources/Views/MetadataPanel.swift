@@ -16,14 +16,15 @@ private struct MetadataPanelContent: View {
     @State private var saveError: String? = nil
 
     private var sourceEntries: [MetadataEntry] {
-        viewModel.collection.currentDocument?.metadata ?? []
+        let entries = viewModel.collection.currentDocument?.metadata ?? []
+        return entries.isEmpty ? MetadataService().defaultEntries() : entries
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            if editedEntries.isEmpty {
+            if viewModel.currentImage == nil {
                 Spacer()
-                Text(viewModel.currentImage == nil ? "Kein Bild geöffnet" : "Keine Metadaten")
+                Text("Kein Bild geöffnet")
                     .foregroundColor(.secondary)
                     .font(.callout)
                 Spacer()

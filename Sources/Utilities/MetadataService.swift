@@ -143,6 +143,17 @@ final class MetadataService {
         }
     }
 
+    func defaultEntries() -> [MetadataEntry] {
+        [
+            entry("Titel",        "iptc.ObjectName",       .general,  ""),
+            entry("Beschreibung", "iptc.Caption",          .general,  ""),
+            entry("Stichwörter",  "iptc.Keywords",         .general,  ""),
+            entry("Copyright",    "iptc.Copyright",        .general,  ""),
+            entry("Urheber",      "iptc.Creator",          .general,  ""),
+            entry("Aufnahmedatum","exif.DateTimeOriginal", .dateTime, ""),
+        ]
+    }
+
     // MARK: – Helpers
 
     private func entry(_ name: String, _ key: String, _ cat: MetadataCategory, _ val: String) -> MetadataEntry {

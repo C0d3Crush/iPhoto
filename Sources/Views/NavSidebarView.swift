@@ -1,11 +1,11 @@
 import SwiftUI
 
 enum NavItem: String, CaseIterable {
-    case mediathek = "Mediathek"
+    case library = "Library"
 
     var icon: String {
         switch self {
-        case .mediathek: return "photo.stack"
+        case .library: return "photo.stack"
         }
     }
 }

@@ -12,7 +12,7 @@ class ImageViewModel: ObservableObject {
     @Published var inspectorVisible: Bool = false
     @Published var isSavingMetadata: Bool = false
     @Published var navSidebarVisible: Bool = true
-    @Published var selectedNavItem: NavItem? = .mediathek
+    @Published var selectedNavItem: NavItem? = .library
 
     private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
