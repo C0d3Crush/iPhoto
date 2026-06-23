@@ -113,10 +113,14 @@ class ImageViewModel: ObservableObject {
         guard let doc = collection.currentDocument else { return }
         let index = collection.currentIndex
         isSavingMetadata = true
+        Log.info("Speichere Metadaten für \(doc.filename) (\(entries.count) Einträge)")
         metadataService.writePhotoMetadata(url: doc.url, entries: entries) { [weak self] error in
             guard let self = self else { return }
             self.isSavingMetadata = false
-            if error == nil {
+            if let error = error {
+                Log.error("Metadaten speichern fehlgeschlagen: \(error.localizedDescription)")
+            } else {
+                Log.info("Metadaten erfolgreich gespeichert")
                 let updated = self.metadataService.readPhotoMetadata(from: doc.url)
                 guard index < self.collection.documents.count,
                       self.collection.documents[index].url == doc.url else { return }
@@ -142,13 +146,18 @@ class ImageViewModel: ObservableObject {
         let token = UUID()
         loadToken = token
 
+        Log.info("Lade Bild: \(url.lastPathComponent)")
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let image = try RAWImageDecoder.decode(url: url)
                 let size = CGSize(width: image.width, height: image.height)
                 let metadata = self.metadataService.readPhotoMetadata(from: url)
+                Log.info("Bild dekodiert: \(url.lastPathComponent) \(Int(size.width))×\(Int(size.height)), \(metadata.count) Metadaten-Einträge")
                 DispatchQueue.main.async { [weak self] in
-                    guard let self = self, self.loadToken == token else { return }
+                    guard let self = self, self.loadToken == token else {
+                        Log.debug("Bild verworfen (Token ungültig): \(url.lastPathComponent)")
+                        return
+                    }
                     guard index < self.collection.documents.count,
                           self.collection.documents[index].url == url else {
                         self.isLoading = false
@@ -164,6 +173,7 @@ class ImageViewModel: ObservableObject {
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
                 }
             } catch {
+                Log.error("Bild laden fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.loadToken == token else { return }
                     self.isLoading = false

@@ -77,11 +77,13 @@ private struct MetadataPanelContent: View {
                 }
             }
         }
-        .onChange(of: sourceEntries.count) { _ in
+        .onChange(of: sourceEntries.count) { newCount in
+            Log.debug("MetadataPanel: Einträge geändert → \(newCount)")
             editedEntries = sourceEntries
             saveError = nil
         }
         .onAppear {
+            Log.debug("MetadataPanel: onAppear, \(sourceEntries.count) Einträge")
             editedEntries = sourceEntries
         }
     }
