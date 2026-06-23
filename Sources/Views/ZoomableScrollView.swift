@@ -34,6 +34,16 @@ struct ZoomableScrollView: NSViewRepresentable {
             coordinator?.zoomFactor.wrappedValue = mag
         }
 
+        scrollView.onSmartZoom = { [weak coordinator = context.coordinator] in
+            guard let coordinator = coordinator else { return }
+            if abs(coordinator.zoomFactor.wrappedValue - 1.0) < 0.05 {
+                coordinator.fitToWindow()
+            } else {
+                coordinator.scrollView?.magnification = 1.0
+                coordinator.zoomFactor.wrappedValue = 1.0
+            }
+        }
+
         NotificationCenter.default.addObserver(
             context.coordinator,
             selector: #selector(Coordinator.magnificationChanged(_:)),
@@ -127,12 +137,24 @@ private class CenteredClipView: NSClipView {
 
 class PanScrollView: NSScrollView {
     var onMagnificationChange: ((CGFloat) -> Void)?
+    var onSmartZoom: (() -> Void)?
 
     private var dragStart: NSPoint?
     private var scrollOrigin: NSPoint?
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .openHand)
+    }
+
+    // Trackpad pinch-to-zoom — live updates during the gesture
+    override func magnify(with event: NSEvent) {
+        super.magnify(with: event)
+        onMagnificationChange?(magnification)
+    }
+
+    // Trackpad smart zoom (double-tap with two fingers)
+    override func smartMagnify(with event: NSEvent) {
+        onSmartZoom?()
     }
 
     override func scrollWheel(with event: NSEvent) {
@@ -144,6 +166,7 @@ class PanScrollView: NSScrollView {
             setMagnification(newMag, centeredAt: mouseInView)
             onMagnificationChange?(magnification)
         } else {
+            // Trackpad two-finger scroll → pan
             super.scrollWheel(with: event)
         }
     }
