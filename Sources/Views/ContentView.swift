@@ -54,7 +54,6 @@ struct DetailView: View {
                     zoomFactor: $viewModel.zoomFactor,
                     fitToWindow: $viewModel.fitToWindowRequested
                 )
-                .ignoresSafeArea()
             } else if let err = viewModel.errorMessage {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
