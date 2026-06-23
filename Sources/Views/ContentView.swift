@@ -26,7 +26,7 @@ struct ContentView: View {
                 } else {
                     SidebarView()
                         .environmentObject(viewModel)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(height: 97)
                 }
             }
 
