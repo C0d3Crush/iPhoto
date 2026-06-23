@@ -5,16 +5,24 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            DetailView()
-                .environmentObject(viewModel)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                DetailView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Divider()
+                Divider()
 
-            SidebarView()
-                .environmentObject(viewModel)
-                .frame(height: 130)
+                SidebarView()
+                    .environmentObject(viewModel)
+                    .frame(height: 130)
+            }
+
+            if viewModel.inspectorVisible {
+                Divider()
+                InspectorView()
+                    .environmentObject(viewModel)
+            }
         }
         .onChange(of: viewModel.windowTitle) { title in
             NSApp.mainWindow?.title = title
@@ -93,6 +101,15 @@ struct DetailView: View {
                 }
                 .disabled(!viewModel.collection.hasNext)
                 .help("Nächstes Bild")
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(action: { viewModel.toggleInspector() }) {
+                    Image(systemName: "sidebar.right")
+                        .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
+                }
+                .help("Inspector ein-/ausblenden")
+                .keyboardShortcut("i", modifiers: .command)
             }
 
             ToolbarItemGroup(placement: .automatic) {

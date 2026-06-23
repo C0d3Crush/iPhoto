@@ -9,7 +9,10 @@ class ImageViewModel: ObservableObject {
     @Published var errorMessage: String? = nil
     @Published var fitToWindowRequested: Bool = false
     @Published var showExportSheet: Bool = false
+    @Published var inspectorVisible: Bool = false
+    @Published var isSavingMetadata: Bool = false
 
+    private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
     private var loadToken: UUID = UUID()
 
@@ -100,10 +103,27 @@ class ImageViewModel: ObservableObject {
     func next()     { collection.next();     loadCurrentImage(); prefetchAdjacent() }
     func previous() { collection.previous(); loadCurrentImage(); prefetchAdjacent() }
 
-    func zoomIn()      { zoomFactor = min(zoomFactor * 1.25, 32.0) }
-    func zoomOut()     { zoomFactor = max(zoomFactor / 1.25, 0.05) }
-    func actualSize()  { zoomFactor = 1.0 }
-    func fitToWindow() { fitToWindowRequested = true }
+    func zoomIn()           { zoomFactor = min(zoomFactor * 1.25, 32.0) }
+    func zoomOut()          { zoomFactor = max(zoomFactor / 1.25, 0.05) }
+    func actualSize()       { zoomFactor = 1.0 }
+    func fitToWindow()      { fitToWindowRequested = true }
+    func toggleInspector()  { inspectorVisible.toggle() }
+
+    func saveMetadata(_ entries: [MetadataEntry]) {
+        guard let doc = collection.currentDocument else { return }
+        let index = collection.currentIndex
+        isSavingMetadata = true
+        metadataService.writePhotoMetadata(url: doc.url, entries: entries) { [weak self] error in
+            guard let self = self else { return }
+            self.isSavingMetadata = false
+            if error == nil {
+                let updated = self.metadataService.readPhotoMetadata(from: doc.url)
+                guard index < self.collection.documents.count,
+                      self.collection.documents[index].url == doc.url else { return }
+                self.collection.documents[index].metadata = updated
+            }
+        }
+    }
 
     // MARK: - Private
 
@@ -126,6 +146,7 @@ class ImageViewModel: ObservableObject {
             do {
                 let image = try RAWImageDecoder.decode(url: url)
                 let size = CGSize(width: image.width, height: image.height)
+                let metadata = self.metadataService.readPhotoMetadata(from: url)
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.loadToken == token else { return }
                     guard index < self.collection.documents.count,
@@ -136,6 +157,7 @@ class ImageViewModel: ObservableObject {
                     var updated = self.collection.documents[index]
                     updated.cgImage = image
                     updated.imageSize = size
+                    updated.metadata = metadata
                     self.collection.update(document: updated, at: index)
                     self.isLoading = false
                     self.fitToWindowRequested = true

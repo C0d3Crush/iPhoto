@@ -11,6 +11,7 @@ struct ImageDocument: Identifiable, Equatable {
     var imageSize: CGSize
     var isRAW: Bool
     var errorMessage: String?
+    var metadata: [MetadataEntry] = []
 
     var filename: String { url.lastPathComponent }
 
