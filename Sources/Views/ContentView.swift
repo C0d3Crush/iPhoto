@@ -17,16 +17,18 @@ struct ContentView: View {
                     .environmentObject(viewModel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                Divider()
+                if !viewModel.collection.documents.isEmpty {
+                    Divider()
 
-                if viewModel.selectedNavItem == .library {
-                    LibraryGridView()
-                        .environmentObject(viewModel)
-                        .frame(height: 160)
-                } else {
-                    SidebarView()
-                        .environmentObject(viewModel)
-                        .frame(height: 138)
+                    if viewModel.navSelection == .library || viewModel.navSelection == nil {
+                        LibraryGridView()
+                            .environmentObject(viewModel)
+                            .frame(height: 138)
+                    } else {
+                        SidebarView()
+                            .environmentObject(viewModel)
+                            .frame(height: 138)
+                    }
                 }
             }
 

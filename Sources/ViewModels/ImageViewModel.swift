@@ -12,7 +12,8 @@ class ImageViewModel: ObservableObject {
     @Published var inspectorVisible: Bool = false
     @Published var isSavingMetadata: Bool = false
     @Published var navSidebarVisible: Bool = true
-    @Published var selectedNavItem: NavItem? = .library
+    @Published var navSelection: NavSelection? = .library
+    @Published var albums: [Album] = []
 
     private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
@@ -22,7 +23,22 @@ class ImageViewModel: ObservableObject {
     var windowTitle: String { collection.currentDocument?.filename ?? "iPhoto" }
     var imageSize: CGSize { collection.currentDocument?.imageSize ?? .zero }
 
+    var visibleDocuments: [ImageDocument] {
+        switch navSelection {
+        case .library, nil:
+            return collection.documents
+        case .album(let id):
+            guard let album = albums.first(where: { $0.id == id }) else { return [] }
+            return collection.documents.filter { album.photoURLs.contains($0.url) }
+        }
+    }
+
+    func collectionIndex(for document: ImageDocument) -> Int? {
+        collection.documents.firstIndex(where: { $0.id == document.id })
+    }
+
     init() {
+        loadAlbums()
         // Änderungen in collection (z.B. neue Thumbnails) an SwiftUI weiterleiten
         collection.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -110,6 +126,58 @@ class ImageViewModel: ObservableObject {
     func actualSize()       { zoomFactor = 1.0 }
     func fitToWindow()      { fitToWindowRequested = true }
     func toggleInspector()  { inspectorVisible.toggle() }
+
+    // MARK: - Albums
+
+    func createAlbum(name: String) {
+        let album = Album(name: name)
+        albums.append(album)
+        saveAlbums()
+        navSelection = .album(album.id) as NavSelection?
+    }
+
+    func deleteAlbum(_ album: Album) {
+        albums.removeAll { $0.id == album.id }
+        if navSelection == .album(album.id) { navSelection = .library as NavSelection? }
+        saveAlbums()
+    }
+
+    func renameAlbum(_ album: Album, to name: String) {
+        guard let idx = albums.firstIndex(where: { $0.id == album.id }) else { return }
+        albums[idx].name = name
+        saveAlbums()
+    }
+
+    func addToAlbum(_ document: ImageDocument, albumID: UUID) {
+        guard let idx = albums.firstIndex(where: { $0.id == albumID }) else { return }
+        guard !albums[idx].photoURLs.contains(document.url) else { return }
+        albums[idx].photoURLs.append(document.url)
+        saveAlbums()
+    }
+
+    func removeFromAlbum(_ document: ImageDocument, albumID: UUID) {
+        guard let idx = albums.firstIndex(where: { $0.id == albumID }) else { return }
+        albums[idx].photoURLs.removeAll { $0 == document.url }
+        saveAlbums()
+    }
+
+    private var albumsFileURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("albums.json")
+    }
+
+    func loadAlbums() {
+        guard let data = try? Data(contentsOf: albumsFileURL),
+              let decoded = try? JSONDecoder().decode([Album].self, from: data) else { return }
+        albums = decoded
+    }
+
+    func saveAlbums() {
+        guard let data = try? JSONEncoder().encode(albums) else { return }
+        try? data.write(to: albumsFileURL, options: .atomic)
+    }
 
     func saveMetadata(_ entries: [MetadataEntry]) {
         guard let doc = collection.currentDocument else { return }
