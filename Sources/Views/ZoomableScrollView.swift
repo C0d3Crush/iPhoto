@@ -25,6 +25,10 @@ struct ZoomableScrollView: NSViewRepresentable {
         context.coordinator.imageView = imageView
         context.coordinator.scrollView = scrollView
 
+        scrollView.onMagnificationChange = { [weak coordinator = context.coordinator] mag in
+            coordinator?.zoomFactor.wrappedValue = mag
+        }
+
         NotificationCenter.default.addObserver(
             context.coordinator,
             selector: #selector(Coordinator.magnificationChanged(_:)),
@@ -39,9 +43,14 @@ struct ZoomableScrollView: NSViewRepresentable {
         let coordinator = context.coordinator
         let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
 
-        if coordinator.imageView?.image !== nsImage {
+        let imageChanged = coordinator.imageView?.image !== nsImage
+        if imageChanged {
             coordinator.imageView?.image = nsImage
             coordinator.imageView?.frame = NSRect(origin: .zero, size: nsImage.size)
+            // Auto-fit and center when a new image is loaded
+            DispatchQueue.main.async {
+                coordinator.fitToWindow()
+            }
         }
 
         if fitToWindow {
@@ -49,7 +58,7 @@ struct ZoomableScrollView: NSViewRepresentable {
                 coordinator.fitToWindow()
                 self.fitToWindow = false
             }
-        } else if abs(scrollView.magnification - zoomFactor) > 0.001 {
+        } else if !imageChanged, abs(scrollView.magnification - zoomFactor) > 0.001 {
             scrollView.magnification = zoomFactor
         }
     }
@@ -75,9 +84,7 @@ struct ZoomableScrollView: NSViewRepresentable {
             let imgSize = img.size
             guard imgSize.width > 0, imgSize.height > 0 else { return }
 
-            let scaleX = viewSize.width / imgSize.width
-            let scaleY = viewSize.height / imgSize.height
-            let scale = min(scaleX, scaleY)
+            let scale = min(viewSize.width / imgSize.width, viewSize.height / imgSize.height)
             let clamped = min(max(scale, scrollView.minMagnification), scrollView.maxMagnification)
 
             scrollView.magnification = clamped
@@ -97,13 +104,27 @@ struct ZoomableScrollView: NSViewRepresentable {
     }
 }
 
-// NSScrollView-Subklasse mit Hand-Cursor und Klick-Ziehen zum Verschieben
 class PanScrollView: NSScrollView {
+    var onMagnificationChange: ((CGFloat) -> Void)?
+
     private var dragStart: NSPoint?
     private var scrollOrigin: NSPoint?
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .openHand)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        // Mouse wheel (no trackpad phase) → zoom centered on cursor
+        if event.phase == [] && event.momentumPhase == [] {
+            let factor: CGFloat = event.deltaY > 0 ? 1.1 : (1.0 / 1.1)
+            let newMag = min(max(magnification * factor, minMagnification), maxMagnification)
+            let mouseInView = convert(event.locationInWindow, from: nil)
+            setMagnification(newMag, centeredAt: mouseInView)
+            onMagnificationChange?(magnification)
+        } else {
+            super.scrollWheel(with: event)
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
