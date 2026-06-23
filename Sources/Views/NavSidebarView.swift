@@ -8,46 +8,42 @@ struct NavSidebarView: View {
     @State private var renameText = ""
 
     var body: some View {
-        List(selection: $viewModel.navSelection) {
-            Section(header: Text("Bibliothek")) {
-                Label("Library", systemImage: "photo.stack")
-                    .tag(NavSelection.library)
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader("Bibliothek")
+
+            navRow(
+                label: "Library",
+                icon: "photo.stack",
+                isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil
+            ) {
+                viewModel.navSelection = .library
             }
 
-            Section(header: HStack {
-                Text("Alben")
-                Spacer()
+            sectionHeader("Alben", trailing: AnyView(
                 Button(action: { newAlbumName = ""; showCreateAlbum = true }) {
-                    Image(systemName: "plus")
-                        .font(.caption)
+                    Image(systemName: "plus").font(.caption)
                 }
                 .buttonStyle(PlainButtonStyle())
-            }) {
-                ForEach(viewModel.albums) { album in
-                    AlbumRow(album: album)
-                        .environmentObject(viewModel)
-                        .tag(NavSelection.album(album.id))
-                        .contextMenu {
-                            Button("Umbenennen") {
-                                renameText = album.name
-                                renamingAlbum = album
-                            }
-                            Divider()
-                            Button("Album löschen") {
-                                viewModel.deleteAlbum(album)
-                            }
-                        }
+            ))
+
+            ForEach(viewModel.albums) { album in
+                AlbumRow(
+                    album: album,
+                    isSelected: viewModel.navSelection == .album(album.id)
+                )
+                .environmentObject(viewModel)
+                .contextMenu {
+                    Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
+                    Divider()
+                    Button("Album löschen") { viewModel.deleteAlbum(album) }
                 }
             }
+
+            Spacer()
         }
-        .listStyle(SidebarListStyle())
+        .padding(.vertical, 8)
         .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
-        .onChange(of: viewModel.navSelection) { selection in
-            if case .album(let id) = selection,
-               let album = viewModel.albums.first(where: { $0.id == id }) {
-                viewModel.selectAlbum(album)
-            }
-        }
+        .background(Color(NSColor.controlBackgroundColor))
         .sheet(isPresented: $showCreateAlbum) {
             AlbumNameSheet(
                 title: "Neues Album",
@@ -55,9 +51,7 @@ struct NavSidebarView: View {
                 confirmLabel: "Erstellen",
                 name: $newAlbumName,
                 isPresented: $showCreateAlbum
-            ) { name in
-                viewModel.createAlbum(name: name)
-            }
+            ) { name in viewModel.createAlbum(name: name) }
         }
         .sheet(item: $renamingAlbum) { album in
             AlbumNameSheet(
@@ -69,35 +63,70 @@ struct NavSidebarView: View {
                     get: { renamingAlbum != nil },
                     set: { if !$0 { renamingAlbum = nil } }
                 )
-            ) { name in
-                viewModel.renameAlbum(album, to: name)
-            }
+            ) { name in viewModel.renameAlbum(album, to: name) }
         }
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ title: String, trailing: AnyView? = nil) -> some View {
+        HStack {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+            Spacer()
+            trailing
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 2)
+    }
+
+    private func navRow(label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
     }
 }
 
 private struct AlbumRow: View {
     let album: Album
+    let isSelected: Bool
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var isTargeted = false
 
     var body: some View {
-        Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
-            .foregroundColor(isTargeted ? .accentColor : .primary)
-            .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
-                for provider in providers {
-                    provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
-                        guard let data = item as? Data,
-                              let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                        DispatchQueue.main.async {
-                            if let doc = viewModel.collection.documents.first(where: { $0.url == url }) {
-                                viewModel.addToAlbum(doc, albumID: album.id)
-                            }
+        Button(action: { viewModel.selectAlbum(album) }) {
+            Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : (isTargeted ? Color.accentColor.opacity(0.1) : Color.clear))
+                .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
+            for provider in providers {
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                    guard let data = item as? Data,
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                    DispatchQueue.main.async {
+                        if let doc = viewModel.collection.documents.first(where: { $0.url == url }) {
+                            viewModel.addToAlbum(doc, albumID: album.id)
                         }
                     }
                 }
-                return true
             }
+            return true
+        }
     }
 }
 
