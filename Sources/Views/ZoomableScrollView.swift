@@ -14,9 +14,14 @@ struct ZoomableScrollView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = true
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
-        scrollView.backgroundColor = .windowBackgroundColor
 
-        let imageView = CenteredImageView()
+        // CenteredClipView keeps the document centered whenever it's smaller than the viewport
+        let clipView = CenteredClipView()
+        clipView.drawsBackground = true
+        clipView.backgroundColor = .windowBackgroundColor
+        scrollView.contentView = clipView
+
+        let imageView = NSImageView()
         imageView.imageScaling = .scaleNone
         imageView.imageAlignment = .alignCenter
         imageView.autoresizingMask = []
@@ -82,25 +87,35 @@ struct ZoomableScrollView: NSViewRepresentable {
                   let img = imageView.image else { return }
             let viewSize = scrollView.contentSize
             let imgSize = img.size
-            guard imgSize.width > 0, imgSize.height > 0 else { return }
+            guard imgSize.width > 0, imgSize.height > 0, viewSize.width > 0 else { return }
 
             let scale = min(viewSize.width / imgSize.width, viewSize.height / imgSize.height)
             let clamped = min(max(scale, scrollView.minMagnification), scrollView.maxMagnification)
-
             scrollView.magnification = clamped
             zoomFactor.wrappedValue = clamped
-
-            let scaledW = imgSize.width * clamped
-            let scaledH = imgSize.height * clamped
-            let offsetX = max((viewSize.width - scaledW) / 2, 0)
-            let offsetY = max((viewSize.height - scaledH) / 2, 0)
-            scrollView.contentView.scroll(to: NSPoint(x: -offsetX, y: -offsetY))
+            // CenteredClipView handles centering automatically
         }
 
         @objc func magnificationChanged(_ notification: Notification) {
             guard let sv = notification.object as? NSScrollView else { return }
             zoomFactor.wrappedValue = sv.magnification
         }
+    }
+}
+
+// Automatically centers the document view when it is smaller than the visible area
+private class CenteredClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var rect = super.constrainBoundsRect(proposedBounds)
+        guard let doc = documentView else { return rect }
+        let docFrame = doc.frame
+        if rect.width > docFrame.width {
+            rect.origin.x = (docFrame.width - rect.width) / 2
+        }
+        if rect.height > docFrame.height {
+            rect.origin.y = (docFrame.height - rect.height) / 2
+        }
+        return rect
     }
 }
 
@@ -138,8 +153,7 @@ class PanScrollView: NSScrollView {
         let current = event.locationInWindow
         let dx = current.x - start.x
         let dy = current.y - start.y
-        let newOrigin = NSPoint(x: origin.x - dx, y: origin.y - dy)
-        contentView.scroll(to: newOrigin)
+        contentView.scroll(to: NSPoint(x: origin.x - dx, y: origin.y - dy))
         reflectScrolledClipView(contentView)
     }
 
@@ -148,8 +162,4 @@ class PanScrollView: NSScrollView {
         scrollOrigin = nil
         NSCursor.pop()
     }
-}
-
-private class CenteredImageView: NSImageView {
-    override var isFlipped: Bool { false }
 }
