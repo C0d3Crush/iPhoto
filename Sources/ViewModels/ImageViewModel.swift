@@ -129,6 +129,15 @@ class ImageViewModel: ObservableObject {
 
     // MARK: - Albums
 
+    func selectAlbum(_ album: Album) {
+        navSelection = .album(album.id) as NavSelection?
+        // Auto-import album photos that aren't in the collection yet
+        let missing = album.photoURLs.filter { url in
+            !collection.documents.contains(where: { $0.url == url })
+        }
+        if !missing.isEmpty { importFiles(missing) }
+    }
+
     func createAlbum(name: String) {
         let album = Album(name: name)
         albums.append(album)

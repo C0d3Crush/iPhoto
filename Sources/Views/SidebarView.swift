@@ -17,6 +17,7 @@ struct SidebarView: View {
                             .contentShape(Rectangle())
                             .onTapGesture { viewModel.selectDocument(at: actualIndex) }
                             .contextMenu { albumContextMenu(for: doc) }
+                            .onDrag { NSItemProvider(object: doc.url as NSURL) }
                     }
                 }
                 .padding(.horizontal, 8)

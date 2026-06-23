@@ -24,7 +24,8 @@ struct NavSidebarView: View {
                 .buttonStyle(PlainButtonStyle())
             }) {
                 ForEach(viewModel.albums) { album in
-                    Label(album.name, systemImage: "rectangle.stack")
+                    AlbumRow(album: album)
+                        .environmentObject(viewModel)
                         .tag(NavSelection.album(album.id))
                         .contextMenu {
                             Button("Umbenennen") {
@@ -41,6 +42,12 @@ struct NavSidebarView: View {
         }
         .listStyle(SidebarListStyle())
         .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
+        .onChange(of: viewModel.navSelection) { selection in
+            if case .album(let id) = selection,
+               let album = viewModel.albums.first(where: { $0.id == id }) {
+                viewModel.selectAlbum(album)
+            }
+        }
         .sheet(isPresented: $showCreateAlbum) {
             AlbumNameSheet(
                 title: "Neues Album",
@@ -66,6 +73,31 @@ struct NavSidebarView: View {
                 viewModel.renameAlbum(album, to: name)
             }
         }
+    }
+}
+
+private struct AlbumRow: View {
+    let album: Album
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isTargeted = false
+
+    var body: some View {
+        Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
+            .foregroundColor(isTargeted ? .accentColor : .primary)
+            .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
+                for provider in providers {
+                    provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                        guard let data = item as? Data,
+                              let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                        DispatchQueue.main.async {
+                            if let doc = viewModel.collection.documents.first(where: { $0.url == url }) {
+                                viewModel.addToAlbum(doc, albumID: album.id)
+                            }
+                        }
+                    }
+                }
+                return true
+            }
     }
 }
 
