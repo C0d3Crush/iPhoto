@@ -3,7 +3,7 @@ import SwiftUI
 struct LibraryGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
-    private let columns = [GridItem(.adaptive(minimum: 120, maximum: 160), spacing: 6)]
+    private let columns = [GridItem(.adaptive(minimum: 110, maximum: 150), spacing: 12)]
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -19,7 +19,7 @@ struct LibraryGridView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 40)
                 } else {
-                    LazyVGrid(columns: columns, spacing: 6) {
+                    LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(Array(viewModel.collection.documents.enumerated()), id: \.element.id) { index, doc in
                             LibraryCell(document: doc, isSelected: index == viewModel.collection.currentIndex)
                                 .id(index)

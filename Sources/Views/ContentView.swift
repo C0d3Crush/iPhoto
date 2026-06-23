@@ -22,7 +22,7 @@ struct ContentView: View {
                 if viewModel.selectedNavItem == .library {
                     LibraryGridView()
                         .environmentObject(viewModel)
-                        .frame(height: 220)
+                        .frame(height: 160)
                 } else {
                     SidebarView()
                         .environmentObject(viewModel)
