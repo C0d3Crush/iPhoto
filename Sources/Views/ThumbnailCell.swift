@@ -9,13 +9,13 @@ struct ThumbnailCell: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color(NSColor.quaternaryLabelColor))
-                    .frame(width: 120, height: 90)
+                    .frame(width: 80, height: 60)
 
                 if let thumb = document.thumbnailImage {
                     Image(nsImage: thumb)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 120, height: 90)
+                        .frame(width: 80, height: 60)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                 } else {
                     ProgressView()
@@ -27,7 +27,7 @@ struct ThumbnailCell: View {
                 .font(.caption2)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
-                .frame(width: 120)
+                .frame(width: 80)
                 .foregroundColor(isSelected ? .primary : .secondary)
         }
         .padding(4)
