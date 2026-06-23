@@ -40,13 +40,10 @@ struct RAWImageDecoder {
 
         // Versuch 2: ImageIO-Thumbnail für JPEG/PNG/HEIC/TIFF und RAW auf macOS 12+
         if let source = CGImageSourceCreateWithURL(url as CFURL, nil) {
-            // Kein kCGImageSourceCreateThumbnailFromImageAlways: nur eingebettete Thumbnails oder
-            // nativer Decode – kein teures Full-RAW-Decode als Fallback
             let opts: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxDimension,
-                kCGImageSourceShouldCacheImmediately: false
+                kCGImageSourceThumbnailMaxPixelSize: maxDimension
             ]
             if let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
                 return thumb
