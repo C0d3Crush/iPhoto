@@ -100,8 +100,8 @@ class ImageViewModel: ObservableObject {
         loadCurrentImage()
     }
 
-    func next()     { collection.next();     loadCurrentImage() }
-    func previous() { collection.previous(); loadCurrentImage() }
+    func next()     { collection.next();     loadCurrentImage(); prefetchAdjacent() }
+    func previous() { collection.previous(); loadCurrentImage(); prefetchAdjacent() }
 
     func zoomIn()      { zoomFactor = min(zoomFactor * 1.25, 32.0) }
     func zoomOut()     { zoomFactor = max(zoomFactor / 1.25, 0.05) }
@@ -158,13 +158,38 @@ class ImageViewModel: ObservableObject {
         for (index, doc) in collection.documents.enumerated() {
             guard doc.thumbnail == nil else { continue }
             let url = doc.url
-            DispatchQueue.global(qos: .background).async { [weak self] in
+            DispatchQueue.global(qos: .utility).async { [weak self] in
                 guard let thumb = try? RAWImageDecoder.thumbnail(url: url) else { return }
+                let nsImage = NSImage(cgImage: thumb, size: .zero)
                 DispatchQueue.main.async {
                     guard let self = self,
                           index < self.collection.documents.count,
                           self.collection.documents[index].url == url else { return }
                     self.collection.documents[index].thumbnail = thumb
+                    self.collection.documents[index].thumbnailImage = nsImage
+                }
+            }
+        }
+    }
+
+    private func prefetchAdjacent() {
+        let docs = collection.documents
+        let current = collection.currentIndex
+        for offset in [-1, 1] {
+            let i = current + offset
+            guard i >= 0, i < docs.count, docs[i].cgImage == nil else { continue }
+            let url = docs[i].url
+            let idx = i
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                guard let image = try? RAWImageDecoder.decode(url: url) else { return }
+                let size = CGSize(width: image.width, height: image.height)
+                DispatchQueue.main.async {
+                    guard let self = self,
+                          idx < self.collection.documents.count,
+                          self.collection.documents[idx].url == url,
+                          self.collection.documents[idx].cgImage == nil else { return }
+                    self.collection.documents[idx].cgImage = image
+                    self.collection.documents[idx].imageSize = size
                 }
             }
         }

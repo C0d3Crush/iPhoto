@@ -1,11 +1,13 @@
 import Foundation
 import CoreGraphics
+import AppKit
 
 struct ImageDocument: Identifiable, Equatable {
     let id: UUID
     let url: URL
     var cgImage: CGImage?
     var thumbnail: CGImage?
+    var thumbnailImage: NSImage?
     var imageSize: CGSize
     var isRAW: Bool
     var errorMessage: String?

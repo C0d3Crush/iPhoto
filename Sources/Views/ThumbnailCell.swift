@@ -11,8 +11,8 @@ struct ThumbnailCell: View {
                     .fill(Color(NSColor.quaternaryLabelColor))
                     .frame(width: 120, height: 90)
 
-                if let thumb = document.thumbnail {
-                    Image(nsImage: NSImage(cgImage: thumb, size: .zero))
+                if let thumb = document.thumbnailImage {
+                    Image(nsImage: thumb)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 120, height: 90)
