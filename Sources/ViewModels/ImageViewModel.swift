@@ -94,6 +94,7 @@ class ImageViewModel: ObservableObject {
         let newURLs = supported.filter { !existingURLs.contains($0) }
         guard !newURLs.isEmpty else { return }
 
+        newURLs.forEach { BookmarkStore.shared.save(url: $0) }
         let newDocs = newURLs
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map { ImageDocument(url: $0) }
@@ -239,10 +240,12 @@ class ImageViewModel: ObservableObject {
 
         Log.info("Lade Bild: \(url.lastPathComponent)")
         DispatchQueue.global(qos: .userInitiated).async {
+            let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+            defer { stopAccess() }
             do {
-                let image = try RAWImageDecoder.decode(url: url)
+                let image = try RAWImageDecoder.decode(url: accessURL)
                 let size = CGSize(width: image.width, height: image.height)
-                let metadata = self.metadataService.readPhotoMetadata(from: url)
+                let metadata = self.metadataService.readPhotoMetadata(from: accessURL)
                 Log.info("Bild dekodiert: \(url.lastPathComponent) \(Int(size.width))×\(Int(size.height)), \(metadata.count) Metadaten-Einträge")
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.loadToken == token else {
@@ -279,7 +282,9 @@ class ImageViewModel: ObservableObject {
             guard doc.thumbnail == nil else { continue }
             let url = doc.url
             DispatchQueue.global(qos: .utility).async { [weak self] in
-                guard let thumb = try? RAWImageDecoder.thumbnail(url: url) else { return }
+                let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                defer { stopAccess() }
+                guard let thumb = try? RAWImageDecoder.thumbnail(url: accessURL) else { return }
                 let nsImage = NSImage(cgImage: thumb, size: .zero)
                 DispatchQueue.main.async {
                     guard let self = self,
@@ -301,7 +306,9 @@ class ImageViewModel: ObservableObject {
             let url = docs[i].url
             let idx = i
             DispatchQueue.global(qos: .utility).async { [weak self] in
-                guard let image = try? RAWImageDecoder.decode(url: url) else { return }
+                let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                defer { stopAccess() }
+                guard let image = try? RAWImageDecoder.decode(url: accessURL) else { return }
                 let size = CGSize(width: image.width, height: image.height)
                 DispatchQueue.main.async {
                     guard let self = self,
