@@ -77,13 +77,10 @@ class ImageViewModel: ObservableObject {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map { ImageDocument(url: $0) }
 
-        let wasEmpty = collection.documents.isEmpty
+        let firstNewIndex = collection.documents.count
         collection.appendDocuments(newDocs)
-
-        if wasEmpty {
-            collection.select(index: 0)
-            loadCurrentImage()
-        }
+        collection.select(index: firstNewIndex)
+        loadCurrentImage()
         loadThumbnails()
     }
 
