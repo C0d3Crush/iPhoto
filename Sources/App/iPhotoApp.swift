@@ -15,6 +15,7 @@ struct iPhotoApp: App {
                 }
         }
         .commands {
+            PluginCommands()
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .newItem) {
                 Button("Importieren…") {
