@@ -33,8 +33,15 @@ struct RAWImageDecoder {
     }
 
     static func thumbnail(url: URL, maxDimension: Int = 160) throws -> CGImage {
-        // Versuch 1: ImageIO-Thumbnail (liest eingebettetes JPEG direkt)
+        // Versuch 1: RAF – eingebettetes JPEG-Preview direkt aus dem Container lesen (schnell, hohe Qualität)
+        if let full = decodeEmbeddedJPEG(url: url) {
+            return scaledDown(full, maxDimension: maxDimension)
+        }
+
+        // Versuch 2: ImageIO-Thumbnail für JPEG/PNG/HEIC/TIFF und RAW auf macOS 12+
         if let source = CGImageSourceCreateWithURL(url as CFURL, nil) {
+            // Kein kCGImageSourceCreateThumbnailFromImageAlways: nur eingebettete Thumbnails oder
+            // nativer Decode – kein teures Full-RAW-Decode als Fallback
             let opts: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
@@ -44,11 +51,6 @@ struct RAWImageDecoder {
             if let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
                 return thumb
             }
-        }
-
-        // Versuch 2: Vollbild dekodieren und skalieren (für RAF-Fallback)
-        if let full = decodeEmbeddedJPEG(url: url) {
-            return scaledDown(full, maxDimension: maxDimension)
         }
 
         throw DecoderError.cannotDecodeImage
