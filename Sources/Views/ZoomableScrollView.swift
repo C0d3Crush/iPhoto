@@ -41,16 +41,15 @@ struct ZoomableScrollView: NSViewRepresentable {
 
     func updateNSView(_ scrollView: PanScrollView, context: Context) {
         let coordinator = context.coordinator
-        let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
 
-        let imageChanged = coordinator.imageView?.image !== nsImage
+        let imageChanged = coordinator.lastCGImage !== image
         if imageChanged {
+            coordinator.lastCGImage = image
+            let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
             coordinator.imageView?.image = nsImage
             coordinator.imageView?.frame = NSRect(origin: .zero, size: nsImage.size)
-            // Auto-fit and center when a new image is loaded
-            DispatchQueue.main.async {
-                coordinator.fitToWindow()
-            }
+            DispatchQueue.main.async { coordinator.fitToWindow() }
+            return
         }
 
         if fitToWindow {
@@ -58,7 +57,7 @@ struct ZoomableScrollView: NSViewRepresentable {
                 coordinator.fitToWindow()
                 self.fitToWindow = false
             }
-        } else if !imageChanged, abs(scrollView.magnification - zoomFactor) > 0.001 {
+        } else if abs(scrollView.magnification - zoomFactor) > 0.001 {
             scrollView.magnification = zoomFactor
         }
     }
@@ -71,6 +70,7 @@ struct ZoomableScrollView: NSViewRepresentable {
         var zoomFactor: Binding<CGFloat>
         weak var imageView: NSImageView?
         weak var scrollView: NSScrollView?
+        var lastCGImage: CGImage?
 
         init(zoomFactor: Binding<CGFloat>) {
             self.zoomFactor = zoomFactor
