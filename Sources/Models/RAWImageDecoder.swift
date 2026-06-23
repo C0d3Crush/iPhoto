@@ -36,7 +36,7 @@ struct RAWImageDecoder {
         // Versuch 1: ImageIO-Thumbnail (liest eingebettetes JPEG direkt)
         if let source = CGImageSourceCreateWithURL(url as CFURL, nil) {
             let opts: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxDimension,
                 kCGImageSourceShouldCacheImmediately: false
@@ -62,8 +62,7 @@ struct RAWImageDecoder {
             return nil
         }
         let decodeOptions: [CFString: Any] = [
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceShouldAllowFloat: true
+            kCGImageSourceShouldCacheImmediately: true
         ]
         guard let image = CGImageSourceCreateImageAtIndex(source, 0, decodeOptions as CFDictionary) else {
             return nil
