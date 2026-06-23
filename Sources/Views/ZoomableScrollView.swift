@@ -8,6 +8,7 @@ struct ZoomableScrollView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> PanScrollView {
         let scrollView = PanScrollView()
+        scrollView.setupGestures()
         scrollView.allowsMagnification = true
         scrollView.minMagnification = 0.01
         scrollView.maxMagnification = 32.0
@@ -142,11 +143,31 @@ class PanScrollView: NSScrollView {
     private var dragStart: NSPoint?
     private var scrollOrigin: NSPoint?
 
+    override func awakeFromNib() {
+        super.awakeFromNib()
+        setupGestures()
+    }
+
+    func setupGestures() {
+        let pinch = NSMagnificationGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
+        addGestureRecognizer(pinch)
+    }
+
+    @objc private func handlePinch(_ gesture: NSMagnificationGestureRecognizer) {
+        if gesture.state == .changed || gesture.state == .ended {
+            let newMag = min(max(magnification * (1 + gesture.magnification),
+                                minMagnification), maxMagnification)
+            magnification = newMag
+            gesture.magnification = 0
+            onMagnificationChange?(magnification)
+        }
+    }
+
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .openHand)
     }
 
-    // Trackpad pinch-to-zoom — live updates during the gesture
+    // Trackpad pinch-to-zoom via NSEvent (backup path)
     override func magnify(with event: NSEvent) {
         super.magnify(with: event)
         onMagnificationChange?(magnification)
