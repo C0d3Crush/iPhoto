@@ -19,7 +19,7 @@ struct MetadataPanel: View {
                 Spacer()
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionHeaders) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(MetadataCategory.allCases, id: \.self) { category in
                             let catEntries = editedEntries.filter { $0.category == category }
                             if !catEntries.isEmpty {
