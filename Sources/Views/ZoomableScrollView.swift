@@ -54,6 +54,7 @@ struct ZoomableScrollView: NSViewRepresentable {
             coordinator.imageView?.image = nsImage
             coordinator.imageView?.frame = NSRect(origin: .zero, size: nsImage.size)
             DispatchQueue.main.async { coordinator.fitToWindow() }
+            if fitToWindow { DispatchQueue.main.async { self.fitToWindow = false } }
             return
         }
 
@@ -87,13 +88,18 @@ struct ZoomableScrollView: NSViewRepresentable {
                   let img = imageView.image else { return }
             let viewSize = scrollView.contentSize
             let imgSize = img.size
-            guard imgSize.width > 0, imgSize.height > 0, viewSize.width > 0 else { return }
+            guard imgSize.width > 0, imgSize.height > 0 else { return }
+
+            // Layout not complete yet — retry next runloop until size is available
+            guard viewSize.width > 0, viewSize.height > 0 else {
+                DispatchQueue.main.async { [weak self] in self?.fitToWindow() }
+                return
+            }
 
             let scale = min(viewSize.width / imgSize.width, viewSize.height / imgSize.height)
             let clamped = min(max(scale, scrollView.minMagnification), scrollView.maxMagnification)
             scrollView.magnification = clamped
             zoomFactor.wrappedValue = clamped
-            // CenteredClipView handles centering automatically
         }
 
         @objc func magnificationChanged(_ notification: Notification) {
