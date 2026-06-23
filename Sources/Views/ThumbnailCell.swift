@@ -5,7 +5,7 @@ struct ThumbnailCell: View {
     let isSelected: Bool
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 2) {
             ZStack {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color(NSColor.quaternaryLabelColor))
@@ -29,7 +29,7 @@ struct ThumbnailCell: View {
                 .frame(width: 108)
                 .foregroundColor(isSelected ? .primary : .secondary)
         }
-        .padding(4)
+        .padding(2)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)

@@ -15,7 +15,8 @@ struct SidebarView: View {
                             .onTapGesture { viewModel.selectDocument(at: index) }
                     }
                 }
-                .padding(8)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
             }
             .background(Color(NSColor.controlBackgroundColor))
             .onChange(of: viewModel.collection.currentIndex) { newIndex in
