@@ -131,11 +131,23 @@ class ImageViewModel: ObservableObject {
 
     func selectAlbum(_ album: Album) {
         navSelection = .album(album.id) as NavSelection?
-        // Auto-import album photos that aren't in the collection yet
+        Log.info("Album gewählt: '\(album.name)' (\(album.photoURLs.count) Fotos)")
+
+        // Import photos not yet in collection
         let missing = album.photoURLs.filter { url in
             !collection.documents.contains(where: { $0.url == url })
         }
-        if !missing.isEmpty { importFiles(missing) }
+        if !missing.isEmpty {
+            Log.info("Importiere \(missing.count) fehlende Album-Fotos")
+            importFiles(missing)
+        }
+
+        // Select first album photo that's already in collection
+        if let firstURL = album.photoURLs.first,
+           let idx = collection.documents.firstIndex(where: { $0.url == firstURL }) {
+            Log.info("Wähle erstes Album-Foto bei Index \(idx)")
+            selectDocument(at: idx)
+        }
     }
 
     func createAlbum(name: String) {
