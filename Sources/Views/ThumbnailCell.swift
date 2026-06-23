@@ -1,0 +1,43 @@
+import SwiftUI
+
+struct ThumbnailCell: View {
+    let document: ImageDocument
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color(NSColor.quaternaryLabelColor))
+                    .frame(width: 120, height: 90)
+
+                if let thumb = document.thumbnail {
+                    Image(nsImage: NSImage(cgImage: thumb, size: .zero))
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 120, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                } else {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                }
+            }
+
+            Text(document.filename)
+                .font(.caption2)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(width: 120)
+                .foregroundColor(isSelected ? .primary : .secondary)
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+        )
+    }
+}
