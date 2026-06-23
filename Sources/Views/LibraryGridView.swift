@@ -3,11 +3,9 @@ import SwiftUI
 struct LibraryGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
-    private let columns = [GridItem(.adaptive(minimum: 176, maximum: 176), spacing: 12)]
-
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
+            ScrollView(.horizontal, showsIndicators: true) {
                 if viewModel.collection.documents.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "photo.on.rectangle.angled")
@@ -19,7 +17,7 @@ struct LibraryGridView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 40)
                 } else {
-                    LazyVGrid(columns: columns, spacing: 12) {
+                    LazyHStack(spacing: 12) {
                         ForEach(Array(viewModel.collection.documents.enumerated()), id: \.element.id) { index, doc in
                             ThumbnailCell(document: doc, isSelected: index == viewModel.collection.currentIndex)
                                 .id(index)
@@ -28,7 +26,8 @@ struct LibraryGridView: View {
                                 .onTapGesture { viewModel.selectDocument(at: index) }
                         }
                     }
-                    .padding(8)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                 }
             }
             .background(Color(NSColor.controlBackgroundColor))
