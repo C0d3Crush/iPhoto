@@ -9,6 +9,7 @@ class ImageViewModel: ObservableObject {
     @Published var errorMessage: String? = nil
     @Published var fitToWindowRequested: Bool = false
     @Published var showExportSheet: Bool = false
+    @Published var pendingCrashReport: String? = nil
     @Published var inspectorVisible: Bool = false
     @Published var isSavingMetadata: Bool = false
     @Published var navSidebarVisible: Bool = true

@@ -1,6 +1,11 @@
 import SwiftUI
 import AppKit
 
+private struct CrashReportWrapper: Identifiable {
+    let id = UUID()
+    let report: String
+}
+
 struct ContentView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
@@ -48,6 +53,16 @@ struct ContentView: View {
         }
         .onAppear {
             NSApp.mainWindow?.title = viewModel.windowTitle
+        }
+        .sheet(item: Binding(
+            get: { viewModel.pendingCrashReport.map { CrashReportWrapper(report: $0) } },
+            set: { if $0 == nil { viewModel.pendingCrashReport = nil } }
+        )) { wrapper in
+            CrashReportSheet(report: wrapper.report,
+                             isPresented: Binding(
+                                get: { viewModel.pendingCrashReport != nil },
+                                set: { if !$0 { viewModel.pendingCrashReport = nil } }
+                             ))
         }
         .sheet(isPresented: $viewModel.showExportSheet) {
             ExportSheet(
