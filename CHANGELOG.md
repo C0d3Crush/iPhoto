@@ -2,6 +2,38 @@
 
 ---
 
+## 0.16.1
+**Shift-Klick Bereichsauswahl im Album-Modus korrigiert**
+- Fix: Shift-Klick wählt nun nur sichtbare Album-Fotos im Bereich aus, keine Library-Fotos dazwischen
+
+---
+
+## 0.16.0
+**Cmd+Delete entfernt markierte Fotos**
+- In der Library-Ansicht: markierte Fotos aus der Sammlung entfernen
+- In der Album-Ansicht: markierte Fotos aus dem Album entfernen (bleiben in der Library)
+
+---
+
+## 0.15.1
+**Cmd/Shift-Klick Erkennung korrigiert**
+- Fix: Modifier-Flags werden bei mouseDown gecaptured statt bei onTapGesture, um Timing-Probleme zu beheben
+
+---
+
+## 0.15.0
+**Erweiterte Tastaturauswahl**
+- Cmd+Klick: einzelnes Foto zur Auswahl hinzufügen oder entfernen
+- Shift+Klick: alle Fotos zwischen zwei Positionen auswählen
+
+---
+
+## 0.14.1
+**Drag & Drop Mehrfachauswahl korrigiert**
+- Fix: Drag & Drop auf ein Album fügt jetzt alle markierten Fotos hinzu, nicht nur das gezogene
+
+---
+
 ## 0.14.0
 **Mehrfachauswahl mit Cmd+A**
 - Cmd+A markiert alle sichtbaren Fotos auf einmal

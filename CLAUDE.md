@@ -51,3 +51,20 @@ Prefix all commit messages with a type label: `bugfix:`, `feature:`, `refactor:`
 ```
 ! ssh -T git@github.com
 ```
+
+## Versioning & Changelog
+
+**Semantic versioning** (`MAJOR.MINOR.PATCH`):
+- `feature:` commit → bump MINOR, reset PATCH (e.g. 0.14.0 → 0.15.0)
+- `bugfix:` / `chore:` commit → bump PATCH (e.g. 0.15.0 → 0.15.1)
+- MAJOR stays 0 until the app is considered stable for general release
+
+**After every commit, update both:**
+
+1. `Resources/Info.plist` — set `CFBundleShortVersionString` and `CFBundleVersion` to the new version string.
+
+2. `CHANGELOG.md` — prepend a new entry at the top following the existing format:
+   - `## X.Y.Z` heading
+   - Bold one-line section title
+   - Bullet points describing changes (user-facing language, German)
+   - Group multiple same-type commits in one version block when they form a logical unit
