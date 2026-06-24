@@ -114,14 +114,18 @@ private struct AlbumRow: View {
         .buttonStyle(PlainButtonStyle())
         .padding(.horizontal, 4)
         .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
-            for provider in providers {
-                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
-                    guard let data = item as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                    DispatchQueue.main.async {
-                        if let doc = viewModel.collection.documents.first(where: { $0.url == url }) {
-                            viewModel.addToAlbum(doc, albumID: album.id)
-                        }
+            providers.first?.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                guard let data = item as? Data,
+                      let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                DispatchQueue.main.async {
+                    let selected = viewModel.collection.selectedIndices
+                    let droppedIsSelected = selected.contains(where: {
+                        viewModel.collection.documents[$0].url == url
+                    })
+                    if droppedIsSelected && selected.count > 1 {
+                        viewModel.addSelectedToAlbum(albumID: album.id)
+                    } else if let doc = viewModel.collection.documents.first(where: { $0.url == url }) {
+                        viewModel.addToAlbum(doc, albumID: album.id)
                     }
                 }
             }
