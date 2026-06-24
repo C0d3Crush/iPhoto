@@ -92,6 +92,7 @@ private struct AnalyseToolBlock: View {
             .padding(.vertical, 7)
             .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
             .contentShape(Rectangle())
+            .onTapGesture { onToggleCollapse() }
             .onDrag {
                 DispatchQueue.main.async { draggingTool = tool }
                 return NSItemProvider(object: tool.rawValue as NSString)
