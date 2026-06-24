@@ -76,6 +76,7 @@ class ImageViewModel: ObservableObject {
             case 123: DispatchQueue.main.async { self.previous() }; return nil
             case 124: DispatchQueue.main.async { self.next()     }; return nil
             case 0 where onlyCmdDown: DispatchQueue.main.async { self.selectAll() }; return nil
+            case 51 where onlyCmdDown: DispatchQueue.main.async { self.removeSelected() }; return nil
             default:  return event
             }
         }
@@ -177,6 +178,33 @@ class ImageViewModel: ObservableObject {
         guard let idx = albums.firstIndex(where: { $0.id == album.id }) else { return }
         albums[idx].name = name
         saveAlbums()
+    }
+
+    func removeSelected() {
+        guard !collection.selectedIndices.isEmpty else { return }
+        switch navSelection {
+        case .album(let id):
+            for colIdx in collection.selectedIndices {
+                guard colIdx < collection.documents.count else { continue }
+                removeFromAlbum(collection.documents[colIdx], albumID: id)
+            }
+            collection.selectedIndices = []
+        default:
+            let sorted = collection.selectedIndices.sorted().reversed()
+            for idx in sorted {
+                guard idx < collection.documents.count else { continue }
+                collection.documents.remove(at: idx)
+            }
+            collection.selectedIndices = []
+            if collection.documents.isEmpty {
+                collection.currentIndex = 0
+            } else {
+                let newIdx = min(collection.currentIndex, collection.documents.count - 1)
+                collection.currentIndex = newIdx
+                collection.selectedIndices = [newIdx]
+                loadCurrentImage()
+            }
+        }
     }
 
     func toggleSelection(at index: Int) {
