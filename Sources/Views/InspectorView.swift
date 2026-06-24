@@ -43,7 +43,7 @@ struct InspectorView: View {
                     }
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 0) {
+                        VStack(spacing: 0) {
                             ForEach(orderedActive, id: \.self) { panel in
                                 InspectorBlock(
                                     panel: panel,
