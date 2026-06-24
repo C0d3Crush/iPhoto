@@ -129,22 +129,23 @@ final class AnalysisEngine: ObservableObject {
     }
 
     private static func renderParade(r: [Float], g: [Float], b: [Float], w: Int, h: Int) -> CGImage? {
-        let gap  = 2
-        let outW = w * 3 + gap * 2
+        let gap    = 2
+        let chanW  = (w - gap * 2) / 3
+        let outW   = w
         let maxVal = max(1.0, [r, g, b].flatMap { $0 }.max()!)
         var pixels = [UInt8](repeating: 0, count: outW * h * 4)
 
         let thirds: [(acc: [Float], cr: Float, cg: Float, cb: Float, xOff: Int)] = [
             (r, 1, 0, 0, 0),
-            (g, 0, 1, 0, w + gap),
-            (b, 0, 0, 1, (w + gap) * 2)
+            (g, 0, 1, 0, chanW + gap),
+            (b, 0, 0, 1, (chanW + gap) * 2)
         ]
         for ch in thirds {
             for row in 0..<h {
                 for col in 0..<w {
                     let v = min(1.0, ch.acc[row * w + col] / maxVal * 5.0)
                     guard v > 0 else { continue }
-                    let px = ch.xOff + col
+                    let px = ch.xOff + col * chanW / w
                     guard px < outW else { continue }
                     let base = (row * outW + px) * 4
                     pixels[base]   = UInt8(ch.cr * v * 255)

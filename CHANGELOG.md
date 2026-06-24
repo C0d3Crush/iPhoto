@@ -2,6 +2,12 @@
 
 ---
 
+## 0.19.2
+**RGB-Parade passt jetzt in die Inspector-Breite**
+- Fix: Parade-Ausgabe war 3× zu breit — R/G/B-Kanäle werden jetzt auf je 1/3 der Gesamtbreite komprimiert
+
+---
+
 ## 0.19.1
 **Inspector: Plugins als scrollbare Blöcke mit Drag & Drop**
 - Alle aktiven Plugins werden jetzt als vertikale Blöcke übereinander angezeigt statt als Tabs
