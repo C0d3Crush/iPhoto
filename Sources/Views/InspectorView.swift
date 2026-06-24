@@ -165,6 +165,7 @@ private struct InspectorBlock: View {
             .padding(.vertical, 8)
             .background(Color(NSColor.controlBackgroundColor))
             .contentShape(Rectangle())
+            .onTapGesture { onToggleCollapse() }
             .onDrag {
                 DispatchQueue.main.async { draggingPanel = panel }
                 return NSItemProvider(object: panel.rawValue as NSString)
