@@ -2,6 +2,15 @@
 
 ---
 
+## 0.19.1
+**Inspector: Plugins als scrollbare Blöcke mit Drag & Drop**
+- Alle aktiven Plugins werden jetzt als vertikale Blöcke übereinander angezeigt statt als Tabs
+- Jeder Block hat einen Header zum Ein-/Ausklappen (Chevron-Button)
+- Reihenfolge per Drag & Drop am Header-Griff verschiebbar (Reihenfolge wird gespeichert)
+- Inspector-Bereich ist scrollbar wenn Inhalte die Fensterhöhe überschreiten
+
+---
+
 ## 0.19.0
 **Analysewerkzeuge Plugin: Histogramm, Waveform, RGB-Parade & Gradationskurven**
 - Neues Plugin "Analyse" in der rechten Sidebar (Plugins-Menü → Analyse)

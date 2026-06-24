@@ -13,78 +13,160 @@ struct InspectorView: View {
     @AppStorage("plugin.metadata")    var metadataActive:    Bool = true
     @AppStorage("plugin.anpassungen") var adjustmentsActive: Bool = false
     @AppStorage("plugin.analyse")     var analyseActive:     Bool = false
-    @State private var selectedPanel: InspectorPanel = .metadata
 
-    private var activePanels: [InspectorPanel] {
-        InspectorPanel.allCases.filter { panel in
-            switch panel {
-            case .metadata:    return metadataActive
-            case .adjustments: return adjustmentsActive
-            case .analyse:     return analyseActive
-            }
-        }
+    @State private var panelOrder: [InspectorPanel] = InspectorView.loadOrder()
+    @State private var collapsed: Set<InspectorPanel> = []
+    @State private var draggingPanel: InspectorPanel?
+
+    private var activePanels: Set<InspectorPanel> {
+        var s = Set<InspectorPanel>()
+        if metadataActive    { s.insert(.metadata) }
+        if adjustmentsActive { s.insert(.adjustments) }
+        if analyseActive     { s.insert(.analyse) }
+        return s
+    }
+
+    private var orderedActive: [InspectorPanel] {
+        panelOrder.filter { activePanels.contains($0) }
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if activePanels.isEmpty {
-                Spacer()
-                Text("Kein Plugin aktiv")
-                    .foregroundColor(.secondary)
-                    .font(.callout)
-                Spacer()
-            } else {
-                if activePanels.count > 1 {
-                    HStack(spacing: 4) {
-                        ForEach(activePanels, id: \.self) { panel in
-                            Button(action: { selectedPanel = panel }) {
-                                Text(panel.rawValue)
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(selectedPanel == panel
-                                        ? Color.accentColor.opacity(0.2)
-                                        : Color.clear)
-                                    .cornerRadius(4)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .foregroundColor(selectedPanel == panel ? .accentColor : .secondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-
-                    Divider()
+        Group {
+            if orderedActive.isEmpty {
+                VStack {
+                    Spacer()
+                    Text("Kein Plugin aktiv")
+                        .foregroundColor(.secondary)
+                        .font(.callout)
+                    Spacer()
                 }
-
-                currentPanelView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(orderedActive, id: \.self) { panel in
+                            InspectorBlock(
+                                panel: panel,
+                                isCollapsed: collapsed.contains(panel),
+                                draggingPanel: $draggingPanel,
+                                onToggleCollapse: { toggle(panel) }
+                            )
+                            .opacity(draggingPanel == panel ? 0.4 : 1.0)
+                            .onDrop(of: ["public.text"],
+                                    delegate: PanelDropDelegate(
+                                        target: panel,
+                                        order: $panelOrder,
+                                        dragging: $draggingPanel))
+                            Divider()
+                        }
+                    }
+                }
             }
         }
         .frame(width: 280)
         .background(Color(NSColor.windowBackgroundColor))
-        .onChange(of: activePanels.count) { _ in
-            if !activePanels.contains(selectedPanel), let first = activePanels.first {
-                selectedPanel = first
+        .onChange(of: panelOrder) { InspectorView.saveOrder($0) }
+    }
+
+    private func toggle(_ panel: InspectorPanel) {
+        if collapsed.contains(panel) { collapsed.remove(panel) }
+        else { collapsed.insert(panel) }
+    }
+
+    // MARK: - Order persistence
+
+    private static func loadOrder() -> [InspectorPanel] {
+        let raw = UserDefaults.standard.string(forKey: "inspector.panelOrder") ?? ""
+        let saved = raw.split(separator: ",").compactMap { InspectorPanel(rawValue: String($0)) }
+        return Set(saved) == Set(InspectorPanel.allCases) ? saved : InspectorPanel.allCases
+    }
+
+    private static func saveOrder(_ order: [InspectorPanel]) {
+        UserDefaults.standard.set(order.map(\.rawValue).joined(separator: ","),
+                                  forKey: "inspector.panelOrder")
+    }
+}
+
+// MARK: - Block
+
+private struct InspectorBlock: View {
+    let panel: InspectorPanel
+    let isCollapsed: Bool
+    @Binding var draggingPanel: InspectorPanel?
+    let onToggleCollapse: () -> Void
+    @EnvironmentObject var viewModel: ImageViewModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Draggable header
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption)
+                    .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                Text(panel.rawValue)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button(action: onToggleCollapse) {
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor))
+            .contentShape(Rectangle())
+            .onDrag {
+                DispatchQueue.main.async { draggingPanel = panel }
+                return NSItemProvider(object: panel.rawValue as NSString)
+            }
+
+            // Content
+            if !isCollapsed {
+                panelContent
+                    .frame(maxWidth: .infinity)
             }
         }
     }
 
     @ViewBuilder
-    private var currentPanelView: some View {
-        let panel = activePanels.contains(selectedPanel) ? selectedPanel : (activePanels.first ?? .metadata)
+    private var panelContent: some View {
         switch panel {
         case .metadata:
             MetadataPanel()
-                .environmentObject(viewModel)
         case .adjustments:
             AdjustmentsPanel()
-                .environmentObject(viewModel)
         case .analyse:
             AnalysePanel()
-                .environmentObject(viewModel)
         }
+    }
+}
+
+// MARK: - Drop delegate
+
+private struct PanelDropDelegate: DropDelegate {
+    let target: InspectorPanel
+    @Binding var order: [InspectorPanel]
+    @Binding var dragging: InspectorPanel?
+
+    func dropEntered(info: DropInfo) {
+        guard let src = dragging, src != target,
+              let from = order.firstIndex(of: src),
+              let to   = order.firstIndex(of: target) else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            order.move(fromOffsets: IndexSet(integer: from),
+                       toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }
