@@ -12,17 +12,28 @@ struct ContentView: View {
                 Divider()
             }
 
-            VStack(spacing: 0) {
-                DetailView()
-                    .environmentObject(viewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                if !viewModel.collection.documents.isEmpty {
-                    Divider()
-
-                    LibraryGridView()
+            ZStack {
+                VStack(spacing: 0) {
+                    DetailView()
                         .environmentObject(viewModel)
-                        .frame(height: 138)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    if !viewModel.collection.documents.isEmpty {
+                        Divider()
+
+                        LibraryGridView()
+                            .environmentObject(viewModel)
+                            .frame(height: 138)
+                    }
+                }
+
+                if viewModel.cropToolActive, let img = viewModel.currentImage {
+                    CropEditorView(
+                        image: img,
+                        initialCrop: viewModel.adjCropRect,
+                        initialRotation: viewModel.adjRotation
+                    )
+                    .environmentObject(viewModel)
                 }
             }
 

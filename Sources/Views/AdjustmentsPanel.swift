@@ -15,6 +15,32 @@ struct AdjustmentsPanel: View {
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    // Crop tool
+                    Button(action: { viewModel.cropToolActive = true }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "crop")
+                                .font(.caption)
+                            Text("Zuschneiden & Begradigen")
+                                .font(.caption)
+                            Spacer()
+                            if hasCropOrRotation {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.accentColor)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .foregroundColor(.primary)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                        .background(Color(NSColor.controlBackgroundColor).cornerRadius(6))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                    Divider()
+
                     adjRow(label: "Belichtung",
                            value: $viewModel.adjExposure,
                            range: -2...2,
@@ -59,13 +85,11 @@ struct AdjustmentsPanel: View {
         }
     }
 
-    private var isNeutral: Bool {
-        viewModel.adjExposure == 0 && viewModel.adjBrightness == 0 &&
-        viewModel.adjContrast == 1 && viewModel.adjSaturation == 1 &&
-        viewModel.adjWarmth == 0 &&
-        zip(viewModel.adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
-            abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
-        }
+    private var isNeutral: Bool { !viewModel.hasActiveAdjustments }
+
+    private var hasCropOrRotation: Bool {
+        viewModel.adjRotation != 0 ||
+        viewModel.adjCropRect != CGRect(x: 0, y: 0, width: 1, height: 1)
     }
 
     private var isRAW: Bool {

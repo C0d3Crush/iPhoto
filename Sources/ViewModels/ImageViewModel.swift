@@ -23,8 +23,11 @@ class ImageViewModel: ObservableObject {
     @Published var adjSaturation: Double = 1.0
     @Published var adjWarmth: Double = 0.0
     @Published var adjCurvePoints: [CGPoint] = CurvesView.defaultPoints
+    @Published var adjCropRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+    @Published var adjRotation: Double = 0.0
     @Published var adjustedImage: CGImage? = nil
     @Published var displayImageVersion: UUID = UUID()
+    @Published var cropToolActive: Bool = false
 
     // MARK: - Version history
     @Published var savedVersions: [ImageVersionMeta] = []
@@ -38,7 +41,8 @@ class ImageViewModel: ObservableObject {
 
     var hasActiveAdjustments: Bool {
         adjExposure != 0 || adjBrightness != 0 || adjContrast != 1 ||
-        adjSaturation != 1 || adjWarmth != 0 ||
+        adjSaturation != 1 || adjWarmth != 0 || adjRotation != 0 ||
+        adjCropRect != CGRect(x: 0, y: 0, width: 1, height: 1) ||
         !zip(adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
             abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
         }
@@ -122,10 +126,12 @@ class ImageViewModel: ObservableObject {
             $adjContrast.map { _ in () }.eraseToAnyPublisher(),
             $adjSaturation.map { _ in () }.eraseToAnyPublisher(),
             $adjWarmth.map { _ in () }.eraseToAnyPublisher(),
-            $adjCurvePoints.map { _ in () }.eraseToAnyPublisher()
+            $adjCurvePoints.map { _ in () }.eraseToAnyPublisher(),
+            $adjCropRect.map { _ in () }.eraseToAnyPublisher(),
+            $adjRotation.map { _ in () }.eraseToAnyPublisher(),
         ]
         Publishers.MergeMany(adjPublishers)
-            .dropFirst(6)
+            .dropFirst(8)
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyAdjustments() }
             .store(in: &cancellables)
@@ -682,6 +688,8 @@ class ImageViewModel: ObservableObject {
     func resetAdjustments() {
         adjExposure = 0; adjBrightness = 0; adjContrast = 1; adjSaturation = 1; adjWarmth = 0
         adjCurvePoints = CurvesView.defaultPoints
+        adjCropRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+        adjRotation = 0
         adjustedImage = nil
         pendingMetadataEntries = nil
     }
@@ -713,6 +721,8 @@ class ImageViewModel: ObservableObject {
         if adjContrast   != 1 { parts.append(String(format: "Kontrast %.2f",       adjContrast)) }
         if adjSaturation != 1 { parts.append(String(format: "Sättigung %.2f",      adjSaturation)) }
         if adjWarmth     != 0 { parts.append(String(format: "Wärme %+.2f",         adjWarmth)) }
+        if adjRotation   != 0 { parts.append(String(format: "Rotation %.1f°",      adjRotation)) }
+        if adjCropRect != CGRect(x: 0, y: 0, width: 1, height: 1) { parts.append("Zugeschnitten") }
         let curveDefault = zip(adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
             abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
         }
@@ -759,16 +769,17 @@ class ImageViewModel: ObservableObject {
         let curveDefault = zip(adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
             abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
         }
+        let cropDefault = adjCropRect == CGRect(x: 0, y: 0, width: 1, height: 1)
         let isNeutral = adjExposure == 0 && adjBrightness == 0 && adjContrast == 1
-            && adjSaturation == 1 && adjWarmth == 0 && curveDefault
+            && adjSaturation == 1 && adjWarmth == 0 && curveDefault && adjRotation == 0 && cropDefault
         guard !isNeutral, let source = currentImage else {
             adjustedImage = nil
             displayImageVersion = UUID()
             return
         }
 
-        let (exposure, brightness, contrast, saturation, warmth, curvePoints) =
-            (adjExposure, adjBrightness, adjContrast, adjSaturation, adjWarmth, adjCurvePoints)
+        let (exposure, brightness, contrast, saturation, warmth, curvePoints, rotation, cropRect) =
+            (adjExposure, adjBrightness, adjContrast, adjSaturation, adjWarmth, adjCurvePoints, adjRotation, adjCropRect)
         let token = UUID()
         adjToken = token
 
@@ -807,6 +818,35 @@ class ImageViewModel: ObservableObject {
                     f.setValue(CIVector(x: pt.x, y: pt.y), forKey: "inputPoint\(i)")
                 }
                 if let out = f.outputImage { ci = out }
+            }
+
+            // Rotation (around image center)
+            if rotation != 0 {
+                let angle = CGFloat(rotation) * .pi / 180.0
+                let cx = ci.extent.midX
+                let cy = ci.extent.midY
+                var t = CGAffineTransform(translationX: cx, y: cy)
+                t = t.rotated(by: angle)
+                t = t.translatedBy(x: -cx, y: -cy)
+                let rotated = ci.transformed(by: t)
+                ci = rotated.transformed(by: CGAffineTransform(
+                    translationX: -rotated.extent.minX,
+                    y: -rotated.extent.minY))
+            }
+
+            // Crop (normalized rect, y-axis flipped for CIImage)
+            if !cropRect.equalTo(CGRect(x: 0, y: 0, width: 1, height: 1)) {
+                let ext = ci.extent
+                let px = CGRect(
+                    x: ext.minX + cropRect.minX * ext.width,
+                    y: ext.minY + (1.0 - cropRect.maxY) * ext.height,
+                    width: cropRect.width  * ext.width,
+                    height: cropRect.height * ext.height
+                )
+                let cropped = ci.cropped(to: px)
+                ci = cropped.transformed(by: CGAffineTransform(
+                    translationX: -cropped.extent.minX,
+                    y: -cropped.extent.minY))
             }
 
             let result = self.adjCIContext.createCGImage(ci, from: ci.extent)

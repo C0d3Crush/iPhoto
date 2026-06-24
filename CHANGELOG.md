@@ -2,6 +2,18 @@
 
 ---
 
+## 0.22.0
+**Crop & Straighten**
+- Neues Zuschneiden-Werkzeug im Anpassungen-Plugin ("Zuschneiden & Begradigen")
+- Interaktiver Crop-Editor mit 8 Ziehpunkten (Ecken + Kanten) und Verschieben per Drag auf die Fläche
+- Drittel-Linien (Rule of Thirds) erscheinen beim Ziehen
+- Begradigen-Slider (−45° bis +45°) dreht das Bild — Zuschnitt und Rotation zusammen in einer Ansicht
+- Crop und Rotation sind non-destruktiv: "Anwenden" schreibt die Werte in die bestehende Anpassungs-Pipeline
+- Speichern über die untere Inspector-Leiste bakt Crop + Rotation ins Bild ein
+- Versions-Label zeigt "Rotation X.Y° · Zugeschnitten" wenn aktiv
+
+---
+
 ## 0.21.0
 **Versionslabel + Metadaten über untere Leiste speichern**
 - Jede gespeicherte Version zeigt jetzt, was geändert wurde (z.B. "Belichtung +1.0 EV · Kontrast 1.20" oder "Metadaten")
