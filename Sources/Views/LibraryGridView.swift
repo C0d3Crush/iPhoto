@@ -20,8 +20,7 @@ struct LibraryGridView: View {
                     LazyHStack(spacing: 12) {
                         ForEach(viewModel.visibleDocuments, id: \.id) { doc in
                             let actualIndex = viewModel.collectionIndex(for: doc) ?? 0
-                            let isSelected = viewModel.collection.documents.indices.contains(viewModel.collection.currentIndex)
-                                && viewModel.collection.documents[viewModel.collection.currentIndex].id == doc.id
+                            let isSelected = viewModel.collection.selectedIndices.contains(actualIndex)
                             ThumbnailCell(document: doc, isSelected: isSelected)
                                 .id(actualIndex)
                                 .frame(width: 176)
@@ -45,9 +44,16 @@ struct LibraryGridView: View {
     @ViewBuilder
     private func albumContextMenu(for doc: ImageDocument) -> some View {
         if !viewModel.albums.isEmpty {
-            Menu("Zu Album hinzufügen") {
+            let multiSelect = viewModel.collection.selectedIndices.count > 1
+            Menu(multiSelect ? "Alle (\(viewModel.collection.selectedIndices.count)) zu Album hinzufügen" : "Zu Album hinzufügen") {
                 ForEach(viewModel.albums) { album in
-                    Button(album.name) { viewModel.addToAlbum(doc, albumID: album.id) }
+                    Button(album.name) {
+                        if multiSelect {
+                            viewModel.addSelectedToAlbum(albumID: album.id)
+                        } else {
+                            viewModel.addToAlbum(doc, albumID: album.id)
+                        }
+                    }
                 }
             }
             if case .album(let id) = viewModel.navSelection as NavSelection? {

@@ -70,9 +70,11 @@ class ImageViewModel: ObservableObject {
 
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
+            let onlyCmdDown = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
             switch event.keyCode {
             case 123: DispatchQueue.main.async { self.previous() }; return nil
             case 124: DispatchQueue.main.async { self.next()     }; return nil
+            case 0 where onlyCmdDown: DispatchQueue.main.async { self.selectAll() }; return nil
             default:  return event
             }
         }
@@ -109,6 +111,7 @@ class ImageViewModel: ObservableObject {
     func clearAll() {
         collection.documents = []
         collection.currentIndex = 0
+        collection.selectedIndices = []
         isLoading = false
         errorMessage = nil
         fitToWindowRequested = false
@@ -170,10 +173,26 @@ class ImageViewModel: ObservableObject {
         saveAlbums()
     }
 
+    func selectAll() {
+        let indices = Set(visibleDocuments.compactMap { collectionIndex(for: $0) })
+        collection.selectedIndices = indices
+    }
+
     func addToAlbum(_ document: ImageDocument, albumID: UUID) {
         guard let idx = albums.firstIndex(where: { $0.id == albumID }) else { return }
         guard !albums[idx].photoURLs.contains(document.url) else { return }
         albums[idx].photoURLs.append(document.url)
+        saveAlbums()
+    }
+
+    func addSelectedToAlbum(albumID: UUID) {
+        guard let idx = albums.firstIndex(where: { $0.id == albumID }) else { return }
+        for colIdx in collection.selectedIndices {
+            guard colIdx < collection.documents.count else { continue }
+            let url = collection.documents[colIdx].url
+            guard !albums[idx].photoURLs.contains(url) else { continue }
+            albums[idx].photoURLs.append(url)
+        }
         saveAlbums()
     }
 
