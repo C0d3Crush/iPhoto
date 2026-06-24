@@ -2,6 +2,17 @@
 
 ---
 
+## 0.17.2
+**Löschen in Ordner-Ansicht mit Bestätigung**
+- Cmd+Delete in der Ordner-Ansicht zeigt Warndialog: Originaldateien werden in den Papierkorb verschoben
+- Thumbnails im unteren Strip etwas kleiner (148×99) für bessere Passform
+
+---
+
+## 0.17.1 — in 0.17.2 zusammengefasst
+
+---
+
 ## 0.17.0
 **Ordner-Support mit automatischer Synchronisierung**
 - Ordner über "+" in der Sidebar hinzufügen — alle Bilder darin werden automatisch importiert

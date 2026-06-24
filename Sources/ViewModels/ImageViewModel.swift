@@ -192,6 +192,8 @@ class ImageViewModel: ObservableObject {
     func removeSelected() {
         guard !collection.selectedIndices.isEmpty else { return }
         switch navSelection {
+        case .folder:
+            confirmDeleteFromFolder()
         case .album(let id):
             for colIdx in collection.selectedIndices {
                 guard colIdx < collection.documents.count else { continue }
@@ -213,6 +215,36 @@ class ImageViewModel: ObservableObject {
                 collection.selectedIndices = [newIdx]
                 loadCurrentImage()
             }
+        }
+    }
+
+    private func confirmDeleteFromFolder() {
+        let count = collection.selectedIndices.count
+        let alert = NSAlert()
+        alert.messageText = count == 1 ? "Datei in den Papierkorb?" : "\(count) Dateien in den Papierkorb?"
+        alert.informativeText = count == 1
+            ? "Die Originaldatei wird vom Datenträger in den Papierkorb verschoben."
+            : "Die \(count) Originaldateien werden vom Datenträger in den Papierkorb verschoben."
+        alert.addButton(withTitle: "In Papierkorb")
+        alert.addButton(withTitle: "Abbrechen")
+        alert.alertStyle = .warning
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let indices = collection.selectedIndices.sorted().reversed()
+        for idx in indices {
+            guard idx < collection.documents.count else { continue }
+            let url = collection.documents[idx].url
+            let (accessURL, stop) = BookmarkStore.shared.access(url: url)
+            try? FileManager.default.trashItem(at: accessURL, resultingItemURL: nil)
+            stop()
+            collection.documents.remove(at: idx)
+        }
+        collection.selectedIndices = []
+        if !collection.documents.isEmpty {
+            let newIdx = min(collection.currentIndex, collection.documents.count - 1)
+            collection.currentIndex = newIdx
+            collection.selectedIndices = [newIdx]
+            loadCurrentImage()
         }
     }
 
