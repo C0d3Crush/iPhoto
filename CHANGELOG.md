@@ -2,6 +2,17 @@
 
 ---
 
+## 0.20.0
+**Anpassungen speichern & Versionshistorie**
+- "Speichern"-Button im Anpassungen-Plugin schreibt bearbeitetes Bild ins Original zurück (JPEG/PNG/TIFF)
+- Vor jedem Speichern wird automatisch ein Backup der Vorgängerversion angelegt
+- Versionshistorie zeigt alle gespeicherten Versionen mit Datum, Uhrzeit und Vorschau
+- "Wiederherstellen" setzt das Bild auf eine beliebige frühere Version zurück (sichert vorher den aktuellen Stand)
+- Einzelne Versionen können gelöscht werden
+- RAW-Dateien werden nicht überschrieben (Hinweis im Panel)
+
+---
+
 ## 0.19.3
 **Analyse-Werkzeuge als Blöcke mit Drag & Drop**
 - Histogramm, Waveform, RGB-Parade und Kurven werden jetzt als übereinandergestapelte Blöcke angezeigt statt als Tabs

@@ -26,6 +26,11 @@ class ImageViewModel: ObservableObject {
     @Published var adjustedImage: CGImage? = nil
     @Published var displayImageVersion: UUID = UUID()
 
+    // MARK: - Version history
+    @Published var savedVersions: [ImageVersionMeta] = []
+    @Published var showVersionHistory: Bool = false
+    @Published var isSavingToFile: Bool = false
+
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
     private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
@@ -476,6 +481,91 @@ class ImageViewModel: ObservableObject {
         try? data.write(to: watchedFoldersFileURL, options: .atomic)
     }
 
+    // MARK: - Version history
+
+    func loadVersionsForCurrentImage() {
+        guard let url = collection.currentDocument?.url else { savedVersions = []; return }
+        let (accessURL, stop) = BookmarkStore.shared.access(url: url)
+        savedVersions = VersionStore.shared.loadVersions(for: accessURL)
+        stop()
+    }
+
+    func saveAdjustedToFile() {
+        guard let doc = collection.currentDocument else { return }
+        guard !doc.isRAW else {
+            Log.info("RAW-Dateien können nicht überschrieben werden")
+            return
+        }
+        let image = adjustedImage ?? currentImage
+        guard let image = image else { return }
+
+        isSavingToFile = true
+        let url = doc.url
+        let idx = collection.currentIndex
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let (accessURL, stop) = BookmarkStore.shared.access(url: url)
+            defer { stop() }
+            do {
+                try VersionStore.shared.backupFile(at: accessURL)
+                try VersionStore.shared.writeImage(image, to: accessURL)
+                Log.info("Bild gespeichert: \(url.lastPathComponent)")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.isSavingToFile = false
+                    self.resetAdjustments()
+                    if idx < self.collection.documents.count {
+                        self.collection.documents[idx].cgImage = nil
+                        self.collection.documents[idx].thumbnail = nil
+                    }
+                    self.loadVersionsForCurrentImage()
+                    self.loadCurrentImage()
+                    self.loadThumbnails()
+                }
+            } catch {
+                Log.error("Speichern fehlgeschlagen: \(error.localizedDescription)")
+                DispatchQueue.main.async { [weak self] in
+                    self?.isSavingToFile = false
+                    self?.errorMessage = "Speichern fehlgeschlagen: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    func revertToVersion(_ meta: ImageVersionMeta) {
+        guard let doc = collection.currentDocument else { return }
+        isSavingToFile = true
+        let url = doc.url
+        let idx = collection.currentIndex
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let (accessURL, stop) = BookmarkStore.shared.access(url: url)
+            defer { stop() }
+            do {
+                try VersionStore.shared.backupFile(at: accessURL)
+                try VersionStore.shared.restoreVersion(meta, to: accessURL)
+                Log.info("Version wiederhergestellt: \(meta.date)")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.isSavingToFile = false
+                    self.resetAdjustments()
+                    if idx < self.collection.documents.count {
+                        self.collection.documents[idx].cgImage = nil
+                        self.collection.documents[idx].thumbnail = nil
+                    }
+                    self.loadVersionsForCurrentImage()
+                    self.loadCurrentImage()
+                    self.loadThumbnails()
+                }
+            } catch {
+                Log.error("Revert fehlgeschlagen: \(error.localizedDescription)")
+                DispatchQueue.main.async { [weak self] in self?.isSavingToFile = false }
+            }
+        }
+    }
+
     func saveMetadata(_ entries: [MetadataEntry]) {
         guard let doc = collection.currentDocument else { return }
         let index = collection.currentIndex
@@ -612,6 +702,7 @@ class ImageViewModel: ObservableObject {
                     self.isLoading = false
                     self.fitToWindowRequested = true
                     self.displayImageVersion = UUID()
+                    self.loadVersionsForCurrentImage()
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
                 }
             } catch {

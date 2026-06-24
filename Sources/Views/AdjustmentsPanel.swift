@@ -42,16 +42,46 @@ struct AdjustmentsPanel: View {
 
                     Divider()
 
-                    Button("Zurücksetzen") {
-                        viewModel.resetAdjustments()
-                    }
-                    .disabled(isNeutral)
+                    HStack(spacing: 8) {
+                        Button("Zurücksetzen") {
+                            viewModel.resetAdjustments()
+                        }
+                        .disabled(isNeutral)
 
-                    Text("Vorschau — Original nicht verändert")
+                        Spacer()
+
+                        Button(action: save) {
+                            if viewModel.isSavingToFile {
+                                ProgressView().scaleEffect(0.7)
+                            } else {
+                                Text("Speichern")
+                            }
+                        }
+                        .disabled(viewModel.isSavingToFile || isNeutral || isRAW)
+                        .help(isRAW ? "RAW-Dateien können nicht überschrieben werden" : "Anpassungen ins Bild schreiben")
+                    }
+
+                    if !viewModel.savedVersions.isEmpty {
+                        Button(action: { viewModel.showVersionHistory = true }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                Text("\(viewModel.savedVersions.count) Version\(viewModel.savedVersions.count == 1 ? "" : "en")")
+                            }
+                            .font(.caption)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .foregroundColor(.accentColor)
+                    }
+
+                    Text(isRAW ? "RAW — Exportieren zum Speichern" : "Vorschau — Original nicht verändert")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
                 .padding(16)
+            }
+            .sheet(isPresented: $viewModel.showVersionHistory) {
+                VersionHistorySheet(isPresented: $viewModel.showVersionHistory)
+                    .environmentObject(viewModel)
             }
         }
     }
@@ -59,7 +89,18 @@ struct AdjustmentsPanel: View {
     private var isNeutral: Bool {
         viewModel.adjExposure == 0 && viewModel.adjBrightness == 0 &&
         viewModel.adjContrast == 1 && viewModel.adjSaturation == 1 &&
-        viewModel.adjWarmth == 0
+        viewModel.adjWarmth == 0 &&
+        zip(viewModel.adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
+            abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
+        }
+    }
+
+    private var isRAW: Bool {
+        viewModel.collection.currentDocument?.isRAW ?? false
+    }
+
+    private func save() {
+        viewModel.saveAdjustedToFile()
     }
 
     @ViewBuilder
