@@ -2,6 +2,14 @@
 
 ---
 
+## 0.19.3
+**Analyse-Werkzeuge als Blöcke mit Drag & Drop**
+- Histogramm, Waveform, RGB-Parade und Kurven werden jetzt als übereinandergestapelte Blöcke angezeigt statt als Tabs
+- Reihenfolge per Drag & Drop am Header-Griff verschiebbar
+- Jeder Block einzeln ein-/ausklappbar
+
+---
+
 ## 0.19.2
 **RGB-Parade passt jetzt in die Inspector-Breite**
 - Fix: Parade-Ausgabe war 3× zu breit — R/G/B-Kanäle werden jetzt auf je 1/3 der Gesamtbreite komprimiert
