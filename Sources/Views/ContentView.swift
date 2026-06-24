@@ -20,15 +20,9 @@ struct ContentView: View {
                 if !viewModel.collection.documents.isEmpty {
                     Divider()
 
-                    if viewModel.navSelection == .library || viewModel.navSelection == nil {
-                        LibraryGridView()
-                            .environmentObject(viewModel)
-                            .frame(height: 138)
-                    } else {
-                        SidebarView()
-                            .environmentObject(viewModel)
-                            .frame(height: 138)
-                    }
+                    LibraryGridView()
+                        .environmentObject(viewModel)
+                        .frame(height: 138)
                 }
             }
 

@@ -2,6 +2,12 @@
 
 ---
 
+## 0.17.3
+**Tastaturkürzel in Ordner- und Album-Ansicht korrigiert**
+- Fix: Cmd+A, Cmd-Klick, Shift-Klick funktionieren jetzt auch in Ordner- und Album-Ansicht
+
+---
+
 ## 0.17.2
 **Löschen in Ordner-Ansicht mit Bestätigung**
 - Cmd+Delete in der Ordner-Ansicht zeigt Warndialog: Originaldateien werden in den Papierkorb verschoben
