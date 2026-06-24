@@ -79,15 +79,15 @@ struct InspectorView: View {
                         .foregroundColor(.accentColor)
                     }
                     Spacer()
-                    Button(action: { viewModel.saveAdjustedToFile() }) {
+                    Button(action: { viewModel.saveAll() }) {
                         if viewModel.isSavingToFile {
                             ProgressView().scaleEffect(0.7)
                         } else {
                             Text("Speichern")
                         }
                     }
-                    .disabled(viewModel.isSavingToFile || !viewModel.hasActiveAdjustments || viewModel.currentDocIsRAW)
-                    .help(viewModel.currentDocIsRAW ? "RAW-Dateien können nicht überschrieben werden" : "Anpassungen ins Bild schreiben")
+                    .disabled(viewModel.isSavingToFile || !canSave)
+                    .help(helpText)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -101,6 +101,17 @@ struct InspectorView: View {
                 .environmentObject(viewModel)
         }
         .onChange(of: panelOrder) { InspectorView.saveOrder($0) }
+    }
+
+    private var canSave: Bool {
+        (viewModel.hasActiveAdjustments && !viewModel.currentDocIsRAW) || viewModel.hasMetadataChanges
+    }
+
+    private var helpText: String {
+        if viewModel.currentDocIsRAW && !viewModel.hasMetadataChanges {
+            return "RAW — Anpassungen nicht speicherbar, aber Metadaten schon"
+        }
+        return "Änderungen ins Bild schreiben"
     }
 
     private func toggle(_ panel: InspectorPanel) {

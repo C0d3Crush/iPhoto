@@ -85,6 +85,12 @@ struct VersionHistorySheet: View {
                 Text(meta.date, style: .time)
                     .font(.caption)
                     .foregroundColor(.secondary)
+                if let label = meta.label {
+                    Text(label)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
             }
 
             Spacer()

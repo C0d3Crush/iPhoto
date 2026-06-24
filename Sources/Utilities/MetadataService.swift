@@ -143,6 +143,61 @@ final class MetadataService {
         }
     }
 
+    func writePhotoMetadataSync(url: URL, entries: [MetadataEntry]) throws {
+        let rawData = try Data(contentsOf: url)
+        guard let src = CGImageSourceCreateWithData(rawData as CFData, nil) else {
+            throw MetadataError.cannotReadFile
+        }
+        guard let type = CGImageSourceGetType(src) else {
+            throw MetadataError.unknownFileType
+        }
+        let allProps = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as NSDictionary?
+        let exif = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyExifDictionary] as? NSDictionary) ?? [:])
+        let iptc = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyIPTCDictionary] as? NSDictionary) ?? [:])
+        let gps  = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyGPSDictionary]  as? NSDictionary) ?? [:])
+        let tiff = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyTIFFDictionary] as? NSDictionary) ?? [:])
+        for e in entries where e.isEditable && !e.value.isEmpty {
+            switch e.key {
+            case "iptc.ObjectName":      iptc[kCGImagePropertyIPTCObjectName] = e.value
+            case "iptc.Caption":         iptc[kCGImagePropertyIPTCCaptionAbstract] = e.value
+            case "iptc.Keywords":
+                iptc[kCGImagePropertyIPTCKeywords] = e.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } as NSArray
+            case "iptc.Copyright":
+                iptc[kCGImagePropertyIPTCCopyrightNotice] = e.value
+                tiff[kCGImagePropertyTIFFCopyright] = e.value
+            case "iptc.Creator":
+                iptc[kCGImagePropertyIPTCByline] = [e.value] as NSArray
+                tiff[kCGImagePropertyTIFFArtist] = e.value
+            case "exif.DateTimeOriginal": exif[kCGImagePropertyExifDateTimeOriginal] = e.value
+            case "gps.Latitude":
+                if let lat = Double(e.value) {
+                    gps[kCGImagePropertyGPSLatitude]    = abs(lat) as NSNumber
+                    gps[kCGImagePropertyGPSLatitudeRef] = lat >= 0 ? "N" : "S"
+                }
+            case "gps.Longitude":
+                if let lon = Double(e.value) {
+                    gps[kCGImagePropertyGPSLongitude]    = abs(lon) as NSNumber
+                    gps[kCGImagePropertyGPSLongitudeRef] = lon >= 0 ? "E" : "W"
+                }
+            default: break
+            }
+        }
+        let options = NSMutableDictionary()
+        options[kCGImagePropertyExifDictionary] = exif
+        options[kCGImagePropertyIPTCDictionary] = iptc
+        options[kCGImagePropertyTIFFDictionary] = tiff
+        if gps.count > 0 { options[kCGImagePropertyGPSDictionary] = gps }
+        let outData = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(outData as CFMutableData, type, 1, nil) else {
+            throw MetadataError.cannotWriteFile
+        }
+        CGImageDestinationAddImageFromSource(dest, src, 0, options as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else {
+            throw MetadataError.writeFailed("Finalize fehlgeschlagen")
+        }
+        try (outData as Data).write(to: url, options: .atomic)
+    }
+
     func defaultEntries() -> [MetadataEntry] {
         [
             entry("Titel",        "iptc.ObjectName",       .general,  ""),

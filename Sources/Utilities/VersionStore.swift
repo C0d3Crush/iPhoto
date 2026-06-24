@@ -6,6 +6,7 @@ struct ImageVersionMeta: Codable, Identifiable {
     let id: UUID
     let date: Date
     let ext: String
+    var label: String?
 }
 
 final class VersionStore {
@@ -31,14 +32,14 @@ final class VersionStore {
     }
 
     @discardableResult
-    func backupFile(at url: URL) throws -> ImageVersionMeta {
+    func backupFile(at url: URL, label: String? = nil) throws -> ImageVersionMeta {
         let dir  = versionDir(for: url)
         let id   = UUID()
         let ext  = url.pathExtension
         let dest = dir.appendingPathComponent("\(id).\(ext)")
         try FileManager.default.copyItem(at: url, to: dest)
 
-        let meta = ImageVersionMeta(id: id, date: Date(), ext: ext)
+        let meta = ImageVersionMeta(id: id, date: Date(), ext: ext, label: label)
         var list = loadVersions(for: url)
         list.append(meta)
         try JSONEncoder().encode(list).write(to: indexURL(for: url), options: .atomic)

@@ -32,6 +32,9 @@ class ImageViewModel: ObservableObject {
     @Published var isSavingToFile: Bool = false
     @Published var undoStack: [ImageVersionMeta] = []
     @Published var redoStack: [ImageVersionMeta] = []
+    @Published var pendingMetadataEntries: [MetadataEntry]? = nil
+
+    var hasMetadataChanges: Bool { pendingMetadataEntries != nil }
 
     var hasActiveAdjustments: Bool {
         adjExposure != 0 || adjBrightness != 0 || adjContrast != 1 ||
@@ -508,12 +511,8 @@ class ImageViewModel: ObservableObject {
         stop()
     }
 
-    func saveAdjustedToFile() {
-        guard let doc = collection.currentDocument else { return }
-        guard !doc.isRAW else {
-            Log.info("RAW-Dateien können nicht überschrieben werden")
-            return
-        }
+    private func saveAdjustedToFile(label: String, metaEntries: [MetadataEntry]? = nil) {
+        guard let doc = collection.currentDocument, !doc.isRAW else { return }
         let image = adjustedImage ?? currentImage
         guard let image = image else { return }
 
@@ -526,18 +525,23 @@ class ImageViewModel: ObservableObject {
             let (accessURL, stop) = BookmarkStore.shared.access(url: url)
             defer { stop() }
             do {
-                let meta = try VersionStore.shared.backupFile(at: accessURL)
+                let meta = try VersionStore.shared.backupFile(at: accessURL, label: label)
                 try VersionStore.shared.writeImage(image, to: accessURL)
+                if let entries = metaEntries {
+                    try self.metadataService.writePhotoMetadataSync(url: accessURL, entries: entries)
+                }
                 Log.info("Bild gespeichert: \(url.lastPathComponent)")
+                let updatedMeta = self.metadataService.readPhotoMetadata(from: accessURL)
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     self.isSavingToFile = false
                     self.undoStack.append(meta)
                     self.redoStack.removeAll()
-                    // Gespeichertes Ergebnis wird neues Basisbild — Regler bleiben erhalten
+                    self.pendingMetadataEntries = nil
                     if idx < self.collection.documents.count {
                         self.collection.documents[idx].cgImage = image
                         self.collection.documents[idx].thumbnail = nil
+                        self.collection.documents[idx].metadata = updatedMeta
                     }
                     self.adjustedImage = nil
                     self.displayImageVersion = UUID()
@@ -679,6 +683,76 @@ class ImageViewModel: ObservableObject {
         adjExposure = 0; adjBrightness = 0; adjContrast = 1; adjSaturation = 1; adjWarmth = 0
         adjCurvePoints = CurvesView.defaultPoints
         adjustedImage = nil
+        pendingMetadataEntries = nil
+    }
+
+    // MARK: - Unified save
+
+    func saveAll() {
+        guard let doc = collection.currentDocument else { return }
+        let hasAdj = hasActiveAdjustments && !doc.isRAW
+        let hasMeta = hasMetadataChanges
+        guard hasAdj || hasMeta else { return }
+
+        var parts: [String] = []
+        if hasAdj  { parts.append(adjustmentLabel()) }
+        if hasMeta { parts.append("Metadaten") }
+        let label = parts.joined(separator: " · ")
+
+        if hasAdj {
+            saveAdjustedToFile(label: label, metaEntries: hasMeta ? pendingMetadataEntries : nil)
+        } else if let entries = pendingMetadataEntries {
+            saveOnlyMeta(entries: entries, label: label)
+        }
+    }
+
+    private func adjustmentLabel() -> String {
+        var parts: [String] = []
+        if adjExposure   != 0 { parts.append(String(format: "Belichtung %+.1f EV", adjExposure)) }
+        if adjBrightness != 0 { parts.append(String(format: "Helligkeit %+.2f",    adjBrightness)) }
+        if adjContrast   != 1 { parts.append(String(format: "Kontrast %.2f",       adjContrast)) }
+        if adjSaturation != 1 { parts.append(String(format: "Sättigung %.2f",      adjSaturation)) }
+        if adjWarmth     != 0 { parts.append(String(format: "Wärme %+.2f",         adjWarmth)) }
+        let curveDefault = zip(adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
+            abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
+        }
+        if !curveDefault { parts.append("Kurve") }
+        return parts.isEmpty ? "Anpassungen" : parts.joined(separator: " · ")
+    }
+
+    private func saveOnlyMeta(entries: [MetadataEntry], label: String) {
+        guard let doc = collection.currentDocument else { return }
+        let url = doc.url
+        let idx = collection.currentIndex
+        isSavingToFile = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let (accessURL, stop) = BookmarkStore.shared.access(url: url)
+            defer { stop() }
+            do {
+                let meta = try VersionStore.shared.backupFile(at: accessURL, label: label)
+                try self.metadataService.writePhotoMetadataSync(url: accessURL, entries: entries)
+                let updatedMeta = self.metadataService.readPhotoMetadata(from: accessURL)
+                Log.info("Metadaten gespeichert: \(url.lastPathComponent)")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.isSavingToFile = false
+                    self.undoStack.append(meta)
+                    self.redoStack.removeAll()
+                    self.pendingMetadataEntries = nil
+                    if idx < self.collection.documents.count {
+                        self.collection.documents[idx].metadata = updatedMeta
+                    }
+                    self.loadVersionsForCurrentImage()
+                }
+            } catch {
+                Log.error("Metadaten speichern fehlgeschlagen: \(error)")
+                DispatchQueue.main.async { [weak self] in
+                    self?.isSavingToFile = false
+                    self?.errorMessage = "Metadaten speichern fehlgeschlagen: \(error.localizedDescription)"
+                }
+            }
+        }
     }
 
     private func applyAdjustments() {

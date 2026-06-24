@@ -13,11 +13,18 @@ struct MetadataPanel: View {
 private struct MetadataPanelContent: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var editedEntries: [MetadataEntry] = []
-    @State private var saveError: String? = nil
 
     private var sourceEntries: [MetadataEntry] {
         let entries = viewModel.collection.currentDocument?.metadata ?? []
         return entries.isEmpty ? MetadataService().defaultEntries() : entries
+    }
+
+    private var sourceSignature: String {
+        sourceEntries.filter { $0.isEditable }.map { "\($0.key)=\($0.value)" }.joined(separator: "|")
+    }
+
+    private var editedSignature: String {
+        editedEntries.filter { $0.isEditable }.map { "\($0.key)=\($0.value)" }.joined(separator: "|")
     }
 
     var body: some View {
@@ -51,47 +58,22 @@ private struct MetadataPanelContent: View {
                     }
                     .padding(.bottom, 8)
                 }
-
-                Divider()
-
-                VStack(spacing: 4) {
-                    if let err = saveError {
-                        Text(err)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 8)
-                    }
-                    Button(action: save) {
-                        if viewModel.isSavingMetadata {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
-                                .scaleEffect(0.7)
-                        } else {
-                            Text("Speichern")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .buttonStyle(DefaultButtonStyle())
-                    .disabled(viewModel.isSavingMetadata || viewModel.currentImage == nil)
-                    .padding(8)
-                }
             }
         }
-        .onChange(of: sourceEntries.count) { newCount in
-            Log.debug("MetadataPanel: Einträge geändert → \(newCount)")
+        .onChange(of: sourceEntries.count) { _ in
             editedEntries = sourceEntries
-            saveError = nil
+            viewModel.pendingMetadataEntries = nil
+        }
+        .onChange(of: editedSignature) { sig in
+            viewModel.pendingMetadataEntries = sig != sourceSignature ? editedEntries : nil
         }
         .onAppear {
-            Log.debug("MetadataPanel: onAppear, \(sourceEntries.count) Einträge")
-            editedEntries = sourceEntries
+            if let pending = viewModel.pendingMetadataEntries {
+                editedEntries = pending
+            } else {
+                editedEntries = sourceEntries
+            }
         }
-    }
-
-    private func save() {
-        saveError = nil
-        viewModel.saveMetadata(editedEntries)
     }
 }
 
