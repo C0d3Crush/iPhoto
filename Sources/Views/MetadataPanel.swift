@@ -36,26 +36,28 @@ private struct MetadataPanelContent: View {
                     .font(.callout)
                 Spacer()
             } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(MetadataCategory.allCases, id: \.self) { category in
-                        let indices = editedEntries.indices.filter { editedEntries[$0].category == category }
-                        if !indices.isEmpty {
-                            Text(category.rawValue)
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(MetadataCategory.allCases, id: \.self) { category in
+                            let indices = editedEntries.indices.filter { editedEntries[$0].category == category }
+                            if !indices.isEmpty {
+                                Text(category.rawValue)
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                            ForEach(indices, id: \.self) { idx in
-                                MetadataRowView(entry: $editedEntries[idx])
-                                Divider().padding(.leading, 8)
+                                ForEach(indices, id: \.self) { idx in
+                                    MetadataRowView(entry: $editedEntries[idx])
+                                    Divider().padding(.leading, 8)
+                                }
                             }
                         }
                     }
+                    .padding(.bottom, 8)
                 }
-                .padding(.bottom, 8)
             }
         }
         .onChange(of: sourceEntries.count) { _ in
