@@ -2,6 +2,13 @@
 
 ---
 
+## 0.17.5
+**Album-Crash beim Öffnen behoben**
+- Fix: selectAlbum setzt navSelection sofort, verschiebt Import + Bildladen in nächsten Run-Loop-Zyklus (DispatchQueue.main.async)
+- Verhindert Cascade von objectWillChange-Events die auf macOS 11 den HIMenuBarView-Crash auslösten
+
+---
+
 ## 0.17.4
 **Crash beim Öffnen persistierter Alben behoben**
 - Fix: Album-Fotos werden jetzt vor dem Navigationswechsel importiert (kein ungültiger Zustand mehr)

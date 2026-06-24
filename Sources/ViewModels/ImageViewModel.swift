@@ -158,35 +158,38 @@ class ImageViewModel: ObservableObject {
 
     func selectAlbum(_ album: Album) {
         Log.info("Album gewählt: '\(album.name)' (\(album.photoURLs.count) Fotos)")
+        let albumID = album.id
+        let photoURLs = album.photoURLs
 
-        // Fehlende Fotos zuerst importieren, bevor navSelection wechselt
-        let missing = album.photoURLs.filter { url in
-            !collection.documents.contains(where: { $0.url == url })
-        }
-        if !missing.isEmpty {
-            Log.info("Importiere \(missing.count) fehlende Album-Fotos")
-            let existingCount = collection.documents.count
-            let newDocs = missing
-                .filter { isSupportedFormat($0) }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
-                .map { ImageDocument(url: $0) }
-            guard !newDocs.isEmpty else {
-                navSelection = .album(album.id)
-                return
+        // navSelection sofort setzen → Sidebar zeigt Album als aktiv
+        navSelection = .album(albumID)
+
+        // Import + Selektion in nächsten Run-Loop verschieben,
+        // damit nicht zu viele objectWillChange-Events in einem Zyklus feuern
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            let missing = photoURLs.filter { url in
+                !self.collection.documents.contains(where: { $0.url == url })
             }
-            collection.appendDocuments(newDocs)
-            loadThumbnails()
-            _ = existingCount  // suppress warning
-        }
+            if !missing.isEmpty {
+                Log.info("Importiere \(missing.count) fehlende Album-Fotos")
+                let newDocs = missing
+                    .filter { self.isSupportedFormat($0) }
+                    .sorted { $0.lastPathComponent < $1.lastPathComponent }
+                    .map { ImageDocument(url: $0) }
+                if !newDocs.isEmpty {
+                    self.collection.appendDocuments(newDocs)
+                    self.loadThumbnails()
+                }
+            }
 
-        navSelection = .album(album.id)
-
-        // Erstes Album-Foto auswählen und laden
-        if let firstURL = album.photoURLs.first,
-           let idx = collection.documents.firstIndex(where: { $0.url == firstURL }) {
-            Log.info("Wähle erstes Album-Foto bei Index \(idx)")
-            collection.select(index: idx)
-            loadCurrentImage()
+            if let firstURL = photoURLs.first,
+               let idx = self.collection.documents.firstIndex(where: { $0.url == firstURL }) {
+                Log.info("Wähle erstes Album-Foto bei Index \(idx)")
+                self.collection.select(index: idx)
+                self.loadCurrentImage()
+            }
         }
     }
 
