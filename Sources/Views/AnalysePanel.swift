@@ -11,7 +11,7 @@ struct AnalysePanel: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @StateObject private var engine = AnalysisEngine()
     @State private var toolOrder: [AnalyseTool] = AnalyseTool.allCases
-    @State private var collapsed: Set<AnalyseTool> = []
+    @State private var collapsed: Set<AnalyseTool> = Set(AnalyseTool.allCases)
     @State private var draggingTool: AnalyseTool?
 
     var body: some View {

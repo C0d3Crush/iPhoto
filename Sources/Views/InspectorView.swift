@@ -15,7 +15,7 @@ struct InspectorView: View {
     @AppStorage("plugin.analyse")     var analyseActive:     Bool = false
 
     @State private var panelOrder: [InspectorPanel] = InspectorView.loadOrder()
-    @State private var collapsed: Set<InspectorPanel> = []
+    @State private var collapsed: Set<InspectorPanel> = Set(InspectorPanel.allCases)
     @State private var draggingPanel: InspectorPanel?
 
     private var activePanels: Set<InspectorPanel> {
