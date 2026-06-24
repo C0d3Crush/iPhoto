@@ -32,34 +32,31 @@ struct InspectorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Group {
-                if orderedActive.isEmpty {
-                    VStack {
-                        Spacer()
-                        Text("Kein Plugin aktiv")
-                            .foregroundColor(.secondary)
-                            .font(.callout)
-                        Spacer()
-                    }
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(orderedActive, id: \.self) { panel in
-                            InspectorBlock(
-                                panel: panel,
-                                isCollapsed: collapsed.contains(panel),
-                                draggingPanel: $draggingPanel,
-                                onToggleCollapse: { toggle(panel) }
-                            )
-                            .opacity(draggingPanel == panel ? 0.4 : 1.0)
-                            .onDrop(of: ["public.text"],
-                                    delegate: PanelDropDelegate(
-                                        target: panel,
-                                        order: $panelOrder,
-                                        dragging: $draggingPanel))
-                            Divider()
-                        }
+            if orderedActive.isEmpty {
+                Spacer()
+                Text("Kein Plugin aktiv")
+                    .foregroundColor(.secondary)
+                    .font(.callout)
+                Spacer()
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(orderedActive, id: \.self) { panel in
+                        InspectorBlock(
+                            panel: panel,
+                            isCollapsed: collapsed.contains(panel),
+                            draggingPanel: $draggingPanel,
+                            onToggleCollapse: { toggle(panel) }
+                        )
+                        .opacity(draggingPanel == panel ? 0.4 : 1.0)
+                        .onDrop(of: ["public.text"],
+                                delegate: PanelDropDelegate(
+                                    target: panel,
+                                    order: $panelOrder,
+                                    dragging: $draggingPanel))
+                        Divider()
                     }
                 }
+                Spacer()
             }
 
             if viewModel.currentImage != nil {
