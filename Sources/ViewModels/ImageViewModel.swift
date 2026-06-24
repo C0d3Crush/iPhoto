@@ -78,6 +78,13 @@ class ImageViewModel: ObservableObject {
             .sink { [weak self] _ in self?.showExportSheet = true }
             .store(in: &cancellables)
 
+        // Auswahl zurücksetzen wenn Navigationskontext wechselt
+        $navSelection
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.collection.selectedIndices = [] }
+            .store(in: &cancellables)
+
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
             let onlyCmdDown = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
@@ -150,23 +157,36 @@ class ImageViewModel: ObservableObject {
     // MARK: - Albums
 
     func selectAlbum(_ album: Album) {
-        navSelection = .album(album.id) as NavSelection?
         Log.info("Album gewählt: '\(album.name)' (\(album.photoURLs.count) Fotos)")
 
-        // Import photos not yet in collection
+        // Fehlende Fotos zuerst importieren, bevor navSelection wechselt
         let missing = album.photoURLs.filter { url in
             !collection.documents.contains(where: { $0.url == url })
         }
         if !missing.isEmpty {
             Log.info("Importiere \(missing.count) fehlende Album-Fotos")
-            importFiles(missing)
+            let existingCount = collection.documents.count
+            let newDocs = missing
+                .filter { isSupportedFormat($0) }
+                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+                .map { ImageDocument(url: $0) }
+            guard !newDocs.isEmpty else {
+                navSelection = .album(album.id)
+                return
+            }
+            collection.appendDocuments(newDocs)
+            loadThumbnails()
+            _ = existingCount  // suppress warning
         }
 
-        // Select first album photo that's already in collection
+        navSelection = .album(album.id)
+
+        // Erstes Album-Foto auswählen und laden
         if let firstURL = album.photoURLs.first,
            let idx = collection.documents.firstIndex(where: { $0.url == firstURL }) {
             Log.info("Wähle erstes Album-Foto bei Index \(idx)")
-            selectDocument(at: idx)
+            collection.select(index: idx)
+            loadCurrentImage()
         }
     }
 

@@ -137,8 +137,9 @@ private struct AlbumRow: View {
                       let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
                 DispatchQueue.main.async {
                     let selected = viewModel.collection.selectedIndices
-                    let droppedIsSelected = selected.contains(where: {
-                        viewModel.collection.documents[$0].url == url
+                    let docs = viewModel.collection.documents
+                    let droppedIsSelected = selected.contains(where: { idx in
+                        idx < docs.count && docs[idx].url == url
                     })
                     if droppedIsSelected && selected.count > 1 {
                         viewModel.addSelectedToAlbum(albumID: album.id)

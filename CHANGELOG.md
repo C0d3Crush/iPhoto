@@ -2,6 +2,14 @@
 
 ---
 
+## 0.17.4
+**Crash beim Öffnen persistierter Alben behoben**
+- Fix: Album-Fotos werden jetzt vor dem Navigationswechsel importiert (kein ungültiger Zustand mehr)
+- Fix: selectedIndices wird beim Wechsel der Ansicht zurückgesetzt (verhindert Out-of-Bounds-Crash)
+- Fix: Bounds-Check im Drag & Drop Handler der Album-Sidebar
+
+---
+
 ## 0.17.3
 **Tastaturkürzel in Ordner- und Album-Ansicht korrigiert**
 - Fix: Cmd+A, Cmd-Klick, Shift-Klick funktionieren jetzt auch in Ordner- und Album-Ansicht
