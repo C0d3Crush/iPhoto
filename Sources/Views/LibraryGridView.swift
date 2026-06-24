@@ -23,7 +23,7 @@ struct LibraryGridView: View {
                             let isSelected = viewModel.collection.selectedIndices.contains(actualIndex)
                             ThumbnailCell(document: doc, isSelected: isSelected)
                                 .id(actualIndex)
-                                .frame(width: 176)
+                                .frame(width: 156)
                                 .contentShape(Rectangle())
                                 .onTapGesture { handleTap(at: actualIndex) }
                                 .contextMenu { albumContextMenu(for: doc) }

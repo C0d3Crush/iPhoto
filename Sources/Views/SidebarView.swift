@@ -13,7 +13,7 @@ struct SidebarView: View {
                             && viewModel.collection.documents[viewModel.collection.currentIndex].id == doc.id
                         ThumbnailCell(document: doc, isSelected: isSelected)
                             .id(actualIndex)
-                            .frame(width: 176)
+                            .frame(width: 156)
                             .contentShape(Rectangle())
                             .onTapGesture { viewModel.selectDocument(at: actualIndex) }
                             .contextMenu { albumContextMenu(for: doc) }
