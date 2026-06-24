@@ -30,6 +30,17 @@ class ImageViewModel: ObservableObject {
     @Published var savedVersions: [ImageVersionMeta] = []
     @Published var showVersionHistory: Bool = false
     @Published var isSavingToFile: Bool = false
+    @Published var undoStack: [ImageVersionMeta] = []
+    @Published var redoStack: [ImageVersionMeta] = []
+
+    var hasActiveAdjustments: Bool {
+        adjExposure != 0 || adjBrightness != 0 || adjContrast != 1 ||
+        adjSaturation != 1 || adjWarmth != 0 ||
+        !zip(adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
+            abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
+        }
+    }
+    var currentDocIsRAW: Bool { collection.currentDocument?.isRAW ?? false }
 
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
     private let metadataService = MetadataService()
@@ -118,13 +129,20 @@ class ImageViewModel: ObservableObject {
 
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
-            let onlyCmdDown = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let onlyCmdDown  = mods == .command
+            let cmdShiftDown = mods == [.command, .shift]
+            let textFieldFocused = NSApp.keyWindow?.firstResponder is NSTextView
             switch event.keyCode {
             case 123: DispatchQueue.main.async { self.previous() }; return nil
             case 124: DispatchQueue.main.async { self.next()     }; return nil
-            case 0 where onlyCmdDown: DispatchQueue.main.async { self.selectAll() }; return nil
+            case 0 where onlyCmdDown:  DispatchQueue.main.async { self.selectAll()     }; return nil
             case 51 where onlyCmdDown: DispatchQueue.main.async { self.removeSelected() }; return nil
-            default:  return event
+            case 6 where onlyCmdDown && !textFieldFocused:
+                DispatchQueue.main.async { self.undoSave() }; return nil
+            case 6 where cmdShiftDown && !textFieldFocused:
+                DispatchQueue.main.async { self.redoSave() }; return nil
+            default: return event
             }
         }
 
@@ -508,12 +526,14 @@ class ImageViewModel: ObservableObject {
             let (accessURL, stop) = BookmarkStore.shared.access(url: url)
             defer { stop() }
             do {
-                try VersionStore.shared.backupFile(at: accessURL)
+                let meta = try VersionStore.shared.backupFile(at: accessURL)
                 try VersionStore.shared.writeImage(image, to: accessURL)
                 Log.info("Bild gespeichert: \(url.lastPathComponent)")
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     self.isSavingToFile = false
+                    self.undoStack.append(meta)
+                    self.redoStack.removeAll()
                     self.resetAdjustments()
                     if idx < self.collection.documents.count {
                         self.collection.documents[idx].cgImage = nil
@@ -561,6 +581,72 @@ class ImageViewModel: ObservableObject {
                 }
             } catch {
                 Log.error("Revert fehlgeschlagen: \(error.localizedDescription)")
+                DispatchQueue.main.async { [weak self] in self?.isSavingToFile = false }
+            }
+        }
+    }
+
+    func undoSave() {
+        guard !undoStack.isEmpty, let doc = collection.currentDocument else { return }
+        let undoMeta = undoStack.removeLast()
+        let url = doc.url
+        let idx = collection.currentIndex
+        isSavingToFile = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let (accessURL, stop) = BookmarkStore.shared.access(url: url)
+            defer { stop() }
+            do {
+                let redoMeta = try VersionStore.shared.backupFile(at: accessURL)
+                try VersionStore.shared.restoreVersion(undoMeta, to: accessURL)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.isSavingToFile = false
+                    self.redoStack.append(redoMeta)
+                    self.resetAdjustments()
+                    if idx < self.collection.documents.count {
+                        self.collection.documents[idx].cgImage = nil
+                        self.collection.documents[idx].thumbnail = nil
+                    }
+                    self.loadVersionsForCurrentImage()
+                    self.loadCurrentImage()
+                    self.loadThumbnails()
+                }
+            } catch {
+                Log.error("Undo fehlgeschlagen: \(error)")
+                DispatchQueue.main.async { [weak self] in self?.isSavingToFile = false }
+            }
+        }
+    }
+
+    func redoSave() {
+        guard !redoStack.isEmpty, let doc = collection.currentDocument else { return }
+        let redoMeta = redoStack.removeLast()
+        let url = doc.url
+        let idx = collection.currentIndex
+        isSavingToFile = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let (accessURL, stop) = BookmarkStore.shared.access(url: url)
+            defer { stop() }
+            do {
+                let undoMeta = try VersionStore.shared.backupFile(at: accessURL)
+                try VersionStore.shared.restoreVersion(redoMeta, to: accessURL)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.isSavingToFile = false
+                    self.undoStack.append(undoMeta)
+                    self.resetAdjustments()
+                    if idx < self.collection.documents.count {
+                        self.collection.documents[idx].cgImage = nil
+                        self.collection.documents[idx].thumbnail = nil
+                    }
+                    self.loadVersionsForCurrentImage()
+                    self.loadCurrentImage()
+                    self.loadThumbnails()
+                }
+            } catch {
+                Log.error("Redo fehlgeschlagen: \(error)")
                 DispatchQueue.main.async { [weak self] in self?.isSavingToFile = false }
             }
         }

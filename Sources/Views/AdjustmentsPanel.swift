@@ -47,30 +47,7 @@ struct AdjustmentsPanel: View {
                             viewModel.resetAdjustments()
                         }
                         .disabled(isNeutral)
-
                         Spacer()
-
-                        Button(action: save) {
-                            if viewModel.isSavingToFile {
-                                ProgressView().scaleEffect(0.7)
-                            } else {
-                                Text("Speichern")
-                            }
-                        }
-                        .disabled(viewModel.isSavingToFile || isNeutral || isRAW)
-                        .help(isRAW ? "RAW-Dateien können nicht überschrieben werden" : "Anpassungen ins Bild schreiben")
-                    }
-
-                    if !viewModel.savedVersions.isEmpty {
-                        Button(action: { viewModel.showVersionHistory = true }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "clock.arrow.circlepath")
-                                Text("\(viewModel.savedVersions.count) Version\(viewModel.savedVersions.count == 1 ? "" : "en")")
-                            }
-                            .font(.caption)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .foregroundColor(.accentColor)
                     }
 
                     Text(isRAW ? "RAW — Exportieren zum Speichern" : "Vorschau — Original nicht verändert")
@@ -78,10 +55,6 @@ struct AdjustmentsPanel: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(16)
-            }
-            .sheet(isPresented: $viewModel.showVersionHistory) {
-                VersionHistorySheet(isPresented: $viewModel.showVersionHistory)
-                    .environmentObject(viewModel)
             }
         }
     }
@@ -97,10 +70,6 @@ struct AdjustmentsPanel: View {
 
     private var isRAW: Bool {
         viewModel.collection.currentDocument?.isRAW ?? false
-    }
-
-    private func save() {
-        viewModel.saveAdjustedToFile()
     }
 
     @ViewBuilder

@@ -31,39 +31,75 @@ struct InspectorView: View {
     }
 
     var body: some View {
-        Group {
-            if orderedActive.isEmpty {
-                VStack {
-                    Spacer()
-                    Text("Kein Plugin aktiv")
-                        .foregroundColor(.secondary)
-                        .font(.callout)
-                    Spacer()
-                }
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(orderedActive, id: \.self) { panel in
-                            InspectorBlock(
-                                panel: panel,
-                                isCollapsed: collapsed.contains(panel),
-                                draggingPanel: $draggingPanel,
-                                onToggleCollapse: { toggle(panel) }
-                            )
-                            .opacity(draggingPanel == panel ? 0.4 : 1.0)
-                            .onDrop(of: ["public.text"],
-                                    delegate: PanelDropDelegate(
-                                        target: panel,
-                                        order: $panelOrder,
-                                        dragging: $draggingPanel))
-                            Divider()
+        VStack(spacing: 0) {
+            Group {
+                if orderedActive.isEmpty {
+                    VStack {
+                        Spacer()
+                        Text("Kein Plugin aktiv")
+                            .foregroundColor(.secondary)
+                            .font(.callout)
+                        Spacer()
+                    }
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(orderedActive, id: \.self) { panel in
+                                InspectorBlock(
+                                    panel: panel,
+                                    isCollapsed: collapsed.contains(panel),
+                                    draggingPanel: $draggingPanel,
+                                    onToggleCollapse: { toggle(panel) }
+                                )
+                                .opacity(draggingPanel == panel ? 0.4 : 1.0)
+                                .onDrop(of: ["public.text"],
+                                        delegate: PanelDropDelegate(
+                                            target: panel,
+                                            order: $panelOrder,
+                                            dragging: $draggingPanel))
+                                Divider()
+                            }
                         }
                     }
                 }
             }
+
+            if viewModel.currentImage != nil {
+                Divider()
+                HStack(spacing: 8) {
+                    if !viewModel.savedVersions.isEmpty {
+                        Button(action: { viewModel.showVersionHistory = true }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                Text("\(viewModel.savedVersions.count) Version\(viewModel.savedVersions.count == 1 ? "" : "en")")
+                            }
+                            .font(.caption)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .foregroundColor(.accentColor)
+                    }
+                    Spacer()
+                    Button(action: { viewModel.saveAdjustedToFile() }) {
+                        if viewModel.isSavingToFile {
+                            ProgressView().scaleEffect(0.7)
+                        } else {
+                            Text("Speichern")
+                        }
+                    }
+                    .disabled(viewModel.isSavingToFile || !viewModel.hasActiveAdjustments || viewModel.currentDocIsRAW)
+                    .help(viewModel.currentDocIsRAW ? "RAW-Dateien können nicht überschrieben werden" : "Anpassungen ins Bild schreiben")
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.windowBackgroundColor))
+            }
         }
         .frame(width: 280)
         .background(Color(NSColor.windowBackgroundColor))
+        .sheet(isPresented: $viewModel.showVersionHistory) {
+            VersionHistorySheet(isPresented: $viewModel.showVersionHistory)
+                .environmentObject(viewModel)
+        }
         .onChange(of: panelOrder) { InspectorView.saveOrder($0) }
     }
 

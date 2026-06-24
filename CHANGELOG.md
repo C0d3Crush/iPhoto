@@ -2,6 +2,14 @@
 
 ---
 
+## 0.20.1
+**Speichern-Leiste am Inspector-Boden + Undo/Redo**
+- "Speichern"-Button und Versions-Link aus dem Anpassungen-Plugin in eine fixe Leiste am unteren Rand des Inspectors verschoben
+- Leiste ist immer sichtbar, unabhängig vom aktiven Plugin
+- Cmd+Z macht das letzte Speichern rückgängig, Cmd+Shift+Z wiederholt es (Undo/Redo-Stack)
+
+---
+
 ## 0.20.0
 **Anpassungen speichern & Versionshistorie**
 - "Speichern"-Button im Anpassungen-Plugin schreibt bearbeitetes Bild ins Original zurück (JPEG/PNG/TIFF)
