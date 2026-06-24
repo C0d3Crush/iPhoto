@@ -1,0 +1,33 @@
+name: Build iPhoto
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Zip app
+        run: |
+          VERSION=$(defaults read "$PWD/Resources/Info.plist" CFBundleShortVersionString)
+          zip -r "iPhoto-${VERSION}.zip" build/iPhoto.app
+          echo "ZIP_NAME=iPhoto-${VERSION}.zip" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 30

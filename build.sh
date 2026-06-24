@@ -8,17 +8,21 @@ APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
 
-# Compiler & SDK suchen
+# swiftc suchen: CLT (lokal) → xcrun (Xcode / CI)
 CLT="/Library/Developer/CommandLineTools"
-SWIFTC="$CLT/usr/bin/swiftc"
-
-if [ ! -x "$SWIFTC" ]; then
-    echo "Fehler: swiftc nicht gefunden unter $SWIFTC"
-    echo "Bitte Command Line Tools installieren: xcode-select --install"
+if [ -x "$CLT/usr/bin/swiftc" ]; then
+    SWIFTC="$CLT/usr/bin/swiftc"
+    CODESIGN_ALLOCATE="$CLT/usr/bin/codesign_allocate"
+    DEVELOPER_DIR="$CLT"
+elif SWIFTC=$(xcrun --find swiftc 2>/dev/null); then
+    CODESIGN_ALLOCATE=$(xcrun --find codesign_allocate 2>/dev/null || true)
+    DEVELOPER_DIR=$(xcode-select -p 2>/dev/null || true)
+else
+    echo "Fehler: swiftc nicht gefunden. Bitte Command Line Tools oder Xcode installieren."
     exit 1
 fi
 
-# Bestes verfügbares macOS SDK >= 11 bevorzugen
+# SDK suchen: CLT-Kandidaten → xcrun
 SDK=""
 for candidate in \
     "$CLT/SDKs/MacOSX.sdk" \
@@ -31,7 +35,11 @@ for candidate in \
 done
 
 if [ -z "$SDK" ]; then
-    echo "Fehler: Kein macOS-SDK >= 11 gefunden unter $CLT/SDKs/"
+    SDK=$(xcrun --show-sdk-path --sdk macosx 2>/dev/null || true)
+fi
+
+if [ -z "$SDK" ]; then
+    echo "Fehler: Kein macOS-SDK gefunden."
     exit 1
 fi
 
@@ -80,8 +88,8 @@ cp "$ROOT/Resources/Info.plist" "$CONTENTS/Info.plist"
 printf 'APPL????' > "$CONTENTS/PkgInfo"
 
 echo "==> Signiere App (ad-hoc)…"
-CODESIGN_ALLOCATE="$CLT/usr/bin/codesign_allocate" \
-DEVELOPER_DIR="$CLT" \
+CODESIGN_ALLOCATE="${CODESIGN_ALLOCATE}" \
+DEVELOPER_DIR="${DEVELOPER_DIR}" \
 codesign \
     --force \
     --sign - \
