@@ -2,6 +2,15 @@
 
 ---
 
+## 0.24.0
+**Minimum macOS 13 — modernisierte APIs**
+- Minimum Deployment Target auf macOS 13.0 (Ventura) angehoben
+- onChange-Handler auf neue Zwei-Parameter-Syntax umgestellt
+- Textauswahl im Crash-Report-Sheet aktiviert
+- macOS-11-Workarounds entfernt
+
+---
+
 ## 0.23.1
 **Inspector-Fixes & Crash-Behebung**
 - Fix: Crash auf macOS 11 durch Layout-Loop im Inspector (verschachtelte ScrollViews)
