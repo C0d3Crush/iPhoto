@@ -534,13 +534,14 @@ class ImageViewModel: ObservableObject {
                     self.isSavingToFile = false
                     self.undoStack.append(meta)
                     self.redoStack.removeAll()
-                    self.resetAdjustments()
+                    // Gespeichertes Ergebnis wird neues Basisbild — Regler bleiben erhalten
                     if idx < self.collection.documents.count {
-                        self.collection.documents[idx].cgImage = nil
+                        self.collection.documents[idx].cgImage = image
                         self.collection.documents[idx].thumbnail = nil
                     }
+                    self.adjustedImage = nil
+                    self.displayImageVersion = UUID()
                     self.loadVersionsForCurrentImage()
-                    self.loadCurrentImage()
                     self.loadThumbnails()
                 }
             } catch {
