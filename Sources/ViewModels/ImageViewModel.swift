@@ -22,7 +22,9 @@ class ImageViewModel: ObservableObject {
     @Published var adjContrast: Double = 1.0
     @Published var adjSaturation: Double = 1.0
     @Published var adjWarmth: Double = 0.0
+    @Published var adjCurvePoints: [CGPoint] = CurvesView.defaultPoints
     @Published var adjustedImage: CGImage? = nil
+    @Published var displayImageVersion: UUID = UUID()
 
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
     private let metadataService = MetadataService()
@@ -100,10 +102,11 @@ class ImageViewModel: ObservableObject {
             $adjBrightness.map { _ in () }.eraseToAnyPublisher(),
             $adjContrast.map { _ in () }.eraseToAnyPublisher(),
             $adjSaturation.map { _ in () }.eraseToAnyPublisher(),
-            $adjWarmth.map { _ in () }.eraseToAnyPublisher()
+            $adjWarmth.map { _ in () }.eraseToAnyPublisher(),
+            $adjCurvePoints.map { _ in () }.eraseToAnyPublisher()
         ]
         Publishers.MergeMany(adjPublishers)
-            .dropFirst(5)
+            .dropFirst(6)
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyAdjustments() }
             .store(in: &cancellables)
@@ -497,15 +500,24 @@ class ImageViewModel: ObservableObject {
 
     func resetAdjustments() {
         adjExposure = 0; adjBrightness = 0; adjContrast = 1; adjSaturation = 1; adjWarmth = 0
+        adjCurvePoints = CurvesView.defaultPoints
         adjustedImage = nil
     }
 
     private func applyAdjustments() {
-        let isNeutral = adjExposure == 0 && adjBrightness == 0 && adjContrast == 1 && adjSaturation == 1 && adjWarmth == 0
-        guard !isNeutral, let source = currentImage else { adjustedImage = nil; return }
+        let curveDefault = zip(adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
+            abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
+        }
+        let isNeutral = adjExposure == 0 && adjBrightness == 0 && adjContrast == 1
+            && adjSaturation == 1 && adjWarmth == 0 && curveDefault
+        guard !isNeutral, let source = currentImage else {
+            adjustedImage = nil
+            displayImageVersion = UUID()
+            return
+        }
 
-        let (exposure, brightness, contrast, saturation, warmth) =
-            (adjExposure, adjBrightness, adjContrast, adjSaturation, adjWarmth)
+        let (exposure, brightness, contrast, saturation, warmth, curvePoints) =
+            (adjExposure, adjBrightness, adjContrast, adjSaturation, adjWarmth, adjCurvePoints)
         let token = UUID()
         adjToken = token
 
@@ -535,10 +547,22 @@ class ImageViewModel: ObservableObject {
                 if let out = f.outputImage { ci = out }
             }
 
+            let curveDef = zip(curvePoints, CurvesView.defaultPoints).allSatisfy {
+                abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
+            }
+            if !curveDef, let f = CIFilter(name: "CIToneCurve") {
+                f.setValue(ci, forKey: kCIInputImageKey)
+                for (i, pt) in curvePoints.enumerated() {
+                    f.setValue(CIVector(x: pt.x, y: pt.y), forKey: "inputPoint\(i)")
+                }
+                if let out = f.outputImage { ci = out }
+            }
+
             let result = self.adjCIContext.createCGImage(ci, from: ci.extent)
             DispatchQueue.main.async { [weak self] in
                 guard let self = self, self.adjToken == token else { return }
                 self.adjustedImage = result
+                self.displayImageVersion = UUID()
             }
         }
     }
@@ -587,6 +611,7 @@ class ImageViewModel: ObservableObject {
                     self.collection.update(document: updated, at: index)
                     self.isLoading = false
                     self.fitToWindowRequested = true
+                    self.displayImageVersion = UUID()
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
                 }
             } catch {

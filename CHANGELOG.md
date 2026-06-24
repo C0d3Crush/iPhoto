@@ -2,6 +2,18 @@
 
 ---
 
+## 0.19.0
+**Analysewerkzeuge Plugin: Histogramm, Waveform, RGB-Parade & Gradationskurven**
+- Neues Plugin "Analyse" in der rechten Sidebar (Plugins-Menü → Analyse)
+- Histogramm: R/G/B- und Luma-Verteilung als Screen-Blend überlagert
+- Waveform: Luma-Dichte-Scope zur Helligkeitskontrolle
+- RGB-Parade: R/G/B-Kanäle nebeneinander für Farbbalance-Analyse
+- Gradationskurve: 5 verschiebbare Kontrollpunkte mit monotoner kubischer Spline-Interpolation
+- S-Kurve-Preset für filmischen Look, Zurücksetzen-Button
+- Kurve greift in die CIImage-Pipeline ein (CIToneCurve) — non-destructiv
+
+---
+
 ## 0.18.0
 **Photo-Editor Plugin mit Live-Anpassungen**
 - Neues Plugin "Anpassungen" in der rechten Sidebar (Plugins-Menü → Anpassungen)
