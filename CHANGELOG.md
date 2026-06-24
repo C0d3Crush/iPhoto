@@ -2,6 +2,16 @@
 
 ---
 
+## 0.21.0
+**Versionslabel + Metadaten über untere Leiste speichern**
+- Jede gespeicherte Version zeigt jetzt, was geändert wurde (z.B. "Belichtung +1.0 EV · Kontrast 1.20" oder "Metadaten")
+- Metadaten-Speichern ist in die untere Inspector-Leiste gewandert — kein separater "Speichern"-Button mehr im Metadaten-Plugin
+- "Speichern" in der unteren Leiste speichert Bild-Anpassungen und/oder Metadaten in einem Schritt
+- Metadatenänderungen erzeugen ebenfalls einen Versions-Eintrag mit Wiederherstellungsmöglichkeit
+- Bei RAW-Dateien: Metadaten können weiterhin gespeichert werden
+
+---
+
 ## 0.20.1
 **Speichern-Leiste am Inspector-Boden + Undo/Redo**
 - "Speichern"-Button und Versions-Link aus dem Anpassungen-Plugin in eine fixe Leiste am unteren Rand des Inspectors verschoben
