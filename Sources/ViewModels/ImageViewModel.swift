@@ -221,9 +221,16 @@ class ImageViewModel: ObservableObject {
     }
 
     func extendSelection(to index: Int) {
-        let from = collection.currentIndex
-        let lo = min(from, index), hi = max(from, index)
-        (lo...hi).forEach { collection.selectedIndices.insert($0) }
+        let visibleColIndices = visibleDocuments.compactMap { collectionIndex(for: $0) }
+        guard let fromPos = visibleColIndices.firstIndex(of: collection.currentIndex),
+              let toPos = visibleColIndices.firstIndex(of: index) else {
+            collection.selectedIndices.insert(index)
+            collection.currentIndex = index
+            loadCurrentImage()
+            return
+        }
+        let lo = min(fromPos, toPos), hi = max(fromPos, toPos)
+        visibleColIndices[lo...hi].forEach { collection.selectedIndices.insert($0) }
         collection.currentIndex = index
         loadCurrentImage()
     }
