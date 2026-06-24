@@ -128,19 +128,12 @@ struct DetailView: View {
                 .help("Nächstes Bild")
             }
 
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .automatic) {
                 Button(action: { viewModel.showOriginal.toggle() }) {
                     Image(systemName: viewModel.showOriginal ? "eye.slash" : "eye")
                 }
                 .help("Original / Anpassungen")
                 .disabled(viewModel.currentImage == nil)
-
-                Button(action: { viewModel.toggleInspector() }) {
-                    Image(systemName: "sidebar.right")
-                        .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
-                }
-                .help("Inspector ein-/ausblenden")
-                .keyboardShortcut("i", modifiers: .command)
             }
 
             ToolbarItemGroup(placement: .automatic) {
@@ -170,6 +163,15 @@ struct DetailView: View {
                 .help("Vergrößern")
                 .keyboardShortcut("=", modifiers: .command)
                 .disabled(viewModel.currentImage == nil)
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(action: { viewModel.toggleInspector() }) {
+                    Image(systemName: "sidebar.right")
+                        .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
+                }
+                .help("Inspector ein-/ausblenden")
+                .keyboardShortcut("i", modifiers: .command)
             }
         }
     }
