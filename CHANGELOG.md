@@ -2,6 +2,12 @@
 
 ---
 
+## 0.16.2
+**"Über iPhoto"-Panel mit Versionsnummer**
+- Menüeintrag "Über iPhoto" zeigt Version, Copyright und App-Info an
+
+---
+
 ## 0.16.1
 **Shift-Klick Bereichsauswahl im Album-Modus korrigiert**
 - Fix: Shift-Klick wählt nun nur sichtbare Album-Fotos im Bereich aus, keine Library-Fotos dazwischen

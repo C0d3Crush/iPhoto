@@ -16,6 +16,11 @@ struct iPhotoApp: App {
         }
         .commands {
             PluginCommands()
+            CommandGroup(replacing: .appInfo) {
+                Button("Über iPhoto") {
+                    NSApp.orderFrontStandardAboutPanel(nil)
+                }
+            }
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .newItem) {
                 Button("Importieren…") {
