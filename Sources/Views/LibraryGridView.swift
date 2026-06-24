@@ -42,10 +42,10 @@ struct LibraryGridView: View {
     }
 
     private func handleTap(at index: Int) {
-        let flags = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if flags == .command {
+        let flags = viewModel.lastClickModifiers
+        if flags.contains(.command) {
             viewModel.toggleSelection(at: index)
-        } else if flags == .shift {
+        } else if flags.contains(.shift) {
             viewModel.extendSelection(to: index)
         } else {
             viewModel.selectDocument(at: index)

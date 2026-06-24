@@ -15,6 +15,7 @@ class ImageViewModel: ObservableObject {
     @Published var navSelection: NavSelection? = .library
     @Published var albums: [Album] = []
 
+    private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
     private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
     private var loadToken: UUID = UUID()
@@ -77,6 +78,11 @@ class ImageViewModel: ObservableObject {
             case 0 where onlyCmdDown: DispatchQueue.main.async { self.selectAll() }; return nil
             default:  return event
             }
+        }
+
+        NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            self?.lastClickModifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            return event
         }
     }
 
