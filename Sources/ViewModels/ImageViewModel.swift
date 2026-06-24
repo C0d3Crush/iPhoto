@@ -14,11 +14,13 @@ class ImageViewModel: ObservableObject {
     @Published var navSidebarVisible: Bool = true
     @Published var navSelection: NavSelection? = .library
     @Published var albums: [Album] = []
+    @Published var watchedFolders: [WatchedFolder] = []
 
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
     private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
     private var loadToken: UUID = UUID()
+    private var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
 
     var currentImage: CGImage? { collection.currentDocument?.cgImage }
     var windowTitle: String { collection.currentDocument?.filename ?? "iPhoto" }
@@ -31,6 +33,12 @@ class ImageViewModel: ObservableObject {
         case .album(let id):
             guard let album = albums.first(where: { $0.id == id }) else { return [] }
             return collection.documents.filter { album.photoURLs.contains($0.url) }
+        case .folder(let id):
+            guard let folder = watchedFolders.first(where: { $0.id == id }),
+                  let (folderURL, stop) = folder.resolveURL() else { return [] }
+            defer { stop() }
+            let prefix = folderURL.standardized.path
+            return collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
         }
     }
 
@@ -40,6 +48,7 @@ class ImageViewModel: ObservableObject {
 
     init() {
         loadAlbums()
+        loadWatchedFolders()
         // Änderungen in collection (z.B. neue Thumbnails) an SwiftUI weiterleiten
         collection.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -280,6 +289,109 @@ class ImageViewModel: ObservableObject {
     func saveAlbums() {
         guard let data = try? JSONEncoder().encode(albums) else { return }
         try? data.write(to: albumsFileURL, options: .atomic)
+    }
+
+    // MARK: - Watched Folders
+
+    func addFolderDialog() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Ordner hinzufügen"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard !watchedFolders.contains(where: { $0.resolveURL()?.url.standardized == url.standardized }) else { return }
+        guard let folder = try? WatchedFolder(url: url) else { return }
+        watchedFolders.append(folder)
+        saveWatchedFolders()
+        syncFolder(folder)
+        startWatching(folder)
+        navSelection = .folder(folder.id)
+    }
+
+    func deleteWatchedFolder(_ folder: WatchedFolder) {
+        stopWatching(folder)
+        watchedFolders.removeAll { $0.id == folder.id }
+        if navSelection == .folder(folder.id) { navSelection = .library }
+        saveWatchedFolders()
+    }
+
+    func syncFolder(_ folder: WatchedFolder) {
+        guard let (folderURL, stop) = folder.resolveURL() else { return }
+        DispatchQueue.global(qos: .utility).async {
+            defer { stop() }
+            let fm = FileManager.default
+            guard let enumerator = fm.enumerator(
+                at: folderURL,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else { return }
+            var found: [URL] = []
+            for case let fileURL as URL in enumerator {
+                if (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+                   ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
+                    found.append(fileURL)
+                }
+            }
+            let folderPrefix = folderURL.standardized.path
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                // Remove docs from this folder that no longer exist on disk
+                let toRemove = self.collection.documents.filter {
+                    $0.url.standardized.path.hasPrefix(folderPrefix) && !found.map { $0.standardized }.contains($0.url.standardized)
+                }
+                self.collection.documents.removeAll { doc in toRemove.contains(where: { $0.id == doc.id }) }
+                // Import new files
+                self.importFiles(found)
+            }
+        }
+    }
+
+    private func startWatching(_ folder: WatchedFolder) {
+        guard let (folderURL, stop) = folder.resolveURL() else { return }
+        let fd = open(folderURL.path, O_EVTONLY)
+        stop()
+        guard fd != -1 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .rename, .delete],
+            queue: .global(qos: .utility)
+        )
+        source.setEventHandler { [weak self] in
+            guard let self = self,
+                  let f = self.watchedFolders.first(where: { $0.id == folder.id }) else { return }
+            self.syncFolder(f)
+        }
+        source.setCancelHandler { close(fd) }
+        source.resume()
+        folderWatchers[folder.id] = source
+    }
+
+    private func stopWatching(_ folder: WatchedFolder) {
+        folderWatchers[folder.id]?.cancel()
+        folderWatchers[folder.id] = nil
+    }
+
+    private var watchedFoldersFileURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("watchedFolders.json")
+    }
+
+    func loadWatchedFolders() {
+        guard let data = try? Data(contentsOf: watchedFoldersFileURL),
+              let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) else { return }
+        watchedFolders = decoded
+        for folder in watchedFolders {
+            syncFolder(folder)
+            startWatching(folder)
+        }
+    }
+
+    func saveWatchedFolders() {
+        guard let data = try? JSONEncoder().encode(watchedFolders) else { return }
+        try? data.write(to: watchedFoldersFileURL, options: .atomic)
     }
 
     func saveMetadata(_ entries: [MetadataEntry]) {

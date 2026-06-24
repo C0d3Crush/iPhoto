@@ -2,6 +2,15 @@
 
 ---
 
+## 0.17.0
+**Ordner-Support mit automatischer Synchronisierung**
+- Ordner über "+" in der Sidebar hinzufügen — alle Bilder darin werden automatisch importiert
+- Ordner werden live überwacht: neue Bilder erscheinen automatisch, gelöschte verschwinden
+- Ordner sind eine eigene Kategorie (kein Album) — Änderungen von außen werden reflektiert
+- Rechtsklick auf Ordner in der Sidebar zum Entfernen
+
+---
+
 ## 0.16.2
 **"Über iPhoto"-Panel mit Versionsnummer**
 - Menüeintrag "Über iPhoto" zeigt Version, Copyright und App-Info an

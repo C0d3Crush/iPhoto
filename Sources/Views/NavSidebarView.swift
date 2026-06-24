@@ -39,6 +39,24 @@ struct NavSidebarView: View {
                 }
             }
 
+            sectionHeader("Ordner", trailing: AnyView(
+                Button(action: { viewModel.addFolderDialog() }) {
+                    Image(systemName: "plus").font(.caption)
+                }
+                .buttonStyle(PlainButtonStyle())
+            ))
+
+            ForEach(viewModel.watchedFolders) { folder in
+                FolderRow(
+                    folder: folder,
+                    isSelected: viewModel.navSelection == .folder(folder.id)
+                )
+                .environmentObject(viewModel)
+                .contextMenu {
+                    Button("Ordner entfernen") { viewModel.deleteWatchedFolder(folder) }
+                }
+            }
+
             Spacer()
         }
         .padding(.vertical, 8)
@@ -131,6 +149,25 @@ private struct AlbumRow: View {
             }
             return true
         }
+    }
+}
+
+private struct FolderRow: View {
+    let folder: WatchedFolder
+    let isSelected: Bool
+    @EnvironmentObject var viewModel: ImageViewModel
+
+    var body: some View {
+        Button(action: { viewModel.navSelection = .folder(folder.id) }) {
+            Label(folder.name, systemImage: "folder")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
     }
 }
 

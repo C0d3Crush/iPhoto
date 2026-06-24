@@ -15,4 +15,5 @@ struct Album: Identifiable, Codable, Equatable {
 enum NavSelection: Hashable {
     case library
     case album(UUID)
+    case folder(UUID)
 }
