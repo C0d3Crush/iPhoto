@@ -75,7 +75,7 @@ struct DetailView: View {
                     Text("Bild wird geladen…")
                         .foregroundColor(.secondary)
                 }
-            } else if let image = viewModel.adjustedImage ?? viewModel.currentImage {
+            } else if let image = viewModel.showOriginal ? viewModel.currentImage : (viewModel.adjustedImage ?? viewModel.currentImage) {
                 ZoomableScrollView(
                     image: image,
                     zoomFactor: $viewModel.zoomFactor,
@@ -129,6 +129,12 @@ struct DetailView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
+                Button(action: { viewModel.showOriginal.toggle() }) {
+                    Image(systemName: viewModel.showOriginal ? "eye.slash" : "eye")
+                }
+                .help("Original / Anpassungen")
+                .disabled(viewModel.currentImage == nil)
+
                 Button(action: { viewModel.toggleInspector() }) {
                     Image(systemName: "sidebar.right")
                         .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)

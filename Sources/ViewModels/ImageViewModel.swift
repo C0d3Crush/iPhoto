@@ -22,12 +22,20 @@ class ImageViewModel: ObservableObject {
     @Published var adjContrast: Double = 1.0
     @Published var adjSaturation: Double = 1.0
     @Published var adjWarmth: Double = 0.0
+    @Published var adjTint: Double = 0.0
+    @Published var adjClarity: Double = 0.0
+    @Published var adjTexture: Double = 0.0
+    @Published var adjDehaze: Double = 0.0
     @Published var adjCurvePoints: [CGPoint] = CurvesView.defaultPoints
+    @Published var adjCurveR: [CGPoint] = CurvesView.defaultPoints
+    @Published var adjCurveG: [CGPoint] = CurvesView.defaultPoints
+    @Published var adjCurveB: [CGPoint] = CurvesView.defaultPoints
     @Published var adjCropRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)
     @Published var adjRotation: Double = 0.0
     @Published var adjustedImage: CGImage? = nil
     @Published var displayImageVersion: UUID = UUID()
     @Published var cropToolActive: Bool = false
+    @Published var showOriginal: Bool = false
 
     // MARK: - Version history
     @Published var savedVersions: [ImageVersionMeta] = []
@@ -41,11 +49,12 @@ class ImageViewModel: ObservableObject {
 
     var hasActiveAdjustments: Bool {
         adjExposure != 0 || adjBrightness != 0 || adjContrast != 1 ||
-        adjSaturation != 1 || adjWarmth != 0 || adjRotation != 0 ||
+        adjSaturation != 1 || adjWarmth != 0 || adjTint != 0 ||
+        adjClarity != 0 || adjTexture != 0 || adjDehaze != 0 ||
+        adjRotation != 0 ||
         adjCropRect != CGRect(x: 0, y: 0, width: 1, height: 1) ||
-        !zip(adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
-            abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
-        }
+        !isDefaultCurve(adjCurvePoints) ||
+        !isDefaultCurve(adjCurveR) || !isDefaultCurve(adjCurveG) || !isDefaultCurve(adjCurveB)
     }
     var currentDocIsRAW: Bool { collection.currentDocument?.isRAW ?? false }
 
@@ -129,9 +138,16 @@ class ImageViewModel: ObservableObject {
             $adjCurvePoints.map { _ in () }.eraseToAnyPublisher(),
             $adjCropRect.map { _ in () }.eraseToAnyPublisher(),
             $adjRotation.map { _ in () }.eraseToAnyPublisher(),
+            $adjTint.map { _ in () }.eraseToAnyPublisher(),
+            $adjClarity.map { _ in () }.eraseToAnyPublisher(),
+            $adjTexture.map { _ in () }.eraseToAnyPublisher(),
+            $adjDehaze.map { _ in () }.eraseToAnyPublisher(),
+            $adjCurveR.map { _ in () }.eraseToAnyPublisher(),
+            $adjCurveG.map { _ in () }.eraseToAnyPublisher(),
+            $adjCurveB.map { _ in () }.eraseToAnyPublisher(),
         ]
         Publishers.MergeMany(adjPublishers)
-            .dropFirst(8)
+            .dropFirst(15)
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyAdjustments() }
             .store(in: &cancellables)
@@ -151,7 +167,33 @@ class ImageViewModel: ObservableObject {
                 DispatchQueue.main.async { self.undoSave() }; return nil
             case 6 where cmdShiftDown && !textFieldFocused:
                 DispatchQueue.main.async { self.redoSave() }; return nil
-            default: return event
+            default:
+                guard mods.isEmpty, !textFieldFocused else { return event }
+                let char = event.characters ?? ""
+                if char == "\\" {
+                    DispatchQueue.main.async { self.showOriginal.toggle() }
+                    return nil
+                }
+                switch char {
+                case "p", "P":
+                    DispatchQueue.main.async { self.toggleFlag(.pick) }; return nil
+                case "x", "X":
+                    DispatchQueue.main.async { self.toggleFlag(.reject) }; return nil
+                case "0", "1", "2", "3", "4", "5":
+                    if let r = Int(char) {
+                        DispatchQueue.main.async { self.setRating(r) }; return nil
+                    }
+                case "6":
+                    DispatchQueue.main.async { self.setColorLabel(.red) }; return nil
+                case "7":
+                    DispatchQueue.main.async { self.setColorLabel(.yellow) }; return nil
+                case "8":
+                    DispatchQueue.main.async { self.setColorLabel(.green) }; return nil
+                case "9":
+                    DispatchQueue.main.async { self.setColorLabel(.blue) }; return nil
+                default: break
+                }
+                return event
             }
         }
 
@@ -687,7 +729,11 @@ class ImageViewModel: ObservableObject {
 
     func resetAdjustments() {
         adjExposure = 0; adjBrightness = 0; adjContrast = 1; adjSaturation = 1; adjWarmth = 0
+        adjTint = 0; adjClarity = 0; adjTexture = 0; adjDehaze = 0
         adjCurvePoints = CurvesView.defaultPoints
+        adjCurveR = CurvesView.defaultPoints
+        adjCurveG = CurvesView.defaultPoints
+        adjCurveB = CurvesView.defaultPoints
         adjCropRect = CGRect(x: 0, y: 0, width: 1, height: 1)
         adjRotation = 0
         adjustedImage = nil
@@ -765,21 +811,59 @@ class ImageViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Rating / Flags / Color Labels
+
+    func setRating(_ r: Int) {
+        let idx = collection.currentIndex
+        guard idx < collection.documents.count else { return }
+        collection.documents[idx].rating = r
+        persistRating(at: idx)
+    }
+
+    func toggleFlag(_ flag: FlagStatus) {
+        let idx = collection.currentIndex
+        guard idx < collection.documents.count else { return }
+        let cur = collection.documents[idx].flagStatus
+        collection.documents[idx].flagStatus = (cur == flag) ? .none : flag
+        persistRating(at: idx)
+    }
+
+    func setColorLabel(_ label: ColorLabel) {
+        let idx = collection.currentIndex
+        guard idx < collection.documents.count else { return }
+        let cur = collection.documents[idx].colorLabel
+        collection.documents[idx].colorLabel = (cur == label) ? .none : label
+        persistRating(at: idx)
+    }
+
+    private func persistRating(at idx: Int) {
+        guard idx < collection.documents.count else { return }
+        let doc = collection.documents[idx]
+        RatingStore.shared.save(RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel), for: doc.url)
+    }
+
+    // MARK: - Curve helper
+
+    private func isDefaultCurve(_ pts: [CGPoint]) -> Bool {
+        zip(pts, CurvesView.defaultPoints).allSatisfy { abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001 }
+    }
+
     private func applyAdjustments() {
-        let curveDefault = zip(adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
-            abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
-        }
         let cropDefault = adjCropRect == CGRect(x: 0, y: 0, width: 1, height: 1)
-        let isNeutral = adjExposure == 0 && adjBrightness == 0 && adjContrast == 1
-            && adjSaturation == 1 && adjWarmth == 0 && curveDefault && adjRotation == 0 && cropDefault
-        guard !isNeutral, let source = currentImage else {
+        let isNeutral = !hasActiveAdjustments && cropDefault
+        guard hasActiveAdjustments, let source = currentImage else {
             adjustedImage = nil
             displayImageVersion = UUID()
             return
         }
 
-        let (exposure, brightness, contrast, saturation, warmth, curvePoints, rotation, cropRect) =
-            (adjExposure, adjBrightness, adjContrast, adjSaturation, adjWarmth, adjCurvePoints, adjRotation, adjCropRect)
+        let (exposure, brightness, contrast, saturation, warmth, tint, clarity, texture, dehaze,
+             curvePoints, curveR, curveG, curveB, rotation, cropRect) = (
+            adjExposure, adjBrightness, adjContrast, adjSaturation, adjWarmth, adjTint,
+            adjClarity, adjTexture, adjDehaze,
+            adjCurvePoints, adjCurveR, adjCurveG, adjCurveB, adjRotation, adjCropRect
+        )
+        let _ = isNeutral
         let token = UUID()
         adjToken = token
 
@@ -802,10 +886,10 @@ class ImageViewModel: ObservableObject {
                 if let out = f.outputImage { ci = out }
             }
 
-            if warmth != 0, let f = CIFilter(name: "CITemperatureAndTint") {
+            if warmth != 0 || tint != 0, let f = CIFilter(name: "CITemperatureAndTint") {
                 f.setValue(ci, forKey: kCIInputImageKey)
                 f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-                f.setValue(CIVector(x: CGFloat(6500 - warmth * 2500), y: 0), forKey: "inputTargetNeutral")
+                f.setValue(CIVector(x: CGFloat(6500 - warmth * 2500), y: CGFloat(-tint * 150)), forKey: "inputTargetNeutral")
                 if let out = f.outputImage { ci = out }
             }
 
@@ -817,6 +901,61 @@ class ImageViewModel: ObservableObject {
                 for (i, pt) in curvePoints.enumerated() {
                     f.setValue(CIVector(x: pt.x, y: pt.y), forKey: "inputPoint\(i)")
                 }
+                if let out = f.outputImage { ci = out }
+            }
+
+            // Per-channel RGB curves via CIColorCube
+            let rDef = self.isDefaultCurve(curveR)
+            let gDef = self.isDefaultCurve(curveG)
+            let bDef = self.isDefaultCurve(curveB)
+            if !rDef || !gDef || !bDef {
+                let lutR = CurvesView.evaluateSpline(curveR)
+                let lutG = CurvesView.evaluateSpline(curveG)
+                let lutB = CurvesView.evaluateSpline(curveB)
+                let size = 32
+                var cubeData = [Float]()
+                cubeData.reserveCapacity(size * size * size * 4)
+                for b in 0..<size {
+                    for g in 0..<size {
+                        for r in 0..<size {
+                            let ri = Swift.min(255, r * 255 / (size - 1))
+                            let gi = Swift.min(255, g * 255 / (size - 1))
+                            let bi = Swift.min(255, b * 255 / (size - 1))
+                            cubeData.append(Float(lutR[ri]))
+                            cubeData.append(Float(lutG[gi]))
+                            cubeData.append(Float(lutB[bi]))
+                            cubeData.append(1.0)
+                        }
+                    }
+                }
+                if let f = CIFilter(name: "CIColorCube") {
+                    f.setValue(size, forKey: "inputCubeDimension")
+                    f.setValue(Data(bytes: cubeData, count: cubeData.count * MemoryLayout<Float>.size) as NSData, forKey: "inputCubeData")
+                    f.setValue(ci, forKey: kCIInputImageKey)
+                    if let out = f.outputImage { ci = out }
+                }
+            }
+
+            // Clarity (local contrast, large radius)
+            if clarity != 0, let f = CIFilter(name: "CIUnsharpMask") {
+                f.setValue(ci, forKey: kCIInputImageKey)
+                f.setValue(20.0, forKey: kCIInputRadiusKey)
+                f.setValue(Swift.max(0, clarity) * 2.0, forKey: kCIInputIntensityKey)
+                if let out = f.outputImage { ci = out }
+            }
+            // Texture (fine detail)
+            if texture != 0, let f = CIFilter(name: "CIUnsharpMask") {
+                f.setValue(ci, forKey: kCIInputImageKey)
+                f.setValue(4.0, forKey: kCIInputRadiusKey)
+                f.setValue(Swift.max(0, texture) * 2.5, forKey: kCIInputIntensityKey)
+                if let out = f.outputImage { ci = out }
+            }
+            // Dehaze (contrast/brightness manipulation)
+            if dehaze != 0, let f = CIFilter(name: "CIColorControls") {
+                f.setValue(ci, forKey: kCIInputImageKey)
+                f.setValue(-dehaze * 0.05, forKey: kCIInputBrightnessKey)
+                f.setValue(1.0 + dehaze * 0.25, forKey: kCIInputContrastKey)
+                f.setValue(1.0, forKey: kCIInputSaturationKey)
                 if let out = f.outputImage { ci = out }
             }
 
@@ -899,6 +1038,11 @@ class ImageViewModel: ObservableObject {
                     updated.cgImage = image
                     updated.imageSize = size
                     updated.metadata = metadata
+                    if let entry = RatingStore.shared.load(for: url) {
+                        updated.rating = entry.rating
+                        updated.flagStatus = entry.flagStatus
+                        updated.colorLabel = entry.colorLabel
+                    }
                     self.collection.update(document: updated, at: index)
                     self.isLoading = false
                     self.fitToWindowRequested = true

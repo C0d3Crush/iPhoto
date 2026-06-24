@@ -2,6 +2,20 @@ import Foundation
 import CoreGraphics
 import AppKit
 
+enum FlagStatus: String, Codable { case none, pick, reject }
+enum ColorLabel: String, Codable {
+    case none, red, yellow, green, blue
+    var displayColor: NSColor {
+        switch self {
+        case .none:   return .clear
+        case .red:    return .systemRed
+        case .yellow: return .systemYellow
+        case .green:  return .systemGreen
+        case .blue:   return .systemBlue
+        }
+    }
+}
+
 struct ImageDocument: Identifiable, Equatable {
     let id: UUID
     let url: URL
@@ -12,6 +26,9 @@ struct ImageDocument: Identifiable, Equatable {
     var isRAW: Bool
     var errorMessage: String?
     var metadata: [MetadataEntry] = []
+    var rating: Int = 0
+    var flagStatus: FlagStatus = .none
+    var colorLabel: ColorLabel = .none
 
     var filename: String { url.lastPathComponent }
 

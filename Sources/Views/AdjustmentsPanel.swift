@@ -15,70 +15,101 @@ struct AdjustmentsPanel: View {
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Crop tool
-                    Button(action: { viewModel.cropToolActive = true }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "crop")
-                                .font(.caption)
-                            Text("Zuschneiden & Begradigen")
-                                .font(.caption)
-                            Spacer()
-                            if hasCropOrRotation {
-                                Image(systemName: "checkmark.circle.fill")
+                    Group {
+                        // Crop tool
+                        Button(action: { viewModel.cropToolActive = true }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "crop")
                                     .font(.caption)
-                                    .foregroundColor(.accentColor)
+                                Text("Zuschneiden & Begradigen")
+                                    .font(.caption)
+                                Spacer()
+                                if hasCropOrRotation {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundColor(.accentColor)
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                            .foregroundColor(.primary)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 10)
+                            .background(Color(NSColor.controlBackgroundColor).cornerRadius(6))
                         }
-                        .foregroundColor(.primary)
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 10)
-                        .background(Color(NSColor.controlBackgroundColor).cornerRadius(6))
-                    }
-                    .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(PlainButtonStyle())
 
-                    Divider()
+                        Divider()
 
-                    adjRow(label: "Belichtung",
-                           value: $viewModel.adjExposure,
-                           range: -2...2,
-                           format: "%+.1f EV")
+                        adjRow(label: "Belichtung",
+                               value: $viewModel.adjExposure,
+                               range: -2...2,
+                               format: "%+.1f EV")
 
-                    adjRow(label: "Helligkeit",
-                           value: $viewModel.adjBrightness,
-                           range: -0.5...0.5,
-                           format: "%+.2f")
+                        adjRow(label: "Helligkeit",
+                               value: $viewModel.adjBrightness,
+                               range: -0.5...0.5,
+                               format: "%+.2f")
 
-                    adjRow(label: "Kontrast",
-                           value: $viewModel.adjContrast,
-                           range: 0.5...1.5,
-                           format: "%.2f")
+                        adjRow(label: "Kontrast",
+                               value: $viewModel.adjContrast,
+                               range: 0.5...1.5,
+                               format: "%.2f")
 
-                    adjRow(label: "Sättigung",
-                           value: $viewModel.adjSaturation,
-                           range: 0...2,
-                           format: "%.2f")
+                        adjRow(label: "Sättigung",
+                               value: $viewModel.adjSaturation,
+                               range: 0...2,
+                               format: "%.2f")
 
-                    adjRow(label: "Wärme",
-                           value: $viewModel.adjWarmth,
-                           range: -1...1,
-                           format: "%+.2f")
+                        adjRow(label: "Wärme",
+                               value: $viewModel.adjWarmth,
+                               range: -1...1,
+                               format: "%+.2f")
 
-                    Divider()
-
-                    HStack(spacing: 8) {
-                        Button("Zurücksetzen") {
-                            viewModel.resetAdjustments()
-                        }
-                        .disabled(isNeutral)
-                        Spacer()
+                        adjRow(label: "Farbstich",
+                               value: $viewModel.adjTint,
+                               range: -1...1,
+                               format: "%+.2f")
                     }
 
-                    Text(isRAW ? "RAW — Exportieren zum Speichern" : "Vorschau — Original nicht verändert")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    Group {
+                        Divider()
+
+                        Text("Detail")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fontWeight(.semibold)
+
+                        adjRow(label: "Klarheit",
+                               value: $viewModel.adjClarity,
+                               range: -1...1,
+                               format: "%+.2f")
+
+                        adjRow(label: "Textur",
+                               value: $viewModel.adjTexture,
+                               range: -1...1,
+                               format: "%+.2f")
+
+                        adjRow(label: "Dunst",
+                               value: $viewModel.adjDehaze,
+                               range: -1...1,
+                               format: "%+.2f")
+
+                        Divider()
+
+                        HStack(spacing: 8) {
+                            Button("Zurücksetzen") {
+                                viewModel.resetAdjustments()
+                            }
+                            .disabled(isNeutral)
+                            Spacer()
+                        }
+
+                        Text(isRAW ? "RAW — Exportieren zum Speichern" : "Vorschau — Original nicht verändert")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .padding(16)
             }

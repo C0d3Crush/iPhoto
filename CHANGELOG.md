@@ -2,6 +2,18 @@
 
 ---
 
+## 0.23.0
+**Lightroom-Features: Farbstich, Detail, Before/After, Bewertung, R/G/B-Kurven**
+- Farbstich-Regler (−1…+1) für Grün-/Magenta-Balance via CITemperatureAndTint
+- Klarheit (radius 20), Textur (radius 4) und Dunst-Entfernung als Detailregler
+- Before/After-Toggle: Augensymbol in der Toolbar oder `\`-Taste zeigt das Original
+- Bewertungssystem: Sterne (0–5 via Zifferntasten), Aufnahme-Flag (p = Auswählen, x = Ablehnen), Farbmarken (6–9: rot/gelb/grün/blau) — Werte werden persistent in AppSupport gespeichert
+- Badges im Thumbnail-Strip: Sterne, Fähnchen und Farbpunkt sichtbar
+- Separate R/G/B-Kurven: Kanalwahl-Picker (RGB / R / G / B) im Kurven-Editor, CIColorCube-LUT für pixelgenaue Kanal-Isolation
+- Alle neuen Regler in `hasActiveAdjustments` und `resetAdjustments()` integriert
+
+---
+
 ## 0.22.0
 **Crop & Straighten**
 - Neues Zuschneiden-Werkzeug im Anpassungen-Plugin ("Zuschneiden & Begradigen")

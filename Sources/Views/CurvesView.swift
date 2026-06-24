@@ -3,6 +3,9 @@ import SwiftUI
 struct CurvesView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var activeIdx: Int? = nil
+    @State private var channel: Channel = .rgb
+
+    enum Channel: String, CaseIterable { case rgb = "RGB", r = "R", g = "G", b = "B" }
 
     static let defaultPoints: [CGPoint] = [
         CGPoint(x: 0,    y: 0),
@@ -20,8 +23,56 @@ struct CurvesView: View {
         CGPoint(x: 1,    y: 1)
     ]
 
+    private var currentPoints: [CGPoint] {
+        switch channel {
+        case .rgb: return viewModel.adjCurvePoints
+        case .r:   return viewModel.adjCurveR
+        case .g:   return viewModel.adjCurveG
+        case .b:   return viewModel.adjCurveB
+        }
+    }
+
+    private func setPoints(_ pts: [CGPoint]) {
+        switch channel {
+        case .rgb: viewModel.adjCurvePoints = pts
+        case .r:   viewModel.adjCurveR = pts
+        case .g:   viewModel.adjCurveG = pts
+        case .b:   viewModel.adjCurveB = pts
+        }
+    }
+
+    private var channelColor: Color {
+        channelColorFor(channel)
+    }
+
+    private func channelColorFor(_ ch: Channel) -> Color {
+        switch ch {
+        case .rgb: return .white
+        case .r:   return Color(red: 1,   green: 0.3, blue: 0.3)
+        case .g:   return Color(red: 0.3, green: 0.9, blue: 0.4)
+        case .b:   return Color(red: 0.4, green: 0.6, blue: 1.0)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 12) {
+            // Channel picker
+            HStack(spacing: 4) {
+                ForEach(Channel.allCases, id: \.self) { ch in
+                    let isActive = channel == ch
+                    Button(ch.rawValue) { channel = ch }
+                        .buttonStyle(PlainButtonStyle())
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(isActive ? channelColorFor(ch) : Color(NSColor.secondaryLabelColor))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(isActive ? Color(NSColor.controlBackgroundColor) : Color.clear)
+                        .cornerRadius(4)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+
             GeometryReader { geo in
                 let size = geo.size
                 ZStack {
@@ -29,7 +80,7 @@ struct CurvesView: View {
                     grid(in: size)
                     diagonal(in: size)
                     curvePath(in: size)
-                        .stroke(Color.white, lineWidth: 1.5)
+                        .stroke(channelColor, lineWidth: 1.5)
                     ForEach(0..<5) { i in
                         controlPoint(i, in: size)
                     }
@@ -41,14 +92,14 @@ struct CurvesView: View {
                                 activeIdx = nearestPoint(to: val.startLocation, in: size)
                             }
                             guard let idx = activeIdx else { return }
-                            var pts = viewModel.adjCurvePoints
+                            var pts = currentPoints
                             let norm = normalize(val.location, in: size)
                             let x: CGFloat
                             if idx == 0 { x = 0 }
                             else if idx == 4 { x = 1 }
                             else { x = norm.x.clamped(pts[idx-1].x + 0.01, pts[idx+1].x - 0.01) }
                             pts[idx] = CGPoint(x: x, y: norm.y.clamped(0, 1))
-                            viewModel.adjCurvePoints = pts
+                            setPoints(pts)
                         }
                         .onEnded { _ in activeIdx = nil }
                 )
@@ -58,8 +109,8 @@ struct CurvesView: View {
             .padding(.horizontal, 16)
 
             HStack(spacing: 8) {
-                Button("S-Kurve") { viewModel.adjCurvePoints = CurvesView.sCurvePoints }
-                Button("Zurücksetzen") { viewModel.adjCurvePoints = CurvesView.defaultPoints }
+                Button("S-Kurve") { setPoints(CurvesView.sCurvePoints) }
+                Button("Zurücksetzen") { setPoints(CurvesView.defaultPoints) }
                     .disabled(isDefault)
             }
             .buttonStyle(BorderlessButtonStyle())
@@ -93,7 +144,7 @@ struct CurvesView: View {
     }
 
     private func curvePath(in size: CGSize) -> Path {
-        let lut = Self.evaluateSpline(viewModel.adjCurvePoints)
+        let lut = Self.evaluateSpline(currentPoints)
         return Path { path in
             for (i, y) in lut.enumerated() {
                 let pt = canvasPoint(CGPoint(x: CGFloat(i) / 255, y: y), in: size)
@@ -104,9 +155,9 @@ struct CurvesView: View {
 
     @ViewBuilder
     private func controlPoint(_ i: Int, in size: CGSize) -> some View {
-        let pt = canvasPoint(viewModel.adjCurvePoints[i], in: size)
+        let pt = canvasPoint(currentPoints[i], in: size)
         Circle()
-            .fill(activeIdx == i ? Color.yellow : Color.white)
+            .fill(activeIdx == i ? Color.yellow : channelColor)
             .frame(width: 10, height: 10)
             .position(pt)
     }
@@ -123,7 +174,7 @@ struct CurvesView: View {
     }
 
     private func nearestPoint(to location: CGPoint, in size: CGSize) -> Int {
-        let pts = viewModel.adjCurvePoints
+        let pts = currentPoints
         var bestIdx = 0
         var bestDist = CGFloat.infinity
         for (i, p) in pts.enumerated() {
@@ -136,7 +187,7 @@ struct CurvesView: View {
 
     private var isDefault: Bool {
         let d = CurvesView.defaultPoints
-        return zip(viewModel.adjCurvePoints, d).allSatisfy {
+        return zip(currentPoints, d).allSatisfy {
             abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
         }
     }
