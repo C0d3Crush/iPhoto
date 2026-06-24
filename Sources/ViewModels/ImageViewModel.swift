@@ -173,6 +173,27 @@ class ImageViewModel: ObservableObject {
         saveAlbums()
     }
 
+    func toggleSelection(at index: Int) {
+        if collection.selectedIndices.contains(index) {
+            collection.selectedIndices.remove(index)
+            if collection.currentIndex == index {
+                collection.currentIndex = collection.selectedIndices.first ?? index
+            }
+        } else {
+            collection.selectedIndices.insert(index)
+            collection.currentIndex = index
+            loadCurrentImage()
+        }
+    }
+
+    func extendSelection(to index: Int) {
+        let from = collection.currentIndex
+        let lo = min(from, index), hi = max(from, index)
+        (lo...hi).forEach { collection.selectedIndices.insert($0) }
+        collection.currentIndex = index
+        loadCurrentImage()
+    }
+
     func selectAll() {
         let indices = Set(visibleDocuments.compactMap { collectionIndex(for: $0) })
         collection.selectedIndices = indices

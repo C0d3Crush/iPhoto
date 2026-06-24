@@ -25,9 +25,9 @@ struct LibraryGridView: View {
                                 .id(actualIndex)
                                 .frame(width: 176)
                                 .contentShape(Rectangle())
-                                .onTapGesture { viewModel.selectDocument(at: actualIndex) }
+                                .onTapGesture { handleTap(at: actualIndex) }
                                 .contextMenu { albumContextMenu(for: doc) }
-                            .onDrag { NSItemProvider(object: doc.url as NSURL) }
+                                .onDrag { NSItemProvider(object: doc.url as NSURL) }
                         }
                     }
                     .padding(.horizontal, 8)
@@ -38,6 +38,17 @@ struct LibraryGridView: View {
             .onChange(of: viewModel.collection.currentIndex) { newIndex in
                 withAnimation { proxy.scrollTo(newIndex, anchor: .center) }
             }
+        }
+    }
+
+    private func handleTap(at index: Int) {
+        let flags = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command {
+            viewModel.toggleSelection(at: index)
+        } else if flags == .shift {
+            viewModel.extendSelection(to: index)
+        } else {
+            viewModel.selectDocument(at: index)
         }
     }
 
