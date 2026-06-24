@@ -2,6 +2,7 @@ import SwiftUI
 
 enum InspectorPanel: String, CaseIterable {
     case metadata = "Metadaten"
+    case adjustments = "Anpassungen"
 
     var storageKey: String { "plugin.\(rawValue.lowercased())" }
 }
@@ -9,12 +10,14 @@ enum InspectorPanel: String, CaseIterable {
 struct InspectorView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @AppStorage("plugin.metadata") var metadataActive: Bool = true
+    @AppStorage("plugin.anpassungen") var adjustmentsActive: Bool = false
     @State private var selectedPanel: InspectorPanel = .metadata
 
     private var activePanels: [InspectorPanel] {
         InspectorPanel.allCases.filter { panel in
             switch panel {
             case .metadata: return metadataActive
+            case .adjustments: return adjustmentsActive
             }
         }
     }
@@ -72,6 +75,9 @@ struct InspectorView: View {
         switch panel {
         case .metadata:
             MetadataPanel()
+                .environmentObject(viewModel)
+        case .adjustments:
+            AdjustmentsPanel()
                 .environmentObject(viewModel)
         }
     }

@@ -2,6 +2,15 @@
 
 ---
 
+## 0.18.0
+**Photo-Editor Plugin mit Live-Anpassungen**
+- Neues Plugin "Anpassungen" in der rechten Sidebar (Plugins-Menü → Anpassungen)
+- Regler für Belichtung (EV), Helligkeit, Kontrast, Sättigung und Farbwärme
+- Live-Vorschau via CoreImage-Filter-Pipeline ohne Originaldatei zu verändern
+- Regler werden beim Bildwechsel automatisch zurückgesetzt
+
+---
+
 ## 0.17.5
 **Album-Crash beim Öffnen behoben**
 - Fix: selectAlbum setzt navSelection sofort, verschiebt Import + Bildladen in nächsten Run-Loop-Zyklus (DispatchQueue.main.async)

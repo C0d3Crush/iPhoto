@@ -16,10 +16,20 @@ class ImageViewModel: ObservableObject {
     @Published var albums: [Album] = []
     @Published var watchedFolders: [WatchedFolder] = []
 
+    // MARK: - Adjustments
+    @Published var adjExposure: Double = 0.0
+    @Published var adjBrightness: Double = 0.0
+    @Published var adjContrast: Double = 1.0
+    @Published var adjSaturation: Double = 1.0
+    @Published var adjWarmth: Double = 0.0
+    @Published var adjustedImage: CGImage? = nil
+
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
     private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
     private var loadToken: UUID = UUID()
+    private var adjToken: UUID = UUID()
+    private let adjCIContext = CIContext(options: [.useSoftwareRenderer: false])
     private var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
 
     var currentImage: CGImage? { collection.currentDocument?.cgImage }
@@ -85,6 +95,19 @@ class ImageViewModel: ObservableObject {
             .sink { [weak self] _ in self?.collection.selectedIndices = [] }
             .store(in: &cancellables)
 
+        let adjPublishers: [AnyPublisher<Void, Never>] = [
+            $adjExposure.map { _ in () }.eraseToAnyPublisher(),
+            $adjBrightness.map { _ in () }.eraseToAnyPublisher(),
+            $adjContrast.map { _ in () }.eraseToAnyPublisher(),
+            $adjSaturation.map { _ in () }.eraseToAnyPublisher(),
+            $adjWarmth.map { _ in () }.eraseToAnyPublisher()
+        ]
+        Publishers.MergeMany(adjPublishers)
+            .dropFirst(5)
+            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyAdjustments() }
+            .store(in: &cancellables)
+
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
             let onlyCmdDown = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
@@ -138,6 +161,7 @@ class ImageViewModel: ObservableObject {
         isLoading = false
         errorMessage = nil
         fitToWindowRequested = false
+        resetAdjustments()
     }
 
     func selectDocument(at index: Int) {
@@ -469,11 +493,62 @@ class ImageViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Adjustments
+
+    func resetAdjustments() {
+        adjExposure = 0; adjBrightness = 0; adjContrast = 1; adjSaturation = 1; adjWarmth = 0
+        adjustedImage = nil
+    }
+
+    private func applyAdjustments() {
+        let isNeutral = adjExposure == 0 && adjBrightness == 0 && adjContrast == 1 && adjSaturation == 1 && adjWarmth == 0
+        guard !isNeutral, let source = currentImage else { adjustedImage = nil; return }
+
+        let (exposure, brightness, contrast, saturation, warmth) =
+            (adjExposure, adjBrightness, adjContrast, adjSaturation, adjWarmth)
+        let token = UUID()
+        adjToken = token
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            var ci = CIImage(cgImage: source)
+
+            if exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
+                f.setValue(ci, forKey: kCIInputImageKey)
+                f.setValue(exposure, forKey: kCIInputEVKey)
+                if let out = f.outputImage { ci = out }
+            }
+
+            if brightness != 0 || contrast != 1 || saturation != 1,
+               let f = CIFilter(name: "CIColorControls") {
+                f.setValue(ci, forKey: kCIInputImageKey)
+                f.setValue(brightness, forKey: kCIInputBrightnessKey)
+                f.setValue(contrast, forKey: kCIInputContrastKey)
+                f.setValue(saturation, forKey: kCIInputSaturationKey)
+                if let out = f.outputImage { ci = out }
+            }
+
+            if warmth != 0, let f = CIFilter(name: "CITemperatureAndTint") {
+                f.setValue(ci, forKey: kCIInputImageKey)
+                f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
+                f.setValue(CIVector(x: CGFloat(6500 - warmth * 2500), y: 0), forKey: "inputTargetNeutral")
+                if let out = f.outputImage { ci = out }
+            }
+
+            let result = self.adjCIContext.createCGImage(ci, from: ci.extent)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.adjToken == token else { return }
+                self.adjustedImage = result
+            }
+        }
+    }
+
     // MARK: - Private
 
     func loadCurrentImage() {
         guard let doc = collection.currentDocument else { return }
         let index = collection.currentIndex
+        resetAdjustments()
 
         if doc.cgImage != nil {
             fitToWindowRequested = true

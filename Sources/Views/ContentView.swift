@@ -64,7 +64,7 @@ struct DetailView: View {
                     Text("Bild wird geladen…")
                         .foregroundColor(.secondary)
                 }
-            } else if let image = viewModel.currentImage {
+            } else if let image = viewModel.adjustedImage ?? viewModel.currentImage {
                 ZoomableScrollView(
                     image: image,
                     zoomFactor: $viewModel.zoomFactor,
