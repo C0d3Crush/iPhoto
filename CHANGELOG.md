@@ -2,6 +2,15 @@
 
 ---
 
+## 0.23.1
+**Inspector-Fixes & Crash-Behebung**
+- Fix: Crash auf macOS 11 durch Layout-Loop im Inspector (verschachtelte ScrollViews)
+- Fix: Plugin-Header klappt jetzt beim Klick auf den gesamten Header auf/zu (nicht nur Pfeil-Button) — gilt für Inspector und Analyse-Panel
+- Fix: Inspector-Header oben angeheftet, Speichern-Leiste immer unten fixiert
+- Fix: Inspector-Button in die Toolbar ganz rechts verschoben
+
+---
+
 ## 0.23.0
 **Lightroom-Features: Farbstich, Detail, Before/After, Bewertung, R/G/B-Kurven**
 - Farbstich-Regler (−1…+1) für Grün-/Magenta-Balance via CITemperatureAndTint
