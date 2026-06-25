@@ -2,6 +2,13 @@
 
 ---
 
+## 0.25.0
+**GPU-Beschleunigung für Histogramm und Export**
+- RGB-Histogramm wird jetzt per SIMD (vImage/Accelerate) berechnet – deutlich schneller bei jedem Slider-Move
+- sRGB-Konvertierung beim Export läuft jetzt über Metal (Core Image) statt CPU
+
+---
+
 ## 0.24.1
 **Deployment Target zurück auf macOS 11**
 - Minimum Deployment Target wieder auf macOS 11.0 (Big Sur) gesenkt
