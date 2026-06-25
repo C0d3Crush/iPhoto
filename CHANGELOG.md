@@ -2,6 +2,15 @@
 
 ---
 
+## 0.27.2
+**Performance-Benchmark-Suite**
+- `Tests/bench/main.swift` + `Tests/run_bench.sh`: 21 Benchmarks über 3 Bildgrößen (2/12/24 MP)
+- Misst Decode (JPEG/PNG), Thumbnail (160 px / 1500 px), Export (JPEG/PNG/TIFF) mit Min/Avg/Median/p95/Max
+- Definierte Schwellwerte je Größe; Exit-Code 1 bei Überschreitung
+- Ausgabe mit Plattform, CPU-Anzahl, RAM und Zeitstempel
+
+---
+
 ## 0.27.1
 **Sanfterer Bildwechsel beim progressiven Laden**
 - Beim Qualitäts-Upgrade (Thumbnail → Vorschau → Vollbild) wird der Zoom jetzt proportional skaliert statt zurückgesetzt
