@@ -20,6 +20,7 @@ struct ImageDocument: Identifiable, Equatable {
     let id: UUID
     let url: URL
     var cgImage: CGImage?
+    var previewImage: CGImage?
     var thumbnail: CGImage?
     var thumbnailImage: NSImage?
     var imageSize: CGSize

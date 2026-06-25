@@ -2,6 +2,14 @@
 
 ---
 
+## 0.26.0
+**Progressives Laden — stufenweise Bildqualität ohne Stottern**
+- Bilder erscheinen sofort als Thumbnail (Phase 1), dann schnell in ~1500px Vorschau (Phase 2), schließlich in voller Auflösung nach 1,5 s Betrachtungszeit (Phase 3)
+- Beim Hineinzoomen über 1:1 wird automatisch das Vollbild nachgeladen
+- Ladeindikator erscheint nur noch wenn kein Thumbnail verfügbar ist
+
+---
+
 ## 0.25.1
 **Performance-Messungen in Log**
 - Histogramm-Analysezeit (Pixel-Pass + Render) wird in `~/Library/Logs/iPhoto/iPhoto.log` geloggt

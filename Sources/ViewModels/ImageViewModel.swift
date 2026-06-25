@@ -66,8 +66,12 @@ class ImageViewModel: ObservableObject {
     private var adjToken: UUID = UUID()
     private let adjCIContext = CIContext(options: [.useSoftwareRenderer: false])
     private var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
+    private var isLoadingFullRes = false
 
-    var currentImage: CGImage? { collection.currentDocument?.cgImage }
+    var currentImage: CGImage? {
+        guard let doc = collection.currentDocument else { return nil }
+        return doc.cgImage ?? doc.previewImage ?? doc.thumbnail
+    }
     var windowTitle: String { collection.currentDocument?.filename ?? "iPhoto" }
     var imageSize: CGSize { collection.currentDocument?.imageSize ?? .zero }
 
@@ -151,6 +155,12 @@ class ImageViewModel: ObservableObject {
             .dropFirst(15)
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyAdjustments() }
+            .store(in: &cancellables)
+
+        $zoomFactor
+            .filter { $0 > 1.0 }
+            .throttle(for: .milliseconds(500), scheduler: DispatchQueue.main, latest: false)
+            .sink { [weak self] _ in self?.upgradeToFullResIfNeeded() }
             .store(in: &cancellables)
 
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -849,7 +859,7 @@ class ImageViewModel: ObservableObject {
         zip(pts, CurvesView.defaultPoints).allSatisfy { abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001 }
     }
 
-    private func applyAdjustments() {
+    func applyAdjustments() {
         let cropDefault = adjCropRect == CGRect(x: 0, y: 0, width: 1, height: 1)
         let isNeutral = !hasActiveAdjustments && cropDefault
         guard hasActiveAdjustments, let source = currentImage else {
@@ -1004,35 +1014,96 @@ class ImageViewModel: ObservableObject {
         guard let doc = collection.currentDocument else { return }
         let index = collection.currentIndex
         resetAdjustments()
+        isLoadingFullRes = false
 
         if doc.cgImage != nil {
             fitToWindowRequested = true
+            displayImageVersion = UUID()
             return
         }
 
-        isLoading = true
         errorMessage = nil
         let url = doc.url
         let token = UUID()
         loadToken = token
 
+        // Phase 1: sofort Thumbnail/Preview anzeigen falls vorhanden
+        let hasQuickPreview = doc.thumbnail != nil || doc.previewImage != nil
+        if hasQuickPreview {
+            displayImageVersion = UUID()
+            fitToWindowRequested = true
+            isLoading = false
+        } else {
+            isLoading = true
+        }
+
+        // Falls Preview schon geladen → direkt zu Phase 3 (Vollbild nach Dwell)
+        if doc.previewImage != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self = self, self.loadToken == token else { return }
+                self.loadFullRes(url: url, index: index, token: token)
+            }
+            return
+        }
+
         Log.info("Lade Bild: \(url.lastPathComponent)")
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+            defer { stopAccess() }
+
+            // Phase 2: Preview in Bildschirmauflösung (~1500px) — sehr schnell
+            if let preview = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 1500) {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, self.loadToken == token else { return }
+                    guard index < self.collection.documents.count,
+                          self.collection.documents[index].url == url else { return }
+                    self.collection.documents[index].previewImage = preview
+                    self.isLoading = false
+                    if self.collection.documents[index].thumbnail == nil {
+                        self.fitToWindowRequested = true
+                    }
+                    self.displayImageVersion = UUID()
+                    if self.hasActiveAdjustments { self.applyAdjustments() }
+                }
+            }
+
+            // Phase 3: Vollbild nach Dwell-Zeit (1.5 s)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self = self, self.loadToken == token else { return }
+                self.loadFullRes(url: url, index: index, token: token)
+            }
+        }
+    }
+
+    private func loadFullRes(url: URL, index: Int, token: UUID) {
+        guard !isLoadingFullRes,
+              index < collection.documents.count,
+              collection.documents[index].url == url,
+              collection.documents[index].cgImage == nil else { return }
+        isLoadingFullRes = true
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self, self.loadToken == token else {
+                DispatchQueue.main.async { self?.isLoadingFullRes = false }
+                return
+            }
             let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
             defer { stopAccess() }
             do {
                 let image = try RAWImageDecoder.decode(url: accessURL)
                 let size = CGSize(width: image.width, height: image.height)
                 let metadata = self.metadataService.readPhotoMetadata(from: accessURL)
-                Log.info("Bild dekodiert: \(url.lastPathComponent) \(Int(size.width))×\(Int(size.height)), \(metadata.count) Metadaten-Einträge")
+                Log.info("Bild dekodiert (voll): \(url.lastPathComponent) \(Int(size.width))×\(Int(size.height)), \(metadata.count) Metadaten-Einträge")
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.loadToken == token else {
-                        Log.debug("Bild verworfen (Token ungültig): \(url.lastPathComponent)")
+                        Log.debug("Vollbild verworfen (Token ungültig): \(url.lastPathComponent)")
+                        self?.isLoadingFullRes = false
                         return
                     }
                     guard index < self.collection.documents.count,
                           self.collection.documents[index].url == url else {
-                        self.isLoading = false
+                        self.isLoadingFullRes = false
                         return
                     }
                     var updated = self.collection.documents[index]
@@ -1045,21 +1116,29 @@ class ImageViewModel: ObservableObject {
                         updated.colorLabel = entry.colorLabel
                     }
                     self.collection.update(document: updated, at: index)
-                    self.isLoading = false
-                    self.fitToWindowRequested = true
+                    self.isLoadingFullRes = false
                     self.displayImageVersion = UUID()
+                    if self.hasActiveAdjustments { self.applyAdjustments() }
                     self.loadVersionsForCurrentImage()
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
                 }
             } catch {
-                Log.error("Bild laden fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
+                Log.error("Vollbild laden fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.loadToken == token else { return }
-                    self.isLoading = false
-                    self.errorMessage = error.localizedDescription
+                    self.isLoadingFullRes = false
+                    if self.collection.currentDocument?.url == url {
+                        self.isLoading = false
+                        self.errorMessage = error.localizedDescription
+                    }
                 }
             }
         }
+    }
+
+    private func upgradeToFullResIfNeeded() {
+        guard let doc = collection.currentDocument, doc.cgImage == nil else { return }
+        loadFullRes(url: doc.url, index: collection.currentIndex, token: loadToken)
     }
 
     func loadThumbnails() {
