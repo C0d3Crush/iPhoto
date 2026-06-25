@@ -72,8 +72,8 @@ struct ZoomableScrollView: NSViewRepresentable {
             coordinator.imageView?.frame = NSRect(origin: .zero, size: newSize)
 
             if fitToWindow {
-                // Neues Bild geöffnet → Zoom zurücksetzen
-                DispatchQueue.main.async { coordinator.fitToWindow() }
+                // Neues Bild geöffnet → Zoom sofort synchron korrigieren
+                coordinator.fitToWindow()
                 DispatchQueue.main.async { self.fitToWindow = false }
             } else if oldWidth > 0, let sv = coordinator.scrollView {
                 // Qualitäts-Upgrade: Zoom synchron skalieren bevor der Frame gerendert wird
