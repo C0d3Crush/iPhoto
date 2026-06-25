@@ -169,33 +169,26 @@ private struct FolderRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 2) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() }
-                } label: {
+            Button {
+                viewModel.navSelection = .folder(folder.id)
+                withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 4) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .frame(width: 16, height: 16)
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                Button {
-                    viewModel.navSelection = .folder(folder.id)
-                    withAnimation(.easeInOut(duration: 0.18)) { isExpanded = true }
-                } label: {
+                        .frame(width: 12)
                     Label(folder.name, systemImage: isExpanded ? "folder.fill" : "folder")
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 5)
-                        .padding(.trailing, 6)
-                        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-                        .cornerRadius(6)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .padding(.horizontal, 6)
+                .padding(.vertical, 5)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .cornerRadius(6)
             }
-            .padding(.leading, 4)
-            .padding(.trailing, 4)
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 4)
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 0) {
