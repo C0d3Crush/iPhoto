@@ -2,6 +2,16 @@
 
 ---
 
+## 0.30.0
+**Ordner in der Sidebar aufklappbar**
+- Pfeil-Button klappt Ordner auf/zu (mit Animation, unabhängig von Auswahl)
+- Klick auf Ordnername wählt Ordner aus und klappt ihn gleichzeitig auf
+- Ausgeklappter Ordner zeigt alle enthaltenen Bilder mit Vorschau-Thumbnail und Dateiname
+- Klick auf ein Bild in der Liste wählt es direkt im Hauptviewer aus
+- Aktuell angezeigtes Bild wird in der Liste hervorgehoben
+
+---
+
 ## 0.29.2
 **Dokumentation**
 - `ARCHITECTURE.md`: Systemübersicht (ASCII-Diagramm), Datenfluß, Schichtmodell, Persistenz-Schema, AppKit-Bridges, CLI
