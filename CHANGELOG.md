@@ -2,6 +2,19 @@
 
 ---
 
+## 0.29.0
+**SQLite-Katalog (`CatalogStore`)**
+- Neue Datei `~/Library/Application Support/iPhoto/catalog.db` mit WAL-Modus
+- Tabellen: `images`, `ratings`, `albums`, `album_images` — mit Fremdschlüsseln und Indizes
+- Bilder werden beim Vollbild-Load automatisch im Katalog registriert (Pfad, Größe, Kamera, Datum)
+- Bewertungen/Flags/Farbmarken werden parallel in JSON und SQLite gespeichert
+- Album-Operationen (erstellen, umbenennen, löschen, Fotos hinzufügen/entfernen) spiegeln sich im Katalog
+- Migration: bestehende `albums.json` wird beim ersten Start importiert
+- Ratings-Fallback: CatalogStore → RatingStore (JSON) für rückwärtskompatibles Laden
+- Suchfunktion nach Dateiname, Kamera, Datum; Filter nach Flag und Mindestbewertung
+
+---
+
 ## 0.28.2
 **Fix: Erstes Bild nicht mehr rangezoomt**
 - Fix: Wenn das 160 px Thumbnail schon geladen war bevor die 1500 px Vorschau ankam, wurde fitToWindow übersprungen — das Bild erschien 1:1 (zu groß)

@@ -309,6 +309,7 @@ class ImageViewModel: ObservableObject {
         let album = Album(name: name)
         albums.append(album)
         saveAlbums()
+        CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: album.name)
         navSelection = .album(album.id) as NavSelection?
     }
 
@@ -316,12 +317,14 @@ class ImageViewModel: ObservableObject {
         albums.removeAll { $0.id == album.id }
         if navSelection == .album(album.id) { navSelection = .library as NavSelection? }
         saveAlbums()
+        CatalogStore.shared.deleteAlbum(id: album.id.uuidString)
     }
 
     func renameAlbum(_ album: Album, to name: String) {
         guard let idx = albums.firstIndex(where: { $0.id == album.id }) else { return }
         albums[idx].name = name
         saveAlbums()
+        CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: name)
     }
 
     func removeSelected() {
@@ -421,6 +424,8 @@ class ImageViewModel: ObservableObject {
         guard !albums[idx].photoURLs.contains(document.url) else { return }
         albums[idx].photoURLs.append(document.url)
         saveAlbums()
+        CatalogStore.shared.addImage(path: document.url.path, toAlbum: albumID.uuidString,
+                                     order: albums[idx].photoURLs.count - 1)
     }
 
     func addSelectedToAlbum(albumID: UUID) {
@@ -430,6 +435,8 @@ class ImageViewModel: ObservableObject {
             let url = collection.documents[colIdx].url
             guard !albums[idx].photoURLs.contains(url) else { continue }
             albums[idx].photoURLs.append(url)
+            CatalogStore.shared.addImage(path: url.path, toAlbum: albumID.uuidString,
+                                         order: albums[idx].photoURLs.count - 1)
         }
         saveAlbums()
     }
@@ -438,6 +445,7 @@ class ImageViewModel: ObservableObject {
         guard let idx = albums.firstIndex(where: { $0.id == albumID }) else { return }
         albums[idx].photoURLs.removeAll { $0 == document.url }
         saveAlbums()
+        CatalogStore.shared.removeImage(path: document.url.path, fromAlbum: albumID.uuidString)
     }
 
     private var albumsFileURL: URL {
@@ -850,7 +858,10 @@ class ImageViewModel: ObservableObject {
     private func persistRating(at idx: Int) {
         guard idx < collection.documents.count else { return }
         let doc = collection.documents[idx]
-        RatingStore.shared.save(RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel), for: doc.url)
+        let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel)
+        RatingStore.shared.save(entry, for: doc.url)
+        CatalogStore.shared.saveRating(path: doc.url.path, rating: doc.rating,
+                                       flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
     }
 
     // MARK: - Curve helper
@@ -1108,12 +1119,26 @@ class ImageViewModel: ObservableObject {
                     updated.cgImage = image
                     updated.imageSize = size
                     updated.metadata = metadata
-                    if let entry = RatingStore.shared.load(for: url) {
+                    // Load rating from Catalog first, fall back to legacy RatingStore
+                    if let r = CatalogStore.shared.rating(forPath: url.path) {
+                        updated.rating = r.rating
+                        updated.flagStatus = FlagStatus(rawValue: r.flag) ?? .none
+                        updated.colorLabel = ColorLabel(rawValue: r.colorLabel) ?? .none
+                    } else if let entry = RatingStore.shared.load(for: url) {
                         updated.rating = entry.rating
                         updated.flagStatus = entry.flagStatus
                         updated.colorLabel = entry.colorLabel
                     }
                     self.collection.update(document: updated, at: index)
+                    // Register image in catalog for search/browse
+                    let sizeBytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { Int64($0) } ?? 0
+                    let dateTaken = updated.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value
+                    let camMake = updated.metadata.first(where: { $0.key == "tiff.Make" })?.value
+                    let camModel = updated.metadata.first(where: { $0.key == "tiff.Model" })?.value
+                    CatalogStore.shared.upsertImage(path: url.path, filename: url.lastPathComponent,
+                                                    isRAW: updated.isRAW, width: Int(size.width),
+                                                    height: Int(size.height), sizeBytes: sizeBytes,
+                                                    dateTaken: dateTaken, cameraMake: camMake, cameraModel: camModel)
                     self.isLoadingFullRes = false
                     self.displayImageVersion = UUID()
                     if self.hasActiveAdjustments { self.applyAdjustments() }
