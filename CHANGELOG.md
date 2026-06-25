@@ -2,6 +2,13 @@
 
 ---
 
+## 0.29.2
+**Dokumentation**
+- `ARCHITECTURE.md`: Systemübersicht (ASCII-Diagramm), Datenfluß, Schichtmodell, Persistenz-Schema, AppKit-Bridges, CLI
+- `Tests/README.md`: Wie man alle Tests ausführt, was jeder Test prüft, Schwellwerte und FAIL-Bedeutung
+
+---
+
 ## 0.29.1
 **Katalog-Tests (21 PASS)**
 - `Tests/catalog/main.swift` + `Tests/run_catalog.sh`: 21 Tests über Schema, CRUD, Suche, Performance und Persistenz
