@@ -64,12 +64,27 @@ struct ZoomableScrollView: NSViewRepresentable {
 
         let imageChanged = coordinator.lastCGImage !== image
         if imageChanged {
+            let oldWidth = CGFloat(coordinator.lastCGImage?.width ?? 0)
             coordinator.lastCGImage = image
-            let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+            let newSize = NSSize(width: image.width, height: image.height)
+            let nsImage = NSImage(cgImage: image, size: newSize)
             coordinator.imageView?.image = nsImage
-            coordinator.imageView?.frame = NSRect(origin: .zero, size: nsImage.size)
-            DispatchQueue.main.async { coordinator.fitToWindow() }
-            if fitToWindow { DispatchQueue.main.async { self.fitToWindow = false } }
+            coordinator.imageView?.frame = NSRect(origin: .zero, size: newSize)
+
+            if fitToWindow {
+                // Neues Bild geöffnet → Zoom zurücksetzen
+                DispatchQueue.main.async { coordinator.fitToWindow() }
+                DispatchQueue.main.async { self.fitToWindow = false }
+            } else if oldWidth > 0 {
+                // Qualitäts-Upgrade (thumbnail → preview → voll): Zoom proportional anpassen
+                let ratio = oldWidth / CGFloat(image.width)
+                DispatchQueue.main.async {
+                    guard let sv = coordinator.scrollView else { return }
+                    let adjusted = min(max(sv.magnification * ratio, sv.minMagnification), sv.maxMagnification)
+                    sv.magnification = adjusted
+                    coordinator.zoomFactor.wrappedValue = adjusted
+                }
+            }
             return
         }
 

@@ -2,6 +2,13 @@
 
 ---
 
+## 0.27.1
+**Sanfterer Bildwechsel beim progressiven Laden**
+- Beim Qualitäts-Upgrade (Thumbnail → Vorschau → Vollbild) wird der Zoom jetzt proportional skaliert statt zurückgesetzt
+- Kein Sprung mehr beim Bildwechsel wenn der Nutzer bereits gezoomt oder gescrollt hat
+
+---
+
 ## 0.27.0
 **CLI-Tool: `iphoto-cli` für Kommandozeilenexport**
 - `./build.sh` erstellt jetzt zusätzlich `build/iphoto-cli`
