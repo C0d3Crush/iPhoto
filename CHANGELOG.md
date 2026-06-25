@@ -2,6 +2,13 @@
 
 ---
 
+## 0.25.1
+**Performance-Messungen in Log**
+- Histogramm-Analysezeit (Pixel-Pass + Render) wird in `~/Library/Logs/iPhoto/iPhoto.log` geloggt
+- Export-sRGB-Konvertierungszeit pro Datei wird geloggt
+
+---
+
 ## 0.25.0
 **GPU-Beschleunigung für Histogramm und Export**
 - RGB-Histogramm wird jetzt per SIMD (vImage/Accelerate) berechnet – deutlich schneller bei jedem Slider-Move
