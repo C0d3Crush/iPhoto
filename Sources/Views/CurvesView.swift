@@ -106,6 +106,7 @@ struct CurvesView: View {
                 .cornerRadius(4)
             }
             .aspectRatio(1, contentMode: .fit)
+            .frame(maxHeight: 200)
             .padding(.horizontal, 16)
 
             HStack(spacing: 8) {

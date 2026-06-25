@@ -7,46 +7,73 @@ struct WaveformView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if isParade {
+                paradeView
+            } else {
+                waveformView
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var waveformView: some View {
+        VStack(spacing: 0) {
             ZStack {
                 Color.black
                 guideLines
-                if let img = isParade ? engine.rgbParadeImage : engine.waveformImage {
+                if let img = engine.waveformImage {
                     Image(nsImage: NSImage(cgImage: img, size: .zero))
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .clipped()
                 } else {
-                    Text("Berechne…")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    Text("Berechne…").font(.caption2).foregroundColor(.secondary)
                 }
             }
-            .frame(height: 160)
+            .frame(height: 140)
             .cornerRadius(4)
 
-            if isParade {
-                HStack {
-                    ForEach(["R", "G", "B"], id: \.self) { label in
-                        Text(label)
-                            .font(.caption2)
-                            .foregroundColor(label == "R" ? .red : label == "G" ? .green : .blue)
-                            .frame(maxWidth: .infinity)
+            HStack {
+                Text("0%").font(.caption2).foregroundColor(.secondary)
+                Spacer()
+                Text("50%").font(.caption2).foregroundColor(.secondary)
+                Spacer()
+                Text("100%").font(.caption2).foregroundColor(.secondary)
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private var paradeView: some View {
+        let channelInfo: [(String, Color)] = [("R", .red), ("G", .green), ("B", .blue)]
+        return VStack(spacing: 3) {
+            if let img = engine.rgbParadeImage {
+                let cgH = img.height / 3
+                ForEach(0..<3, id: \.self) { i in
+                    HStack(spacing: 6) {
+                        Text(channelInfo[i].0)
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundColor(channelInfo[i].1)
+                            .frame(width: 10)
+                        ZStack {
+                            Color.black
+                            if let slice = img.cropping(to: CGRect(x: 0, y: i * cgH, width: img.width, height: cgH)) {
+                                Image(nsImage: NSImage(cgImage: slice, size: .zero))
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .clipped()
+                            }
+                        }
+                        .frame(height: 80)
+                        .cornerRadius(3)
                     }
                 }
-                .padding(.top, 4)
             } else {
-                HStack {
-                    Text("0%").font(.caption2).foregroundColor(.secondary)
-                    Spacer()
-                    Text("50%").font(.caption2).foregroundColor(.secondary)
-                    Spacer()
-                    Text("100%").font(.caption2).foregroundColor(.secondary)
-                }
-                .padding(.top, 4)
+                Text("Berechne…").font(.caption2).foregroundColor(.secondary)
+                    .frame(height: 258)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     private var guideLines: some View {
