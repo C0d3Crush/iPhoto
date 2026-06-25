@@ -11,12 +11,13 @@ struct ThumbnailCell: View {
                     .fill(Color(NSColor.quaternaryLabelColor))
                     .frame(width: 148, height: 99)
 
-                if let thumb = document.thumbnailImage {
+                if let thumb = document.thumbnailImage ?? document.placeholderThumbnailImage {
                     Image(nsImage: thumb)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 148, height: 99)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .animation(.easeIn(duration: 0.15), value: document.thumbnailImage != nil)
                 } else {
                     ProgressView()
                         .scaleEffect(0.6)

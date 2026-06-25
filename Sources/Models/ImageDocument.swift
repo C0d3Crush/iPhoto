@@ -23,6 +23,7 @@ struct ImageDocument: Identifiable, Equatable {
     var previewImage: CGImage?
     var thumbnail: CGImage?
     var thumbnailImage: NSImage?
+    var placeholderThumbnailImage: NSImage?
     var imageSize: CGSize
     var isRAW: Bool
     var errorMessage: String?

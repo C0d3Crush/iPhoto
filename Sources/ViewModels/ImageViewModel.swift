@@ -1142,21 +1142,43 @@ class ImageViewModel: ObservableObject {
     }
 
     func loadThumbnails() {
+        // Load cheap 80px placeholders for all docs in background so cells have something to show immediately.
         for (index, doc) in collection.documents.enumerated() {
-            guard doc.thumbnail == nil else { continue }
+            guard doc.placeholderThumbnailImage == nil && doc.thumbnailImage == nil else { continue }
             let url = doc.url
-            DispatchQueue.global(qos: .utility).async { [weak self] in
+            DispatchQueue.global(qos: .background).async { [weak self] in
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
-                guard let thumb = try? RAWImageDecoder.thumbnail(url: accessURL) else { return }
+                guard let thumb = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 80) else { return }
                 let nsImage = NSImage(cgImage: thumb, size: .zero)
                 DispatchQueue.main.async {
                     guard let self = self,
                           index < self.collection.documents.count,
-                          self.collection.documents[index].url == url else { return }
-                    self.collection.documents[index].thumbnail = thumb
-                    self.collection.documents[index].thumbnailImage = nsImage
+                          self.collection.documents[index].url == url,
+                          self.collection.documents[index].thumbnailImage == nil else { return }
+                    self.collection.documents[index].placeholderThumbnailImage = nsImage
                 }
+            }
+        }
+    }
+
+    func requestVisibleThumbnail(at index: Int) {
+        guard index < collection.documents.count else { return }
+        let doc = collection.documents[index]
+        guard doc.thumbnailImage == nil else { return }
+        let url = doc.url
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+            defer { stopAccess() }
+            guard let thumb = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 160) else { return }
+            let nsImage = NSImage(cgImage: thumb, size: .zero)
+            DispatchQueue.main.async {
+                guard let self = self,
+                      index < self.collection.documents.count,
+                      self.collection.documents[index].url == url else { return }
+                self.collection.documents[index].thumbnail = thumb
+                self.collection.documents[index].thumbnailImage = nsImage
+                self.collection.documents[index].placeholderThumbnailImage = nil
             }
         }
     }

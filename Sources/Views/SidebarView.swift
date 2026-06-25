@@ -15,6 +15,7 @@ struct SidebarView: View {
                             .id(actualIndex)
                             .frame(width: 156)
                             .contentShape(Rectangle())
+                            .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }
                             .onTapGesture { viewModel.selectDocument(at: actualIndex) }
                             .contextMenu { albumContextMenu(for: doc) }
                             .onDrag { NSItemProvider(object: doc.url as NSURL) }

@@ -2,6 +2,15 @@
 
 ---
 
+## 0.28.1
+**Viewport-basiertes Thumbnail-Laden mit Qualitätsstufen**
+- Nur sichtbare Thumbnails werden sofort in 160 px geladen (höhere Priorität)
+- Alle anderen Bilder erhalten zuerst ein günstiges 80 px Platzhalter-Thumbnail im Hintergrund
+- Beim Scrollen wird jede neu sichtbare Zelle automatisch auf 160 px hochgeladen
+- Weicher Überblendeffekt beim Qualitätswechsel (80 px → 160 px)
+
+---
+
 ## 0.28.0
 **Bibliotheks-Skalierungstest**
 - `Tests/library/main.swift` + `Tests/run_library.sh`: 7 Sektionen, 22 Tests über 10/100/500/1000 Bilder
