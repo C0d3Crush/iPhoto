@@ -1,5 +1,6 @@
 import CoreGraphics
 import AppKit
+import Accelerate
 
 final class AnalysisEngine: ObservableObject {
     @Published var histogramImage: CGImage?
@@ -28,11 +29,35 @@ final class AnalysisEngine: ObservableObject {
                                       space: colorSpace, bitmapInfo: bitmapFlags) else { return }
             ctx.draw(source, in: CGRect(x: 0, y: 0, width: scopeW, height: scopeH))
 
-            var rBins = [Int](repeating: 0, count: 256)
-            var gBins = [Int](repeating: 0, count: 256)
-            var bBins = [Int](repeating: 0, count: 256)
-            var lBins = [Int](repeating: 0, count: 256)
+            // vImage SIMD histogram for R/G/B channels
+            var rHist = [vImagePixelCount](repeating: 0, count: 256)
+            var gHist = [vImagePixelCount](repeating: 0, count: 256)
+            var bHist = [vImagePixelCount](repeating: 0, count: 256)
+            var aHist = [vImagePixelCount](repeating: 0, count: 256)
+            scaled.withUnsafeMutableBytes { rawPtr in
+                var vBuf = vImage_Buffer(data: rawPtr.baseAddress,
+                                         height: vImagePixelCount(scopeH),
+                                         width: vImagePixelCount(scopeW),
+                                         rowBytes: scopeW * 4)
+                rHist.withUnsafeMutableBufferPointer { rp in
+                    gHist.withUnsafeMutableBufferPointer { gp in
+                        bHist.withUnsafeMutableBufferPointer { bp in
+                            aHist.withUnsafeMutableBufferPointer { ap in
+                                var ptrs: [UnsafeMutablePointer<vImagePixelCount>?] = [
+                                    rp.baseAddress, gp.baseAddress, bp.baseAddress, ap.baseAddress
+                                ]
+                                vImageHistogramCalculation_ARGB8888(&vBuf, &ptrs, 0)
+                            }
+                        }
+                    }
+                }
+            }
+            let rBins = rHist.map { Int($0) }
+            let gBins = gHist.map { Int($0) }
+            let bBins = bHist.map { Int($0) }
 
+            // Per-pixel pass: luma histogram + waveform accumulation
+            var lBins = [Int](repeating: 0, count: 256)
             let outH = 200
             var lumaAcc = [Float](repeating: 0, count: scopeW * outH)
             var rAcc    = [Float](repeating: 0, count: scopeW * outH)
@@ -46,10 +71,6 @@ final class AnalysisEngine: ObservableObject {
                     let g = Float(scaled[base+1]) / 255
                     let b = Float(scaled[base+2]) / 255
                     let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-                    rBins[Int(r * 255)] += 1
-                    gBins[Int(g * 255)] += 1
-                    bBins[Int(b * 255)] += 1
                     lBins[min(255, Int(luma * 255))] += 1
 
                     func acc(_ v: Float, buf: inout [Float]) {

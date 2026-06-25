@@ -1,5 +1,6 @@
 import ImageIO
 import CoreGraphics
+import CoreImage
 import Foundation
 
 enum ExportFormat: String, CaseIterable, Identifiable {
@@ -54,6 +55,7 @@ struct ExportResult {
 }
 
 struct ImageExporter {
+    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     static func exportSingle(
         image: CGImage,
@@ -84,16 +86,8 @@ struct ImageExporter {
 
     private static func convertToSRGB(_ image: CGImage) -> CGImage? {
         guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
-        let w = image.width, h = image.height
-        guard let ctx = CGContext(
-            data: nil, width: w, height: h,
-            bitsPerComponent: 8,
-            bytesPerRow: w * 4,
-            space: srgb,
-            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
-        ) else { return nil }
-        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        return ctx.makeImage()
+        let ci = CIImage(cgImage: image)
+        return ciContext.createCGImage(ci, from: ci.extent, format: .RGBA8, colorSpace: srgb)
     }
 
     static func exportBatch(
