@@ -157,18 +157,89 @@ private struct FolderRow: View {
     let folder: WatchedFolder
     let isSelected: Bool
     @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isExpanded: Bool = false
+
+    private var folderImages: [ImageDocument] {
+        guard let folderURL = folder.resolveURL()?.url else { return [] }
+        let prefix = folderURL.standardized.path
+        return viewModel.collection.documents.filter {
+            $0.url.standardized.path.hasPrefix(prefix)
+        }
+    }
 
     var body: some View {
-        Button(action: { viewModel.navSelection = .folder(folder.id) }) {
-            Label(folder.name, systemImage: "folder")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-                .cornerRadius(6)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 2) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button {
+                    viewModel.navSelection = .folder(folder.id)
+                    withAnimation(.easeInOut(duration: 0.18)) { isExpanded = true }
+                } label: {
+                    Label(folder.name, systemImage: isExpanded ? "folder.fill" : "folder")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 5)
+                        .padding(.trailing, 6)
+                        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.leading, 4)
+            .padding(.trailing, 4)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(folderImages) { doc in
+                        let idx = viewModel.collectionIndex(for: doc) ?? 0
+                        let isCurrent = viewModel.collection.currentIndex == idx && isSelected
+                        Button {
+                            if viewModel.navSelection != .folder(folder.id) {
+                                viewModel.navSelection = .folder(folder.id)
+                            }
+                            viewModel.selectDocument(at: idx)
+                        } label: {
+                            HStack(spacing: 5) {
+                                if let thumb = doc.thumbnailImage ?? doc.placeholderThumbnailImage {
+                                    Image(nsImage: thumb)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 22, height: 15)
+                                        .clipped()
+                                        .cornerRadius(2)
+                                } else {
+                                    Image(systemName: "photo")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 22, height: 15)
+                                }
+                                Text(doc.filename)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .foregroundColor(isCurrent ? .primary : .secondary)
+                            }
+                            .padding(.leading, 28)
+                            .padding(.trailing, 6)
+                            .padding(.vertical, 3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(isCurrent ? Color.accentColor.opacity(0.15) : Color.clear)
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.horizontal, 4)
+                    }
+                }
+            }
         }
-        .buttonStyle(PlainButtonStyle())
-        .padding(.horizontal, 4)
     }
 }
 
