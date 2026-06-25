@@ -76,7 +76,9 @@ struct ImageExporter {
 
         // Immer nach sRGB konvertieren — Adobe RGB und andere Profile
         // werden von manchen Viewern (inkl. Preview auf macOS 11) nicht korrekt gelesen.
+        let t0 = Date()
         let srgbImage = convertToSRGB(image) ?? image
+        Log.debug(String(format: "sRGB-Konvertierung: %.1f ms (%@)", Date().timeIntervalSince(t0) * 1000, url.lastPathComponent))
         CGImageDestinationAddImage(dest, srgbImage, props.isEmpty ? nil : props as CFDictionary)
 
         guard CGImageDestinationFinalize(dest) else {

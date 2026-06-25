@@ -16,6 +16,7 @@ final class AnalysisEngine: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
+            let t0 = Date()
             let scopeW = 256
             let aspect = CGFloat(source.height) / max(1, CGFloat(source.width))
             let scopeH = max(1, min(200, Int(CGFloat(scopeW) * aspect)))
@@ -86,9 +87,13 @@ final class AnalysisEngine: ObservableObject {
 
             guard self.token == currentToken else { return }
 
+            let tAnalysis = Date().timeIntervalSince(t0)
             let hist   = Self.renderHistogram(r: rBins, g: gBins, b: bBins, luma: lBins)
             let wave   = Self.renderScope(lumaAcc, w: scopeW, h: outH, cr: 1, cg: 1, cb: 1)
             let parade = Self.renderParade(r: rAcc, g: gAcc, b: bAcc, w: scopeW, h: outH)
+            let tTotal = Date().timeIntervalSince(t0)
+            Log.debug(String(format: "analyse: %.1f ms (pixel-pass), %.1f ms (gesamt inkl. render)",
+                             tAnalysis * 1000, tTotal * 1000))
 
             DispatchQueue.main.async { [weak self] in
                 guard let self = self, self.token == currentToken else { return }
