@@ -2,6 +2,13 @@
 
 ---
 
+## 0.24.1
+**Deployment Target zurück auf macOS 11**
+- Minimum Deployment Target wieder auf macOS 11.0 (Big Sur) gesenkt
+- Kompatibilität mit älteren macOS-Versionen wiederhergestellt
+
+---
+
 ## 0.24.0
 **Minimum macOS 13 — modernisierte APIs**
 - Minimum Deployment Target auf macOS 13.0 (Ventura) angehoben

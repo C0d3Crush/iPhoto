@@ -45,9 +45,9 @@ fi
 
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ]; then
-    TARGET="arm64-apple-macosx13.0"
+    TARGET="arm64-apple-macosx11.0"
 else
-    TARGET="x86_64-apple-macosx13.0"
+    TARGET="x86_64-apple-macosx11.0"
 fi
 
 echo "==> Baue $APP_NAME"
