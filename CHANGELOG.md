@@ -2,6 +2,16 @@
 
 ---
 
+## 0.27.0
+**CLI-Tool: `iphoto-cli` für Kommandozeilenexport**
+- `./build.sh` erstellt jetzt zusätzlich `build/iphoto-cli`
+- `iphoto-cli export <datei> --format jpeg|png|tiff|heif [--output <pfad>] [--quality 0.9]`
+- `iphoto-cli export <datei1> <datei2> --format png --output-dir <ordner>` (Batch)
+- `iphoto-cli info <datei>` zeigt Bildgröße, Kamera, ISO, Belichtung, Blende
+- `Tests/test_formats.sh` testet alle Export-Formate automatisch (7 Tests, HEIF als Skip im CLI)
+
+---
+
 ## 0.26.0
 **Progressives Laden — stufenweise Bildqualität ohne Stottern**
 - Bilder erscheinen sofort als Thumbnail (Phase 1), dann schnell in ~1500px Vorschau (Phase 2), schließlich in voller Auflösung nach 1,5 s Betrachtungszeit (Phase 3)

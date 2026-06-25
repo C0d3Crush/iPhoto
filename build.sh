@@ -61,7 +61,7 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$MACOS_DIR" "$CONTENTS/Resources"
 
 # Swift-Dateien einsammeln (sortiert für konsistente Kompilierung)
-SOURCES=$(find "$ROOT/Sources" -name "*.swift" | sort)
+SOURCES=$(find "$ROOT/Sources" -name "*.swift" -not -path "*/CLI/*" | sort)
 COUNT=$(echo "$SOURCES" | wc -l | tr -d ' ')
 echo "==> $COUNT Swift-Dateien gefunden"
 echo "$SOURCES" | while read f; do echo "    $f"; done
@@ -99,3 +99,27 @@ codesign \
 echo ""
 echo "Fertig: $APP_BUNDLE"
 echo "Starten: open \"$APP_BUNDLE\""
+
+# CLI-Tool bauen
+echo ""
+echo "==> Baue iphoto-cli…"
+CLI_SOURCES="\
+    $ROOT/Sources/Models/RAWImageDecoder.swift \
+    $ROOT/Sources/Utilities/ImageExporter.swift \
+    $ROOT/Sources/Utilities/Log.swift \
+    $ROOT/Sources/Utilities/BookmarkStore.swift \
+    $ROOT/Sources/CLI/main.swift"
+
+"$SWIFTC" \
+    -target "$TARGET" \
+    -sdk "$SDK" \
+    -framework CoreImage \
+    -framework ImageIO \
+    -framework VideoToolbox \
+    -framework CoreMedia \
+    -module-name iPhotoCLI \
+    -O \
+    $CLI_SOURCES \
+    -o "$BUILD_DIR/iphoto-cli"
+
+echo "Fertig: $BUILD_DIR/iphoto-cli"
