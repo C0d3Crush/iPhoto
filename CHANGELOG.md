@@ -2,6 +2,12 @@
 
 ---
 
+## 0.28.2
+**Fix: Erstes Bild nicht mehr rangezoomt**
+- Fix: Wenn das 160 px Thumbnail schon geladen war bevor die 1500 px Vorschau ankam, wurde fitToWindow übersprungen — das Bild erschien 1:1 (zu groß)
+
+---
+
 ## 0.28.1
 **Viewport-basiertes Thumbnail-Laden mit Qualitätsstufen**
 - Nur sichtbare Thumbnails werden sofort in 160 px geladen (höhere Priorität)
