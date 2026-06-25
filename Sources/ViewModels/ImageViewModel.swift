@@ -1060,9 +1060,7 @@ class ImageViewModel: ObservableObject {
                           self.collection.documents[index].url == url else { return }
                     self.collection.documents[index].previewImage = preview
                     self.isLoading = false
-                    if self.collection.documents[index].thumbnail == nil {
-                        self.fitToWindowRequested = true
-                    }
+                    self.fitToWindowRequested = true
                     self.displayImageVersion = UUID()
                     if self.hasActiveAdjustments { self.applyAdjustments() }
                 }
