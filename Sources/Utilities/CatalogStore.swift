@@ -187,6 +187,42 @@ final class CatalogStore {
         }
     }
 
+    // Bulk-insert inside a single transaction — several orders of magnitude faster than N individual calls.
+    func batchUpsertImages(_ items: [(path: String, filename: String, isRAW: Bool,
+                                      width: Int, height: Int, sizeBytes: Int64,
+                                      dateTaken: String?, cameraMake: String?, cameraModel: String?)]) {
+        queue.sync {
+            exec("BEGIN")
+            let stmt = prepare("""
+                INSERT INTO images (id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(path) DO UPDATE SET
+                    filename=excluded.filename, size_bytes=excluded.size_bytes,
+                    width=excluded.width, height=excluded.height,
+                    date_taken=excluded.date_taken, camera_make=excluded.camera_make,
+                    camera_model=excluded.camera_model, is_raw=excluded.is_raw
+            """)
+            let now = iso8601()
+            for item in items {
+                sqlite3_reset(stmt)
+                bind(stmt, 1, UUID().uuidString)
+                bind(stmt, 2, item.path)
+                bind(stmt, 3, item.filename)
+                sqlite3_bind_int64(stmt, 4, item.sizeBytes)
+                sqlite3_bind_int(stmt, 5, Int32(item.width))
+                sqlite3_bind_int(stmt, 6, Int32(item.height))
+                bindOpt(stmt, 7, item.dateTaken)
+                bindOpt(stmt, 8, item.cameraMake)
+                bindOpt(stmt, 9, item.cameraModel)
+                sqlite3_bind_int(stmt, 10, item.isRAW ? 1 : 0)
+                bind(stmt, 11, now)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+            exec("COMMIT")
+        }
+    }
+
     // MARK: - Ratings
 
     func saveRating(path: String, rating: Int, flag: String, colorLabel: String) {

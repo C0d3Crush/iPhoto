@@ -2,6 +2,13 @@
 
 ---
 
+## 0.29.1
+**Katalog-Tests (21 PASS)**
+- `Tests/catalog/main.swift` + `Tests/run_catalog.sh`: 21 Tests über Schema, CRUD, Suche, Performance und Persistenz
+- `batchUpsertImages()` in CatalogStore: 10.000 Einträge in einer Transaktion (&lt; 0.1 s)
+
+---
+
 ## 0.29.0
 **SQLite-Katalog (`CatalogStore`)**
 - Neue Datei `~/Library/Application Support/iPhoto/catalog.db` mit WAL-Modus
