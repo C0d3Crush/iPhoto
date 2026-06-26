@@ -40,6 +40,11 @@ class ImageViewModel: ObservableObject {
     var hasActiveAdjustments: Bool { adjustments != AdjustmentState() }
     var currentDocIsRAW: Bool { collection.currentDocument?.isRAW ?? false }
 
+    @Published var adjUndoStack: [AdjustmentState] = []
+    @Published var adjRedoStack: [AdjustmentState] = []
+    private var isUndoRedoing = false
+    private var lastCommittedAdjustments = AdjustmentState()
+
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
     private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
@@ -128,6 +133,19 @@ class ImageViewModel: ObservableObject {
             .sink { [weak self] _ in self?.applyAdjustments() }
             .store(in: &cancellables)
 
+        $adjustments
+            .dropFirst()
+            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
+            .sink { [weak self] newState in
+                guard let self = self, !self.isUndoRedoing,
+                      newState != self.lastCommittedAdjustments else { return }
+                self.adjUndoStack.append(self.lastCommittedAdjustments)
+                self.adjRedoStack.removeAll()
+                self.lastCommittedAdjustments = newState
+                if self.adjUndoStack.count > 50 { self.adjUndoStack.removeFirst() }
+            }
+            .store(in: &cancellables)
+
         $zoomFactor
             .filter { $0 > 1.0 }
             .throttle(for: .milliseconds(500), scheduler: DispatchQueue.main, latest: false)
@@ -146,9 +164,15 @@ class ImageViewModel: ObservableObject {
             case 0 where onlyCmdDown:  DispatchQueue.main.async { self.selectAll()     }; return nil
             case 51 where onlyCmdDown: DispatchQueue.main.async { self.removeSelected() }; return nil
             case 6 where onlyCmdDown && !textFieldFocused:
-                DispatchQueue.main.async { self.undoSave() }; return nil
+                DispatchQueue.main.async {
+                    if !self.adjUndoStack.isEmpty { self.undoAdjustments() }
+                    else { self.undoSave() }
+                }; return nil
             case 6 where cmdShiftDown && !textFieldFocused:
-                DispatchQueue.main.async { self.redoSave() }; return nil
+                DispatchQueue.main.async {
+                    if !self.adjRedoStack.isEmpty { self.redoAdjustments() }
+                    else { self.redoSave() }
+                }; return nil
             default:
                 guard mods.isEmpty, !textFieldFocused else { return event }
                 let char = event.characters ?? ""
@@ -724,6 +748,30 @@ class ImageViewModel: ObservableObject {
         pendingMetadataEntries = nil
     }
 
+    func undoAdjustments() {
+        guard !adjUndoStack.isEmpty else { return }
+        isUndoRedoing = true
+        adjRedoStack.append(lastCommittedAdjustments)
+        let prev = adjUndoStack.removeLast()
+        adjustments = prev
+        lastCommittedAdjustments = prev
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            self?.isUndoRedoing = false
+        }
+    }
+
+    func redoAdjustments() {
+        guard !adjRedoStack.isEmpty else { return }
+        isUndoRedoing = true
+        adjUndoStack.append(lastCommittedAdjustments)
+        let next = adjRedoStack.removeLast()
+        adjustments = next
+        lastCommittedAdjustments = next
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            self?.isUndoRedoing = false
+        }
+    }
+
     private func persistAdjustmentsForCurrent() {
         guard let doc = collection.currentDocument else { return }
         if adjustments != AdjustmentState() {
@@ -1044,9 +1092,13 @@ class ImageViewModel: ObservableObject {
         guard let doc = collection.currentDocument else { return }
         let index = collection.currentIndex
         resetAdjustments()
+        adjUndoStack.removeAll()
+        adjRedoStack.removeAll()
+        isUndoRedoing = false
         if let saved = CatalogStore.shared.loadAdjustments(path: doc.url.path) {
             adjustments = saved
         }
+        lastCommittedAdjustments = adjustments
         isLoadingFullRes = false
 
         if doc.cgImage != nil {

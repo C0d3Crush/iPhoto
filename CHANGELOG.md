@@ -2,6 +2,15 @@
 
 ---
 
+## 0.35.1
+**Undo/Redo für Anpassungen (Cmd+Z / Cmd+Shift+Z)**
+- Jede Slider-Bewegung (500 ms nach letzter Änderung) wird auf einen Undo-Stack geschrieben (max. 50 Schritte)
+- Cmd+Z macht den letzten Adjustment-Schritt rückgängig; Cmd+Shift+Z stellt ihn wieder her
+- Wenn kein Adjustment-Undo vorhanden ist, fällt Cmd+Z auf den Versions-Undo zurück
+- Stacks werden beim Bildwechsel geleert — jedes Bild hat seine eigene Session-History
+
+---
+
 ## 0.35.0
 **Export-Modell + Batch-Sync (Phase 2)**
 - „Speichern" für Anpassungen entfernt — Originaldatei wird nie verändert
