@@ -122,9 +122,15 @@ struct HotPixelAnalyzer {
         if rawExtensions.contains(ext) {
             // Use nil options + setValue — same pattern as ImageViewModel, avoids
             // CIRAWFilterOption dictionary issues on macOS 11.
+            // Guard inputKeys before setValue: unknown keys throw NSUnknownKeyException on macOS 11.
             if let filter = CIFilter(imageURL: url, options: nil) {
-                filter.setValue(true, forKey: "inputAllowDraftMode")
-                filter.setValue(Float(0.25), forKey: "inputScaleFactor") // quarter-size for speed
+                let keys = filter.inputKeys
+                if keys.contains("inputAllowDraftMode") {
+                    filter.setValue(true, forKey: "inputAllowDraftMode")
+                }
+                if keys.contains("inputScaleFactor") {
+                    filter.setValue(Float(0.25), forKey: "inputScaleFactor")
+                }
                 ciImage = filter.outputImage
             }
         }

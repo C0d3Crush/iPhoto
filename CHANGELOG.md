@@ -2,6 +2,13 @@
 
 ---
 
+## 0.39.4
+**Bugfix: Hot-Pixel-Analyse crasht auf macOS 11 bei RAF-Dateien**
+- `setValue:forKey:inputAllowDraftMode` warf `NSUnknownKeyException` auf macOS 11 (Key in `CIRAWFilterImpl` nicht vorhanden) → SIGABRT
+- Fix: `filter.inputKeys.contains(...)` prüft vor jedem `setValue` ob der Key unterstützt wird
+
+---
+
 ## 0.39.3
 **Bugfix: Memory-Eviction + POSIX-Signal-Handler**
 - `cgImage`-Objekte (bis zu ~200 MB pro Bild) werden beim Navigieren automatisch freigegeben: aktuelle Position ±2 bleibt im Speicher, alles weitere wird verworfen und bei Bedarf neu geladen
