@@ -2,6 +2,14 @@
 
 ---
 
+## 0.32.1
+**Ladebalken beim Thumbnail-Import**
+- Schlanke Fortschrittsleiste erscheint unten zwischen Viewer und Thumbnail-Strip wenn Bilder geladen werden
+- Zeigt „X / Y" Bilder als Zähler rechts daneben
+- Verschwindet automatisch 0,4 s nach Abschluss
+
+---
+
 ## 0.32.0
 **Navigation als Inspector-Panel**
 - Neue Panel-Option „Navigation" im rechten Inspector (aktivierbar über Plugin-Menü)

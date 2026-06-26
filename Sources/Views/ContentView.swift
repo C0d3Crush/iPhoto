@@ -23,6 +23,11 @@ struct ContentView: View {
                         .environmentObject(viewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                    if let progress = viewModel.thumbnailLoadProgress {
+                        ThumbnailLoadBar(progress: progress,
+                                         total: viewModel.collection.documents.count)
+                    }
+
                     if !viewModel.collection.documents.isEmpty {
                         Divider()
 
@@ -194,5 +199,30 @@ struct DetailView: View {
     private var subtitleText: String {
         guard let img = viewModel.currentImage else { return "" }
         return "\(img.width) × \(img.height)  –  \(Int(viewModel.zoomFactor * 100))%"
+    }
+}
+
+private struct ThumbnailLoadBar: View {
+    let progress: Double
+    let total: Int
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 10) {
+                ProgressView(value: progress)
+                    .progressViewStyle(LinearProgressViewStyle())
+                    .frame(maxWidth: .infinity)
+                Text("\(Int(progress * Double(total))) / \(total)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 60, alignment: .trailing)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Color(NSColor.windowBackgroundColor))
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.2), value: progress)
     }
 }

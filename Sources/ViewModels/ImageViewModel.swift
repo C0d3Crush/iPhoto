@@ -24,6 +24,7 @@ class ImageViewModel: ObservableObject {
     @Published var displayImageVersion: UUID = UUID()
     @Published var cropToolActive: Bool = false
     @Published var showOriginal: Bool = false
+    @Published var thumbnailLoadProgress: Double? = nil
 
     // MARK: - Version history
     @Published var savedVersions: [ImageVersionMeta] = []
@@ -1139,22 +1140,41 @@ class ImageViewModel: ObservableObject {
     }
 
     func loadThumbnails() {
-        // Load cheap 80px placeholders for all docs in background so cells have something to show immediately.
-        for (index, doc) in collection.documents.enumerated() {
-            guard doc.placeholderThumbnailImage == nil && doc.thumbnailImage == nil else { continue }
+        let pending = collection.documents.enumerated().filter {
+            $0.element.placeholderThumbnailImage == nil && $0.element.thumbnailImage == nil
+        }
+        let total = pending.count
+        guard total > 0 else { return }
+
+        let counter = ProgressCounter(total: total) { [weak self] done, all in
+            DispatchQueue.main.async {
+                self?.thumbnailLoadProgress = all > 0 ? Double(done) / Double(all) : nil
+                if done >= all {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        self?.thumbnailLoadProgress = nil
+                    }
+                }
+            }
+        }
+
+        thumbnailLoadProgress = 0.0
+
+        for (index, doc) in pending {
             let url = doc.url
             DispatchQueue.global(qos: .background).async { [weak self] in
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
-                guard let thumb = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 80) else { return }
-                let nsImage = NSImage(cgImage: thumb, size: .zero)
+                let nsImage = (try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 80))
+                    .map { NSImage(cgImage: $0, size: .zero) }
                 DispatchQueue.main.async {
-                    guard let self = self,
-                          index < self.collection.documents.count,
-                          self.collection.documents[index].url == url,
-                          self.collection.documents[index].thumbnailImage == nil else { return }
-                    self.collection.documents[index].placeholderThumbnailImage = nsImage
+                    if let self = self, let img = nsImage,
+                       index < self.collection.documents.count,
+                       self.collection.documents[index].url == url,
+                       self.collection.documents[index].thumbnailImage == nil {
+                        self.collection.documents[index].placeholderThumbnailImage = img
+                    }
                 }
+                counter.increment()
             }
         }
     }
@@ -1207,5 +1227,25 @@ class ImageViewModel: ObservableObject {
 
     private func isSupportedFormat(_ url: URL) -> Bool {
         ImageDocument.supportedExtensions.contains(url.pathExtension.lowercased())
+    }
+}
+
+private final class ProgressCounter {
+    private var done = 0
+    private let total: Int
+    private let lock = NSLock()
+    private let onChange: (Int, Int) -> Void
+
+    init(total: Int, onChange: @escaping (Int, Int) -> Void) {
+        self.total = total
+        self.onChange = onChange
+    }
+
+    func increment() {
+        lock.lock()
+        done += 1
+        let current = done
+        lock.unlock()
+        onChange(current, total)
     }
 }
