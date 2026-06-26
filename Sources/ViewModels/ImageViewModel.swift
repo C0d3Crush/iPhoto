@@ -853,6 +853,7 @@ class ImageViewModel: ObservableObject {
 
             var ci: CIImage
             var exposureApplied = false
+            var wbApplied = false
             var stopRAWAccess: (() -> Void)? = nil
 
             if useRAWPipeline, let url = rawURL {
@@ -862,9 +863,16 @@ class ImageViewModel: ObservableObject {
                     : 1.0
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 if let rf = CIFilter(imageURL: accessURL, options: nil) {
-                    rf.setValue(Float(snap.exposure), forKey: kCIInputEVKey)
-                    rf.setValue(true,                 forKey: "inputAllowDraftMode")
-                    rf.setValue(Float(previewScale),  forKey: "inputScaleFactor")
+                    rf.setValue(Float(snap.exposure),  forKey: kCIInputEVKey)
+                    rf.setValue(true,                  forKey: "inputAllowDraftMode")
+                    rf.setValue(Float(previewScale),   forKey: "inputScaleFactor")
+                    if snap.warmth != 0 || snap.tint != 0 {
+                        let kelvin = Float(6500.0 - snap.warmth * 2500.0)
+                        let tintVal = Float(-snap.tint * 150.0)
+                        rf.setValue(kelvin,   forKey: "inputNeutralTemperature")
+                        rf.setValue(tintVal,  forKey: "inputNeutralTint")
+                        wbApplied = true
+                    }
                     if let rawCI = rf.outputImage {
                         ci = rawCI
                         exposureApplied = true
@@ -896,7 +904,8 @@ class ImageViewModel: ObservableObject {
                 if let out = f.outputImage { ci = out }
             }
 
-            if snap.warmth != 0 || snap.tint != 0, let f = CIFilter(name: "CITemperatureAndTint") {
+            if !wbApplied, snap.warmth != 0 || snap.tint != 0,
+               let f = CIFilter(name: "CITemperatureAndTint") {
                 f.setValue(ci, forKey: kCIInputImageKey)
                 f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
                 f.setValue(CIVector(x: CGFloat(6500 - snap.warmth * 2500), y: CGFloat(-snap.tint * 150)), forKey: "inputTargetNeutral")
