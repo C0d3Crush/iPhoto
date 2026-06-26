@@ -2,6 +2,14 @@
 
 ---
 
+## 0.39.3
+**Bugfix: Memory-Eviction + POSIX-Signal-Handler**
+- `cgImage`-Objekte (bis zu ~200 MB pro Bild) werden beim Navigieren automatisch freigegeben: aktuelle Position ±2 bleibt im Speicher, alles weitere wird verworfen und bei Bedarf neu geladen
+- Bei System-Memory-Pressure (DispatchSource) werden alle nicht sichtbaren Vollbilder sofort freigegeben
+- POSIX-Signal-Handler für SIGSEGV, SIGABRT, SIGBUS, SIGILL: zukünftige Crashes hinterlassen jetzt einen Log-Eintrag (`[SIGNAL] SIGSEGV` o.ä.) im Crash-Report
+
+---
+
 ## 0.39.2
 **Bugfix: Startup-Crash durch Use-after-free in CatalogStore**
 - CatalogStore übergab SQLite Strings per `SQLITE_STATIC` (nil-Destruktor): ARC konnte die NSString-Temporary freigeben bevor `sqlite3_step` auf den Pointer zugegriffen hatte

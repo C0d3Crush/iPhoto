@@ -11,7 +11,7 @@ final class Log {
     // Internal so CrashReporter can call writeSync from the exception handler.
     static let shared = Log()
 
-    private let fileURL: URL
+    let fileURL: URL
     private let queue = DispatchQueue(label: "iphoto.logger", qos: .utility)
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()

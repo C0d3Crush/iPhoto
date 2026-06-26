@@ -61,14 +61,54 @@ enum CrashReporter {
 
     static func installCrashHandlers() {
         NSSetUncaughtExceptionHandler(iphotoUncaughtExceptionHandler)
+        installSignalHandlers()
+    }
+
+    private static func installSignalHandlers() {
+        // Store the log file path in a C-accessible global buffer so the signal
+        // handler (which must be async-signal-safe) can open the file with open(2).
+        _ = Log.shared.fileURL.path.withCString { src in
+            strlcpy(&iphotoLogPathBuf, src, iphotoLogPathBuf.count)
+        }
+        for sig in [SIGSEGV, SIGABRT, SIGBUS, SIGILL] {
+            signal(sig, iphotoSignalHandler)
+        }
     }
 }
+
+// MARK: - C callbacks (free functions, no captures)
+
+// 4096 bytes is always enough for a filesystem path on macOS (PATH_MAX = 1024).
+var iphotoLogPathBuf = [CChar](repeating: 0, count: 4096)
 
 // Must be a free function (not a closure) to be used as a C callback.
 private func iphotoUncaughtExceptionHandler(_ exception: NSException) {
     let stack = exception.callStackSymbols.prefix(10).joined(separator: "\n  ")
     Log.shared.writeSync(level: .error,
         "UNCAUGHT EXCEPTION: \(exception.name.rawValue) — \(exception.reason ?? "–")\n  \(stack)")
-    // Brief pause so the sync write can complete before the process dies.
     Thread.sleep(forTimeInterval: 0.3)
+}
+
+// Async-signal-safe: only syscalls (open/write/close). No Swift runtime, no ObjC, no malloc.
+private func iphotoSignalHandler(_ sig: Int32) {
+    let name: StaticString
+    switch sig {
+    case SIGSEGV: name = "SIGSEGV (Segmentation Fault)"
+    case SIGABRT: name = "SIGABRT (Abort)"
+    case SIGBUS:  name = "SIGBUS (Bus Error)"
+    case SIGILL:  name = "SIGILL (Illegal Instruction)"
+    default:      name = "SIGNAL (unknown)"
+    }
+    // Write a minimal log line using only async-signal-safe syscalls.
+    let msg = "[SIGNAL] \(name)\n"
+    msg.withCString { ptr in
+        let fd = open(&iphotoLogPathBuf, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+        if fd >= 0 {
+            _ = write(fd, ptr, strlen(ptr))
+            _ = Darwin.close(fd)
+        }
+    }
+    // Reset to default handler and re-raise so the OS records a proper crash report.
+    signal(sig, SIG_DFL)
+    raise(sig)
 }

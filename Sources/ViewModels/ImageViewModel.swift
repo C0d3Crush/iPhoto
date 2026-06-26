@@ -210,6 +210,29 @@ class ImageViewModel: ObservableObject {
             self?.lastClickModifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             return event
         }
+
+        // Release large cgImage objects under memory pressure (macOS 11 compatible).
+        let memSource = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        memSource.setEventHandler { [weak self] in self?.evictDistantImages(keepRadius: 0) }
+        memSource.resume()
+        // Retain the source for the lifetime of the view model.
+        cancellables.insert(AnyCancellable { memSource.cancel() })
+    }
+
+    // Evict cgImage from documents more than `keepRadius` positions away from the current index,
+    // and previewImage from documents more than keepRadius*3 positions away.
+    // Called on navigation and under memory pressure.
+    private func evictDistantImages(keepRadius: Int = 2) {
+        let current = collection.currentIndex
+        for i in 0..<collection.documents.count {
+            let dist = abs(i - current)
+            if dist > keepRadius {
+                collection.documents[i].cgImage = nil
+            }
+            if dist > max(keepRadius * 3, 5) {
+                collection.documents[i].previewImage = nil
+            }
+        }
     }
 
     func importFileDialog() {
@@ -256,8 +279,8 @@ class ImageViewModel: ObservableObject {
         loadCurrentImage()
     }
 
-    func next()     { persistAdjustmentsForCurrent(); collection.next();     loadCurrentImage(); prefetchAdjacent() }
-    func previous() { persistAdjustmentsForCurrent(); collection.previous(); loadCurrentImage(); prefetchAdjacent() }
+    func next()     { persistAdjustmentsForCurrent(); collection.next();     evictDistantImages(); loadCurrentImage(); prefetchAdjacent() }
+    func previous() { persistAdjustmentsForCurrent(); collection.previous(); evictDistantImages(); loadCurrentImage(); prefetchAdjacent() }
 
     func zoomIn()           { zoomFactor = min(zoomFactor * 1.25, 32.0) }
     func zoomOut()          { zoomFactor = max(zoomFactor / 1.25, 0.05) }
