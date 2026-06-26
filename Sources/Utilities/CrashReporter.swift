@@ -30,13 +30,17 @@ enum CrashReporter {
 
     private static func buildReport() -> String {
         let log = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
-        let sessionMarker = "=== iPhoto gestartet ==="
-        let sessions = log.components(separatedBy: sessionMarker)
+        // Split on the dedicated session boundary (never appears inside a timestamped log entry).
+        let sessions = log.components(separatedBy: Log.sessionMarker)
 
-        // Take the second-to-last session (the crashed one)
+        // sessions[0]  = everything before first session (usually empty)
+        // sessions[n-1] = current (non-crashed) session
+        // sessions[n-2] = the crashed session
         let crashedSession: String
-        if sessions.count >= 2 {
-            crashedSession = sessionMarker + sessions[sessions.count - 2]
+        if sessions.count >= 3 {
+            crashedSession = Log.sessionMarker + sessions[sessions.count - 2]
+        } else if sessions.count == 2 {
+            crashedSession = Log.sessionMarker + sessions[0]  // only one full session
         } else {
             crashedSession = log
         }
@@ -52,4 +56,19 @@ enum CrashReporter {
         """
         return header + crashedSession.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    // MARK: - Exception / Signal handlers
+
+    static func installCrashHandlers() {
+        NSSetUncaughtExceptionHandler(iphotoUncaughtExceptionHandler)
+    }
+}
+
+// Must be a free function (not a closure) to be used as a C callback.
+private func iphotoUncaughtExceptionHandler(_ exception: NSException) {
+    let stack = exception.callStackSymbols.prefix(10).joined(separator: "\n  ")
+    Log.shared.writeSync(level: .error,
+        "UNCAUGHT EXCEPTION: \(exception.name.rawValue) — \(exception.reason ?? "–")\n  \(stack)")
+    // Brief pause so the sync write can complete before the process dies.
+    Thread.sleep(forTimeInterval: 0.3)
 }

@@ -8,6 +8,7 @@ enum LogLevel: String {
 }
 
 final class Log {
+    // Internal so CrashReporter can call writeSync from the exception handler.
     static let shared = Log()
 
     private let fileURL: URL
@@ -27,7 +28,31 @@ final class Log {
         if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 2_000_000 {
             try? FileManager.default.removeItem(at: fileURL)
         }
-        write(level: .info, "=== iPhoto gestartet === log: \(fileURL.path)")
+        // Write session boundary as a RAW line (not through write() so it never appears inside a
+        // timestamped log entry — CrashReporter.buildReport() splits on this exact string).
+        let boundary = "\n\(Log.sessionMarker) \(fileURL.path)\n"
+        appendRaw(boundary)
+    }
+
+    // Unique marker that only appears as a standalone boundary, never inside a log entry.
+    static let sessionMarker = "###SESSION_START###"
+
+    // Synchronous write — safe to call from crash/signal handlers.
+    func writeSync(level: LogLevel, _ msg: String, function: String = #function) {
+        let timestamp = dateFormatter.string(from: Date())
+        let line = "[\(timestamp)] [\(level.rawValue)] [\(function)] \(msg)\n"
+        appendRaw(line)
+    }
+
+    private func appendRaw(_ text: String) {
+        guard let data = text.data(using: .utf8) else { return }
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            if let handle = try? FileHandle(forWritingTo: fileURL) {
+                handle.seekToEndOfFile(); handle.write(data); handle.closeFile()
+            }
+        } else {
+            try? data.write(to: fileURL, options: .atomic)
+        }
     }
 
     static func debug(_ msg: String, file: String = #file, function: String = #function) {

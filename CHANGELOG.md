@@ -2,6 +2,15 @@
 
 ---
 
+## 0.39.1
+**Bugfix: CrashReporter Session-Splitting + Hot-Pixel RAF-Dekodierung**
+- CrashReporter erkennt den abgestürzten Session-Block jetzt korrekt (neuer Marker `###SESSION_START###` verhindert Verwechslung mit Log-Einträgen)
+- Unkorrekte Ausnahmen werden via `NSSetUncaughtExceptionHandler` geloggt bevor der Prozess beendet wird
+- Hot-Pixel-Analyse lädt RAF-Dateien zuverlässig (gleicher `CIFilter(imageURL:options:nil)` + `setValue`-Ansatz wie der Rest der App)
+- Bug-Report-Datei `iPhoto_Crash_2026-06-27_011610.txt` als behoben archiviert
+
+---
+
 ## 0.39.0
 **Feature: Hot-Pixel-Detektor**
 - Neues Plugin „Hotpixel" im Plugins-Menü und Inspector-Panel

@@ -21,31 +21,32 @@ struct HotPixelAnalyzer {
         let ciContext = CIContext(options: [.useSoftwareRenderer: false])
         var width = 0
         var height = 0
+        var count = 0
 
         // --- Pass 1: decode first frame to get dimensions and single-frame noise ---
         DispatchQueue.main.async { progress("Lese erstes Frame …", 0.0) }
 
-        guard let firstPixels = decodeFrame(url: urls[0], ciContext: ciContext),
-              let (fw, fh) = frameDimensions(url: urls[0], ciContext: ciContext)
-        else { return nil }
+        guard let first = decodeFrame(url: urls[0], ciContext: ciContext) else { return nil }
 
-        width  = fw
-        height = fh
-        let count = width * height
+        width  = first.w
+        height = first.h
+        count  = width * height
 
-        // single-frame mean & std (used as global noise estimate)
-        let (singleMean, singleStd) = meanAndStd(firstPixels)
+        let (singleMean, singleStd) = meanAndStd(first.pixels)
 
-        // --- Pass 2: accumulate mean stack ---
+        // --- Pass 2: accumulate mean stack (memory-efficient: one frame at a time) ---
         var sum = [Double](repeating: 0.0, count: count)
+        // Accumulate first frame (already decoded)
+        let firstN = min(first.pixels.count, count)
+        for i in 0..<firstN { sum[i] += Double(first.pixels[i]) }
 
-        for (idx, url) in urls.enumerated() {
+        for (idx, url) in urls.enumerated().dropFirst() {
             let pct = Double(idx) / Double(urls.count)
             DispatchQueue.main.async { progress("Frame \(idx+1)/\(urls.count) …", pct * 0.7) }
 
-            if let pixels = decodeFrame(url: url, ciContext: ciContext) {
-                let n = min(pixels.count, count)
-                for i in 0..<n { sum[i] += Double(pixels[i]) }
+            if let frame = decodeFrame(url: url, ciContext: ciContext) {
+                let n = min(frame.pixels.count, count)
+                for i in 0..<n { sum[i] += Double(frame.pixels[i]) }
             }
         }
 
@@ -108,36 +109,32 @@ struct HotPixelAnalyzer {
 
     // MARK: - Private helpers
 
-    private static func frameDimensions(url: URL, ciContext: CIContext) -> (Int, Int)? {
-        if let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-           let img = CGImageSourceCreateImageAtIndex(src, 0, nil) {
-            return (img.width, img.height)
-        }
-        return nil
-    }
+    /// Decode one image file into a (pixels, width, height) tuple.
+    /// Pixels are Float values in 0…65535 (linearised 16-bit grayscale).
+    private static func decodeFrame(url: URL, ciContext: CIContext) -> (pixels: [Float], w: Int, h: Int)? {
+        var ciImage: CIImage?
 
-    /// Decode one image file into a [Float] array of 16-bit grayscale values (0…65535).
-    private static func decodeFrame(url: URL, ciContext: CIContext) -> [Float]? {
-        // Try CIFilter for RAW first (with draft mode for speed)
-        var ciImage: CIImage? = nil
         let ext = url.pathExtension.lowercased()
-        let rawExtensions = ["raf","cr2","cr3","nef","arw","dng","orf","rw2","nrw","pef","srw","erf","kdc","dcr","raw","rwl","mrw","3fr","mef","iiq","x3f","srf","sr2"]
+        let rawExtensions: Set<String> = ["raf","cr2","cr3","nef","arw","dng","orf","rw2",
+                                          "nrw","pef","srw","erf","kdc","dcr","raw","rwl",
+                                          "mrw","3fr","mef","iiq","x3f","srf","sr2"]
 
         if rawExtensions.contains(ext) {
-            let filterOptions: [CIRAWFilterOption: Any] = [
-                CIRAWFilterOption.allowDraftMode: true
-            ]
-            if let filter = CIFilter(imageURL: url, options: filterOptions) {
+            // Use nil options + setValue — same pattern as ImageViewModel, avoids
+            // CIRAWFilterOption dictionary issues on macOS 11.
+            if let filter = CIFilter(imageURL: url, options: nil) {
+                filter.setValue(true, forKey: "inputAllowDraftMode")
+                filter.setValue(Float(0.25), forKey: "inputScaleFactor") // quarter-size for speed
                 ciImage = filter.outputImage
             }
         }
 
-        // Fallback: ImageIO
+        // Fallback: standard ImageIO (JPEG, TIFF, PNG, …)
         if ciImage == nil {
-            let srcOpts: [CFString: Any] = [kCGImageSourceShouldCache: false]
-            if let src = CGImageSourceCreateWithURL(url as CFURL, srcOpts as CFDictionary),
-               let cgImg = CGImageSourceCreateImageAtIndex(src, 0, nil) {
-                ciImage = CIImage(cgImage: cgImg)
+            let opts = [kCGImageSourceShouldCache: false] as CFDictionary
+            if let src = CGImageSourceCreateWithURL(url as CFURL, opts),
+               let cg  = CGImageSourceCreateImageAtIndex(src, 0, nil) {
+                ciImage = CIImage(cgImage: cg)
             }
         }
 
@@ -147,31 +144,30 @@ struct HotPixelAnalyzer {
         let h = Int(ci.extent.height)
         guard w > 0, h > 0 else { return nil }
 
-        // Draw into 16-bit grayscale CGContext
-        guard let ctx = CGContext(
-            data:           nil,
-            width:          w,
-            height:         h,
-            bitsPerComponent: 16,
-            bytesPerRow:    w * 2,
-            space:          CGColorSpaceCreateDeviceGray(),
-            bitmapInfo:     CGImageAlphaInfo.none.rawValue | CGBitmapInfo.byteOrder16Big.rawValue
-        ) else { return nil }
-
+        // Render to 8-bit RGBA, then extract luminance.
+        // (More compatible than 16-bit gray on macOS 11 — still fine for outlier detection.)
         guard let cgImg = ciContext.createCGImage(ci, from: ci.extent) else { return nil }
+
+        var rgba = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(
+            data:             &rgba,
+            width:            w,
+            height:           h,
+            bitsPerComponent: 8,
+            bytesPerRow:      w * 4,
+            space:            CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo:       CGImageAlphaInfo.noneSkipLast.rawValue
+        ) else { return nil }
         ctx.draw(cgImg, in: CGRect(x: 0, y: 0, width: w, height: h))
 
-        guard let dataPtr = ctx.data else { return nil }
-        let pixelCount = w * h
-        let rawPtr = dataPtr.bindMemory(to: UInt16.self, capacity: pixelCount)
-        var result = [Float](repeating: 0, count: pixelCount)
-        for i in 0..<pixelCount {
-            // Big-endian UInt16 → swap bytes → normalize to 0…65535
-            let raw = rawPtr[i]
-            let swapped = (raw >> 8) | (raw << 8)
-            result[i] = Float(swapped)
+        // Rec.709 luminance, scaled to 0…65535 to match the Python script's ADU range.
+        let pixels: [Float] = stride(from: 0, to: rgba.count, by: 4).map { i in
+            let r = Float(rgba[i])
+            let g = Float(rgba[i+1])
+            let b = Float(rgba[i+2])
+            return (0.2126 * r + 0.7152 * g + 0.0722 * b) * 257.0  // 255→65535
         }
-        return result
+        return (pixels, w, h)
     }
 
     /// Compute mean and standard deviation of a float array.
