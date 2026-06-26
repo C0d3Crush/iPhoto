@@ -946,6 +946,99 @@ class ImageViewModel: ObservableObject {
         zip(pts, CurvesView.defaultPoints).allSatisfy { abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001 }
     }
 
+    // MARK: - Local Adjustments
+
+    private func applyLocalAdjustments(_ locals: [LocalAdjustment], to ci: CIImage) -> CIImage {
+        var result = ci
+        let ext = ci.extent
+
+        for adj in locals {
+            guard !adj.delta.isNeutral else { continue }
+            guard var mask = buildMask(adj.mask, extent: ext) else { continue }
+
+            // Scale mask by intensity
+            if adj.intensity < 1.0, let f = CIFilter(name: "CIColorMatrix") {
+                let v = CGFloat(adj.intensity)
+                f.setValue(mask, forKey: kCIInputImageKey)
+                f.setValue(CIVector(x: v, y: 0, z: 0, w: 0), forKey: "inputRVector")
+                f.setValue(CIVector(x: 0, y: v, z: 0, w: 0), forKey: "inputGVector")
+                f.setValue(CIVector(x: 0, y: 0, z: v, w: 0), forKey: "inputBVector")
+                f.setValue(CIVector(x: 0, y: 0, z: 0, w: v), forKey: "inputAVector")
+                if let out = f.outputImage { mask = out }
+            }
+
+            if adj.inverted, let f = CIFilter(name: "CIColorInvert") {
+                f.setValue(mask, forKey: kCIInputImageKey)
+                if let out = f.outputImage { mask = out }
+            }
+
+            mask = mask.cropped(to: ext)
+
+            // Apply delta to the current image
+            var deltaCI = result
+            let d = adj.delta
+            if d.exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
+                f.setValue(deltaCI, forKey: kCIInputImageKey)
+                f.setValue(d.exposure, forKey: kCIInputEVKey)
+                if let out = f.outputImage { deltaCI = out }
+            }
+            if d.brightness != 0 || d.contrast != 1.0 || d.saturation != 1.0,
+               let f = CIFilter(name: "CIColorControls") {
+                f.setValue(deltaCI, forKey: kCIInputImageKey)
+                f.setValue(d.brightness, forKey: kCIInputBrightnessKey)
+                f.setValue(d.contrast, forKey: kCIInputContrastKey)
+                f.setValue(d.saturation, forKey: kCIInputSaturationKey)
+                if let out = f.outputImage { deltaCI = out }
+            }
+            if (d.warmth != 0 || d.tint != 0), let f = CIFilter(name: "CITemperatureAndTint") {
+                f.setValue(deltaCI, forKey: kCIInputImageKey)
+                f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
+                f.setValue(CIVector(x: CGFloat(6500 - d.warmth * 2500), y: CGFloat(-d.tint * 150)),
+                           forKey: "inputTargetNeutral")
+                if let out = f.outputImage { deltaCI = out }
+            }
+
+            if let blend = CIFilter(name: "CIBlendWithMask") {
+                blend.setValue(result,   forKey: kCIInputBackgroundImageKey)
+                blend.setValue(deltaCI,  forKey: kCIInputImageKey)
+                blend.setValue(mask,     forKey: kCIInputMaskImageKey)
+                if let out = blend.outputImage { result = out }
+            }
+        }
+        return result
+    }
+
+    private func buildMask(_ shape: MaskShape, extent: CGRect) -> CIImage? {
+        let w = extent.width, h = extent.height
+        switch shape {
+        case .linearGradient(let sx, let sy, let ex, let ey):
+            // Flip Y: normalized top-left → CIImage bottom-left
+            let p0 = CIVector(x: extent.minX + CGFloat(sx) * w,
+                              y: extent.minY + (1 - CGFloat(sy)) * h)
+            let p1 = CIVector(x: extent.minX + CGFloat(ex) * w,
+                              y: extent.minY + (1 - CGFloat(ey)) * h)
+            guard let f = CIFilter(name: "CILinearGradient") else { return nil }
+            f.setValue(p0, forKey: "inputPoint0")
+            f.setValue(p1, forKey: "inputPoint1")
+            f.setValue(CIColor.white, forKey: "inputColor0")
+            f.setValue(CIColor.black, forKey: "inputColor1")
+            return f.outputImage
+
+        case .radialGradient(let cx, let cy, let r, let feather):
+            let center = CIVector(x: extent.minX + CGFloat(cx) * w,
+                                  y: extent.minY + (1 - CGFloat(cy)) * h)
+            let innerR = CGFloat(r) * min(w, h)
+            let outerR = innerR * CGFloat(1 + max(0.01, feather))
+            guard let f = CIFilter(name: "CIRadialGradient") else { return nil }
+            f.setValue(center,    forKey: "inputCenter")
+            f.setValue(innerR,    forKey: "inputRadius0")
+            f.setValue(outerR,    forKey: "inputRadius1")
+            f.setValue(CIColor.white, forKey: "inputColor0")
+            f.setValue(CIColor.black, forKey: "inputColor1")
+            return f.outputImage
+        }
+    }
+
     func applyAdjustments() {
         guard hasActiveAdjustments, let source = currentImage else {
             adjustedImage = nil
@@ -1089,6 +1182,11 @@ class ImageViewModel: ObservableObject {
                 f.setValue(1.0 + snap.dehaze * 0.25, forKey: kCIInputContrastKey)
                 f.setValue(1.0, forKey: kCIInputSaturationKey)
                 if let out = f.outputImage { ci = out }
+            }
+
+            // Local adjustments (gradient masks)
+            if !snap.localAdjustments.isEmpty {
+                ci = self.applyLocalAdjustments(snap.localAdjustments, to: ci)
             }
 
             // Rotation (around image center)

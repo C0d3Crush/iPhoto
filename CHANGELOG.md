@@ -2,6 +2,18 @@
 
 ---
 
+## 0.37.0
+**Lokale Anpassungen mit Verlaufsmasken (Phase 4)**
+- Neues „Lokal"-Panel im Inspector für nicht-destruktive lokale Anpassungen
+- Linearer Verlauf: Maske von Punkt A zu Punkt B — z. B. Himmel abdunkeln oder Boden aufhellen
+- Radialer Verlauf: Kreisförmige Maske mit einstellbarem Radius und Weichzeichnung
+- Pro Maske: Belichtung, Helligkeit, Kontrast, Sättigung, Wärme und Farbstich unabhängig anpassbar
+- Stärke-Regler (0–100 %) und Invertieren-Option für jede Maske
+- Masken werden in der nicht-destruktiven Pipeline angewendet — Original bleibt unberührt
+- Masken-Einstellungen werden im SQLite-Katalog gespeichert und sind Undo/Redo-fähig
+
+---
+
 ## 0.36.0
 **Film-Simulationen + Rezept-System (Phase 3)**
 - 6 eingebaute Film-Looks: Chrome, Schwarz, Velvet, Nostalgie, Kino, Morgen

@@ -1,22 +1,24 @@
 import SwiftUI
 
 enum InspectorPanel: String, CaseIterable {
-    case metadata    = "Metadaten"
-    case adjustments = "Anpassungen"
-    case presets     = "Rezepte"
-    case analyse     = "Analyse"
-    case navigation  = "Navigation"
+    case metadata         = "Metadaten"
+    case adjustments      = "Anpassungen"
+    case localAdjustments = "Lokal"
+    case presets          = "Rezepte"
+    case analyse          = "Analyse"
+    case navigation       = "Navigation"
 
     var storageKey: String { "plugin.\(rawValue.lowercased())" }
 }
 
 struct InspectorView: View {
     @EnvironmentObject var viewModel: ImageViewModel
-    @AppStorage("plugin.metadata")    var metadataActive:    Bool = true
-    @AppStorage("plugin.anpassungen") var adjustmentsActive: Bool = false
-    @AppStorage("plugin.rezepte")     var presetsActive:     Bool = false
-    @AppStorage("plugin.analyse")     var analyseActive:     Bool = false
-    @AppStorage("plugin.navigation")  var navigationActive:  Bool = false
+    @AppStorage("plugin.metadata")    var metadataActive:         Bool = true
+    @AppStorage("plugin.anpassungen") var adjustmentsActive:      Bool = false
+    @AppStorage("plugin.lokal")       var localAdjustmentsActive: Bool = false
+    @AppStorage("plugin.rezepte")     var presetsActive:          Bool = false
+    @AppStorage("plugin.analyse")     var analyseActive:          Bool = false
+    @AppStorage("plugin.navigation")  var navigationActive:       Bool = false
 
     @State private var panelOrder: [InspectorPanel] = InspectorView.loadOrder()
     @State private var collapsed: Set<InspectorPanel> = Set(InspectorPanel.allCases)
@@ -24,11 +26,12 @@ struct InspectorView: View {
 
     private var activePanels: Set<InspectorPanel> {
         var s = Set<InspectorPanel>()
-        if metadataActive    { s.insert(.metadata) }
-        if adjustmentsActive { s.insert(.adjustments) }
-        if presetsActive     { s.insert(.presets) }
-        if analyseActive     { s.insert(.analyse) }
-        if navigationActive  { s.insert(.navigation) }
+        if metadataActive         { s.insert(.metadata) }
+        if adjustmentsActive      { s.insert(.adjustments) }
+        if localAdjustmentsActive { s.insert(.localAdjustments) }
+        if presetsActive          { s.insert(.presets) }
+        if analyseActive          { s.insert(.analyse) }
+        if navigationActive       { s.insert(.navigation) }
         return s
     }
 
@@ -186,6 +189,8 @@ private struct InspectorBlock: View {
             MetadataPanel()
         case .adjustments:
             AdjustmentsPanel()
+        case .localAdjustments:
+            LocalAdjustmentsPanel()
         case .presets:
             PresetsPanel()
         case .analyse:

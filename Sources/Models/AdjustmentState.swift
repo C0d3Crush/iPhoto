@@ -14,8 +14,9 @@ struct AdjustmentState: Codable, Equatable {
     var curveR:      [CGPoint] = AdjustmentState.defaultCurve
     var curveG:      [CGPoint] = AdjustmentState.defaultCurve
     var curveB:      [CGPoint] = AdjustmentState.defaultCurve
-    var cropRect:    CGRect    = CGRect(x: 0, y: 0, width: 1, height: 1)
-    var rotation:    Double    = 0.0
+    var cropRect:         CGRect             = CGRect(x: 0, y: 0, width: 1, height: 1)
+    var rotation:         Double             = 0.0
+    var localAdjustments: [LocalAdjustment] = []
 
     init(exposure: Double = 0, brightness: Double = 0, contrast: Double = 1,
          saturation: Double = 1, warmth: Double = 0, tint: Double = 0,
@@ -25,13 +26,15 @@ struct AdjustmentState: Codable, Equatable {
          curveG: [CGPoint] = AdjustmentState.defaultCurve,
          curveB: [CGPoint] = AdjustmentState.defaultCurve,
          cropRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1),
-         rotation: Double = 0) {
+         rotation: Double = 0,
+         localAdjustments: [LocalAdjustment] = []) {
         self.exposure = exposure; self.brightness = brightness; self.contrast = contrast
         self.saturation = saturation; self.warmth = warmth; self.tint = tint
         self.clarity = clarity; self.texture = texture; self.dehaze = dehaze
         self.curvePoints = curvePoints; self.curveR = curveR
         self.curveG = curveG; self.curveB = curveB
         self.cropRect = cropRect; self.rotation = rotation
+        self.localAdjustments = localAdjustments
     }
 
     static let defaultCurve: [CGPoint] = [
