@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AppKit
+import CoreImage
 
 class ImageViewModel: ObservableObject {
     @Published var collection = ImageCollection()
@@ -889,11 +890,37 @@ class ImageViewModel: ObservableObject {
         let token = UUID()
         adjToken = token
 
+        let useRAWPipeline = collection.currentDocument?.isRAW ?? false
+        let rawURL = collection.currentDocument?.url
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            var ci = CIImage(cgImage: source)
 
-            if exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
+            var ci: CIImage
+            var exposureApplied = false
+            var stopRAWAccess: (() -> Void)? = nil
+
+            if useRAWPipeline, let url = rawURL {
+                let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                if let rf = CIFilter(imageURL: accessURL, options: nil) {
+                    rf.setValue(Float(exposure), forKey: kCIInputEVKey)
+                    if let rawCI = rf.outputImage {
+                        ci = rawCI
+                        exposureApplied = true
+                        stopRAWAccess = stopAccess
+                    } else {
+                        stopAccess()
+                        ci = CIImage(cgImage: source)
+                    }
+                } else {
+                    stopAccess()
+                    ci = CIImage(cgImage: source)
+                }
+            } else {
+                ci = CIImage(cgImage: source)
+            }
+
+            if !exposureApplied, exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
                 f.setValue(ci, forKey: kCIInputImageKey)
                 f.setValue(exposure, forKey: kCIInputEVKey)
                 if let out = f.outputImage { ci = out }
@@ -1011,6 +1038,7 @@ class ImageViewModel: ObservableObject {
             }
 
             let result = self.adjCIContext.createCGImage(ci, from: ci.extent)
+            stopRAWAccess?()
             DispatchQueue.main.async { [weak self] in
                 guard let self = self, self.adjToken == token else { return }
                 self.adjustedImage = result

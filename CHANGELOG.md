@@ -2,6 +2,14 @@
 
 ---
 
+## 0.31.0
+**CIRAWFilter-Pipeline — volle Sensor-Latitude für RAW-Dateien**
+- RAW-Dateien (CR2, NEF, ARW, DNG, …) werden jetzt direkt über `CIFilter(imageURL:)` verarbeitet — keine Vorkonvertierung auf 8-Bit sRGB mehr
+- Belichtungsanpassung greift jetzt auf die echten 12–14 Bit Sensordaten zu (volle Latitude)
+- Fallback auf Bitmap-Pipeline bleibt erhalten (nicht-RAW-Formate unverändert)
+
+---
+
 ## 0.30.2
 **Inspector scrollt als Ganzes — keine internen Scrollbereiche mehr**
 - Scrollen im Inspector bewegt jetzt alle Panels zusammen (außen)
