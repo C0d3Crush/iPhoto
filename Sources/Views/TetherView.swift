@@ -1,35 +1,35 @@
 import SwiftUI
 import AVFoundation
 
-struct TetherView: View {
+// Inline live-preview shown inside DetailView when tetherMode == true
+struct TetherInlineView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @ObservedObject private var tether = TetherManager.shared
-    @Binding var isPresented: Bool
 
     @State private var selectedDeviceID: String? = nil
+    @State private var showDevicePicker = false
 
     private var selectedDevice: AVCaptureDevice? {
         tether.availableDevices.first { $0.uniqueID == selectedDeviceID }
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
+        ZStack {
+            Color.black.ignoresSafeArea()
 
-            if !tether.permissionGranted {
-                permissionView
+            if tether.isSessionRunning {
+                CameraPreviewView(session: tether.session)
+                    .ignoresSafeArea()
             } else {
-                VStack(spacing: 0) {
-                    deviceBar
-                    Divider()
-                    previewArea
-                    Divider()
-                    controlBar
-                }
+                placeholderView
+            }
+
+            // Bottom control bar
+            VStack {
+                Spacer()
+                controlBar
             }
         }
-        .frame(minWidth: 720, minHeight: 540)
         .onAppear {
             tether.refreshDevices()
             autoSelectDevice()
@@ -51,186 +51,175 @@ struct TetherView: View {
         }
     }
 
-    // MARK: - Subviews
+    // MARK: - Placeholder
 
-    private var header: some View {
-        HStack {
+    private var placeholderView: some View {
+        VStack(spacing: 14) {
             Image(systemName: "camera.fill")
-                .foregroundColor(.accentColor)
-            Text("Live-Vorschau")
-                .font(.headline)
-            Spacer()
-            if tether.isSessionRunning {
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(tether.isRecording ? Color.red : Color.green)
-                        .frame(width: 7, height: 7)
-                    Text(tether.isRecording ? "REC" : "LIVE")
-                        .font(.caption.monospacedDigit())
-                        .foregroundColor(tether.isRecording ? .red : .green)
-                }
-            }
-            Spacer()
-            Button("Schließen") {
-                tether.stopSession()
-                isPresented = false
-            }
-            .keyboardShortcut(.cancelAction)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private var deviceBar: some View {
-        HStack(spacing: 10) {
-            Text("Kamera:")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            Picker("", selection: $selectedDeviceID) {
-                Text("— Keine —").tag(nil as String?)
-                ForEach(tether.availableDevices, id: \.uniqueID) { dev in
-                    Text(dev.localizedName).tag(dev.uniqueID as String?)
-                }
-            }
-            .labelsHidden()
-            .frame(maxWidth: 280)
-
-            Button(action: {
-                tether.refreshDevices()
-                if selectedDeviceID == nil { autoSelectDevice() }
-            }) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption)
-            }
-            .help("Geräte aktualisieren")
-
-            Spacer()
-
-            if tether.availableDevices.isEmpty {
-                Label("Kein Gerät gefunden", systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundColor(.orange)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color(NSColor.controlBackgroundColor))
-    }
-
-    @ViewBuilder
-    private var previewArea: some View {
-        if tether.isSessionRunning {
-            CameraPreviewView(session: tether.session)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ZStack {
-                Color.black
-                VStack(spacing: 14) {
-                    Image(systemName: selectedDeviceID == nil ? "camera.slash" : "camera")
-                        .font(.system(size: 52))
-                        .foregroundColor(.gray)
-                    Text(selectedDeviceID == nil
-                         ? "Kamera oben auswählen"
-                         : "Verbinde…")
-                        .font(.callout)
-                        .foregroundColor(.gray)
-                    if selectedDeviceID == nil {
-                        VStack(spacing: 4) {
-                            Text("Fujifilm X-T4: Kamera-Menü → PC-Verbindung → USB-Webcam")
-                                .font(.caption)
-                                .foregroundColor(Color(NSColor.darkGray))
-                            Text("iPhone: WLAN + Bluetooth einschalten, Mac entsperren — erscheint automatisch")
-                                .font(.caption)
-                                .foregroundColor(Color(NSColor.darkGray))
-                        }
-                        .multilineTextAlignment(.center)
+                .font(.system(size: 52))
+                .foregroundColor(.gray)
+            if !tether.permissionGranted {
+                Text("Kamerazugriff erforderlich")
+                    .foregroundColor(.gray)
+                Button("Systemeinstellungen öffnen") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
+                        NSWorkspace.shared.open(url)
                     }
                 }
+                .foregroundColor(.accentColor)
+            } else if selectedDeviceID == nil {
+                Text("Kamera auswählen")
+                    .foregroundColor(.gray)
+                hintText
+            } else {
+                Text("Verbinde…")
+                    .foregroundColor(.gray)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
+    private var hintText: some View {
+        VStack(spacing: 3) {
+            Text("Fujifilm X-T4: Kamera-Menü → PC-Verbindung → USB-Webcam")
+                .font(.caption)
+                .foregroundColor(Color(NSColor.darkGray))
+            Text("iPhone: WLAN + Bluetooth an, Mac entsperrt → erscheint automatisch (macOS 13+)")
+                .font(.caption)
+                .foregroundColor(Color(NSColor.darkGray))
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 40)
+    }
+
+    // MARK: - Control bar
+
     private var controlBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
+            // Device picker
+            devicePickerButton
+
+            Spacer()
+
+            // Status
             if !tether.statusMessage.isEmpty {
                 Text(tether.statusMessage)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.7))
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
+
             Spacer()
 
-            // Video button
+            // Record
             Button(action: {
                 if tether.isRecording { tether.stopRecording() }
                 else { tether.startRecording() }
             }) {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(tether.isRecording ? Color.red : Color(NSColor.tertiaryLabelColor))
+                        .fill(tether.isRecording ? Color.red : Color.white.opacity(0.7))
                         .frame(width: 8, height: 8)
                     Text(tether.isRecording ? "Stopp" : "Video")
-                        .font(.callout)
+                        .foregroundColor(.white)
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.vertical, 7)
+                .background(Color.white.opacity(0.15))
+                .cornerRadius(20)
             }
-            .disabled(!tether.isSessionRunning)
-            .help("Videoaufnahme starten / stoppen")
-
-            // Photo button
-            Button(action: { tether.capturePhoto() }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "camera.shutter.button.fill")
-                    Text("Auslösen")
-                        .font(.callout.weight(.medium))
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-                .background(Color.accentColor)
-                .foregroundColor(.white)
-                .cornerRadius(8)
-            }
-            .disabled(!tether.isSessionRunning || tether.isRecording)
             .buttonStyle(PlainButtonStyle())
-            .help("Foto aufnehmen  (Leertaste)")
-            .keyboardShortcut(" ", modifiers: [])
+            .disabled(!tether.isSessionRunning)
+
+            // Shutter
+            shutterButton
+
+            // Close
+            Button(action: {
+                tether.stopSession()
+                viewModel.tetherMode = false
+            }) {
+                Image(systemName: "xmark")
+                    .foregroundColor(.white.opacity(0.8))
+                    .padding(8)
+                    .background(Color.white.opacity(0.15))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("Kamera-Modus beenden")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(NSColor.windowBackgroundColor))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [Color.clear, Color.black.opacity(0.6)]),
+                startPoint: .top, endPoint: .bottom)
+        )
     }
 
-    private var permissionView: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "camera.fill")
-                .font(.system(size: 52))
-                .foregroundColor(.secondary)
-            Text("Kamerazugriff erforderlich")
-                .font(.headline)
-            Text("iPhoto benötigt Zugriff auf die Kamera.")
-                .foregroundColor(.secondary)
-            Button("Systemeinstellungen öffnen") {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
-                    NSWorkspace.shared.open(url)
+    private var shutterButton: some View {
+        Button(action: { tether.capturePhoto() }) {
+            ZStack {
+                Circle()
+                    .stroke(Color.white, lineWidth: 3)
+                    .frame(width: 56, height: 56)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 46, height: 46)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(!tether.isSessionRunning || tether.isRecording)
+        .help("Foto aufnehmen (Leertaste)")
+        .keyboardShortcut(" ", modifiers: [])
+    }
+
+    private var devicePickerButton: some View {
+        Menu {
+            if tether.availableDevices.isEmpty {
+                Text("Kein Gerät gefunden").foregroundColor(.secondary)
+            }
+            ForEach(tether.availableDevices, id: \.uniqueID) { dev in
+                Button(action: { selectedDeviceID = dev.uniqueID }) {
+                    HStack {
+                        Text(dev.localizedName)
+                        if dev.uniqueID == selectedDeviceID {
+                            Image(systemName: "checkmark")
+                        }
+                    }
                 }
             }
-            Spacer()
+            Divider()
+            Button("Aktualisieren") {
+                tether.refreshDevices()
+                if selectedDeviceID == nil { autoSelectDevice() }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "camera")
+                    .foregroundColor(.white)
+                Text(selectedDevice?.localizedName ?? "Kamera wählen")
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color.white.opacity(0.15))
+            .cornerRadius(20)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .menuStyle(BorderlessButtonMenuStyle())
+        .fixedSize()
     }
 
     // MARK: - Helpers
 
     private func autoSelectDevice() {
-        // Prefer Fujifilm, then iPhone, then first available
-        let name: (AVCaptureDevice) -> String = { $0.localizedName.lowercased() }
-        let preferred = tether.availableDevices.first { name($0).contains("fuji") || name($0).contains("x-t") }
-            ?? tether.availableDevices.first { name($0).contains("iphone") || name($0).contains("continuity") }
+        let n: (AVCaptureDevice) -> String = { $0.localizedName.lowercased() }
+        let preferred = tether.availableDevices.first { n($0).contains("fuji") || n($0).contains("x-t") }
+            ?? tether.availableDevices.first { n($0).contains("iphone") || n($0).contains("continuity") }
             ?? tether.availableDevices.first
         selectedDeviceID = preferred?.uniqueID
     }

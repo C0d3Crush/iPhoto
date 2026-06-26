@@ -76,10 +76,6 @@ struct ContentView: View {
                 isPresented: $viewModel.showExportSheet
             )
         }
-        .sheet(isPresented: $viewModel.showTetherView) {
-            TetherView(isPresented: $viewModel.showTetherView)
-                .environmentObject(viewModel)
-        }
     }
 }
 
@@ -91,7 +87,10 @@ struct DetailView: View {
             Color(NSColor.windowBackgroundColor)
                 .ignoresSafeArea()
 
-            if viewModel.isLoading {
+            if viewModel.tetherMode {
+                TetherInlineView()
+                    .environmentObject(viewModel)
+            } else if viewModel.isLoading {
                 VStack(spacing: 12) {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())

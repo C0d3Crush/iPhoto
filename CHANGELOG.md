@@ -2,6 +2,14 @@
 
 ---
 
+## 0.38.2
+**Bugfix: Kamera-Vorschau direkt im Hauptfenster**
+- Live-Vorschau öffnet kein separates Fenster mehr — sie lebt jetzt im normalen Bildbereich
+- Kamera-Button in der linken Navigation wechselt in den Kamera-Modus (erneut klicken zum Beenden)
+- Auslöser, Video und Gerätewahl als transparente Leiste am unteren Bildrand
+
+---
+
 ## 0.38.1
 **Bugfix: iPhone Continuity Camera wird erkannt**
 - iPhone erscheint jetzt korrekt in der Kameraliste (macOS 13+)

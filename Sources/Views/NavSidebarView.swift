@@ -9,12 +9,14 @@ struct NavSidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: { viewModel.showTetherView = true }) {
+            Button(action: { viewModel.tetherMode.toggle() }) {
                 Label("Kamera", systemImage: "camera.fill")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.accentColor.opacity(0.12))
+                    .background(viewModel.tetherMode
+                        ? Color.accentColor.opacity(0.25)
+                        : Color.accentColor.opacity(0.10))
                     .cornerRadius(6)
             }
             .buttonStyle(PlainButtonStyle())
