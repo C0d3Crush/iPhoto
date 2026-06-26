@@ -9,7 +9,7 @@ struct NavSidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: { viewModel.tetherMode.toggle() }) {
+            Button(action: { viewModel.tetherMode = true }) {
                 Label("Kamera", systemImage: "camera.fill")
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 10)
@@ -29,8 +29,9 @@ struct NavSidebarView: View {
             navRow(
                 label: "Library",
                 icon: "photo.stack",
-                isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil
+                isSelected: !viewModel.tetherMode && (viewModel.navSelection == .library || viewModel.navSelection == nil)
             ) {
+                viewModel.tetherMode = false
                 viewModel.navSelection = .library
             }
 
@@ -136,7 +137,7 @@ private struct AlbumRow: View {
     @State private var isTargeted = false
 
     var body: some View {
-        Button(action: { viewModel.selectAlbum(album) }) {
+        Button(action: { viewModel.tetherMode = false; viewModel.selectAlbum(album) }) {
             Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
@@ -185,6 +186,7 @@ private struct FolderRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
+                viewModel.tetherMode = false
                 viewModel.navSelection = .folder(folder.id)
                 withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() }
             } label: {
