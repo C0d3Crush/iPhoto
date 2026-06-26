@@ -2,6 +2,14 @@
 
 ---
 
+## 0.39.2
+**Bugfix: Startup-Crash durch Use-after-free in CatalogStore**
+- CatalogStore übergab SQLite Strings per `SQLITE_STATIC` (nil-Destruktor): ARC konnte die NSString-Temporary freigeben bevor `sqlite3_step` auf den Pointer zugegriffen hatte
+- Fix: `SQLITE_TRANSIENT` als Destruktor — SQLite kopiert den String sofort beim Bind, der Pointer wird danach nicht mehr benötigt
+- Behebt Crash-Loop beim Start (App crashte nach dem Laden von 1-2 Bildern)
+
+---
+
 ## 0.39.1
 **Bugfix: CrashReporter Session-Splitting + Hot-Pixel RAF-Dekodierung**
 - CrashReporter erkennt den abgestürzten Session-Block jetzt korrekt (neuer Marker `###SESSION_START###` verhindert Verwechslung mit Log-Einträgen)

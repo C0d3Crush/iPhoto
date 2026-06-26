@@ -468,6 +468,10 @@ final class CatalogStore {
 
     // MARK: - Helpers
 
+    // SQLITE_TRANSIENT (-1) tells SQLite to copy the string immediately during bind,
+    // so the Swift string can be released by ARC before sqlite3_step is called.
+    private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
     @discardableResult
     private func exec(_ sql: String) -> Bool {
         sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK
@@ -480,7 +484,7 @@ final class CatalogStore {
     }
 
     private func bind(_ s: OpaquePointer?, _ i: Int32, _ v: String) {
-        sqlite3_bind_text(s, i, (v as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(s, i, v, -1, sqliteTransient)
     }
 
     private func bindOpt(_ s: OpaquePointer?, _ i: Int32, _ v: String?) {
