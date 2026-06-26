@@ -2,6 +2,12 @@
 
 ---
 
+## 0.38.1
+**Bugfix: iPhone Continuity Camera wird erkannt**
+- iPhone erscheint jetzt korrekt in der Kameraliste (macOS 13+)
+
+---
+
 ## 0.38.0
 **Tethered Shooting — Live-Vorschau & Kameraauslöser**
 - Neuer „Kamera"-Button in der linken Navigation öffnet Live-Vorschau-Fenster

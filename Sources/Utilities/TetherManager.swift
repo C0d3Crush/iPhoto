@@ -46,11 +46,14 @@ final class TetherManager: NSObject, ObservableObject {
     // MARK: - Device Discovery
 
     func refreshDevices() {
-        // Finds built-in cameras, external USB webcams, and iPhone Continuity Camera (macOS 13+)
+        var types: [AVCaptureDevice.DeviceType] = [.builtInWideAngleCamera]
+        // "AVCaptureDeviceTypeContinuityCamera" is the raw value for .continuityCamera (macOS 13+).
+        // We inject it via raw string so this file compiles against older SDKs too.
+        if #available(macOS 13.0, *) {
+            types.append(AVCaptureDevice.DeviceType(rawValue: "AVCaptureDeviceTypeContinuityCamera"))
+        }
         let discovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera],
-            mediaType: .video,
-            position: .unspecified)
+            deviceTypes: types, mediaType: .video, position: .unspecified)
         let devices = discovery.devices
         DispatchQueue.main.async { self.availableDevices = devices }
     }
