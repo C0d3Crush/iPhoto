@@ -2,6 +2,17 @@
 
 ---
 
+## 0.38.0
+**Tethered Shooting — Live-Vorschau & Kameraauslöser**
+- Neuer „Kamera"-Button in der linken Navigation öffnet Live-Vorschau-Fenster
+- Unterstützt Fujifilm X-T4 (USB-Webcam-Modus), iPhone (Continuity Camera, macOS 13+) und alle UVC-Kameras
+- Foto auslösen direkt aus iPhoto heraus (Leertaste), aufgenommene Bilder automatisch importiert
+- Videoaufnahme starten/stoppen, Video wird ebenfalls importiert
+- Aufnahmen landen in `~/Pictures/iPhoto Tethered/` und sofort in der aktuellen Bibliothek
+- Fehlende Plugin-Einträge ergänzt: Navigation, Rezepte und Lokal jetzt im Plugins-Menü ein-/ausschaltbar
+
+---
+
 ## 0.37.0
 **Lokale Anpassungen mit Verlaufsmasken (Phase 4)**
 - Neues „Lokal"-Panel im Inspector für nicht-destruktive lokale Anpassungen

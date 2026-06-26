@@ -9,6 +9,19 @@ struct NavSidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Button(action: { viewModel.showTetherView = true }) {
+                Label("Kamera", systemImage: "camera.fill")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.accentColor.opacity(0.12))
+                    .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 4)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+
             sectionHeader("Bibliothek")
 
             navRow(

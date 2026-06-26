@@ -1,15 +1,22 @@
 import SwiftUI
 
 struct PluginCommands: Commands {
-    @AppStorage("plugin.metadata")    var metadataActive:    Bool = true
-    @AppStorage("plugin.anpassungen") var adjustmentsActive: Bool = false
-    @AppStorage("plugin.analyse")     var analyseActive:     Bool = false
+    @AppStorage("plugin.metadata")    var metadataActive:         Bool = true
+    @AppStorage("plugin.anpassungen") var adjustmentsActive:      Bool = false
+    @AppStorage("plugin.lokal")       var localAdjustmentsActive: Bool = false
+    @AppStorage("plugin.rezepte")     var presetsActive:          Bool = false
+    @AppStorage("plugin.analyse")     var analyseActive:          Bool = false
+    @AppStorage("plugin.navigation")  var navigationActive:       Bool = false
 
     var body: some Commands {
         CommandMenu("Plugins") {
-            Toggle(isOn: $metadataActive)    { Text(InspectorPanel.metadata.rawValue) }
-            Toggle(isOn: $adjustmentsActive) { Text(InspectorPanel.adjustments.rawValue) }
-            Toggle(isOn: $analyseActive)     { Text(InspectorPanel.analyse.rawValue) }
+            Toggle(isOn: $metadataActive)         { Text(InspectorPanel.metadata.rawValue) }
+            Toggle(isOn: $adjustmentsActive)      { Text(InspectorPanel.adjustments.rawValue) }
+            Toggle(isOn: $localAdjustmentsActive) { Text(InspectorPanel.localAdjustments.rawValue) }
+            Toggle(isOn: $presetsActive)          { Text(InspectorPanel.presets.rawValue) }
+            Divider()
+            Toggle(isOn: $analyseActive)          { Text(InspectorPanel.analyse.rawValue) }
+            Toggle(isOn: $navigationActive)       { Text(InspectorPanel.navigation.rawValue) }
         }
     }
 }

@@ -76,6 +76,10 @@ struct ContentView: View {
                 isPresented: $viewModel.showExportSheet
             )
         }
+        .sheet(isPresented: $viewModel.showTetherView) {
+            TetherView(isPresented: $viewModel.showTetherView)
+                .environmentObject(viewModel)
+        }
     }
 }
 
