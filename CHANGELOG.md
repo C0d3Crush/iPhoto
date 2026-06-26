@@ -2,6 +2,14 @@
 
 ---
 
+## 0.33.0
+**Preview-Auflösung + Half-Float-Pipeline für RAW-Editing**
+- RAW-Slider-Moves rendern jetzt in max. 1500 px (`inputScaleFactor`) + Draft-Mode (`inputAllowDraftMode`) — deutlich schneller auf älterer Hardware
+- `CIContext` arbeitet jetzt in halbfloat (RGBAh) und linearem sRGB — kein Banding mehr in Lichtern/Schatten bei starken Edits
+- Volle Auflösung wird nur beim Export verwendet (RAW-Speichern bleibt bewusst blockiert)
+
+---
+
 ## 0.32.1
 **Ladebalken beim Thumbnail-Import**
 - Schlanke Fortschrittsleiste erscheint unten zwischen Viewer und Thumbnail-Strip wenn Bilder geladen werden

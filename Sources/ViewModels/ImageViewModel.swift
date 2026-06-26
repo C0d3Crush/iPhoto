@@ -44,7 +44,14 @@ class ImageViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var loadToken: UUID = UUID()
     private var adjToken: UUID = UUID()
-    private let adjCIContext = CIContext(options: [.useSoftwareRenderer: false])
+    private let adjCIContext: CIContext = {
+        var opts: [CIContextOption: Any] = [.useSoftwareRenderer: false]
+        if let linearSRGB = CGColorSpace(name: CGColorSpace.linearSRGB) {
+            opts[.workingColorSpace] = linearSRGB
+        }
+        opts[.workingFormat] = CIFormat.RGBAh
+        return CIContext(options: opts)
+    }()
     private var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
     private var isLoadingFullRes = false
 
@@ -839,6 +846,7 @@ class ImageViewModel: ObservableObject {
 
         let useRAWPipeline = collection.currentDocument?.isRAW ?? false
         let rawURL = collection.currentDocument?.url
+        let nativeSize = imageSize
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -848,9 +856,15 @@ class ImageViewModel: ObservableObject {
             var stopRAWAccess: (() -> Void)? = nil
 
             if useRAWPipeline, let url = rawURL {
+                let longestEdge = max(nativeSize.width, nativeSize.height)
+                let previewScale = longestEdge > 0
+                    ? min(1.0, 1500.0 / Double(longestEdge))
+                    : 1.0
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 if let rf = CIFilter(imageURL: accessURL, options: nil) {
                     rf.setValue(Float(snap.exposure), forKey: kCIInputEVKey)
+                    rf.setValue(true,                 forKey: "inputAllowDraftMode")
+                    rf.setValue(Float(previewScale),  forKey: "inputScaleFactor")
                     if let rawCI = rf.outputImage {
                         ci = rawCI
                         exposureApplied = true
