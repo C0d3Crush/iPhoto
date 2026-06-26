@@ -55,23 +55,6 @@ struct NavSidebarView: View {
                 }
             }
 
-            sectionHeader("Ordner", trailing: AnyView(
-                Button(action: { viewModel.addFolderDialog() }) {
-                    Image(systemName: "plus").font(.caption)
-                }
-                .buttonStyle(PlainButtonStyle())
-            ))
-
-            ForEach(viewModel.watchedFolders) { folder in
-                FolderRow(
-                    folder: folder,
-                    isSelected: viewModel.navSelection == .folder(folder.id)
-                )
-                .environmentObject(viewModel)
-                .contextMenu {
-                    Button("Ordner entfernen") { viewModel.deleteWatchedFolder(folder) }
-                }
-            }
 
             Spacer()
         }
