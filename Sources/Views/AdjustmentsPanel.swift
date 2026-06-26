@@ -13,7 +13,6 @@ struct AdjustmentsPanel: View {
                 Spacer()
             }
         } else {
-            ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                     Group {
                         // Crop tool
@@ -112,7 +111,6 @@ struct AdjustmentsPanel: View {
                     }
                 }
                 .padding(16)
-            }
         }
     }
 

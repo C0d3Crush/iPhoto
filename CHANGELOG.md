@@ -2,6 +2,20 @@
 
 ---
 
+## 0.30.2
+**Inspector scrollt als Ganzes — keine internen Scrollbereiche mehr**
+- Scrollen im Inspector bewegt jetzt alle Panels zusammen (außen)
+- Metadaten- und Anpassungen-Panel haben keinen eigenen Scrollbereich mehr
+
+---
+
+## 0.30.1
+**RGB-Parade untereinander + Kurven-Canvas begrenzt**
+- RGB-Parade zeigt R / G / B vertikal gestapelt (je 80 px) mit Farb-Label links
+- Kurven-Canvas hat jetzt eine maximale Höhe von 200 px — kein Scrollen nötig
+
+---
+
 ## 0.30.0
 **Ordner in der Sidebar aufklappbar**
 - Pfeil-Button klappt Ordner auf/zu (mit Animation, unabhängig von Auswahl)
