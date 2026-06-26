@@ -2,6 +2,16 @@
 
 ---
 
+## 0.36.0
+**Film-Simulationen + Rezept-System (Phase 3)**
+- 6 eingebaute Film-Looks: Chrome, Schwarz, Velvet, Nostalgie, Kino, Morgen
+- Neues „Rezepte"-Panel im Inspector: Film-Looks + eigene Rezepte mit einem Klick anwenden
+- Eigene Rezepte speichern (aktuelle Anpassungen als Preset sichern)
+- Rezepte exportieren (`.iphotorecipe`-Datei) und importieren — teilbar, kein Account nötig
+- `Preset`-Modell ist `Codable` — Format ist offen und erweiterbar
+
+---
+
 ## 0.35.1
 **Undo/Redo für Anpassungen (Cmd+Z / Cmd+Shift+Z)**
 - Jede Slider-Bewegung (500 ms nach letzter Änderung) wird auf einen Undo-Stack geschrieben (max. 50 Schritte)

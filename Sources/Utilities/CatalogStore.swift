@@ -104,6 +104,16 @@ final class CatalogStore {
             updated_at TEXT NOT NULL
         )
         """)
+
+        exec("""
+        CREATE TABLE IF NOT EXISTS presets (
+            id         TEXT PRIMARY KEY,
+            name       TEXT NOT NULL,
+            author     TEXT,
+            data       TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """)
     }
 
     // MARK: - Migration from JSON
@@ -302,6 +312,49 @@ final class CatalogStore {
         queue.async {
             let stmt = self.prepare("DELETE FROM adjustments WHERE image_path=?")
             self.bind(stmt, 1, path); sqlite3_step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
+    // MARK: - Presets
+
+    func savePreset(_ preset: Preset) {
+        guard let data = try? JSONEncoder().encode(preset),
+              let json = String(data: data, encoding: .utf8) else { return }
+        queue.async {
+            let stmt = self.prepare("""
+                INSERT INTO presets (id, name, author, data, created_at) VALUES (?,?,?,?,?)
+                ON CONFLICT(id) DO UPDATE SET name=excluded.name, author=excluded.author, data=excluded.data
+            """)
+            self.bind(stmt, 1, preset.id.uuidString)
+            self.bind(stmt, 2, preset.name)
+            self.bindOpt(stmt, 3, preset.author)
+            self.bind(stmt, 4, json)
+            self.bind(stmt, 5, self.iso8601())
+            sqlite3_step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
+    func allUserPresets() -> [Preset] {
+        queue.sync {
+            let stmt = prepare("SELECT data FROM presets ORDER BY created_at ASC")
+            var out: [Preset] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let ptr = sqlite3_column_text(stmt, 0) {
+                    let json = String(cString: ptr)
+                    if let p = try? JSONDecoder().decode(Preset.self, from: Data(json.utf8)) {
+                        out.append(p)
+                    }
+                }
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
+    func deletePreset(id: UUID) {
+        queue.async {
+            let stmt = self.prepare("DELETE FROM presets WHERE id=?")
+            self.bind(stmt, 1, id.uuidString)
+            sqlite3_step(stmt); sqlite3_finalize(stmt)
         }
     }
 

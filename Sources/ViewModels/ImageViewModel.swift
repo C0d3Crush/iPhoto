@@ -26,6 +26,7 @@ class ImageViewModel: ObservableObject {
     @Published var showOriginal: Bool = false
     @Published var thumbnailLoadProgress: Double? = nil
     @Published var copiedAdjustments: AdjustmentState? = nil
+    @Published var userPresets: [Preset] = []
 
     // MARK: - Version history
     @Published var savedVersions: [ImageVersionMeta] = []
@@ -91,6 +92,7 @@ class ImageViewModel: ObservableObject {
     init() {
         loadAlbums()
         loadWatchedFolders()
+        userPresets = CatalogStore.shared.allUserPresets()
         // Änderungen in collection (z.B. neue Thumbnails) an SwiftUI weiterleiten
         collection.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -769,6 +771,48 @@ class ImageViewModel: ObservableObject {
         lastCommittedAdjustments = next
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             self?.isUndoRedoing = false
+        }
+    }
+
+    // MARK: - Presets / Rezepte
+
+    func applyPreset(_ preset: Preset) {
+        adjustments = preset.adjustments
+    }
+
+    func saveCurrentAsPreset(name: String, author: String? = nil) {
+        var p = Preset(name: name, author: author, adjustments: adjustments)
+        CatalogStore.shared.savePreset(p)
+        userPresets = CatalogStore.shared.allUserPresets()
+    }
+
+    func deletePreset(_ preset: Preset) {
+        CatalogStore.shared.deletePreset(id: preset.id)
+        userPresets = CatalogStore.shared.allUserPresets()
+    }
+
+    func exportRecipe(_ preset: Preset) {
+        guard let data = try? JSONEncoder().encode(preset) else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(preset.name).iphotorecipe"
+        panel.allowedFileTypes = ["iphotorecipe"]
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? data.write(to: url)
+        }
+    }
+
+    func importRecipe() {
+        let panel = NSOpenPanel()
+        panel.allowedFileTypes = ["iphotorecipe"]
+        panel.allowsMultipleSelection = false
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url,
+                  let data = try? Data(contentsOf: url),
+                  var preset = try? JSONDecoder().decode(Preset.self, from: data) else { return }
+            preset.id = UUID()
+            CatalogStore.shared.savePreset(preset)
+            DispatchQueue.main.async { self?.userPresets = CatalogStore.shared.allUserPresets() }
         }
     }
 
