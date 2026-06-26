@@ -25,6 +25,7 @@ class ImageViewModel: ObservableObject {
     @Published var cropToolActive: Bool = false
     @Published var showOriginal: Bool = false
     @Published var thumbnailLoadProgress: Double? = nil
+    @Published var copiedAdjustments: AdjustmentState? = nil
 
     // MARK: - Version history
     @Published var savedVersions: [ImageVersionMeta] = []
@@ -732,23 +733,33 @@ class ImageViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Unified save
+    // MARK: - Save / Export
 
-    func saveAll() {
-        guard let doc = collection.currentDocument else { return }
-        let hasAdj = hasActiveAdjustments && !doc.isRAW
-        let hasMeta = hasMetadataChanges
-        guard hasAdj || hasMeta else { return }
+    func saveMetadata() {
+        guard hasMetadataChanges, let entries = pendingMetadataEntries else { return }
+        saveOnlyMeta(entries: entries, label: "Metadaten")
+    }
 
-        var parts: [String] = []
-        if hasAdj  { parts.append(adjustmentLabel()) }
-        if hasMeta { parts.append("Metadaten") }
-        let label = parts.joined(separator: " · ")
+    // MARK: - Copy / Paste Adjustments
 
-        if hasAdj {
-            saveAdjustedToFile(label: label, metaEntries: hasMeta ? pendingMetadataEntries : nil)
-        } else if let entries = pendingMetadataEntries {
-            saveOnlyMeta(entries: entries, label: label)
+    func copyAdjustments() {
+        copiedAdjustments = adjustments
+    }
+
+    func pasteAdjustments() {
+        guard let src = copiedAdjustments else { return }
+        let targets: [Int] = collection.selectedIndices.isEmpty
+            ? [collection.currentIndex]
+            : Array(collection.selectedIndices)
+        for idx in targets where idx < collection.documents.count {
+            if idx == collection.currentIndex {
+                adjustments = src
+            } else {
+                CatalogStore.shared.saveAdjustments(
+                    path: collection.documents[idx].url.path,
+                    adjustments: src
+                )
+            }
         }
     }
 

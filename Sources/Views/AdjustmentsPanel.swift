@@ -97,15 +97,19 @@ struct AdjustmentsPanel: View {
 
                         Divider()
 
-                        HStack(spacing: 8) {
-                            Button("Zurücksetzen") {
-                                viewModel.resetAdjustments()
-                            }
-                            .disabled(isNeutral)
+                        HStack(spacing: 6) {
+                            Button("Zurücksetzen") { viewModel.resetAdjustments() }
+                                .disabled(isNeutral)
                             Spacer()
+                            Button("Kopieren") { viewModel.copyAdjustments() }
+                                .disabled(isNeutral)
+                                .help("Anpassungen in Zwischenablage")
+                            Button("Einfügen") { viewModel.pasteAdjustments() }
+                                .disabled(viewModel.copiedAdjustments == nil)
+                                .help("Auf aktuelles Bild oder Auswahl anwenden")
                         }
 
-                        Text(isRAW ? "RAW — Exportieren zum Speichern" : "Vorschau — Original nicht verändert")
+                        Text("Original wird nie verändert — Exportieren zum Rendern")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }

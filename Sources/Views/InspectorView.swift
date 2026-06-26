@@ -78,15 +78,23 @@ struct InspectorView: View {
                         .foregroundColor(.accentColor)
                     }
                     Spacer()
-                    Button(action: { viewModel.saveAll() }) {
-                        if viewModel.isSavingToFile {
-                            ProgressView().scaleEffect(0.7)
-                        } else {
-                            Text("Speichern")
+                    if viewModel.hasMetadataChanges {
+                        Button(action: { viewModel.saveMetadata() }) {
+                            if viewModel.isSavingToFile {
+                                ProgressView().scaleEffect(0.7)
+                            } else {
+                                Text("Metadaten")
+                            }
                         }
+                        .disabled(viewModel.isSavingToFile)
+                        .help("Metadaten ins Bild schreiben")
                     }
-                    .disabled(viewModel.isSavingToFile || !canSave)
-                    .help(helpText)
+                    if viewModel.hasActiveAdjustments {
+                        Button(action: { viewModel.showExportSheet = true }) {
+                            Text("Exportieren")
+                        }
+                        .help("Anpassungen als neue Datei rendern")
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -102,16 +110,6 @@ struct InspectorView: View {
         .onChange(of: panelOrder) { InspectorView.saveOrder($0) }
     }
 
-    private var canSave: Bool {
-        (viewModel.hasActiveAdjustments && !viewModel.currentDocIsRAW) || viewModel.hasMetadataChanges
-    }
-
-    private var helpText: String {
-        if viewModel.currentDocIsRAW && !viewModel.hasMetadataChanges {
-            return "RAW — Anpassungen nicht speicherbar, aber Metadaten schon"
-        }
-        return "Änderungen ins Bild schreiben"
-    }
 
     private func toggle(_ panel: InspectorPanel) {
         if collapsed.contains(panel) { collapsed.remove(panel) }

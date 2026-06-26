@@ -2,6 +2,16 @@
 
 ---
 
+## 0.35.0
+**Export-Modell + Batch-Sync (Phase 2)**
+- „Speichern" für Anpassungen entfernt — Originaldatei wird nie verändert
+- Stattdessen: „Exportieren"-Button öffnet den Export-Dialog zum Rendern in eine neue Datei
+- „Metadaten"-Button speichert nur EXIF/IPTC (weiterhin sicher in-place)
+- Neue Buttons „Kopieren" / „Einfügen" im Anpassungen-Panel: Einstellungen auf aktuelles Bild oder die gesamte Auswahl übertragen
+- Batch-Paste schreibt die kopierten Anpassungen für alle markierten Bilder direkt in den Katalog
+
+---
+
 ## 0.34.0
 **Edits pro Bild persistiert — Katalog als Wahrheit (Phase 2)**
 - Alle Anpassungen (Belichtung, WB, Kurven, Crop …) werden beim Bildwechsel automatisch im SQLite-Katalog gespeichert
