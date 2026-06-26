@@ -42,32 +42,32 @@ struct AdjustmentsPanel: View {
                         Divider()
 
                         adjRow(label: "Belichtung",
-                               value: $viewModel.adjExposure,
+                               value: $viewModel.adjustments.exposure,
                                range: -2...2,
                                format: "%+.1f EV")
 
                         adjRow(label: "Helligkeit",
-                               value: $viewModel.adjBrightness,
+                               value: $viewModel.adjustments.brightness,
                                range: -0.5...0.5,
                                format: "%+.2f")
 
                         adjRow(label: "Kontrast",
-                               value: $viewModel.adjContrast,
+                               value: $viewModel.adjustments.contrast,
                                range: 0.5...1.5,
                                format: "%.2f")
 
                         adjRow(label: "Sättigung",
-                               value: $viewModel.adjSaturation,
+                               value: $viewModel.adjustments.saturation,
                                range: 0...2,
                                format: "%.2f")
 
                         adjRow(label: "Wärme",
-                               value: $viewModel.adjWarmth,
+                               value: $viewModel.adjustments.warmth,
                                range: -1...1,
                                format: "%+.2f")
 
                         adjRow(label: "Farbstich",
-                               value: $viewModel.adjTint,
+                               value: $viewModel.adjustments.tint,
                                range: -1...1,
                                format: "%+.2f")
                     }
@@ -81,17 +81,17 @@ struct AdjustmentsPanel: View {
                             .fontWeight(.semibold)
 
                         adjRow(label: "Klarheit",
-                               value: $viewModel.adjClarity,
+                               value: $viewModel.adjustments.clarity,
                                range: -1...1,
                                format: "%+.2f")
 
                         adjRow(label: "Textur",
-                               value: $viewModel.adjTexture,
+                               value: $viewModel.adjustments.texture,
                                range: -1...1,
                                format: "%+.2f")
 
                         adjRow(label: "Dunst",
-                               value: $viewModel.adjDehaze,
+                               value: $viewModel.adjustments.dehaze,
                                range: -1...1,
                                format: "%+.2f")
 
@@ -117,8 +117,8 @@ struct AdjustmentsPanel: View {
     private var isNeutral: Bool { !viewModel.hasActiveAdjustments }
 
     private var hasCropOrRotation: Bool {
-        viewModel.adjRotation != 0 ||
-        viewModel.adjCropRect != CGRect(x: 0, y: 0, width: 1, height: 1)
+        viewModel.adjustments.rotation != 0 ||
+        viewModel.adjustments.cropRect != CGRect(x: 0, y: 0, width: 1, height: 1)
     }
 
     private var isRAW: Bool {

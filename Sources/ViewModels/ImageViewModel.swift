@@ -19,21 +19,7 @@ class ImageViewModel: ObservableObject {
     @Published var watchedFolders: [WatchedFolder] = []
 
     // MARK: - Adjustments
-    @Published var adjExposure: Double = 0.0
-    @Published var adjBrightness: Double = 0.0
-    @Published var adjContrast: Double = 1.0
-    @Published var adjSaturation: Double = 1.0
-    @Published var adjWarmth: Double = 0.0
-    @Published var adjTint: Double = 0.0
-    @Published var adjClarity: Double = 0.0
-    @Published var adjTexture: Double = 0.0
-    @Published var adjDehaze: Double = 0.0
-    @Published var adjCurvePoints: [CGPoint] = CurvesView.defaultPoints
-    @Published var adjCurveR: [CGPoint] = CurvesView.defaultPoints
-    @Published var adjCurveG: [CGPoint] = CurvesView.defaultPoints
-    @Published var adjCurveB: [CGPoint] = CurvesView.defaultPoints
-    @Published var adjCropRect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)
-    @Published var adjRotation: Double = 0.0
+    @Published var adjustments: AdjustmentState = AdjustmentState()
     @Published var adjustedImage: CGImage? = nil
     @Published var displayImageVersion: UUID = UUID()
     @Published var cropToolActive: Bool = false
@@ -49,15 +35,7 @@ class ImageViewModel: ObservableObject {
 
     var hasMetadataChanges: Bool { pendingMetadataEntries != nil }
 
-    var hasActiveAdjustments: Bool {
-        adjExposure != 0 || adjBrightness != 0 || adjContrast != 1 ||
-        adjSaturation != 1 || adjWarmth != 0 || adjTint != 0 ||
-        adjClarity != 0 || adjTexture != 0 || adjDehaze != 0 ||
-        adjRotation != 0 ||
-        adjCropRect != CGRect(x: 0, y: 0, width: 1, height: 1) ||
-        !isDefaultCurve(adjCurvePoints) ||
-        !isDefaultCurve(adjCurveR) || !isDefaultCurve(adjCurveG) || !isDefaultCurve(adjCurveB)
-    }
+    var hasActiveAdjustments: Bool { adjustments != AdjustmentState() }
     var currentDocIsRAW: Bool { collection.currentDocument?.isRAW ?? false }
 
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
@@ -135,25 +113,8 @@ class ImageViewModel: ObservableObject {
             .sink { [weak self] _ in self?.collection.selectedIndices = [] }
             .store(in: &cancellables)
 
-        let adjPublishers: [AnyPublisher<Void, Never>] = [
-            $adjExposure.map { _ in () }.eraseToAnyPublisher(),
-            $adjBrightness.map { _ in () }.eraseToAnyPublisher(),
-            $adjContrast.map { _ in () }.eraseToAnyPublisher(),
-            $adjSaturation.map { _ in () }.eraseToAnyPublisher(),
-            $adjWarmth.map { _ in () }.eraseToAnyPublisher(),
-            $adjCurvePoints.map { _ in () }.eraseToAnyPublisher(),
-            $adjCropRect.map { _ in () }.eraseToAnyPublisher(),
-            $adjRotation.map { _ in () }.eraseToAnyPublisher(),
-            $adjTint.map { _ in () }.eraseToAnyPublisher(),
-            $adjClarity.map { _ in () }.eraseToAnyPublisher(),
-            $adjTexture.map { _ in () }.eraseToAnyPublisher(),
-            $adjDehaze.map { _ in () }.eraseToAnyPublisher(),
-            $adjCurveR.map { _ in () }.eraseToAnyPublisher(),
-            $adjCurveG.map { _ in () }.eraseToAnyPublisher(),
-            $adjCurveB.map { _ in () }.eraseToAnyPublisher(),
-        ]
-        Publishers.MergeMany(adjPublishers)
-            .dropFirst(15)
+        $adjustments
+            .dropFirst()
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyAdjustments() }
             .store(in: &cancellables)
@@ -748,14 +709,7 @@ class ImageViewModel: ObservableObject {
     // MARK: - Adjustments
 
     func resetAdjustments() {
-        adjExposure = 0; adjBrightness = 0; adjContrast = 1; adjSaturation = 1; adjWarmth = 0
-        adjTint = 0; adjClarity = 0; adjTexture = 0; adjDehaze = 0
-        adjCurvePoints = CurvesView.defaultPoints
-        adjCurveR = CurvesView.defaultPoints
-        adjCurveG = CurvesView.defaultPoints
-        adjCurveB = CurvesView.defaultPoints
-        adjCropRect = CGRect(x: 0, y: 0, width: 1, height: 1)
-        adjRotation = 0
+        adjustments = AdjustmentState()
         adjustedImage = nil
         pendingMetadataEntries = nil
     }
@@ -782,14 +736,14 @@ class ImageViewModel: ObservableObject {
 
     private func adjustmentLabel() -> String {
         var parts: [String] = []
-        if adjExposure   != 0 { parts.append(String(format: "Belichtung %+.1f EV", adjExposure)) }
-        if adjBrightness != 0 { parts.append(String(format: "Helligkeit %+.2f",    adjBrightness)) }
-        if adjContrast   != 1 { parts.append(String(format: "Kontrast %.2f",       adjContrast)) }
-        if adjSaturation != 1 { parts.append(String(format: "Sättigung %.2f",      adjSaturation)) }
-        if adjWarmth     != 0 { parts.append(String(format: "Wärme %+.2f",         adjWarmth)) }
-        if adjRotation   != 0 { parts.append(String(format: "Rotation %.1f°",      adjRotation)) }
-        if adjCropRect != CGRect(x: 0, y: 0, width: 1, height: 1) { parts.append("Zugeschnitten") }
-        let curveDefault = zip(adjCurvePoints, CurvesView.defaultPoints).allSatisfy {
+        if adjustments.exposure   != 0 { parts.append(String(format: "Belichtung %+.1f EV", adjustments.exposure)) }
+        if adjustments.brightness != 0 { parts.append(String(format: "Helligkeit %+.2f",    adjustments.brightness)) }
+        if adjustments.contrast   != 1 { parts.append(String(format: "Kontrast %.2f",       adjustments.contrast)) }
+        if adjustments.saturation != 1 { parts.append(String(format: "Sättigung %.2f",      adjustments.saturation)) }
+        if adjustments.warmth     != 0 { parts.append(String(format: "Wärme %+.2f",         adjustments.warmth)) }
+        if adjustments.rotation   != 0 { parts.append(String(format: "Rotation %.1f°",      adjustments.rotation)) }
+        if adjustments.cropRect != CGRect(x: 0, y: 0, width: 1, height: 1) { parts.append("Zugeschnitten") }
+        let curveDefault = zip(adjustments.curvePoints, CurvesView.defaultPoints).allSatisfy {
             abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
         }
         if !curveDefault { parts.append("Kurve") }
@@ -872,21 +826,13 @@ class ImageViewModel: ObservableObject {
     }
 
     func applyAdjustments() {
-        let cropDefault = adjCropRect == CGRect(x: 0, y: 0, width: 1, height: 1)
-        let isNeutral = !hasActiveAdjustments && cropDefault
         guard hasActiveAdjustments, let source = currentImage else {
             adjustedImage = nil
             displayImageVersion = UUID()
             return
         }
 
-        let (exposure, brightness, contrast, saturation, warmth, tint, clarity, texture, dehaze,
-             curvePoints, curveR, curveG, curveB, rotation, cropRect) = (
-            adjExposure, adjBrightness, adjContrast, adjSaturation, adjWarmth, adjTint,
-            adjClarity, adjTexture, adjDehaze,
-            adjCurvePoints, adjCurveR, adjCurveG, adjCurveB, adjRotation, adjCropRect
-        )
-        let _ = isNeutral
+        let snap = adjustments
         let token = UUID()
         adjToken = token
 
@@ -903,7 +849,7 @@ class ImageViewModel: ObservableObject {
             if useRAWPipeline, let url = rawURL {
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 if let rf = CIFilter(imageURL: accessURL, options: nil) {
-                    rf.setValue(Float(exposure), forKey: kCIInputEVKey)
+                    rf.setValue(Float(snap.exposure), forKey: kCIInputEVKey)
                     if let rawCI = rf.outputImage {
                         ci = rawCI
                         exposureApplied = true
@@ -920,47 +866,47 @@ class ImageViewModel: ObservableObject {
                 ci = CIImage(cgImage: source)
             }
 
-            if !exposureApplied, exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
+            if !exposureApplied, snap.exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
                 f.setValue(ci, forKey: kCIInputImageKey)
-                f.setValue(exposure, forKey: kCIInputEVKey)
+                f.setValue(snap.exposure, forKey: kCIInputEVKey)
                 if let out = f.outputImage { ci = out }
             }
 
-            if brightness != 0 || contrast != 1 || saturation != 1,
+            if snap.brightness != 0 || snap.contrast != 1 || snap.saturation != 1,
                let f = CIFilter(name: "CIColorControls") {
                 f.setValue(ci, forKey: kCIInputImageKey)
-                f.setValue(brightness, forKey: kCIInputBrightnessKey)
-                f.setValue(contrast, forKey: kCIInputContrastKey)
-                f.setValue(saturation, forKey: kCIInputSaturationKey)
+                f.setValue(snap.brightness, forKey: kCIInputBrightnessKey)
+                f.setValue(snap.contrast, forKey: kCIInputContrastKey)
+                f.setValue(snap.saturation, forKey: kCIInputSaturationKey)
                 if let out = f.outputImage { ci = out }
             }
 
-            if warmth != 0 || tint != 0, let f = CIFilter(name: "CITemperatureAndTint") {
+            if snap.warmth != 0 || snap.tint != 0, let f = CIFilter(name: "CITemperatureAndTint") {
                 f.setValue(ci, forKey: kCIInputImageKey)
                 f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-                f.setValue(CIVector(x: CGFloat(6500 - warmth * 2500), y: CGFloat(-tint * 150)), forKey: "inputTargetNeutral")
+                f.setValue(CIVector(x: CGFloat(6500 - snap.warmth * 2500), y: CGFloat(-snap.tint * 150)), forKey: "inputTargetNeutral")
                 if let out = f.outputImage { ci = out }
             }
 
-            let curveDef = zip(curvePoints, CurvesView.defaultPoints).allSatisfy {
+            let curveDef = zip(snap.curvePoints, CurvesView.defaultPoints).allSatisfy {
                 abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
             }
             if !curveDef, let f = CIFilter(name: "CIToneCurve") {
                 f.setValue(ci, forKey: kCIInputImageKey)
-                for (i, pt) in curvePoints.enumerated() {
+                for (i, pt) in snap.curvePoints.enumerated() {
                     f.setValue(CIVector(x: pt.x, y: pt.y), forKey: "inputPoint\(i)")
                 }
                 if let out = f.outputImage { ci = out }
             }
 
             // Per-channel RGB curves via CIColorCube
-            let rDef = self.isDefaultCurve(curveR)
-            let gDef = self.isDefaultCurve(curveG)
-            let bDef = self.isDefaultCurve(curveB)
+            let rDef = self.isDefaultCurve(snap.curveR)
+            let gDef = self.isDefaultCurve(snap.curveG)
+            let bDef = self.isDefaultCurve(snap.curveB)
             if !rDef || !gDef || !bDef {
-                let lutR = CurvesView.evaluateSpline(curveR)
-                let lutG = CurvesView.evaluateSpline(curveG)
-                let lutB = CurvesView.evaluateSpline(curveB)
+                let lutR = CurvesView.evaluateSpline(snap.curveR)
+                let lutG = CurvesView.evaluateSpline(snap.curveG)
+                let lutB = CurvesView.evaluateSpline(snap.curveB)
                 let size = 32
                 var cubeData = [Float]()
                 cubeData.reserveCapacity(size * size * size * 4)
@@ -986,31 +932,31 @@ class ImageViewModel: ObservableObject {
             }
 
             // Clarity (local contrast, large radius)
-            if clarity != 0, let f = CIFilter(name: "CIUnsharpMask") {
+            if snap.clarity != 0, let f = CIFilter(name: "CIUnsharpMask") {
                 f.setValue(ci, forKey: kCIInputImageKey)
                 f.setValue(20.0, forKey: kCIInputRadiusKey)
-                f.setValue(Swift.max(0, clarity) * 2.0, forKey: kCIInputIntensityKey)
+                f.setValue(Swift.max(0, snap.clarity) * 2.0, forKey: kCIInputIntensityKey)
                 if let out = f.outputImage { ci = out }
             }
             // Texture (fine detail)
-            if texture != 0, let f = CIFilter(name: "CIUnsharpMask") {
+            if snap.texture != 0, let f = CIFilter(name: "CIUnsharpMask") {
                 f.setValue(ci, forKey: kCIInputImageKey)
                 f.setValue(4.0, forKey: kCIInputRadiusKey)
-                f.setValue(Swift.max(0, texture) * 2.5, forKey: kCIInputIntensityKey)
+                f.setValue(Swift.max(0, snap.texture) * 2.5, forKey: kCIInputIntensityKey)
                 if let out = f.outputImage { ci = out }
             }
             // Dehaze (contrast/brightness manipulation)
-            if dehaze != 0, let f = CIFilter(name: "CIColorControls") {
+            if snap.dehaze != 0, let f = CIFilter(name: "CIColorControls") {
                 f.setValue(ci, forKey: kCIInputImageKey)
-                f.setValue(-dehaze * 0.05, forKey: kCIInputBrightnessKey)
-                f.setValue(1.0 + dehaze * 0.25, forKey: kCIInputContrastKey)
+                f.setValue(-snap.dehaze * 0.05, forKey: kCIInputBrightnessKey)
+                f.setValue(1.0 + snap.dehaze * 0.25, forKey: kCIInputContrastKey)
                 f.setValue(1.0, forKey: kCIInputSaturationKey)
                 if let out = f.outputImage { ci = out }
             }
 
             // Rotation (around image center)
-            if rotation != 0 {
-                let angle = CGFloat(rotation) * .pi / 180.0
+            if snap.rotation != 0 {
+                let angle = CGFloat(snap.rotation) * .pi / 180.0
                 let cx = ci.extent.midX
                 let cy = ci.extent.midY
                 var t = CGAffineTransform(translationX: cx, y: cy)
@@ -1023,13 +969,13 @@ class ImageViewModel: ObservableObject {
             }
 
             // Crop (normalized rect, y-axis flipped for CIImage)
-            if !cropRect.equalTo(CGRect(x: 0, y: 0, width: 1, height: 1)) {
+            if !snap.cropRect.equalTo(CGRect(x: 0, y: 0, width: 1, height: 1)) {
                 let ext = ci.extent
                 let px = CGRect(
-                    x: ext.minX + cropRect.minX * ext.width,
-                    y: ext.minY + (1.0 - cropRect.maxY) * ext.height,
-                    width: cropRect.width  * ext.width,
-                    height: cropRect.height * ext.height
+                    x: ext.minX + snap.cropRect.minX * ext.width,
+                    y: ext.minY + (1.0 - snap.cropRect.maxY) * ext.height,
+                    width: snap.cropRect.width  * ext.width,
+                    height: snap.cropRect.height * ext.height
                 )
                 let cropped = ci.cropped(to: px)
                 ci = cropped.transformed(by: CGAffineTransform(

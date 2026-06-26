@@ -35,8 +35,8 @@ struct ContentView: View {
                 if viewModel.cropToolActive, let img = viewModel.currentImage {
                     CropEditorView(
                         image: img,
-                        initialCrop: viewModel.adjCropRect,
-                        initialRotation: viewModel.adjRotation
+                        initialCrop: viewModel.adjustments.cropRect,
+                        initialRotation: viewModel.adjustments.rotation
                     )
                     .environmentObject(viewModel)
                 }

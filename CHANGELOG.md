@@ -2,6 +2,15 @@
 
 ---
 
+## 0.31.1
+**Refactor: 16 einzelne Adjustment-Properties zu `AdjustmentState` zusammengefasst**
+- `ImageViewModel` verwendet jetzt ein einzelnes `@Published var adjustments: AdjustmentState` statt 16 separater `adj*`-Properties
+- `AdjustmentState` ist ein `Equatable`-Struct mit allen Bildbearbeitungs-Parametern
+- Combine-Pipeline vereinfacht: ein einziger `$adjustments`-Publisher statt `MergeMany` über 15 Publisher
+- Keine Verhaltensänderung — reine interne Umbenennung
+
+---
+
 ## 0.31.0
 **CIRAWFilter-Pipeline — volle Sensor-Latitude für RAW-Dateien**
 - RAW-Dateien (CR2, NEF, ARW, DNG, …) werden jetzt direkt über `CIFilter(imageURL:)` verarbeitet — keine Vorkonvertierung auf 8-Bit sRGB mehr

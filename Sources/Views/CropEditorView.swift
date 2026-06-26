@@ -293,8 +293,8 @@ struct CropEditorView: View {
     // MARK: - Apply
 
     private func apply() {
-        viewModel.adjCropRect = cropRect
-        viewModel.adjRotation = rotation
+        viewModel.adjustments.cropRect = cropRect
+        viewModel.adjustments.rotation = rotation
         viewModel.cropToolActive = false
     }
 }
