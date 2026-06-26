@@ -1,6 +1,6 @@
 import CoreGraphics
 
-struct AdjustmentState: Equatable {
+struct AdjustmentState: Codable, Equatable {
     var exposure:    Double = 0.0
     var brightness:  Double = 0.0
     var contrast:    Double = 1.0

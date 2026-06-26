@@ -4,6 +4,7 @@ enum InspectorPanel: String, CaseIterable {
     case metadata    = "Metadaten"
     case adjustments = "Anpassungen"
     case analyse     = "Analyse"
+    case navigation  = "Navigation"
 
     var storageKey: String { "plugin.\(rawValue.lowercased())" }
 }
@@ -13,6 +14,7 @@ struct InspectorView: View {
     @AppStorage("plugin.metadata")    var metadataActive:    Bool = true
     @AppStorage("plugin.anpassungen") var adjustmentsActive: Bool = false
     @AppStorage("plugin.analyse")     var analyseActive:     Bool = false
+    @AppStorage("plugin.navigation")  var navigationActive:  Bool = false
 
     @State private var panelOrder: [InspectorPanel] = InspectorView.loadOrder()
     @State private var collapsed: Set<InspectorPanel> = Set(InspectorPanel.allCases)
@@ -23,6 +25,7 @@ struct InspectorView: View {
         if metadataActive    { s.insert(.metadata) }
         if adjustmentsActive { s.insert(.adjustments) }
         if analyseActive     { s.insert(.analyse) }
+        if navigationActive  { s.insert(.navigation) }
         return s
     }
 
@@ -184,6 +187,8 @@ private struct InspectorBlock: View {
             AdjustmentsPanel()
         case .analyse:
             AnalysePanel()
+        case .navigation:
+            NavigationPanel()
         }
     }
 }

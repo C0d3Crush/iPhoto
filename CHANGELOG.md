@@ -2,6 +2,15 @@
 
 ---
 
+## 0.32.0
+**Navigation als Inspector-Panel**
+- Neue Panel-Option „Navigation" im rechten Inspector (aktivierbar über Plugin-Menü)
+- Zeigt Bibliothek, Alben und Ordner direkt in der rechten Seitenleiste
+- Ordner aufklappbar mit Bildliste und Thumbnail-Vorschau — identisch zur linken Sidebar
+- `AdjustmentState` jetzt `Codable` (Vorbereitung für Pro-Bild-Persistenz)
+
+---
+
 ## 0.31.1
 **Refactor: 16 einzelne Adjustment-Properties zu `AdjustmentState` zusammengefasst**
 - `ImageViewModel` verwendet jetzt ein einzelnes `@Published var adjustments: AdjustmentState` statt 16 separater `adj*`-Properties
