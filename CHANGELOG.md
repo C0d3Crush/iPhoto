@@ -2,6 +2,18 @@
 
 ---
 
+## 0.39.0
+**Feature: Hot-Pixel-Detektor**
+- Neues Plugin „Hotpixel" im Plugins-Menü und Inspector-Panel
+- Dunkelbilder-Ordner auswählen und automatisch alle RAF/JPEG/TIFF/PNG-Frames analysieren
+- Algorithmus: 16-Bit-Graustufen-Stack, Schwelle = Mittelwert + 5σ (Einzelframe-Rauschen)
+- Ergebnis-Bewertung in Klassen A (hervorragend) bis F (defekt) nach Anzahl der Hot Pixel
+- Drei CoreGraphics-Diagramme: Hot-Pixel-Karte, 20×20-Cluster-Grid mit Farbskala, Verteilungshistogramm
+- Top-10-Tabelle der hellsten Hot Pixel mit X/Y-Position und Wert
+- Vollständig in sich geschlossen – keine Änderungen an ImageViewModel erforderlich
+
+---
+
 ## 0.38.2
 **Bugfix: Kamera-Vorschau direkt im Hauptfenster**
 - Live-Vorschau öffnet kein separates Fenster mehr — sie lebt jetzt im normalen Bildbereich

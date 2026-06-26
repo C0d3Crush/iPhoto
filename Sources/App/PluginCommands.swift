@@ -7,6 +7,7 @@ struct PluginCommands: Commands {
     @AppStorage("plugin.rezepte")     var presetsActive:          Bool = false
     @AppStorage("plugin.analyse")     var analyseActive:          Bool = false
     @AppStorage("plugin.navigation")  var navigationActive:       Bool = false
+    @AppStorage("plugin.hotpixel")    var hotpixelActive:         Bool = false
 
     var body: some Commands {
         CommandMenu("Plugins") {
@@ -17,6 +18,7 @@ struct PluginCommands: Commands {
             Divider()
             Toggle(isOn: $analyseActive)          { Text(InspectorPanel.analyse.rawValue) }
             Toggle(isOn: $navigationActive)       { Text(InspectorPanel.navigation.rawValue) }
+            Toggle(isOn: $hotpixelActive)         { Text(InspectorPanel.hotpixel.rawValue) }
         }
     }
 }
