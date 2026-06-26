@@ -96,6 +96,14 @@ final class CatalogStore {
         )
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_album_images_id ON album_images(album_id)")
+
+        exec("""
+        CREATE TABLE IF NOT EXISTS adjustments (
+            image_path TEXT PRIMARY KEY,
+            data       TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """)
     }
 
     // MARK: - Migration from JSON
@@ -256,6 +264,44 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("DELETE FROM ratings WHERE image_path=?")
             bind(stmt, 1, path); sqlite3_step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
+    // MARK: - Adjustments
+
+    func saveAdjustments(path: String, adjustments: AdjustmentState) {
+        guard let data = try? JSONEncoder().encode(adjustments),
+              let json = String(data: data, encoding: .utf8) else { return }
+        queue.async {
+            let stmt = self.prepare("""
+                INSERT INTO adjustments (image_path, data, updated_at) VALUES (?,?,?)
+                ON CONFLICT(image_path) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at
+            """)
+            self.bind(stmt, 1, path)
+            self.bind(stmt, 2, json)
+            self.bind(stmt, 3, self.iso8601())
+            sqlite3_step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
+    func loadAdjustments(path: String) -> AdjustmentState? {
+        queue.sync {
+            let stmt = prepare("SELECT data FROM adjustments WHERE image_path=?")
+            bind(stmt, 1, path)
+            guard sqlite3_step(stmt) == SQLITE_ROW,
+                  let ptr = sqlite3_column_text(stmt, 0) else {
+                sqlite3_finalize(stmt); return nil
+            }
+            let json = String(cString: ptr)
+            sqlite3_finalize(stmt)
+            return (try? JSONDecoder().decode(AdjustmentState.self, from: Data(json.utf8)))
+        }
+    }
+
+    func deleteAdjustments(path: String) {
+        queue.async {
+            let stmt = self.prepare("DELETE FROM adjustments WHERE image_path=?")
+            self.bind(stmt, 1, path); sqlite3_step(stmt); sqlite3_finalize(stmt)
         }
     }
 

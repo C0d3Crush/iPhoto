@@ -2,6 +2,15 @@
 
 ---
 
+## 0.34.0
+**Edits pro Bild persistiert — Katalog als Wahrheit (Phase 2)**
+- Alle Anpassungen (Belichtung, WB, Kurven, Crop …) werden beim Bildwechsel automatisch im SQLite-Katalog gespeichert
+- Beim Zurückwechseln zu einem Bild werden die Regler exakt so wiederhergestellt wie verlassen
+- Neue `adjustments`-Tabelle im Katalog (JSON-kodiertes `AdjustmentState`)
+- Default-Edits (alle Regler neutral) werden nicht gespeichert — der Eintrag wird gelöscht
+
+---
+
 ## 0.33.1
 **Nativer Weißabgleich direkt am RAW-Decoder**
 - Wärme- und Farbstich-Regler setzen bei RAW-Dateien jetzt `inputNeutralTemperature` / `inputNeutralTint` am `CIFilter(imageURL:)` — Weißabgleich greift vor dem Demosaicing auf die Rohdaten

@@ -223,12 +223,13 @@ class ImageViewModel: ObservableObject {
     }
 
     func selectDocument(at index: Int) {
+        persistAdjustmentsForCurrent()
         collection.select(index: index)
         loadCurrentImage()
     }
 
-    func next()     { collection.next();     loadCurrentImage(); prefetchAdjacent() }
-    func previous() { collection.previous(); loadCurrentImage(); prefetchAdjacent() }
+    func next()     { persistAdjustmentsForCurrent(); collection.next();     loadCurrentImage(); prefetchAdjacent() }
+    func previous() { persistAdjustmentsForCurrent(); collection.previous(); loadCurrentImage(); prefetchAdjacent() }
 
     func zoomIn()           { zoomFactor = min(zoomFactor * 1.25, 32.0) }
     func zoomOut()          { zoomFactor = max(zoomFactor / 1.25, 0.05) }
@@ -722,6 +723,15 @@ class ImageViewModel: ObservableObject {
         pendingMetadataEntries = nil
     }
 
+    private func persistAdjustmentsForCurrent() {
+        guard let doc = collection.currentDocument else { return }
+        if adjustments != AdjustmentState() {
+            CatalogStore.shared.saveAdjustments(path: doc.url.path, adjustments: adjustments)
+        } else {
+            CatalogStore.shared.deleteAdjustments(path: doc.url.path)
+        }
+    }
+
     // MARK: - Unified save
 
     func saveAll() {
@@ -1023,6 +1033,9 @@ class ImageViewModel: ObservableObject {
         guard let doc = collection.currentDocument else { return }
         let index = collection.currentIndex
         resetAdjustments()
+        if let saved = CatalogStore.shared.loadAdjustments(path: doc.url.path) {
+            adjustments = saved
+        }
         isLoadingFullRes = false
 
         if doc.cgImage != nil {
