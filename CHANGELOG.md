@@ -2,6 +2,15 @@
 
 ---
 
+## 0.43.0
+**Feature: Bilder-Import + Bugfix Bewertungen**
+- Ordner können jetzt ein lokales Importziel haben (Rechtsklick → „Importziel festlegen…")
+- Neue Bilder vom Wechselmedium werden beim Einführen (Auto-Sync) oder manuell auf den Mac kopiert
+- Fortschrittsanzeige direkt unter dem Ordnernamen während des Imports
+- Bugfix: Bewertungen, Pick/Reject und Farb-Labels gingen nach App-Neustart verloren — werden jetzt sofort beim Laden der Bilder aus der Datenbank wiederhergestellt
+
+---
+
 ## 0.42.1
 **Bugfix: Crash-Reports wurden nicht gespeichert**
 - Ursache: App-Sandbox blockierte Schreibzugriff auf `~/Documents/bugreports/` still (kein Fehler, kein Report)
