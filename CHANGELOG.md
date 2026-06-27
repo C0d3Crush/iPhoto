@@ -2,6 +2,15 @@
 
 ---
 
+## 0.42.0
+**Feature: Auto-Sync für Wechselmedien**
+- Jeder Ordner kann per Rechtsklick → „Auto-Sync bei Einführen" aktiviert werden
+- Wird die SD-Karte / der USB-Stick eingeführt, synchronisiert iPhoto automatisch neue Bilder und wechselt zur Ordneransicht
+- Aktive Ordner zeigen ein kleines Sync-Icon neben dem Namen
+- Einstellung wird pro Ordner gespeichert
+
+---
+
 ## 0.41.0
 **Feature: Wechselmedium-Erkennung + Auswahl-Export**
 - Ordner auf SD-Karten oder USB-Laufwerken werden mit Festplatten-Icon dargestellt
