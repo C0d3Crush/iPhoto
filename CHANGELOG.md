@@ -2,6 +2,14 @@
 
 ---
 
+## 0.44.0
+**Feature: Rezepte rückgängig machen**
+- Nach „Anwenden" erscheint direkt am Rezept ein „↩ Rückgängig"-Button — stellt den Zustand vor dem Anwenden wieder her
+- Untere Leiste zeigt „Zurücksetzen" wenn Anpassungen aktiv sind — setzt alle auf Null zurück
+- Wechsel zu einem anderen Bild setzt den Rückgängig-Button automatisch zurück
+
+---
+
 ## 0.43.1
 **Bugfix: App-Absturz beim Öffnen von RAF-Dateien mit Anpassungen (macOS 11)**
 - `applyAdjustments()` setzte `inputAllowDraftMode`, `inputScaleFactor`, `inputNeutralTemperature` ohne vorherigen `inputKeys`-Check
