@@ -2,6 +2,14 @@
 
 ---
 
+## 0.41.0
+**Feature: Wechselmedium-Erkennung + Auswahl-Export**
+- Ordner auf SD-Karten oder USB-Laufwerken werden mit Festplatten-Icon dargestellt
+- Ist das Medium nicht eingeführt, erscheint die Warnung „Speichermedium nicht verfügbar"
+- Export-Dialog: neuer Umfang „Auswahl (X Bilder)" — wird automatisch vorgewählt wenn mehrere Bilder markiert sind
+
+---
+
 ## 0.40.0
 **Feature: Sternebewertungs-Panel**
 - Neues Inspector-Plugin „Bewertung" (standardmäßig aktiv)
