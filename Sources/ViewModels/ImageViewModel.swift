@@ -281,7 +281,19 @@ class ImageViewModel: ObservableObject {
         newURLs.forEach { BookmarkStore.shared.save(url: $0) }
         let newDocs = newURLs
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .map { ImageDocument(url: $0) }
+            .map { url -> ImageDocument in
+                var doc = ImageDocument(url: url)
+                if let r = CatalogStore.shared.rating(forPath: url.path) {
+                    doc.rating = r.rating
+                    doc.flagStatus = FlagStatus(rawValue: r.flag) ?? .none
+                    doc.colorLabel = ColorLabel(rawValue: r.colorLabel) ?? .none
+                } else if let entry = RatingStore.shared.load(for: url) {
+                    doc.rating = entry.rating
+                    doc.flagStatus = entry.flagStatus
+                    doc.colorLabel = entry.colorLabel
+                }
+                return doc
+            }
 
         let firstNewIndex = collection.documents.count
         collection.appendDocuments(newDocs)
