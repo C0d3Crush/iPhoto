@@ -2,6 +2,14 @@
 
 ---
 
+## 0.43.1
+**Bugfix: App-Absturz beim Öffnen von RAF-Dateien mit Anpassungen (macOS 11)**
+- `applyAdjustments()` setzte `inputAllowDraftMode`, `inputScaleFactor`, `inputNeutralTemperature` ohne vorherigen `inputKeys`-Check
+- `CIRAWFilterImpl` kennt diese Keys auf macOS 11 nicht → `NSUnknownKeyException` → SIGABRT
+- Fix: Alle `setValue:forKey:` für CIRAWFilter-Keys werden jetzt durch `rf.inputKeys.contains(...)` abgesichert
+
+---
+
 ## 0.43.0
 **Feature: Bilder-Import + Bugfix Bewertungen**
 - Ordner können jetzt ein lokales Importziel haben (Rechtsklick → „Importziel festlegen…")
