@@ -4,7 +4,7 @@ import CoreGraphics
 
 // MARK: - Phase
 
-private enum HotPixelPhase {
+enum HotPixelPhase {
     case idle
     case analyzing(String, Double)
     case result(HotPixelResult)
@@ -14,7 +14,9 @@ private enum HotPixelPhase {
 
 struct HotPixelPanel: View {
 
-    @State private var phase: HotPixelPhase = .idle
+    @EnvironmentObject var viewModel: ImageViewModel
+
+    private var phase: HotPixelPhase { viewModel.hotPixelPhase }
 
     var body: some View {
         switch phase {
@@ -121,7 +123,7 @@ struct HotPixelPanel: View {
 
                 // --- Reset ---
                 Button("Neue Analyse") {
-                    phase = .idle
+                    viewModel.hotPixelPhase = .idle
                 }
                 .buttonStyle(BorderedButtonStyle())
                 .padding(.bottom, 12)
@@ -246,26 +248,28 @@ struct HotPixelPanel: View {
         let urls = contents.filter { supportedExts.contains($0.pathExtension.lowercased()) }.sorted { $0.lastPathComponent < $1.lastPathComponent }
 
         guard !urls.isEmpty else {
-            phase = .analyzing("Keine Bilddateien gefunden.", 0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { phase = .idle }
+            viewModel.hotPixelPhase = .analyzing("Keine Bilddateien gefunden.", 0)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                self.viewModel.hotPixelPhase = .idle
+            }
             return
         }
 
-        phase = .analyzing("Starte …", 0.0)
+        viewModel.hotPixelPhase = .analyzing("Starte …", 0.0)
 
         DispatchQueue.global(qos: .userInitiated).async {
             let result = HotPixelAnalyzer.analyze(urls: urls) { status, pct in
                 DispatchQueue.main.async {
-                    self.phase = .analyzing(status, pct)
+                    self.viewModel.hotPixelPhase = .analyzing(status, pct)
                 }
             }
             DispatchQueue.main.async {
                 if let r = result {
-                    self.phase = .result(r)
+                    self.viewModel.hotPixelPhase = .result(r)
                 } else {
-                    self.phase = .analyzing("Keine Bilder dekodierbar.", 0)
+                    self.viewModel.hotPixelPhase = .analyzing("Keine Bilder dekodierbar.", 0)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        self.phase = .idle
+                        self.viewModel.hotPixelPhase = .idle
                     }
                 }
             }
