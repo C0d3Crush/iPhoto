@@ -392,33 +392,20 @@ class ImageViewModel: ObservableObject {
     func removeSelected() {
         guard !collection.selectedIndices.isEmpty else { return }
         switch navSelection {
-        case .folder:
-            confirmDeleteFromFolder()
         case .album(let id):
+            // Remove from album only — don't touch the file
             for colIdx in collection.selectedIndices {
                 guard colIdx < collection.documents.count else { continue }
                 removeFromAlbum(collection.documents[colIdx], albumID: id)
             }
             collection.selectedIndices = []
         default:
-            let sorted = collection.selectedIndices.sorted().reversed()
-            for idx in sorted {
-                guard idx < collection.documents.count else { continue }
-                collection.documents.remove(at: idx)
-            }
-            collection.selectedIndices = []
-            if collection.documents.isEmpty {
-                collection.currentIndex = 0
-            } else {
-                let newIdx = min(collection.currentIndex, collection.documents.count - 1)
-                collection.currentIndex = newIdx
-                collection.selectedIndices = [newIdx]
-                loadCurrentImage()
-            }
+            // Folder, Library, or any other context: move files to trash
+            confirmTrashFiles()
         }
     }
 
-    private func confirmDeleteFromFolder() {
+    private func confirmTrashFiles() {
         let count = collection.selectedIndices.count
         let alert = NSAlert()
         alert.messageText = count == 1 ? "Datei in den Papierkorb?" : "\(count) Dateien in den Papierkorb?"
