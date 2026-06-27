@@ -1202,14 +1202,25 @@ class ImageViewModel: ObservableObject {
                     : 1.0
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 if let rf = CIFilter(imageURL: accessURL, options: nil) {
-                    rf.setValue(Float(snap.exposure),  forKey: kCIInputEVKey)
-                    rf.setValue(true,                  forKey: "inputAllowDraftMode")
-                    rf.setValue(Float(previewScale),   forKey: "inputScaleFactor")
+                    let keys = rf.inputKeys
+                    if keys.contains(kCIInputEVKey as String) {
+                        rf.setValue(Float(snap.exposure), forKey: kCIInputEVKey)
+                    }
+                    if keys.contains("inputAllowDraftMode") {
+                        rf.setValue(true, forKey: "inputAllowDraftMode")
+                    }
+                    if keys.contains("inputScaleFactor") {
+                        rf.setValue(Float(previewScale), forKey: "inputScaleFactor")
+                    }
                     if snap.warmth != 0 || snap.tint != 0 {
                         let kelvin = Float(6500.0 - snap.warmth * 2500.0)
                         let tintVal = Float(-snap.tint * 150.0)
-                        rf.setValue(kelvin,   forKey: "inputNeutralTemperature")
-                        rf.setValue(tintVal,  forKey: "inputNeutralTint")
+                        if keys.contains("inputNeutralTemperature") {
+                            rf.setValue(kelvin,  forKey: "inputNeutralTemperature")
+                        }
+                        if keys.contains("inputNeutralTint") {
+                            rf.setValue(tintVal, forKey: "inputNeutralTint")
+                        }
                         wbApplied = true
                     }
                     if let rawCI = rf.outputImage {
