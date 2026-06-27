@@ -2,6 +2,12 @@
 
 ---
 
+## 0.47.4
+**Bugfix: Histogramm/Waveform/RGB-Parade aktualisieren sich beim Bildwechsel**
+- `HistogramView` und `WaveformView` deklarierten `let engine: AnalysisEngine` statt `@ObservedObject` — SwiftUI hat keine Subscription auf `engine.objectWillChange` eingerichtet, weshalb die Views bei fertiggestellter Analyse nie neu gerendert wurden. Nur das manuelle Auf-/Zuklappen erzwang ein Re-Render (das dann den bereits berechneten Wert las). Fix: `@ObservedObject var engine` in beiden Views.
+
+---
+
 ## 0.47.3
 **Bugfix: Analyse-Diagramme bei Bildwechsel sofort leeren**
 - Histogramm, Waveform und RGB-Parade zeigten beim Navigieren mit den Pfeiltasten so lange das alte Bild an, bis der Preview des neuen Bilds geladen war (bis zu 2 Sekunden)

@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 struct HistogramView: View {
-    let engine: AnalysisEngine
+    @ObservedObject var engine: AnalysisEngine
 
     var body: some View {
         VStack(spacing: 0) {

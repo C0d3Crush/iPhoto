@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 struct WaveformView: View {
-    let engine: AnalysisEngine
+    @ObservedObject var engine: AnalysisEngine
     let isParade: Bool
 
     var body: some View {
