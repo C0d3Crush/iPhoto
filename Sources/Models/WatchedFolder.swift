@@ -27,4 +27,34 @@ struct WatchedFolder: Identifiable, Codable {
         let didStart = url.startAccessingSecurityScopedResource()
         return (url, { if didStart { url.stopAccessingSecurityScopedResource() } })
     }
+
+    /// True when the folder's volume is currently mounted and accessible.
+    var isAvailable: Bool {
+        guard let resolved = resolveURL() else { return false }
+        defer { resolved.stop() }
+        return FileManager.default.fileExists(atPath: resolved.url.path)
+    }
+
+    /// True when the folder lives on a removable volume (SD card, USB drive, etc.).
+    var isRemovableMedia: Bool {
+        guard let resolved = resolveURL() else {
+            // Bookmark resolves to /Volumes/... even when unmounted — check path prefix
+            return bookmarkPath?.hasPrefix("/Volumes/") ?? false
+        }
+        defer { resolved.stop() }
+        let vals = try? resolved.url.resourceValues(forKeys: [.volumeIsRemovableKey])
+        return vals?.volumeIsRemovable ?? false
+    }
+
+    /// Best-effort path extracted from bookmark without starting security scope.
+    private var bookmarkPath: String? {
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: bookmarkData,
+            options: [],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else { return nil }
+        return url.path
+    }
 }

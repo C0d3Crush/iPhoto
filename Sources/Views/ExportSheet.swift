@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 private class ExportState: ObservableObject {
-    enum Scope { case current, all }
+    enum Scope { case current, selection, all }
     enum Phase { case idle, exporting, done, failed(String) }
 
     @Published var format: ExportFormat = .jpeg
@@ -16,6 +16,7 @@ private class ExportState: ObservableObject {
 
 struct ExportSheet: View {
     let documents: [ImageDocument]
+    let selectedDocuments: [ImageDocument]
     let currentDocument: ImageDocument?
     @Binding var isPresented: Bool
 
@@ -59,6 +60,14 @@ struct ExportSheet: View {
                             state.scope = .current
                         }
                     }
+                    if selectedDocuments.count > 1 {
+                        HStack {
+                            radioButton(selected: state.scope == .selection,
+                                        label: "Auswahl (\(selectedDocuments.count) Bilder)") {
+                                state.scope = .selection
+                            }
+                        }
+                    }
                     HStack {
                         radioButton(selected: state.scope == .all,
                                     label: "Alle Bilder (\(documents.count))") {
@@ -68,6 +77,9 @@ struct ExportSheet: View {
                 }
             }
             .disabled(currentDocument == nil)
+            .onAppear {
+                if selectedDocuments.count > 1 { state.scope = .selection }
+            }
 
             Divider()
 
@@ -173,8 +185,9 @@ struct ExportSheet: View {
 
     private func beginExport() {
         switch state.scope {
-        case .current: exportCurrent()
-        case .all:     exportAll()
+        case .current:   exportCurrent()
+        case .selection: exportBatch(selectedDocuments)
+        case .all:       exportBatch(documents)
         }
     }
 
@@ -222,7 +235,7 @@ struct ExportSheet: View {
         }
     }
 
-    private func exportAll() {
+    private func exportBatch(_ docs: [ImageDocument]) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -230,7 +243,6 @@ struct ExportSheet: View {
         panel.title = "Exportziel wählen"
         panel.prompt = "Exportieren"
 
-        let docs = documents
         let fmt = state.format
         let q = state.quality / 100.0
 

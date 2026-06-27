@@ -56,8 +56,15 @@ struct ContentView: View {
             NSApp.mainWindow?.title = viewModel.windowTitle
         }
         .sheet(isPresented: $viewModel.showExportSheet) {
+            let selectedDocs = viewModel.collection.selectedIndices
+                .sorted()
+                .compactMap { idx -> ImageDocument? in
+                    guard idx < viewModel.collection.documents.count else { return nil }
+                    return viewModel.collection.documents[idx]
+                }
             ExportSheet(
                 documents: viewModel.collection.documents,
+                selectedDocuments: selectedDocs,
                 currentDocument: viewModel.collection.currentDocument,
                 isPresented: $viewModel.showExportSheet
             )

@@ -150,9 +150,20 @@ private struct PanelFolderRow: View {
         }
     }
 
+    private var isRemovable: Bool { folder.isRemovableMedia }
+    private var isAvailable: Bool { folder.isAvailable }
+
+    private var folderIcon: String {
+        if isRemovable {
+            return isAvailable ? "externaldrive.fill" : "externaldrive.badge.exclamationmark"
+        }
+        return isExpanded ? "folder.fill" : "folder"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
+                guard isAvailable || !isRemovable else { return }
                 viewModel.navSelection = .folder(folder.id)
                 withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() }
             } label: {
@@ -162,8 +173,17 @@ private struct PanelFolderRow: View {
                         .foregroundColor(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         .frame(width: 12)
-                    Label(folder.name, systemImage: isExpanded ? "folder.fill" : "folder")
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .opacity(isRemovable && !isAvailable ? 0 : 1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Label(folder.name, systemImage: folderIcon)
+                            .foregroundColor(isRemovable && !isAvailable ? .secondary : .primary)
+                        if isRemovable && !isAvailable {
+                            Text("Speichermedium nicht verfügbar")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 5)
