@@ -36,6 +36,12 @@ struct NavigationPanel: View {
                 .buttonStyle(PlainButtonStyle())
             ))
 
+            // Import progress banner
+            if !viewModel.importProgress.isEmpty {
+                ImportProgressBanner()
+                    .environmentObject(viewModel)
+            }
+
             ForEach(viewModel.watchedFolders) { folder in
                 PanelFolderRow(folder: folder,
                                isSelected: viewModel.navSelection == .folder(folder.id))
@@ -177,6 +183,45 @@ private struct PanelAlbumRow: View {
     }
 }
 
+// MARK: - Import progress banner
+
+private struct ImportProgressBanner: View {
+    @EnvironmentObject var viewModel: ImageViewModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(viewModel.importProgress.values.enumerated()), id: \.offset) { _, prog in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.accentColor)
+                        Text("Importiere \(prog.folderName)")
+                            .font(.caption2)
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        Spacer()
+                        Text("\(prog.completed)/\(prog.total)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
+                    ProgressView(value: prog.total > 0 ? Double(prog.completed) / Double(prog.total) : 0)
+                        .progressViewStyle(LinearProgressViewStyle())
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.accentColor.opacity(0.08))
+                .overlay(
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(Color.accentColor.opacity(0.15)),
+                    alignment: .bottom
+                )
+            }
+        }
+    }
+}
+
 private struct PanelFolderRow: View {
     let folder: WatchedFolder
     let isSelected: Bool
@@ -229,6 +274,11 @@ private struct PanelFolderRow: View {
                         }
                         if isRemovable && !isAvailable {
                             Text("Speichermedium nicht verfügbar")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                        }
+                        if folder.autoSync && folder.importDestinationPath == nil {
+                            Text("Kein Importziel — Bilder nicht lokal gespeichert")
                                 .font(.caption2)
                                 .foregroundColor(.orange)
                         }

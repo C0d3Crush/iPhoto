@@ -20,6 +20,7 @@ class ImageViewModel: ObservableObject {
     @Published var watchedFolders: [WatchedFolder] = []
 
     struct ImportProgress {
+        var folderName: String
         var completed: Int
         var total: Int
     }
@@ -562,6 +563,18 @@ class ImageViewModel: ObservableObject {
         guard let idx = watchedFolders.firstIndex(where: { $0.id == folder.id }) else { return }
         watchedFolders[idx].importDestinationPath = path
         saveWatchedFolders()
+
+        // Auto-add destination as watched folder so imports stay in Library after drive removal
+        guard let path = path else { return }
+        let destURL = URL(fileURLWithPath: path)
+        let alreadyWatched = watchedFolders.contains {
+            $0.bookmarkPath.map { URL(fileURLWithPath: $0).standardized } == destURL.standardized
+        }
+        guard !alreadyWatched, let destFolder = try? WatchedFolder(url: destURL) else { return }
+        watchedFolders.append(destFolder)
+        saveWatchedFolders()
+        syncFolder(destFolder)
+        startWatching(destFolder)
     }
 
     func importImages(from folder: WatchedFolder) {
@@ -570,7 +583,8 @@ class ImageViewModel: ObservableObject {
         else { return }
 
         let folderID = folder.id
-        importProgress[folderID] = ImportProgress(completed: 0, total: 0)
+        let folderName = folder.name
+        importProgress[folderID] = ImportProgress(folderName: folderName, completed: 0, total: 0)
 
         DispatchQueue.global(qos: .userInitiated).async {
             defer { stop() }
@@ -598,7 +612,7 @@ class ImageViewModel: ObservableObject {
             let newFiles = sourceFiles.filter { !existingNames.contains($0.lastPathComponent.lowercased()) }
 
             DispatchQueue.main.async {
-                self.importProgress[folderID] = ImportProgress(completed: 0, total: newFiles.count)
+                self.importProgress[folderID] = ImportProgress(folderName: folderName, completed: 0, total: newFiles.count)
             }
 
             var completed = 0
@@ -611,7 +625,7 @@ class ImageViewModel: ObservableObject {
                 completed += 1
                 let c = completed
                 DispatchQueue.main.async {
-                    self.importProgress[folderID] = ImportProgress(completed: c, total: newFiles.count)
+                    self.importProgress[folderID] = ImportProgress(folderName: folderName, completed: c, total: newFiles.count)
                 }
             }
 
