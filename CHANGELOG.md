@@ -2,6 +2,14 @@
 
 ---
 
+## 0.45.0
+**Feature: Importierte Bilder bleiben in der Library + Fortschrittsleiste**
+- Das Importziel wird automatisch als Ordner zur Library hinzugefügt — Bilder sind auch nach Entfernen der SD-Karte sichtbar und werden beim nächsten App-Start geladen
+- Fortschrittsleiste über der Ordnerliste zeigt laufende Importe (Name, Ladebalken, X/Y Bilder)
+- Warnung wenn Auto-Sync aktiv ist aber kein Importziel gesetzt wurde
+
+---
+
 ## 0.44.0
 **Feature: Rezepte rückgängig machen**
 - Nach „Anwenden" erscheint direkt am Rezept ein „↩ Rückgängig"-Button — stellt den Zustand vor dem Anwenden wieder her
