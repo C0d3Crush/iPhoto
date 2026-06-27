@@ -49,6 +49,11 @@ struct PresetsPanel: View {
             Button("Importieren") { viewModel.importRecipe() }
                 .font(.caption)
             Spacer()
+            if viewModel.hasActiveAdjustments {
+                Button("Zurücksetzen") { viewModel.resetAdjustments() }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             Button("Als Rezept speichern") {
                 newPresetName = ""
                 showSaveSheet = true
@@ -66,6 +71,8 @@ private struct PresetRow: View {
     let deletable: Bool
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var isHovered = false
+    @State private var justApplied = false
+    @State private var snapshotBeforeApply: AdjustmentState? = nil
 
     var body: some View {
         HStack(spacing: 6) {
@@ -80,30 +87,53 @@ private struct PresetRow: View {
                 }
             }
             Spacer()
-            if isHovered {
-                if deletable {
-                    Button(action: { viewModel.deletePreset(preset) }) {
-                        Image(systemName: "trash")
+            if justApplied {
+                Button {
+                    if let snap = snapshotBeforeApply {
+                        viewModel.adjustments = snap
+                    }
+                    justApplied = false
+                    snapshotBeforeApply = nil
+                } label: {
+                    Label("Rückgängig", systemImage: "arrow.uturn.backward")
+                        .font(.caption2)
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                if isHovered {
+                    if deletable {
+                        Button(action: { viewModel.deletePreset(preset) }) {
+                            Image(systemName: "trash")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    Button(action: { viewModel.exportRecipe(preset) }) {
+                        Image(systemName: "square.and.arrow.up")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
-                Button(action: { viewModel.exportRecipe(preset) }) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                Button("Anwenden") {
+                    snapshotBeforeApply = viewModel.adjustments
+                    viewModel.applyPreset(preset)
+                    justApplied = true
                 }
-                .buttonStyle(PlainButtonStyle())
-            }
-            Button("Anwenden") { viewModel.applyPreset(preset) }
                 .font(.caption2)
                 .disabled(viewModel.currentImage == nil)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(isHovered ? Color(NSColor.controlBackgroundColor) : Color.clear)
+        .background(isHovered || justApplied ? Color(NSColor.controlBackgroundColor) : Color.clear)
         .onHover { isHovered = $0 }
+        .onChange(of: viewModel.collection.currentIndex) { _ in
+            justApplied = false
+            snapshotBeforeApply = nil
+        }
     }
 }
 
