@@ -151,9 +151,11 @@ private struct PanelFolderRow: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var isExpanded: Bool = false
 
-    private var folderImages: [ImageDocument] {
-        guard let folderURL = folder.resolveURL()?.url else { return [] }
-        let prefix = folderURL.standardized.path
+    private var resolvedURL: URL? { folder.resolveURL()?.url }
+
+    private var allDocs: [ImageDocument] {
+        guard let url = resolvedURL else { return [] }
+        let prefix = url.standardized.path + "/"
         return viewModel.collection.documents.filter {
             $0.url.standardized.path.hasPrefix(prefix)
         }
@@ -209,49 +211,164 @@ private struct PanelFolderRow: View {
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 4)
 
-            if isExpanded {
+            if isExpanded, let rootURL = resolvedURL {
+                let subs = navSubfolders(of: rootURL, in: allDocs)
+                let direct = navDirectDocs(of: rootURL, in: allDocs)
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(folderImages) { doc in
-                        let idx = viewModel.collectionIndex(for: doc) ?? 0
-                        let isCurrent = viewModel.collection.currentIndex == idx && isSelected
-                        Button {
-                            if viewModel.navSelection != .folder(folder.id) {
-                                viewModel.navSelection = .folder(folder.id)
-                            }
-                            viewModel.selectDocument(at: idx)
-                        } label: {
-                            HStack(spacing: 5) {
-                                if let thumb = doc.thumbnailImage ?? doc.placeholderThumbnailImage {
-                                    Image(nsImage: thumb)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 22, height: 15)
-                                        .clipped()
-                                        .cornerRadius(2)
-                                } else {
-                                    Image(systemName: "photo")
-                                        .font(.system(size: 9))
-                                        .foregroundColor(.secondary)
-                                        .frame(width: 22, height: 15)
-                                }
-                                Text(doc.filename)
-                                    .font(.caption2)
-                                    .lineLimit(1)
-                                    .foregroundColor(isCurrent ? .primary : .secondary)
-                            }
-                            .padding(.leading, 28)
-                            .padding(.trailing, 6)
-                            .padding(.vertical, 3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(isCurrent ? Color.accentColor.opacity(0.15) : Color.clear)
-                            .cornerRadius(4)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding(.horizontal, 4)
+                    ForEach(subs, id: \.path) { sub in
+                        SubfolderTreeRow(folderURL: sub, folderID: folder.id, depth: 0)
+                            .environmentObject(viewModel)
+                    }
+                    ForEach(direct) { doc in
+                        PanelImageRow(doc: doc, folderID: folder.id, indent: 28)
+                            .environmentObject(viewModel)
                     }
                 }
             }
         }
+    }
+}
+
+// MARK: - Recursive subfolder tree
+
+private struct SubfolderTreeRow: View {
+    let folderURL: URL
+    let folderID: UUID
+    let depth: Int
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isExpanded = false
+
+    private var allDocs: [ImageDocument] {
+        let prefix = folderURL.standardized.path + "/"
+        return viewModel.collection.documents.filter {
+            $0.url.standardized.path.hasPrefix(prefix)
+        }
+    }
+
+    private var indent: CGFloat { CGFloat(16 + depth * 12) }
+
+    var body: some View {
+        let subs = navSubfolders(of: folderURL, in: allDocs)
+        let direct = navDirectDocs(of: folderURL, in: allDocs)
+
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 10)
+                    Image(systemName: isExpanded ? "folder.fill" : "folder")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Text(folderURL.lastPathComponent)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(allDocs.count)")
+                        .font(.caption2)
+                        .foregroundColor(Color(NSColor.quaternaryLabelColor))
+                }
+                .padding(.leading, indent)
+                .padding(.trailing, 6)
+                .padding(.vertical, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 4)
+
+            if isExpanded {
+                ForEach(subs, id: \.path) { sub in
+                    SubfolderTreeRow(folderURL: sub, folderID: folderID, depth: depth + 1)
+                        .environmentObject(viewModel)
+                }
+                ForEach(direct) { doc in
+                    PanelImageRow(doc: doc, folderID: folderID, indent: indent + 14)
+                        .environmentObject(viewModel)
+                }
+            }
+        }
+    }
+}
+
+private struct PanelImageRow: View {
+    let doc: ImageDocument
+    let folderID: UUID
+    let indent: CGFloat
+    @EnvironmentObject var viewModel: ImageViewModel
+
+    private var idx: Int { viewModel.collectionIndex(for: doc) ?? 0 }
+    private var isCurrent: Bool {
+        viewModel.collection.currentIndex == idx &&
+        viewModel.navSelection == .folder(folderID)
+    }
+
+    var body: some View {
+        Button {
+            if viewModel.navSelection != .folder(folderID) {
+                viewModel.navSelection = .folder(folderID)
+            }
+            viewModel.selectDocument(at: idx)
+        } label: {
+            HStack(spacing: 5) {
+                if let thumb = doc.thumbnailImage ?? doc.placeholderThumbnailImage {
+                    Image(nsImage: thumb)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 22, height: 15)
+                        .clipped()
+                        .cornerRadius(2)
+                } else {
+                    Image(systemName: "photo")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                        .frame(width: 22, height: 15)
+                }
+                Text(doc.filename)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .foregroundColor(isCurrent ? .primary : .secondary)
+            }
+            .padding(.leading, indent)
+            .padding(.trailing, 6)
+            .padding(.vertical, 3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isCurrent ? Color.accentColor.opacity(0.15) : Color.clear)
+            .cornerRadius(4)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+    }
+}
+
+// MARK: - Tree helpers
+
+private func navSubfolders(of root: URL, in docs: [ImageDocument]) -> [URL] {
+    let rootPath = root.standardized.path + "/"
+    var seen = Set<String>()
+    var result: [URL] = []
+    for doc in docs {
+        let p = doc.url.standardized.path
+        guard p.hasPrefix(rootPath) else { continue }
+        let rel = String(p.dropFirst(rootPath.count))
+        guard let slash = rel.firstIndex(of: "/") else { continue }
+        let subName = String(rel[..<slash])
+        if seen.insert(subName).inserted {
+            result.append(root.appendingPathComponent(subName))
+        }
+    }
+    return result.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+}
+
+private func navDirectDocs(of root: URL, in docs: [ImageDocument]) -> [ImageDocument] {
+    let rootPath = root.standardized.path + "/"
+    return docs.filter { doc in
+        let p = doc.url.standardized.path
+        guard p.hasPrefix(rootPath) else { return false }
+        return !String(p.dropFirst(rootPath.count)).contains("/")
     }
 }
 
