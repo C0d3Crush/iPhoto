@@ -49,6 +49,38 @@ struct NavigationPanel: View {
                                 systemImage: folder.autoSync ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath"
                             )
                         }
+
+                        Divider()
+
+                        Button {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.canCreateDirectories = true
+                            panel.title = "Importziel wählen"
+                            panel.prompt = "Auswählen"
+                            if panel.runModal() == .OK, let url = panel.url {
+                                viewModel.setImportDestination(for: folder, path: url.path)
+                            }
+                        } label: {
+                            Label("Importziel festlegen…", systemImage: "folder.badge.plus")
+                        }
+
+                        if folder.importDestinationPath != nil {
+                            Button {
+                                viewModel.importImages(from: folder)
+                            } label: {
+                                Label("Jetzt importieren", systemImage: "arrow.down.circle")
+                            }
+                            .disabled(!folder.isAvailable || viewModel.importProgress[folder.id] != nil)
+
+                            Button {
+                                viewModel.setImportDestination(for: folder, path: nil)
+                            } label: {
+                                Label("Importziel entfernen", systemImage: "folder.badge.minus")
+                            }
+                        }
+
                         Divider()
                         Button("Ordner entfernen") { viewModel.deleteWatchedFolder(folder) }
                     }
@@ -199,6 +231,21 @@ private struct PanelFolderRow: View {
                             Text("Speichermedium nicht verfügbar")
                                 .font(.caption2)
                                 .foregroundColor(.orange)
+                        }
+                        if let prog = viewModel.importProgress[folder.id] {
+                            HStack(spacing: 4) {
+                                ProgressView(value: prog.total > 0 ? Double(prog.completed) / Double(prog.total) : 0)
+                                    .progressViewStyle(LinearProgressViewStyle())
+                                    .frame(maxWidth: 80)
+                                Text("\(prog.completed)/\(prog.total)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else if let destPath = folder.importDestinationPath {
+                            Text("→ \(URL(fileURLWithPath: destPath).lastPathComponent)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

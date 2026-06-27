@@ -5,6 +5,12 @@ struct WatchedFolder: Identifiable, Codable {
     var name: String
     var bookmarkData: Data
     var autoSync: Bool = false
+    var importDestinationPath: String? = nil
+
+    var importDestinationURL: URL? {
+        guard let p = importDestinationPath else { return nil }
+        return URL(fileURLWithPath: p)
+    }
 
     init(url: URL) throws {
         self.id = UUID()

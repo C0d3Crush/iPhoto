@@ -19,6 +19,12 @@ class ImageViewModel: ObservableObject {
     @Published var albums: [Album] = []
     @Published var watchedFolders: [WatchedFolder] = []
 
+    struct ImportProgress {
+        var completed: Int
+        var total: Int
+    }
+    @Published var importProgress: [UUID: ImportProgress] = [:]
+
     // MARK: - Adjustments
     @Published var adjustments: AdjustmentState = AdjustmentState()
     @Published var adjustedImage: CGImage? = nil
@@ -144,6 +150,9 @@ class ImageViewModel: ObservableObject {
                           bookmarkPath.hasPrefix(volumePath) else { continue }
                     self.syncFolder(folder)
                     self.navSelection = .folder(folder.id)
+                    if folder.importDestinationPath != nil {
+                        self.importImages(from: folder)
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -535,6 +544,70 @@ class ImageViewModel: ObservableObject {
         guard let idx = watchedFolders.firstIndex(where: { $0.id == folder.id }) else { return }
         watchedFolders[idx].autoSync.toggle()
         saveWatchedFolders()
+    }
+
+    func setImportDestination(for folder: WatchedFolder, path: String?) {
+        guard let idx = watchedFolders.firstIndex(where: { $0.id == folder.id }) else { return }
+        watchedFolders[idx].importDestinationPath = path
+        saveWatchedFolders()
+    }
+
+    func importImages(from folder: WatchedFolder) {
+        guard let (sourceURL, stop) = folder.resolveURL(),
+              let destURL = folder.importDestinationURL
+        else { return }
+
+        let folderID = folder.id
+        importProgress[folderID] = ImportProgress(completed: 0, total: 0)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            defer { stop() }
+
+            let fm = FileManager.default
+            guard let enumerator = fm.enumerator(
+                at: sourceURL,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else {
+                DispatchQueue.main.async { self.importProgress.removeValue(forKey: folderID) }
+                return
+            }
+
+            var sourceFiles: [URL] = []
+            for case let fileURL as URL in enumerator {
+                if (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+                   ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
+                    sourceFiles.append(fileURL)
+                }
+            }
+
+            try? fm.createDirectory(at: destURL, withIntermediateDirectories: true)
+            let existingNames = Set((try? fm.contentsOfDirectory(atPath: destURL.path).map { $0.lowercased() }) ?? [])
+            let newFiles = sourceFiles.filter { !existingNames.contains($0.lastPathComponent.lowercased()) }
+
+            DispatchQueue.main.async {
+                self.importProgress[folderID] = ImportProgress(completed: 0, total: newFiles.count)
+            }
+
+            var completed = 0
+            var newURLs: [URL] = []
+            for file in newFiles {
+                let dest = destURL.appendingPathComponent(file.lastPathComponent)
+                if (try? fm.copyItem(at: file, to: dest)) != nil {
+                    newURLs.append(dest)
+                }
+                completed += 1
+                let c = completed
+                DispatchQueue.main.async {
+                    self.importProgress[folderID] = ImportProgress(completed: c, total: newFiles.count)
+                }
+            }
+
+            DispatchQueue.main.async {
+                self.importProgress.removeValue(forKey: folderID)
+                if !newURLs.isEmpty { self.importFiles(newURLs) }
+            }
+        }
     }
 
     func syncFolder(_ folder: WatchedFolder) {
