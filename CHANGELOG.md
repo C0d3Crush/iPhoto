@@ -2,6 +2,14 @@
 
 ---
 
+## 0.47.1
+**Bugfix: Pfeiltasten-Navigation in gefilterten Ordnern**
+- Pfeiltasten navigieren jetzt ausschließlich durch die Bilder des aktuell aktiven Ordners/Intelligenten Ordners – kein Überspringen zu Bildern außerhalb des Filters mehr
+- Beim Wechsel in einen anderen Ordner werden Bilder außerhalb des neuen Kontexts automatisch entladen (Performance)
+- Prefetch der Nachbarbilder berücksichtigt ebenfalls den aktiven Filter
+
+---
+
 ## 0.47.0
 **Feature: Capture Sharpening, Rauschreduzierung, Objektivkorrekturen**
 - **Schärfen** — echter Unsharp Mask mit Stärke (0–150) und Radius (0.5–3.0 px), unabhängig von Klarheit/Textur

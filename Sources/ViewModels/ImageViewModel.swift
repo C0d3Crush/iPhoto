@@ -157,7 +157,19 @@ class ImageViewModel: ObservableObject {
         $navSelection
             .dropFirst()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.collection.selectedIndices = [] }
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                self.collection.selectedIndices = []
+                let visible = self.visibleDocuments
+                let curInVisible = self.collection.currentDocument.map { doc in
+                    visible.contains(where: { $0.id == doc.id })
+                } ?? false
+                if !curInVisible, let first = visible.first, let idx = self.collectionIndex(for: first) {
+                    self.collection.select(index: idx)
+                    self.loadCurrentImage()
+                }
+                self.evictDistantImages()
+            }
             .store(in: &cancellables)
 
         // Wechselmedien: auto-sync wenn Datenträger eingeführt wird
@@ -270,17 +282,20 @@ class ImageViewModel: ObservableObject {
         cancellables.insert(AnyCancellable { memSource.cancel() })
     }
 
-    // Evict cgImage from documents more than `keepRadius` positions away from the current index,
-    // and previewImage from documents more than keepRadius*3 positions away.
-    // Called on navigation and under memory pressure.
     private func evictDistantImages(keepRadius: Int = 2) {
         let current = collection.currentIndex
+        let visibleIDs: Set<UUID>?
+        switch navSelection {
+        case .library, nil: visibleIDs = nil
+        default: visibleIDs = Set(visibleDocuments.map { $0.id })
+        }
         for i in 0..<collection.documents.count {
             let dist = abs(i - current)
-            if dist > keepRadius {
+            let outsideContext = visibleIDs.map { !$0.contains(collection.documents[i].id) } ?? false
+            if dist > keepRadius || outsideContext {
                 collection.documents[i].cgImage = nil
             }
-            if dist > max(keepRadius * 3, 5) {
+            if dist > max(keepRadius * 3, 5) || outsideContext {
                 collection.documents[i].previewImage = nil
             }
         }
@@ -342,8 +357,31 @@ class ImageViewModel: ObservableObject {
         loadCurrentImage()
     }
 
-    func next()     { persistAdjustmentsForCurrent(); collection.next();     evictDistantImages(); loadCurrentImage(); prefetchAdjacent() }
-    func previous() { persistAdjustmentsForCurrent(); collection.previous(); evictDistantImages(); loadCurrentImage(); prefetchAdjacent() }
+    func next() {
+        persistAdjustmentsForCurrent()
+        let visible = visibleDocuments
+        guard let cur = collection.currentDocument,
+              let visPos = visible.firstIndex(where: { $0.id == cur.id }),
+              visPos + 1 < visible.count,
+              let nextIdx = collectionIndex(for: visible[visPos + 1]) else { return }
+        collection.select(index: nextIdx)
+        evictDistantImages()
+        loadCurrentImage()
+        prefetchAdjacent()
+    }
+
+    func previous() {
+        persistAdjustmentsForCurrent()
+        let visible = visibleDocuments
+        guard let cur = collection.currentDocument,
+              let visPos = visible.firstIndex(where: { $0.id == cur.id }),
+              visPos > 0,
+              let prevIdx = collectionIndex(for: visible[visPos - 1]) else { return }
+        collection.select(index: prevIdx)
+        evictDistantImages()
+        loadCurrentImage()
+        prefetchAdjacent()
+    }
 
     func zoomIn()           { zoomFactor = min(zoomFactor * 1.25, 32.0) }
     func zoomOut()          { zoomFactor = max(zoomFactor / 1.25, 0.05) }
@@ -1708,13 +1746,16 @@ class ImageViewModel: ObservableObject {
     }
 
     private func prefetchAdjacent() {
-        let docs = collection.documents
-        let current = collection.currentIndex
+        let visible = visibleDocuments
+        guard let cur = collection.currentDocument,
+              let visPos = visible.firstIndex(where: { $0.id == cur.id }) else { return }
         for offset in [-1, 1] {
-            let i = current + offset
-            guard i >= 0, i < docs.count, docs[i].cgImage == nil else { continue }
-            let url = docs[i].url
-            let idx = i
+            let neighborPos = visPos + offset
+            guard neighborPos >= 0, neighborPos < visible.count,
+                  let colIdx = collectionIndex(for: visible[neighborPos]),
+                  collection.documents[colIdx].cgImage == nil else { continue }
+            let url = collection.documents[colIdx].url
+            let idx = colIdx
             DispatchQueue.global(qos: .utility).async { [weak self] in
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
