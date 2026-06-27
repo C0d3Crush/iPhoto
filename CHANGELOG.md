@@ -2,6 +2,14 @@
 
 ---
 
+## 0.42.1
+**Bugfix: Crash-Reports wurden nicht gespeichert**
+- Ursache: App-Sandbox blockierte Schreibzugriff auf `~/Documents/bugreports/` still (kein Fehler, kein Report)
+- Fix: Sandbox-Entitlement entfernt — die App ist ad-hoc signiert und nicht im App Store
+- Reports landen jetzt zuverlässig in `~/Documents/bugreports/iPhoto_Crash_<datum>.txt`
+
+---
+
 ## 0.42.0
 **Feature: Auto-Sync für Wechselmedien**
 - Jeder Ordner kann per Rechtsklick → „Auto-Sync bei Einführen" aktiviert werden
