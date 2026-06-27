@@ -2,6 +2,14 @@
 
 ---
 
+## 0.45.1
+**Bugfix: Cmd+Delete löscht Dateien vom Datenträger**
+- In der Library-Ansicht wurden Bilder bisher nur aus der App entfernt, die Datei blieb auf dem Datenträger
+- Jetzt: Bestätigungs-Dialog + Datei wird in den Papierkorb verschoben (Library & Ordner-Ansicht)
+- Album-Ansicht: entfernt weiterhin nur den Eintrag aus dem Album (keine Dateilöschung)
+
+---
+
 ## 0.45.0
 **Feature: Importierte Bilder bleiben in der Library + Fortschrittsleiste**
 - Das Importziel wird automatisch als Ordner zur Library hinzugefügt — Bilder sind auch nach Entfernen der SD-Karte sichtbar und werden beim nächsten App-Start geladen
