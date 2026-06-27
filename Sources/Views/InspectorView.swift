@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum InspectorPanel: String, CaseIterable {
+    case rating           = "Bewertung"
     case metadata         = "Metadaten"
     case adjustments      = "Anpassungen"
     case localAdjustments = "Lokal"
@@ -14,6 +15,7 @@ enum InspectorPanel: String, CaseIterable {
 
 struct InspectorView: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @AppStorage("plugin.bewertung")   var ratingActive:           Bool = true
     @AppStorage("plugin.metadata")    var metadataActive:         Bool = true
     @AppStorage("plugin.anpassungen") var adjustmentsActive:      Bool = false
     @AppStorage("plugin.lokal")       var localAdjustmentsActive: Bool = false
@@ -28,6 +30,7 @@ struct InspectorView: View {
 
     private var activePanels: Set<InspectorPanel> {
         var s = Set<InspectorPanel>()
+        if ratingActive           { s.insert(.rating) }
         if metadataActive         { s.insert(.metadata) }
         if adjustmentsActive      { s.insert(.adjustments) }
         if localAdjustmentsActive { s.insert(.localAdjustments) }
@@ -188,6 +191,8 @@ private struct InspectorBlock: View {
     @ViewBuilder
     private var panelContent: some View {
         switch panel {
+        case .rating:
+            RatingPanel()
         case .metadata:
             MetadataPanel()
         case .adjustments:
