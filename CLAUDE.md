@@ -73,4 +73,4 @@ Prefix all commit messages with a type label: `bugfix:`, `feature:`, `refactor:`
 
 Bug-Reports und die Tabelle bekannter Fehler: siehe **[BUGS.md](BUGS.md)**
 
-Bug-Reports werden vom `CrashReporter` automatisch beim nächsten App-Start erkannt. Der Nutzer legt sie manuell ab unter `~/Documents/bugreports/`. Behobene Bugs in `~/Documents/bugreports/fixed/` verschieben und Tabelle in BUGS.md aktualisieren.
+Bug-Reports werden vom `CrashReporter` automatisch beim nächsten App-Start erkannt und in `~/Documents/bugreports/` gespeichert — kein Dialog mehr. Behobene Bugs in `~/Documents/bugreports/fixed/` verschieben und Tabelle in BUGS.md aktualisieren.

@@ -10,9 +10,7 @@ struct iPhotoApp: App {
             ContentView()
                 .environmentObject(viewModel)
                 .frame(minWidth: 600, minHeight: 400)
-                .onAppear {
-                    appDelegate.viewModel = viewModel
-                }
+                .onAppear { }
         }
         .commands {
             PluginCommands()

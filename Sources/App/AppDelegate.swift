@@ -1,14 +1,11 @@
 import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    weak var viewModel: ImageViewModel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReporter.installCrashHandlers()
         if let report = CrashReporter.checkAndMark() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.viewModel?.pendingCrashReport = report
-            }
+            CrashReporter.saveReport(report)
         }
     }
 

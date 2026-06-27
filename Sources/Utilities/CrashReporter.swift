@@ -28,6 +28,21 @@ enum CrashReporter {
         try? FileManager.default.removeItem(at: sentinelURL)
     }
 
+    // Saves a crash report to ~/Documents/bugreports/ and returns the saved URL.
+    @discardableResult
+    static func saveReport(_ report: String) -> URL? {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Documents/bugreports")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HHmmss"
+        let filename = "iPhoto_Crash_\(formatter.string(from: Date())).txt"
+        let url = dir.appendingPathComponent(filename)
+        try? report.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
     private static func buildReport() -> String {
         let log = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
         // Split on the dedicated session boundary (never appears inside a timestamped log entry).

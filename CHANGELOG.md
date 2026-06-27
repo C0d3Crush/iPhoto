@@ -2,6 +2,13 @@
 
 ---
 
+## 0.39.5
+**Feature: Crash-Reports werden automatisch gespeichert**
+- Kein Crash-Report-Dialog mehr beim App-Start
+- Reports werden direkt in `~/Documents/bugreports/` abgelegt (`iPhoto_Crash_<datum>.txt`)
+
+---
+
 ## 0.39.4
 **Bugfix: Hot-Pixel-Analyse crasht auf macOS 11 bei RAF-Dateien**
 - `setValue:forKey:inputAllowDraftMode` warf `NSUnknownKeyException` auf macOS 11 (Key in `CIRAWFilterImpl` nicht vorhanden) → SIGABRT

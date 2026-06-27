@@ -1,10 +1,10 @@
 # iPhoto – Bug-Tracking
 
-Bug-Reports werden vom `CrashReporter` automatisch beim nächsten App-Start erkannt und dem Nutzer angezeigt. Der Nutzer legt sie manuell ab unter:
+Bug-Reports werden vom `CrashReporter` automatisch beim nächsten App-Start erkannt und direkt gespeichert unter:
 
 ```
-~/Documents/bugreports/iPhoto_Crash_<datum>.txt        ← offen / zu bearbeiten
-~/Documents/bugreports/fixed/iPhoto_Crash_<datum>.txt  ← behoben
+~/Documents/bugreports/iPhoto_Crash_<datum>.txt        ← automatisch gespeichert, zu bearbeiten
+~/Documents/bugreports/fixed/iPhoto_Crash_<datum>.txt  ← behoben (manuell verschieben)
 ```
 
 **Workflow beim Auftreten eines neuen Bug-Reports:**
