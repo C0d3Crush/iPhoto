@@ -2,6 +2,16 @@
 
 ---
 
+## 0.40.0
+**Feature: Sternebewertungs-Panel**
+- Neues Inspector-Plugin „Bewertung" (standardmäßig aktiv)
+- 5 anklickbare Sterne – erneutes Klicken der aktuellen Bewertung setzt auf 0 zurück
+- Pick/Reject-Buttons mit farblicher Hervorhebung
+- Farb-Label-Picker (rot, gelb, grün, blau) als Punkte-Auswahl
+- Alle Bewertungen werden wie gewohnt via RatingStore + CatalogStore persistiert
+
+---
+
 ## 0.39.5
 **Feature: Crash-Reports werden automatisch gespeichert**
 - Kein Crash-Report-Dialog mehr beim App-Start
