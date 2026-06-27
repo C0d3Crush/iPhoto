@@ -258,10 +258,9 @@ struct HotPixelPanel: View {
         viewModel.hotPixelPhase = .analyzing("Starte …", 0.0)
 
         DispatchQueue.global(qos: .userInitiated).async {
+            // HotPixelAnalyzer.analyze already dispatches progress to main — no inner async needed.
             let result = HotPixelAnalyzer.analyze(urls: urls) { status, pct in
-                DispatchQueue.main.async {
-                    self.viewModel.hotPixelPhase = .analyzing(status, pct)
-                }
+                self.viewModel.hotPixelPhase = .analyzing(status, pct)
             }
             DispatchQueue.main.async {
                 if let r = result {
