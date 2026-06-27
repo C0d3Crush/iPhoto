@@ -94,6 +94,59 @@ struct AdjustmentsPanel: View {
                                value: $viewModel.adjustments.dehaze,
                                range: -1...1,
                                format: "%+.2f")
+                    }
+
+                    Group {
+                        Divider()
+
+                        Text("Schärfe & Rauschen")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fontWeight(.semibold)
+
+                        adjRow(label: "Schärfen",
+                               value: $viewModel.adjustments.sharpenAmount,
+                               range: 0...150,
+                               format: "%.0f")
+
+                        adjRow(label: "Schärfen-Radius",
+                               value: $viewModel.adjustments.sharpenRadius,
+                               range: 0.5...3.0,
+                               format: "%.1f px")
+
+                        adjRow(label: "Luma-Rauschen",
+                               value: $viewModel.adjustments.lumaNoise,
+                               range: 0...100,
+                               format: "%.0f")
+
+                        adjRow(label: "Farb-Rauschen",
+                               value: $viewModel.adjustments.colorNoise,
+                               range: 0...100,
+                               format: "%.0f")
+                    }
+
+                    Group {
+                        Divider()
+
+                        Text("Objektiv")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fontWeight(.semibold)
+
+                        adjRow(label: "Vignette",
+                               value: $viewModel.adjustments.vignetteAmount,
+                               range: -100...100,
+                               format: "%+.0f")
+
+                        adjRow(label: "Verzeichnung",
+                               value: $viewModel.adjustments.distortion,
+                               range: -100...100,
+                               format: "%+.0f")
+
+                        adjRow(label: "Farbsaum",
+                               value: $viewModel.adjustments.caAmount,
+                               range: 0...100,
+                               format: "%.0f")
 
                         Divider()
 

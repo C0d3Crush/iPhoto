@@ -2,6 +2,19 @@
 
 ---
 
+## 0.47.0
+**Feature: Capture Sharpening, Rauschreduzierung, Objektivkorrekturen**
+- **Schärfen** — echter Unsharp Mask mit Stärke (0–150) und Radius (0.5–3.0 px), unabhängig von Klarheit/Textur
+- **Luma-Rauschen** — `CINoiseReduction` reduziert Luminanzrauschen bei ISO 6400+, ohne Farbdetails zu zerstören
+- **Farb-Rauschen** — chrominanzselektive Glättung via `CILuminosityBlendMode`: Farbflecken verschwinden, Textur bleibt erhalten (kein Metal-Kernel nötig)
+- **Vignette** — `CIVignetteEffect`: −100 dunkelt Ecken ab (klassisch), +100 hellt sie auf
+- **Verzeichnung** — radialer Warp-Kernel korrigiert Tonnen- (−100) und Kissenverzeichnung (+100)
+- **Farbsaum (CA)** — R/B-Kanalversatz vom Bildzentrum aus korrigiert laterale chromatische Aberration
+- Alle 7 Werte werden gespeichert, in Export gerendert und durch Reset zurückgesetzt
+- Pipeline-Reihenfolge korrekt: CA/Verzeichnung → WB/Ton → NR → Schärfen → Kurven → Vignette
+
+---
+
 ## 0.46.0
 **Feature: Intelligente Ordner + Live View entfernt**
 - Neue "Intelligente Ordner" in der Navigation (Sidebar und Navigationsbereich im Inspector)

@@ -18,6 +18,19 @@ struct AdjustmentState: Codable, Equatable {
     var rotation:         Double             = 0.0
     var localAdjustments: [LocalAdjustment] = []
 
+    // Capture Sharpening
+    var sharpenAmount: Double = 0       // 0–150 → USM intensity 0–1.5
+    var sharpenRadius: Double = 1.0     // 0.5–3.0 px
+
+    // Noise Reduction
+    var lumaNoise:  Double = 0          // 0–100 → CINoiseReduction level 0–0.1
+    var colorNoise: Double = 0          // 0–100 → chroma blur radius 0–25 px
+
+    // Lens Corrections
+    var vignetteAmount: Double = 0      // −100 (darken corners) … +100 (brighten corners)
+    var distortion:     Double = 0      // −100 (barrel) … +100 (pincushion)
+    var caAmount:       Double = 0      // 0–100 (chromatic aberration correction)
+
     init(exposure: Double = 0, brightness: Double = 0, contrast: Double = 1,
          saturation: Double = 1, warmth: Double = 0, tint: Double = 0,
          clarity: Double = 0, texture: Double = 0, dehaze: Double = 0,

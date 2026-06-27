@@ -1301,6 +1301,25 @@ class ImageViewModel: ObservableObject {
                 ci = CIImage(cgImage: source)
             }
 
+            // Chromatic Aberration correction (R out, B in from center)
+            if snap.caAmount > 0, let k = LensFilters.caKernel {
+                if let out = k.apply(extent: ci.extent,
+                                     roiCallback: { _, r in r },
+                                     arguments: [ci, Float(snap.caAmount)]) { ci = out }
+            }
+
+            // Lens Distortion correction (barrel/pincushion radial polynomial)
+            if snap.distortion != 0, let k = LensFilters.distortKernel {
+                let k1  = Float(-snap.distortion * 0.003)   // neg slider = barrel = pos k1
+                let ext = CIVector(cgRect: ci.extent)
+                if let out = k.apply(extent: ci.extent,
+                                     roiCallback: { _, r in r.insetBy(dx: -4, dy: -4) },
+                                     image: ci,
+                                     arguments: [ext, k1]) {
+                    ci = out.cropped(to: ci.extent)
+                }
+            }
+
             if !exposureApplied, snap.exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
                 f.setValue(ci, forKey: kCIInputImageKey)
                 f.setValue(snap.exposure, forKey: kCIInputEVKey)
@@ -1321,6 +1340,35 @@ class ImageViewModel: ObservableObject {
                 f.setValue(ci, forKey: kCIInputImageKey)
                 f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
                 f.setValue(CIVector(x: CGFloat(6500 - snap.warmth * 2500), y: CGFloat(-snap.tint * 150)), forKey: "inputTargetNeutral")
+                if let out = f.outputImage { ci = out }
+            }
+
+            // Luminance Noise Reduction
+            if snap.lumaNoise > 0, let f = CIFilter(name: "CINoiseReduction") {
+                f.setValue(ci, forKey: kCIInputImageKey)
+                f.setValue(snap.lumaNoise * 0.001, forKey: "inputNoiseLevel")  // 0.001–0.1
+                f.setValue(0.4, forKey: kCIInputSharpnessKey)
+                if let out = f.outputImage { ci = out }
+            }
+
+            // Color Noise Reduction via CILuminosityBlendMode:
+            // luma from original (foreground), chroma from blurred (background)
+            if snap.colorNoise > 0, let blurF = CIFilter(name: "CIGaussianBlur") {
+                blurF.setValue(ci, forKey: kCIInputImageKey)
+                blurF.setValue(snap.colorNoise * 0.25, forKey: kCIInputRadiusKey)
+                if let blurred = blurF.outputImage?.cropped(to: ci.extent),
+                   let blendF  = CIFilter(name: "CILuminosityBlendMode") {
+                    blendF.setValue(ci,      forKey: kCIInputImageKey)
+                    blendF.setValue(blurred, forKey: kCIInputBackgroundImageKey)
+                    if let out = blendF.outputImage { ci = out }
+                }
+            }
+
+            // Capture Sharpening (fine-radius USM, applied before tone)
+            if snap.sharpenAmount > 0, let f = CIFilter(name: "CIUnsharpMask") {
+                f.setValue(ci, forKey: kCIInputImageKey)
+                f.setValue(snap.sharpenRadius,         forKey: kCIInputRadiusKey)
+                f.setValue(snap.sharpenAmount / 100.0, forKey: kCIInputIntensityKey)
                 if let out = f.outputImage { ci = out }
             }
 
@@ -1422,6 +1470,18 @@ class ImageViewModel: ObservableObject {
                 ci = cropped.transformed(by: CGAffineTransform(
                     translationX: -cropped.extent.minX,
                     y: -cropped.extent.minY))
+            }
+
+            // Vignette (applied last — purely cosmetic, after all geometry)
+            if snap.vignetteAmount != 0, let f = CIFilter(name: "CIVignetteEffect") {
+                let center = CIVector(x: ci.extent.midX, y: ci.extent.midY)
+                let radius = hypot(ci.extent.width, ci.extent.height) * 0.55
+                f.setValue(ci,                              forKey: kCIInputImageKey)
+                f.setValue(center,                          forKey: kCIInputCenterKey)
+                f.setValue(radius,                          forKey: kCIInputRadiusKey)
+                f.setValue(-snap.vignetteAmount / 100.0,    forKey: kCIInputIntensityKey)
+                f.setValue(0.5,                             forKey: "inputFalloff")
+                if let out = f.outputImage { ci = out }
             }
 
             let result = self.adjCIContext.createCGImage(ci, from: ci.extent)
