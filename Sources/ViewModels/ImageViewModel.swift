@@ -18,6 +18,7 @@ class ImageViewModel: ObservableObject {
     @Published var navSelection: NavSelection? = .library
     @Published var albums: [Album] = []
     @Published var watchedFolders: [WatchedFolder] = []
+    @Published var smartFolders: [SmartFolder] = []
 
     struct ImportProgress {
         var folderName: String
@@ -90,7 +91,28 @@ class ImageViewModel: ObservableObject {
             defer { stop() }
             let prefix = folderURL.standardized.path
             return collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
+        case .smartFolder(let id):
+            guard let sf = smartFolders.first(where: { $0.id == id }) else { return [] }
+            return collection.documents.filter { smartFolderMatches($0, sf: sf) }
         }
+    }
+
+    private func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder) -> Bool {
+        guard !sf.criteria.isEmpty else { return true }
+        let results = sf.criteria.map { c -> Bool in
+            switch c.kind {
+            case .flag:          return doc.flagStatus == c.flagValue
+            case .ratingAtLeast: return doc.rating >= c.ratingValue
+            case .colorLabel:    return doc.colorLabel == c.colorValue
+            case .cameraMake:
+                guard !c.textValue.isEmpty else { return true }
+                return doc.metadata.contains { $0.key == "tiff.Make" && $0.value.localizedCaseInsensitiveContains(c.textValue) }
+            case .cameraModel:
+                guard !c.textValue.isEmpty else { return true }
+                return doc.metadata.contains { $0.key == "tiff.Model" && $0.value.localizedCaseInsensitiveContains(c.textValue) }
+            }
+        }
+        return sf.matchAll ? results.allSatisfy { $0 } : results.contains { $0 }
     }
 
     func collectionIndex(for document: ImageDocument) -> Int? {
@@ -100,6 +122,7 @@ class ImageViewModel: ObservableObject {
     init() {
         loadAlbums()
         loadWatchedFolders()
+        loadSmartFolders()
         userPresets = CatalogStore.shared.allUserPresets()
         // Änderungen in collection (z.B. neue Thumbnails) an SwiftUI weiterleiten
         collection.objectWillChange
@@ -513,6 +536,44 @@ class ImageViewModel: ObservableObject {
     func saveAlbums() {
         guard let data = try? JSONEncoder().encode(albums) else { return }
         try? data.write(to: albumsFileURL, options: .atomic)
+    }
+
+    // MARK: - Smart Folders
+
+    func createSmartFolder(_ sf: SmartFolder) {
+        smartFolders.append(sf)
+        saveSmartFolders()
+        navSelection = .smartFolder(sf.id)
+    }
+
+    func deleteSmartFolder(_ sf: SmartFolder) {
+        smartFolders.removeAll { $0.id == sf.id }
+        if navSelection == .smartFolder(sf.id) { navSelection = .library }
+        saveSmartFolders()
+    }
+
+    func updateSmartFolder(_ sf: SmartFolder) {
+        guard let idx = smartFolders.firstIndex(where: { $0.id == sf.id }) else { return }
+        smartFolders[idx] = sf
+        saveSmartFolders()
+    }
+
+    private var smartFoldersFileURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("smartFolders.json")
+    }
+
+    func loadSmartFolders() {
+        guard let data = try? Data(contentsOf: smartFoldersFileURL),
+              let decoded = try? JSONDecoder().decode([SmartFolder].self, from: data) else { return }
+        smartFolders = decoded
+    }
+
+    func saveSmartFolders() {
+        guard let data = try? JSONEncoder().encode(smartFolders) else { return }
+        try? data.write(to: smartFoldersFileURL, options: .atomic)
     }
 
     // MARK: - Watched Folders

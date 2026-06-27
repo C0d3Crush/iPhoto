@@ -6,32 +6,18 @@ struct NavSidebarView: View {
     @State private var newAlbumName = ""
     @State private var renamingAlbum: Album? = nil
     @State private var renameText = ""
+    @State private var showSmartFolderSheet = false
+    @State private var editingSmartFolder: SmartFolder? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: { viewModel.tetherMode = true }) {
-                Label("Kamera", systemImage: "camera.fill")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(viewModel.tetherMode
-                        ? Color.accentColor.opacity(0.25)
-                        : Color.accentColor.opacity(0.10))
-                    .cornerRadius(6)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 4)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
-
             sectionHeader("Bibliothek")
 
             navRow(
                 label: "Library",
                 icon: "photo.stack",
-                isSelected: !viewModel.tetherMode && (viewModel.navSelection == .library || viewModel.navSelection == nil)
+                isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil
             ) {
-                viewModel.tetherMode = false
                 viewModel.navSelection = .library
             }
 
@@ -56,11 +42,37 @@ struct NavSidebarView: View {
             }
 
 
+            sectionHeader("Intelligente Ordner", trailing: AnyView(
+                Button(action: { editingSmartFolder = nil; showSmartFolderSheet = true }) {
+                    Image(systemName: "plus").font(.caption)
+                }
+                .buttonStyle(PlainButtonStyle())
+            ))
+
+            ForEach(viewModel.smartFolders) { sf in
+                navRow(
+                    label: sf.name,
+                    icon: "folder.badge.gearshape",
+                    isSelected: viewModel.navSelection == .smartFolder(sf.id)
+                ) {
+                    viewModel.navSelection = .smartFolder(sf.id)
+                }
+                .contextMenu {
+                    Button("Bearbeiten") { editingSmartFolder = sf; showSmartFolderSheet = true }
+                    Divider()
+                    Button("Löschen") { viewModel.deleteSmartFolder(sf) }
+                }
+            }
+
             Spacer()
         }
         .padding(.vertical, 8)
         .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
         .background(Color(NSColor.controlBackgroundColor))
+        .sheet(isPresented: $showSmartFolderSheet) {
+            SmartFolderSheet(editing: editingSmartFolder, isPresented: $showSmartFolderSheet)
+                .environmentObject(viewModel)
+        }
         .sheet(isPresented: $showCreateAlbum) {
             AlbumNameSheet(
                 title: "Neues Album",
@@ -120,7 +132,7 @@ private struct AlbumRow: View {
     @State private var isTargeted = false
 
     var body: some View {
-        Button(action: { viewModel.tetherMode = false; viewModel.selectAlbum(album) }) {
+        Button(action: { viewModel.selectAlbum(album) }) {
             Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
@@ -180,7 +192,6 @@ private struct FolderRow: View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 guard isAvailable || !isRemovable else { return }
-                viewModel.tetherMode = false
                 viewModel.navSelection = .folder(folder.id)
                 withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() }
             } label: {

@@ -2,6 +2,17 @@
 
 ---
 
+## 0.46.0
+**Feature: Intelligente Ordner + Live View entfernt**
+- Neue "Intelligente Ordner" in der Navigation (Sidebar und Navigationsbereich im Inspector)
+- Ordner filtern Bilder dynamisch nach Kriterien: Markierung (Pick/Reject), Mindestbewertung, Farblabel, Kamera-Hersteller, Kamera-Modell
+- Mehrere Kriterien kombinierbar (alle müssen zutreffen / mindestens eines muss zutreffen)
+- Ordner erstellen, bearbeiten (Rechtsklick → Bearbeiten) und löschen
+- Ordner und ihre Kriterien werden dauerhaft gespeichert (`smartFolders.json`)
+- Live View / Kamera-Tethering aus der Navigation entfernt
+
+---
+
 ## 0.45.2
 **Bugfix: Trackpad Pinch-to-Zoom funktioniert jetzt**
 - `InternalDropView` (Drop-Ziel für Datei-Drag) lag als oberste View im ZStack und hat alle Gesture-Events verschluckt
