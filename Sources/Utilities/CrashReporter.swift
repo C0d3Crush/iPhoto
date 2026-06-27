@@ -96,6 +96,15 @@ enum CrashReporter {
 // 4096 bytes is always enough for a filesystem path on macOS (PATH_MAX = 1024).
 var iphotoLogPathBuf = [CChar](repeating: 0, count: 4096)
 
+// Pre-allocated signal message buffers — filled at startup, never modified.
+// Using pre-allocated buffers avoids any malloc call inside the signal handler,
+// which is not async-signal-safe and caused a second SIGSEGV inside the handler.
+var iphotoMsgSIGSEGV = Array("[SIGNAL] SIGSEGV (Segmentation Fault)\n".utf8CString)
+var iphotoMsgSIGABRT = Array("[SIGNAL] SIGABRT (Abort)\n".utf8CString)
+var iphotoMsgSIGBUS  = Array("[SIGNAL] SIGBUS (Bus Error)\n".utf8CString)
+var iphotoMsgSIGILL  = Array("[SIGNAL] SIGILL (Illegal Instruction)\n".utf8CString)
+var iphotoMsgUnknown = Array("[SIGNAL] SIGNAL (unknown)\n".utf8CString)
+
 // Must be a free function (not a closure) to be used as a C callback.
 private func iphotoUncaughtExceptionHandler(_ exception: NSException) {
     let stack = exception.callStackSymbols.prefix(10).joined(separator: "\n  ")
@@ -104,24 +113,18 @@ private func iphotoUncaughtExceptionHandler(_ exception: NSException) {
     Thread.sleep(forTimeInterval: 0.3)
 }
 
-// Async-signal-safe: only syscalls (open/write/close). No Swift runtime, no ObjC, no malloc.
+// Async-signal-safe: only syscalls (open/write/close) + reads from pre-allocated global buffers.
 private func iphotoSignalHandler(_ sig: Int32) {
-    let name: StaticString
-    switch sig {
-    case SIGSEGV: name = "SIGSEGV (Segmentation Fault)"
-    case SIGABRT: name = "SIGABRT (Abort)"
-    case SIGBUS:  name = "SIGBUS (Bus Error)"
-    case SIGILL:  name = "SIGILL (Illegal Instruction)"
-    default:      name = "SIGNAL (unknown)"
-    }
-    // Write a minimal log line using only async-signal-safe syscalls.
-    let msg = "[SIGNAL] \(name)\n"
-    msg.withCString { ptr in
-        let fd = open(&iphotoLogPathBuf, O_WRONLY | O_CREAT | O_APPEND, 0o644)
-        if fd >= 0 {
-            _ = write(fd, ptr, strlen(ptr))
-            _ = Darwin.close(fd)
+    let fd = open(&iphotoLogPathBuf, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+    if fd >= 0 {
+        switch sig {
+        case SIGSEGV: iphotoMsgSIGSEGV.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
+        case SIGABRT: iphotoMsgSIGABRT.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
+        case SIGBUS:  iphotoMsgSIGBUS.withUnsafeBufferPointer  { _ = write(fd, $0.baseAddress, $0.count - 1) }
+        case SIGILL:  iphotoMsgSIGILL.withUnsafeBufferPointer  { _ = write(fd, $0.baseAddress, $0.count - 1) }
+        default:      iphotoMsgUnknown.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
         }
+        Darwin.close(fd)
     }
     // Reset to default handler and re-raise so the OS records a proper crash report.
     signal(sig, SIG_DFL)

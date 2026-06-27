@@ -2,6 +2,13 @@
 
 ---
 
+## 0.47.2
+**Bugfix: SIGSEGV beim Durchblättern von RAF-Ordnern**
+- `BookmarkStore.bookmarks` (Swift Dictionary) wurde ohne Lock von mehreren Hintergrund-Threads gleichzeitig gelesen und vom Haupt-Thread (Import/Sync) beschrieben → Read+Write-Data-Race → Speicherkorruption → SIGSEGV. Fix: `NSLock` schützt jetzt alle Lese- und Schreibzugriffe auf das Dictionary.
+- Signal-Handler rief `"\(name)"` auf — Swift-String-Interpolation verwendet `malloc`, das nicht async-signal-safe ist. Wenn der Absturz selbst `malloc` unterbrochen hatte, crashte der Handler erneut (daher doppelter `[SIGNAL] SIGSEGV` in manchen Reports). Fix: Vorallozierte globale `[CChar]`-Puffer pro Signal, keine Allokation im Handler mehr.
+
+---
+
 ## 0.47.1
 **Bugfix: Pfeiltasten-Navigation in gefilterten Ordnern**
 - Pfeiltasten navigieren jetzt ausschließlich durch die Bilder des aktuell aktiven Ordners/Intelligenten Ordners – kein Überspringen zu Bildern außerhalb des Filters mehr

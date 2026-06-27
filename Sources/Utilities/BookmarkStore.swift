@@ -5,6 +5,9 @@ final class BookmarkStore {
 
     private var bookmarks: [String: Data] = [:]
     private let fileURL: URL
+    // Protects `bookmarks` against concurrent read+write from background threads (image loading)
+    // and main-thread writes (import/sync). Missing lock caused SIGSEGV (data race on Dictionary).
+    private let lock = NSLock()
 
     private init() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -21,14 +24,20 @@ final class BookmarkStore {
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         ) else { return }
+        lock.lock()
         bookmarks[url.absoluteString] = data
+        lock.unlock()
         persist()
     }
 
     // Resolves bookmark and starts security-scoped access.
     // Returns the URL to use and a stop closure — caller MUST call stop() when done.
     func access(url: URL) -> (url: URL, stop: () -> Void) {
-        if let data = bookmarks[url.absoluteString] {
+        lock.lock()
+        let data = bookmarks[url.absoluteString]
+        lock.unlock()
+
+        if let data = data {
             var stale = false
             if let resolved = try? URL(
                 resolvingBookmarkData: data,
@@ -49,11 +58,16 @@ final class BookmarkStore {
     private func load() {
         guard let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode([String: Data].self, from: data) else { return }
+        lock.lock()
         bookmarks = decoded
+        lock.unlock()
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(bookmarks) else { return }
+        lock.lock()
+        let snap = bookmarks
+        lock.unlock()
+        guard let data = try? JSONEncoder().encode(snap) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }
 }
