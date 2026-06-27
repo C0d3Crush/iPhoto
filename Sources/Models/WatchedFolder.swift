@@ -4,6 +4,7 @@ struct WatchedFolder: Identifiable, Codable {
     let id: UUID
     var name: String
     var bookmarkData: Data
+    var autoSync: Bool = false
 
     init(url: URL) throws {
         self.id = UUID()
@@ -47,7 +48,7 @@ struct WatchedFolder: Identifiable, Codable {
     }
 
     /// Best-effort path extracted from bookmark without starting security scope.
-    private var bookmarkPath: String? {
+    var bookmarkPath: String? {
         var isStale = false
         guard let url = try? URL(
             resolvingBookmarkData: bookmarkData,

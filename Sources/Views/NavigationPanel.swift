@@ -41,6 +41,15 @@ struct NavigationPanel: View {
                                isSelected: viewModel.navSelection == .folder(folder.id))
                     .environmentObject(viewModel)
                     .contextMenu {
+                        Button {
+                            viewModel.toggleAutoSync(for: folder)
+                        } label: {
+                            Label(
+                                folder.autoSync ? "Auto-Sync deaktivieren" : "Auto-Sync bei Einführen",
+                                systemImage: folder.autoSync ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath"
+                            )
+                        }
+                        Divider()
                         Button("Ordner entfernen") { viewModel.deleteWatchedFolder(folder) }
                     }
             }
@@ -175,8 +184,15 @@ private struct PanelFolderRow: View {
                         .frame(width: 12)
                         .opacity(isRemovable && !isAvailable ? 0 : 1)
                     VStack(alignment: .leading, spacing: 1) {
-                        Label(folder.name, systemImage: folderIcon)
-                            .foregroundColor(isRemovable && !isAvailable ? .secondary : .primary)
+                        HStack(spacing: 4) {
+                            Label(folder.name, systemImage: folderIcon)
+                                .foregroundColor(isRemovable && !isAvailable ? .secondary : .primary)
+                            if folder.autoSync {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
                         if isRemovable && !isAvailable {
                             Text("Speichermedium nicht verfügbar")
                                 .font(.caption2)

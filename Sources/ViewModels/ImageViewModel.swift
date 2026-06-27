@@ -130,6 +130,24 @@ class ImageViewModel: ObservableObject {
             .sink { [weak self] _ in self?.collection.selectedIndices = [] }
             .store(in: &cancellables)
 
+        // Wechselmedien: auto-sync wenn Datenträger eingeführt wird
+        NSWorkspace.shared.notificationCenter
+            .publisher(for: Notification.Name("NSWorkspaceDidMountNotification"))
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let volumeURL = notification.userInfo?["NSWorkspaceVolumeURLKey"] as? URL
+                else { return }
+                let volumePath = volumeURL.standardized.path
+                for folder in self.watchedFolders where folder.autoSync {
+                    guard let bookmarkPath = folder.bookmarkPath,
+                          bookmarkPath.hasPrefix(volumePath) else { continue }
+                    self.syncFolder(folder)
+                    self.navSelection = .folder(folder.id)
+                }
+            }
+            .store(in: &cancellables)
+
         $adjustments
             .dropFirst()
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
@@ -510,6 +528,12 @@ class ImageViewModel: ObservableObject {
         stopWatching(folder)
         watchedFolders.removeAll { $0.id == folder.id }
         if navSelection == .folder(folder.id) { navSelection = .library }
+        saveWatchedFolders()
+    }
+
+    func toggleAutoSync(for folder: WatchedFolder) {
+        guard let idx = watchedFolders.firstIndex(where: { $0.id == folder.id }) else { return }
+        watchedFolders[idx].autoSync.toggle()
         saveWatchedFolders()
     }
 
