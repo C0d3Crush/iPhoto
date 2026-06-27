@@ -105,9 +105,11 @@ echo ""
 echo "==> Baue iphoto-cli…"
 CLI_SOURCES="\
     $ROOT/Sources/Models/RAWImageDecoder.swift \
+    $ROOT/Sources/Models/HotPixelResult.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \
     $ROOT/Sources/Utilities/Log.swift \
     $ROOT/Sources/Utilities/BookmarkStore.swift \
+    $ROOT/Sources/Utilities/HotPixelAnalyzer.swift \
     $ROOT/Sources/CLI/main.swift"
 
 "$SWIFTC" \
@@ -115,6 +117,7 @@ CLI_SOURCES="\
     -sdk "$SDK" \
     -framework CoreImage \
     -framework ImageIO \
+    -framework AppKit \
     -framework VideoToolbox \
     -framework CoreMedia \
     -module-name iPhotoCLI \

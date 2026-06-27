@@ -11,6 +11,7 @@ private func printUsage() {
       iphoto-cli export <eingabe> --format jpeg|png|tiff|heif [--output <pfad>] [--quality 0.9]
       iphoto-cli export <datei1> <datei2> ... --format jpeg --output-dir <ordner>
       iphoto-cli info <eingabe>
+      iphoto-cli hotpixel <ordner>
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -148,6 +149,83 @@ private func runInfo(_ args: CLIArgs) -> Int32 {
     return 0
 }
 
+private func runHotPixel(_ args: CLIArgs) -> Int32 {
+    guard let dir = args.inputs.first else {
+        fputs("Fehler: Ordner angeben — iphoto-cli hotpixel <ordner>\n", stderr)
+        return 1
+    }
+    var isDir: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir), isDir.boolValue else {
+        fputs("Fehler: '\(dir.path)' ist kein Ordner\n", stderr)
+        return 1
+    }
+
+    let imageExts: Set<String> = ["raf","cr2","cr3","nef","arw","dng","orf","rw2","nrw","pef",
+                                   "srw","erf","kdc","dcr","raw","rwl","mrw","3fr","mef","iiq",
+                                   "x3f","srf","sr2","jpg","jpeg","tiff","tif","png","heic","heif"]
+    let urls = (try? FileManager.default.contentsOfDirectory(
+        at: dir, includingPropertiesForKeys: nil
+    ))?.filter { imageExts.contains($0.pathExtension.lowercased()) }
+      .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
+
+    guard !urls.isEmpty else {
+        fputs("Fehler: Keine Bilddateien in '\(dir.path)'\n", stderr)
+        return 1
+    }
+
+    print("Hot-Pixel-Analyse: \(urls.count) Datei(en) in \(dir.lastPathComponent)")
+
+    guard let result = HotPixelAnalyzer.analyze(urls: urls, progress: { status, pct in
+        let bar = String(repeating: "█", count: Int(pct * 30))
+            + String(repeating: "░", count: 30 - Int(pct * 30))
+        print("\r[\(bar)] \(Int(pct * 100))%  \(status)          ", terminator: "")
+        fflush(stdout)
+    }) else {
+        fputs("\nFehler: Analyse fehlgeschlagen (keine Frames dekodierbar)\n", stderr)
+        return 1
+    }
+
+    print("\n")
+    print("╔══════════════════════════════════════════════════╗")
+    print("║           HOT-PIXEL-ANALYSE ERGEBNIS             ║")
+    print("╚══════════════════════════════════════════════════╝")
+    print("  Sensor       : \(result.sensorWidth) × \(result.sensorHeight) px")
+    print("  Frames        : \(result.frameCount)")
+    print("  Dunkel-Mittel : \(String(format: "%.1f", result.darkMean))  σ = \(String(format: "%.1f", result.darkStd))")
+    print("  Schwelle      : \(String(format: "%.1f", result.threshold))")
+    print("")
+    print("  Hot Pixel     : \(result.hotCount)")
+    print("  Bewertung     : \(result.grade) — \(result.gradeLabel)")
+    print("")
+
+    if !result.hotPixels.isEmpty {
+        print("  Top-10 hellste Hot Pixel:")
+        print("  ─────────────────────────────────────────")
+        print("   #   X      Y      Wert")
+        let top = Array(result.hotPixels.prefix(10))
+        for i in 0..<top.count {
+            print(String(format: "  %2d  %-6d %-6d %.1f", i + 1, top[i].x, top[i].y, top[i].value))
+        }
+        print("")
+    }
+
+    // ASCII cluster grid (20×20 → condensed to 10×5 for terminal)
+    print("  Cluster-Grid (20×20, Wert = Anzahl Hot Pixel pro Zelle):")
+    for row in result.clusterGrid {
+        let line = row.map { v -> String in
+            switch v {
+            case 0:       return "·"
+            case 1...3:   return "+"
+            case 4...10:  return "▪"
+            default:      return "█"
+            }
+        }.joined()
+        print("  \(line)")
+    }
+    print("")
+    return 0
+}
+
 // MARK: - Entry Point
 
 let args = CommandLine.arguments
@@ -161,6 +239,8 @@ case "export":
     exitCode = runExport(parsed)
 case "info":
     exitCode = runInfo(parsed)
+case "hotpixel":
+    exitCode = runHotPixel(parsed)
 case "--help", "-h", "help":
     printUsage()
     exitCode = 0

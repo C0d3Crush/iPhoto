@@ -144,16 +144,33 @@ struct HotPixelAnalyzer {
             }
         }
 
-        guard let ci = ciImage else { return nil }
+        // CIFilter / CGImageSource path
+        if let ci = ciImage {
+            if let result = pixelsFromCIImage(ci, ciContext: ciContext) { return result }
+        }
 
+        // Final fallback: RAWImageDecoder (handles RAF via embedded JPEG on macOS 11)
+        if let cgImg = try? RAWImageDecoder.decode(url: url) {
+            return pixelsFromCGImage(cgImg)
+        }
+
+        return nil
+    }
+
+    private static func pixelsFromCIImage(_ ci: CIImage, ciContext: CIContext) -> (pixels: [Float], w: Int, h: Int)? {
         let w = Int(ci.extent.width)
         let h = Int(ci.extent.height)
+        guard w > 0, h > 0, let cgImg = ciContext.createCGImage(ci, from: ci.extent) else { return nil }
+        return pixelsFromCGImage(cgImg)
+    }
+
+    private static func pixelsFromCGImage(_ cgImg: CGImage) -> (pixels: [Float], w: Int, h: Int)? {
+        let w = cgImg.width
+        let h = cgImg.height
         guard w > 0, h > 0 else { return nil }
 
         // Render to 8-bit RGBA, then extract luminance.
         // (More compatible than 16-bit gray on macOS 11 — still fine for outlier detection.)
-        guard let cgImg = ciContext.createCGImage(ci, from: ci.extent) else { return nil }
-
         var rgba = [UInt8](repeating: 0, count: w * h * 4)
         guard let ctx = CGContext(
             data:             &rgba,
