@@ -44,6 +44,7 @@ struct AnalysePanel: View {
                 }
             }
             .onAppear { triggerAnalysis() }
+            .onChange(of: viewModel.collection.currentIndex) { _ in engine.clear() }
             .onChange(of: viewModel.displayImageVersion) { _ in triggerAnalysis() }
         }
     }

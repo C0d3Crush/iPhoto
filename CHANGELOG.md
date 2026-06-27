@@ -2,6 +2,13 @@
 
 ---
 
+## 0.47.3
+**Bugfix: Analyse-Diagramme bei Bildwechsel sofort leeren**
+- Histogramm, Waveform und RGB-Parade zeigten beim Navigieren mit den Pfeiltasten so lange das alte Bild an, bis der Preview des neuen Bilds geladen war (bis zu 2 Sekunden)
+- Fix: `onChange(of: currentIndex)` leert die Diagramme sofort beim Bildwechsel; sobald das neue Bild verfügbar ist, wird die Analyse automatisch neu gestartet
+
+---
+
 ## 0.47.2
 **Bugfix: SIGSEGV beim Durchblättern von RAF-Ordnern**
 - `BookmarkStore.bookmarks` (Swift Dictionary) wurde ohne Lock von mehreren Hintergrund-Threads gleichzeitig gelesen und vom Haupt-Thread (Import/Sync) beschrieben → Read+Write-Data-Race → Speicherkorruption → SIGSEGV. Fix: `NSLock` schützt jetzt alle Lese- und Schreibzugriffe auf das Dictionary.

@@ -9,6 +9,13 @@ final class AnalysisEngine: ObservableObject {
 
     private var token: UUID = UUID()
 
+    func clear() {
+        token = UUID()
+        histogramImage = nil
+        waveformImage  = nil
+        rgbParadeImage = nil
+    }
+
     func analyze(_ source: CGImage) {
         let currentToken = UUID()
         token = currentToken
