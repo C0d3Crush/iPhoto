@@ -37,6 +37,7 @@ class InternalDropView: NSView {
     }
 
     override var isOpaque: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { return nil }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         let urls = extractURLs(from: sender)

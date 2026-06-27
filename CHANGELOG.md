@@ -2,6 +2,13 @@
 
 ---
 
+## 0.45.2
+**Bugfix: Trackpad Pinch-to-Zoom funktioniert jetzt**
+- `InternalDropView` (Drop-Ziel für Datei-Drag) lag als oberste View im ZStack und hat alle Gesture-Events verschluckt
+- Fix: `hitTest` gibt `nil` zurück → View ist für Pinch/Scroll/Klick transparent; Drag-and-Drop bleibt voll funktionsfähig
+
+---
+
 ## 0.45.1
 **Bugfix: Cmd+Delete löscht Dateien vom Datenträger**
 - In der Library-Ansicht wurden Bilder bisher nur aus der App entfernt, die Datei blieb auf dem Datenträger
