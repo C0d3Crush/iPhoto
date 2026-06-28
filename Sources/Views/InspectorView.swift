@@ -184,6 +184,7 @@ private struct InspectorBlock: View {
             if !isCollapsed {
                 panelContent
                     .frame(maxWidth: .infinity)
+                    .clipShape(Rectangle())
             }
         }
     }

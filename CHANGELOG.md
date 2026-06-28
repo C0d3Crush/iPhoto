@@ -2,6 +2,12 @@
 
 ---
 
+## 0.47.8
+**Bugfix: Inspector-Tabs (Anpassungen etc.) fließen nicht mehr über den Rand**
+- `InspectorBlock` fehlte `.clipShape(Rectangle())` am Content-Wrapper — gleicher Hit-Test-Overflow wie zuvor in AnalysePanel behoben.
+
+---
+
 ## 0.47.7
 **Bugfix: Analyse-Tabs zuverlässig zuklappbar**
 - `.clipped()` unterdrückt nur das visuelle Rendering, nicht aber den Hit-Test-Bereich. Die Diagramm-Bilder (`Image.resizable().fill`) hatten weiterhin einen übergroßen Tap-Bereich, der den Header des nächsten Tabs überdeckte. Fix: `.clipShape(Rectangle())` auf dem Content-Wrapper (clippt auch Hit-Testing) und `.allowsHitTesting(false)` auf allen rein visuellen Diagramm-Bildern.
