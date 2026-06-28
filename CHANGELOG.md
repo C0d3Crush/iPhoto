@@ -2,6 +2,13 @@
 
 ---
 
+## 0.47.5
+**Bugfix: Thumbnail-Ladebalken springt nicht mehr**
+- `loadThumbnails()` wird mehrfach gleichzeitig aufgerufen (Import, Sync, Undo …). Jeder Aufruf erstellte einen eigenen `ProgressCounter` mit eigenem Nenner — beide schrieben auf dasselbe `thumbnailLoadProgress` und überschrieben sich abwechselnd → Zahlen sprangen zufällig vor und zurück.
+- Fix: Einzelner gemeinsamer Akkumulator (`thumbQueued`/`thumbDone`) in `ImageViewModel`, der über alle parallelen Aufrufe hinweg akkumuliert. Fortschritt ist dadurch immer monoton steigend. Anzeige zeigt jetzt echte `done / total`-Werte statt der falsch berechneten `progress × documents.count`.
+
+---
+
 ## 0.47.4
 **Bugfix: Histogramm/Waveform/RGB-Parade aktualisieren sich beim Bildwechsel**
 - `HistogramView` und `WaveformView` deklarierten `let engine: AnalysisEngine` statt `@ObservedObject` — SwiftUI hat keine Subscription auf `engine.objectWillChange` eingerichtet, weshalb die Views bei fertiggestellter Analyse nie neu gerendert wurden. Nur das manuelle Auf-/Zuklappen erzwang ein Re-Render (das dann den bereits berechneten Wert las). Fix: `@ObservedObject var engine` in beiden Views.

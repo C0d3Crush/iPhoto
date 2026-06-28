@@ -34,6 +34,8 @@ class ImageViewModel: ObservableObject {
     @Published var cropToolActive: Bool = false
     @Published var showOriginal: Bool = false
     @Published var thumbnailLoadProgress: Double? = nil
+    @Published var thumbnailLoadDone: Int = 0
+    @Published var thumbnailLoadTotal: Int = 0
     @Published var copiedAdjustments: AdjustmentState? = nil
     @Published var userPresets: [Preset] = []
 
@@ -70,6 +72,11 @@ class ImageViewModel: ObservableObject {
     }()
     private var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
     private var isLoadingFullRes = false
+    // Shared accumulator for all concurrent loadThumbnails() calls.
+    // Written only on the main thread, so no lock needed.
+    private var thumbQueued: Int = 0
+    private var thumbDone: Int = 0
+    private var thumbHideTask: DispatchWorkItem? = nil
 
     var currentImage: CGImage? {
         guard let doc = collection.currentDocument else { return nil }
@@ -1688,21 +1695,15 @@ class ImageViewModel: ObservableObject {
         let pending = collection.documents.enumerated().filter {
             $0.element.placeholderThumbnailImage == nil && $0.element.thumbnailImage == nil
         }
-        let total = pending.count
-        guard total > 0 else { return }
+        guard !pending.isEmpty else { return }
 
-        let counter = ProgressCounter(total: total) { [weak self] done, all in
-            DispatchQueue.main.async {
-                self?.thumbnailLoadProgress = all > 0 ? Double(done) / Double(all) : nil
-                if done >= all {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        self?.thumbnailLoadProgress = nil
-                    }
-                }
-            }
-        }
-
-        thumbnailLoadProgress = 0.0
+        // Cancel any pending "hide bar" task and add to the shared accumulator.
+        thumbHideTask?.cancel()
+        thumbHideTask = nil
+        thumbQueued += pending.count
+        thumbnailLoadTotal = thumbQueued
+        thumbnailLoadDone  = thumbDone
+        thumbnailLoadProgress = thumbQueued > 0 ? Double(thumbDone) / Double(thumbQueued) : 0
 
         for (index, doc) in pending {
             let url = doc.url
@@ -1712,14 +1713,27 @@ class ImageViewModel: ObservableObject {
                 let nsImage = (try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 80))
                     .map { NSImage(cgImage: $0, size: .zero) }
                 DispatchQueue.main.async {
-                    if let self = self, let img = nsImage,
+                    guard let self = self else { return }
+                    if let img = nsImage,
                        index < self.collection.documents.count,
                        self.collection.documents[index].url == url,
                        self.collection.documents[index].thumbnailImage == nil {
                         self.collection.documents[index].placeholderThumbnailImage = img
                     }
+                    self.thumbDone += 1
+                    self.thumbnailLoadDone  = self.thumbDone
+                    self.thumbnailLoadTotal = self.thumbQueued
+                    self.thumbnailLoadProgress = Double(self.thumbDone) / Double(self.thumbQueued)
+                    if self.thumbDone >= self.thumbQueued {
+                        self.thumbDone   = 0
+                        self.thumbQueued = 0
+                        let task = DispatchWorkItem { [weak self] in
+                            self?.thumbnailLoadProgress = nil
+                        }
+                        self.thumbHideTask = task
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: task)
+                    }
                 }
-                counter.increment()
             }
         }
     }
@@ -1778,22 +1792,3 @@ class ImageViewModel: ObservableObject {
     }
 }
 
-private final class ProgressCounter {
-    private var done = 0
-    private let total: Int
-    private let lock = NSLock()
-    private let onChange: (Int, Int) -> Void
-
-    init(total: Int, onChange: @escaping (Int, Int) -> Void) {
-        self.total = total
-        self.onChange = onChange
-    }
-
-    func increment() {
-        lock.lock()
-        done += 1
-        let current = done
-        lock.unlock()
-        onChange(current, total)
-    }
-}

@@ -21,7 +21,8 @@ struct ContentView: View {
 
                     if let progress = viewModel.thumbnailLoadProgress {
                         ThumbnailLoadBar(progress: progress,
-                                         total: viewModel.collection.documents.count)
+                                         done: viewModel.thumbnailLoadDone,
+                                         total: viewModel.thumbnailLoadTotal)
                     }
 
                     if !viewModel.collection.documents.isEmpty {
@@ -200,6 +201,7 @@ struct DetailView: View {
 
 private struct ThumbnailLoadBar: View {
     let progress: Double
+    let done: Int
     let total: Int
 
     var body: some View {
@@ -209,7 +211,7 @@ private struct ThumbnailLoadBar: View {
                 ProgressView(value: progress)
                     .progressViewStyle(LinearProgressViewStyle())
                     .frame(maxWidth: .infinity)
-                Text("\(Int(progress * Double(total))) / \(total)")
+                Text("\(done) / \(total)")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 60, alignment: .trailing)
