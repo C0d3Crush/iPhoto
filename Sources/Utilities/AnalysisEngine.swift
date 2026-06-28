@@ -92,8 +92,6 @@ final class AnalysisEngine: ObservableObject {
                 }
             }
 
-            guard self.token == currentToken else { return }
-
             let tAnalysis = Date().timeIntervalSince(t0)
             let hist   = Self.renderHistogram(r: rBins, g: gBins, b: bBins, luma: lBins)
             let wave   = Self.renderScope(lumaAcc, w: scopeW, h: outH, cr: 1, cg: 1, cb: 1)

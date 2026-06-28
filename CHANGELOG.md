@@ -2,6 +2,12 @@
 
 ---
 
+## 0.47.12
+**Bugfix: SIGSEGV mit geöffnetem Analyse-Tab beim Bildwechsel (Bug #8)**
+- `AnalysisEngine.analyze()` las `self.token` im Background-Thread (Zeile 95), während der Main-Thread gleichzeitig `token = UUID()` schrieb. Read-Write-Data-Race → Speicherkorruption → SIGSEGV. Eingeführt in 0.47.3 beim Verbinden der AnalysisEngine mit SwiftUI `onChange`-Callbacks. Fix: Token-Prüfung aus dem Background-Thread entfernt — die Prüfung auf dem Main-Thread (letzter Guard vor dem Publishen der Ergebnisse) ist ausreichend.
+
+---
+
 ## 0.47.11
 **Bugfix: Anpassungen-Tab zieht den Inspector nicht mehr auf volle Fensterbreite**
 - Die drei Buttons ("Zurücksetzen", "Kopieren", "Einfügen") verwendeten den macOS-Default-`ButtonStyle` mit 13pt-Font und System-Mindestbreite — zusammen ca. 282pt, mehr als die 248pt die im 280pt-Inspector nach dem Padding bleiben. `.frame(maxWidth: .infinity)` gibt diesen Überlauf nach oben weiter statt ihn zu kappen. Fix: `PlainButtonStyle()` + `.font(.caption)` auf den Buttons-HStack. Zusätzlich `.clipped()` auf den InspectorView-Container als Schutz vor zukünftigen Overflows.
