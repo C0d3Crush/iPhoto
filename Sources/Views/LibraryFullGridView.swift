@@ -35,6 +35,7 @@ struct LibraryFullGridView: View {
                                     .frame(width: 156)
                                     .contentShape(Rectangle())
                                     .onAppear { viewModel.requestVisibleThumbnail(at: idx) }
+                                    .onTapGesture(count: 2) { openDetail(at: idx) }
                                     .onTapGesture { handleTap(at: idx) }
                                     .contextMenu { contextMenu(for: doc) }
                                     .onDrag { NSItemProvider(object: doc.url as NSURL) }
@@ -70,6 +71,11 @@ struct LibraryFullGridView: View {
                 .keyboardShortcut("i", modifiers: .command)
             }
         }
+    }
+
+    private func openDetail(at index: Int) {
+        viewModel.selectDocument(at: index)
+        viewModel.showingLibraryDetail = true
     }
 
     private func handleTap(at index: Int) {

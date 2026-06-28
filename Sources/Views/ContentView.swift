@@ -14,7 +14,7 @@ struct ContentView: View {
             }
 
             ZStack {
-                if viewModel.navSelection == .library || viewModel.navSelection == nil {
+                if (viewModel.navSelection == .library || viewModel.navSelection == nil) && !viewModel.showingLibraryDetail {
                     // Library: Vollbild-Raster aller Bilder
                     LibraryFullGridView()
                         .environmentObject(viewModel)
@@ -67,6 +67,9 @@ struct ContentView: View {
                 InspectorView()
                     .environmentObject(viewModel)
             }
+        }
+        .onChange(of: viewModel.navSelection) { _ in
+            viewModel.showingLibraryDetail = false
         }
         .onChange(of: viewModel.windowTitle) { title in
             NSApp.mainWindow?.title = title
@@ -149,6 +152,13 @@ struct DetailView: View {
                         .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
                 }
                 .help("Navigation ein-/ausblenden")
+
+                if viewModel.showingLibraryDetail {
+                    Button(action: { viewModel.showingLibraryDetail = false }) {
+                        Image(systemName: "square.grid.3x3")
+                    }
+                    .help("Zurück zur Bibliothek")
+                }
 
                 Button(action: { viewModel.previous() }) {
                     Image(systemName: "chevron.left")

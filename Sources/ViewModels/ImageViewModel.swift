@@ -16,6 +16,7 @@ class ImageViewModel: ObservableObject {
     @Published var isSavingMetadata: Bool = false
     @Published var navSidebarVisible: Bool = true
     @Published var navSelection: NavSelection? = .library
+    @Published var showingLibraryDetail: Bool = false
     @Published var albums: [Album] = []
     @Published var watchedFolders: [WatchedFolder] = []
     @Published var smartFolders: [SmartFolder] = []

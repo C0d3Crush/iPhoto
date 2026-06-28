@@ -2,6 +2,12 @@
 
 ---
 
+## 0.49.0
+**Feature: Doppelklick im Library-Grid öffnet Bild in der Fokus-Ansicht**
+- Doppelklick auf ein Bild im Library-Grid wechselt in die Detail-Ansicht (Viewer + Strip). Ein neuer Toolbar-Button (Raster-Symbol) führt zurück zur Bibliothek. Beim Wechsel in ein Album oder einen Ordner wird die Fokus-Ansicht automatisch geschlossen.
+
+---
+
 ## 0.48.0
 **Feature: Library-Ansicht zeigt jetzt ein Vollbild-Raster**
 - Klick auf "Library" in der Sidebar zeigt alle Bilder in einem adaptiven LazyVGrid statt der Detail+Strip-Ansicht. Album-, Ordner- und Smart-Ordner-Ansichten behalten das bisherige Layout (Detail-Viewer + horizontaler Strip unten). Auswahl (Cmd/Shift-Klick), Kontextmenü und Drag & Drop funktionieren im Grid-View.
