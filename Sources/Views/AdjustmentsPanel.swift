@@ -153,14 +153,18 @@ struct AdjustmentsPanel: View {
                         HStack(spacing: 6) {
                             Button("Zurücksetzen") { viewModel.resetAdjustments() }
                                 .disabled(isNeutral)
+                                .buttonStyle(PlainButtonStyle())
                             Spacer()
                             Button("Kopieren") { viewModel.copyAdjustments() }
                                 .disabled(isNeutral)
                                 .help("Anpassungen in Zwischenablage")
+                                .buttonStyle(PlainButtonStyle())
                             Button("Einfügen") { viewModel.pasteAdjustments() }
                                 .disabled(viewModel.copiedAdjustments == nil)
                                 .help("Auf aktuelles Bild oder Auswahl anwenden")
+                                .buttonStyle(PlainButtonStyle())
                         }
+                        .font(.caption)
 
                         Text("Original wird nie verändert — Exportieren zum Rendern")
                             .font(.caption2)

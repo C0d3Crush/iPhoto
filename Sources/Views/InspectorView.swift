@@ -115,6 +115,7 @@ struct InspectorView: View {
             }
         }
         .frame(width: 280)
+        .clipped()
         .background(Color(NSColor.windowBackgroundColor))
         .sheet(isPresented: $viewModel.showVersionHistory) {
             VersionHistorySheet(isPresented: $viewModel.showVersionHistory)

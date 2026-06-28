@@ -2,6 +2,12 @@
 
 ---
 
+## 0.47.11
+**Bugfix: Anpassungen-Tab zieht den Inspector nicht mehr auf volle Fensterbreite**
+- Die drei Buttons ("Zurücksetzen", "Kopieren", "Einfügen") verwendeten den macOS-Default-`ButtonStyle` mit 13pt-Font und System-Mindestbreite — zusammen ca. 282pt, mehr als die 248pt die im 280pt-Inspector nach dem Padding bleiben. `.frame(maxWidth: .infinity)` gibt diesen Überlauf nach oben weiter statt ihn zu kappen. Fix: `PlainButtonStyle()` + `.font(.caption)` auf den Buttons-HStack. Zusätzlich `.clipped()` auf den InspectorView-Container als Schutz vor zukünftigen Overflows.
+
+---
+
 ## 0.47.10
 **Bugfix: Inspector-Tabs laufen nicht mehr über den Rand (Root Cause)**
 - Der `VStack` innerhalb des `ScrollView(.vertical)` im Inspector hatte kein `.frame(maxWidth: .infinity)`. SwiftUI misst in diesem Fall den VStack nach idealen Inhaltsbreiten statt nach der angebotenen ScrollView-Breite — macOS-Slider-Controls haben eine System-Idealbreite >280pt und ziehen den gesamten Inspector mit. Fix: `.frame(maxWidth: .infinity)` auf den ScrollView-VStack in `InspectorView` und auf den äußeren VStack in `AnalysePanel`.
