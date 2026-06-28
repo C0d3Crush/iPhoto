@@ -102,6 +102,7 @@ private struct AnalyseToolBlock: View {
             if !isCollapsed {
                 toolContent
                     .frame(maxWidth: .infinity)
+                    .clipped()
             }
         }
     }

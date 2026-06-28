@@ -2,6 +2,12 @@
 
 ---
 
+## 0.47.6
+**Bugfix: Waveform/RGB-Parade lassen sich zuklappen; kein Layout-Überlauf mehr**
+- Waveform- und RGB-Parade-Tabs ließen sich nicht zuklappen, weil der Bild-Inhalt horizontal über den Container hinausfloss und den Tap-Bereich des Headers überdeckte. Fix: `.frame(maxWidth: .infinity)` + `.clipShape(...)` auf den inneren ZStacks, `.clipped()` auf dem Tool-Block-Wrapper.
+
+---
+
 ## 0.47.5
 **Bugfix: Thumbnail-Ladebalken springt nicht mehr**
 - `loadThumbnails()` wird mehrfach gleichzeitig aufgerufen (Import, Sync, Undo …). Jeder Aufruf erstellte einen eigenen `ProgressCounter` mit eigenem Nenner — beide schrieben auf dasselbe `thumbnailLoadProgress` und überschrieben sich abwechselnd → Zahlen sprangen zufällig vor und zurück.

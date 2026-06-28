@@ -31,8 +31,8 @@ struct WaveformView: View {
                     Text("Berechne…").font(.caption2).foregroundColor(.secondary)
                 }
             }
-            .frame(height: 140)
-            .cornerRadius(4)
+            .frame(maxWidth: .infinity, minHeight: 140, maxHeight: 140)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
 
             HStack {
                 Text("0%").font(.caption2).foregroundColor(.secondary)
@@ -65,8 +65,8 @@ struct WaveformView: View {
                                     .clipped()
                             }
                         }
-                        .frame(height: 80)
-                        .cornerRadius(3)
+                        .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
                     }
                 }
             } else {
