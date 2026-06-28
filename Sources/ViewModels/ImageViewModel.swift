@@ -317,7 +317,7 @@ class ImageViewModel: ObservableObject {
     }
 
     // Fügt Bilder zur bestehenden Sammlung hinzu (keine Duplikate)
-    func importFiles(_ urls: [URL]) {
+    func importFiles(_ urls: [URL], selectFirst: Bool = true) {
         let supported = urls.filter { isSupportedFormat($0) }
         guard !supported.isEmpty else { return }
 
@@ -344,8 +344,10 @@ class ImageViewModel: ObservableObject {
 
         let firstNewIndex = collection.documents.count
         collection.appendDocuments(newDocs)
-        collection.select(index: firstNewIndex)
-        loadCurrentImage()
+        if selectFirst || collection.documents.count == newDocs.count {
+            collection.select(index: firstNewIndex)
+            loadCurrentImage()
+        }
         loadThumbnails()
     }
 
@@ -725,7 +727,7 @@ class ImageViewModel: ObservableObject {
 
             DispatchQueue.main.async {
                 self.importProgress.removeValue(forKey: folderID)
-                if !newURLs.isEmpty { self.importFiles(newURLs) }
+                if !newURLs.isEmpty { self.importFiles(newURLs, selectFirst: false) }
             }
         }
     }
@@ -756,7 +758,7 @@ class ImageViewModel: ObservableObject {
                 }
                 self.collection.documents.removeAll { doc in toRemove.contains(where: { $0.id == doc.id }) }
                 // Import new files
-                self.importFiles(found)
+                self.importFiles(found, selectFirst: false)
             }
         }
     }
