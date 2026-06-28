@@ -2,6 +2,12 @@
 
 ---
 
+## 0.49.1
+**Bugfix: Sync springt nicht mehr zur neu hinzugefügten Datei**
+- Beim automatischen Sync von überwachten Ordnern bleibt die aktuelle Bildauswahl erhalten. Nur beim manuellen Import per Dialog oder Drag & Drop wird das erste neue Bild automatisch fokussiert.
+
+---
+
 ## 0.49.0
 **Feature: Doppelklick im Library-Grid öffnet Bild in der Fokus-Ansicht**
 - Doppelklick auf ein Bild im Library-Grid wechselt in die Detail-Ansicht (Viewer + Strip). Ein neuer Toolbar-Button (Raster-Symbol) führt zurück zur Bibliothek. Beim Wechsel in ein Album oder einen Ordner wird die Fokus-Ansicht automatisch geschlossen.
