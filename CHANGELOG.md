@@ -2,6 +2,12 @@
 
 ---
 
+## 0.48.0
+**Feature: Library-Ansicht zeigt jetzt ein Vollbild-Raster**
+- Klick auf "Library" in der Sidebar zeigt alle Bilder in einem adaptiven LazyVGrid statt der Detail+Strip-Ansicht. Album-, Ordner- und Smart-Ordner-Ansichten behalten das bisherige Layout (Detail-Viewer + horizontaler Strip unten). Auswahl (Cmd/Shift-Klick), Kontextmenü und Drag & Drop funktionieren im Grid-View.
+
+---
+
 ## 0.47.12
 **Bugfix: SIGSEGV mit geöffnetem Analyse-Tab beim Bildwechsel (Bug #8)**
 - `AnalysisEngine.analyze()` las `self.token` im Background-Thread (Zeile 95), während der Main-Thread gleichzeitig `token = UUID()` schrieb. Read-Write-Data-Race → Speicherkorruption → SIGSEGV. Eingeführt in 0.47.3 beim Verbinden der AnalysisEngine mit SwiftUI `onChange`-Callbacks. Fix: Token-Prüfung aus dem Background-Thread entfernt — die Prüfung auf dem Main-Thread (letzter Guard vor dem Publishen der Ergebnisse) ist ausreichend.

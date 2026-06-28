@@ -14,34 +14,52 @@ struct ContentView: View {
             }
 
             ZStack {
-                VStack(spacing: 0) {
-                    DetailView()
+                if viewModel.navSelection == .library || viewModel.navSelection == nil {
+                    // Library: Vollbild-Raster aller Bilder
+                    LibraryFullGridView()
                         .environmentObject(viewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     if let progress = viewModel.thumbnailLoadProgress {
-                        ThumbnailLoadBar(progress: progress,
-                                         done: viewModel.thumbnailLoadDone,
-                                         total: viewModel.thumbnailLoadTotal)
+                        VStack {
+                            Spacer()
+                            ThumbnailLoadBar(progress: progress,
+                                             done: viewModel.thumbnailLoadDone,
+                                             total: viewModel.thumbnailLoadTotal)
+                        }
                     }
-
-                    if !viewModel.collection.documents.isEmpty {
-                        Divider()
-
-                        LibraryGridView()
+                } else {
+                    // Album / Ordner: Detail-Ansicht + Strip
+                    VStack(spacing: 0) {
+                        DetailView()
                             .environmentObject(viewModel)
-                            .frame(height: 138)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        if let progress = viewModel.thumbnailLoadProgress {
+                            ThumbnailLoadBar(progress: progress,
+                                             done: viewModel.thumbnailLoadDone,
+                                             total: viewModel.thumbnailLoadTotal)
+                        }
+
+                        if !viewModel.collection.documents.isEmpty {
+                            Divider()
+
+                            LibraryGridView()
+                                .environmentObject(viewModel)
+                                .frame(height: 138)
+                        }
+                    }
+
+                    if viewModel.cropToolActive, let img = viewModel.currentImage {
+                        CropEditorView(
+                            image: img,
+                            initialCrop: viewModel.adjustments.cropRect,
+                            initialRotation: viewModel.adjustments.rotation
+                        )
+                        .environmentObject(viewModel)
                     }
                 }
 
-                if viewModel.cropToolActive, let img = viewModel.currentImage {
-                    CropEditorView(
-                        image: img,
-                        initialCrop: viewModel.adjustments.cropRect,
-                        initialRotation: viewModel.adjustments.rotation
-                    )
-                    .environmentObject(viewModel)
-                }
             }
 
             if viewModel.inspectorVisible {
