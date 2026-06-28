@@ -2,6 +2,13 @@
 
 ---
 
+## 0.47.9
+**Bugfix: Tabs werden beim Öffnen von Anpassungen nicht mehr breiter; RGB-Parade zuverlässig schließbar**
+- `Slider`-Controls haben eine System-Mindestbreite die ohne `frame(maxWidth: .infinity)` den Inspector-Container auf Fensterbreite aufzieht. Fix: Constraint auf `adjRow`-VStack und `Slider` in `AdjustmentsPanel`.
+- `.allowsHitTesting(false)` auf alle rein visuellen Analyse-Diagramme (Histogramm, Waveform, RGB-Parade) — verhindert zuverlässig, dass unsichtbare ZStack-Hit-Bereiche den Collapse-Button überdecken. Nur Kurven-Tab behält Hit-Testing.
+
+---
+
 ## 0.47.8
 **Bugfix: Inspector-Tabs (Anpassungen etc.) fließen nicht mehr über den Rand**
 - `InspectorBlock` fehlte `.clipShape(Rectangle())` am Content-Wrapper — gleicher Hit-Test-Overflow wie zuvor in AnalysePanel behoben.

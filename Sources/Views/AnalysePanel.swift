@@ -103,6 +103,7 @@ private struct AnalyseToolBlock: View {
                 toolContent
                     .frame(maxWidth: .infinity)
                     .clipShape(Rectangle())
+                    .allowsHitTesting(tool == .curves)
             }
         }
     }

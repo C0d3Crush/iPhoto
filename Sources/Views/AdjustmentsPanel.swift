@@ -167,6 +167,7 @@ struct AdjustmentsPanel: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding(16)
         }
     }
@@ -195,6 +196,8 @@ struct AdjustmentsPanel: View {
                     .foregroundColor(.primary)
             }
             Slider(value: value, in: range)
+                .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity)
     }
 }
