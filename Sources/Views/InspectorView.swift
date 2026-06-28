@@ -72,6 +72,7 @@ struct InspectorView: View {
                             Divider()
                         }
                     }
+                    .frame(maxWidth: .infinity)
                 }
             }
 

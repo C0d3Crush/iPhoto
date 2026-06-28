@@ -2,6 +2,12 @@
 
 ---
 
+## 0.47.10
+**Bugfix: Inspector-Tabs laufen nicht mehr über den Rand (Root Cause)**
+- Der `VStack` innerhalb des `ScrollView(.vertical)` im Inspector hatte kein `.frame(maxWidth: .infinity)`. SwiftUI misst in diesem Fall den VStack nach idealen Inhaltsbreiten statt nach der angebotenen ScrollView-Breite — macOS-Slider-Controls haben eine System-Idealbreite >280pt und ziehen den gesamten Inspector mit. Fix: `.frame(maxWidth: .infinity)` auf den ScrollView-VStack in `InspectorView` und auf den äußeren VStack in `AnalysePanel`.
+
+---
+
 ## 0.47.9
 **Bugfix: Tabs werden beim Öffnen von Anpassungen nicht mehr breiter; RGB-Parade zuverlässig schließbar**
 - `Slider`-Controls haben eine System-Mindestbreite die ohne `frame(maxWidth: .infinity)` den Inspector-Container auf Fensterbreite aufzieht. Fix: Constraint auf `adjRow`-VStack und `Slider` in `AdjustmentsPanel`.
