@@ -27,6 +27,7 @@ struct WaveformView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .clipped()
+                        .allowsHitTesting(false)
                 } else {
                     Text("Berechne…").font(.caption2).foregroundColor(.secondary)
                 }
@@ -63,6 +64,7 @@ struct WaveformView: View {
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
                                     .clipped()
+                                    .allowsHitTesting(false)
                             }
                         }
                         .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 80)

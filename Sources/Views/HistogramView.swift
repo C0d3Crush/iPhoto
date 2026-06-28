@@ -12,6 +12,8 @@ struct HistogramView: View {
                     Image(nsImage: NSImage(cgImage: img, size: .zero))
                         .resizable()
                         .aspectRatio(contentMode: .fill)
+                        .clipped()
+                        .allowsHitTesting(false)
                 } else {
                     Text("Berechne…")
                         .font(.caption2)
@@ -19,8 +21,8 @@ struct HistogramView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(height: 120)
-            .cornerRadius(4)
+            .frame(maxWidth: .infinity, minHeight: 120, maxHeight: 120)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
 
             HStack(spacing: 12) {
                 legendDot(color: .white,  label: "Luma")
