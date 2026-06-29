@@ -3,7 +3,10 @@ import CoreGraphics
 import CoreImage
 import Foundation
 
-private let sharedCIContext = CIContext(options: [.useSoftwareRenderer: false])
+// CIContext ist nicht thread-safe — jeder Decode-Aufruf erstellt seinen eigenen Context.
+private func makeCIContext() -> CIContext {
+    CIContext(options: [.useSoftwareRenderer: false])
+}
 
 enum DecoderError: LocalizedError {
     case cannotCreateSource
@@ -110,7 +113,7 @@ struct RAWImageDecoder {
               let orientation = CGImagePropertyOrientation(rawValue: raw),
               orientation != .up else { return image }
         let ci = CIImage(cgImage: image).oriented(orientation)
-        return sharedCIContext.createCGImage(ci, from: ci.extent) ?? image
+        return makeCIContext().createCGImage(ci, from: ci.extent) ?? image
     }
 
     private static func scaledDown(_ image: CGImage, maxDimension: Int) -> CGImage {

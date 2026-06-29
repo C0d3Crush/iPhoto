@@ -69,6 +69,7 @@ class ImageViewModel: ObservableObject {
     private let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
     private var loadToken: UUID = UUID()
+    private var currentlyLoadingURL: URL? = nil
     private var adjToken: UUID = UUID()
     private let adjCIContext: CIContext = {
         var opts: [CIContextOption: Any] = [.useSoftwareRenderer: false]
@@ -1828,6 +1829,8 @@ class ImageViewModel: ObservableObject {
 
     func loadCurrentImage() {
         guard let doc = collection.currentDocument else { return }
+        guard doc.url != currentlyLoadingURL || doc.cgImage == nil else { return }
+        currentlyLoadingURL = doc.url
         let index = collection.currentIndex
         resetAdjustments()
         adjUndoStack.removeAll()
@@ -1957,6 +1960,7 @@ class ImageViewModel: ObservableObject {
                                                     height: Int(size.height), sizeBytes: sizeBytes,
                                                     dateTaken: dateTaken, cameraMake: camMake, cameraModel: camModel)
                     self.isLoadingFullRes = false
+                    self.currentlyLoadingURL = nil
                     self.displayImageVersion = UUID()
                     if self.hasActiveAdjustments { self.applyAdjustments() }
                     self.loadVersionsForCurrentImage()
