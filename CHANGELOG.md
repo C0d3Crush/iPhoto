@@ -2,6 +2,14 @@
 
 ---
 
+## 0.54.0
+**Feature: SD-Karte nach Sync leeren**
+- Nach einem erfolgreichen Import von einer SD-Karte / einem Wechselmedium erscheint ein roter "Karte leeren"-Button direkt im Sync-Panel.
+- Ein Bestätigungsdialog zeigt die genaue Anzahl der Bilddateien vor dem Löschen.
+- Alle Bilddateien auf dem Medium werden unwiderruflich gelöscht (Nicht-Bilddateien bleiben erhalten).
+
+---
+
 ## 0.53.0
 **Feature: Kontextmenü auf Thumbnails**
 - Rechtsklick auf ein Thumbnail öffnet ein Menü mit: Pick/Abgelehnt setzen, Bewertung (1–5 Sterne), Farblabel, Exportieren, Im Finder zeigen, Album-Aktionen, Aus Sammlung entfernen.
