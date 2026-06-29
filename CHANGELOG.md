@@ -2,6 +2,14 @@
 
 ---
 
+## 0.55.0
+**Feature: Einheitliche Ladefortschrittsleiste am unteren Rand**
+- Thumbnails und Sync-Vorgänge erscheinen jetzt in einer gemeinsamen Warteschlange unten in der App.
+- Die Leiste zeigt Icon, Beschriftung (z. B. „Lade Thumbnails" / „Synchronisiere 'SONY'"), Fortschrittsbalken und Zähler.
+- Laufen mehrere Vorgänge gleichzeitig, wird einer angezeigt und der Rest mit „+N weitere" gekennzeichnet.
+
+---
+
 ## 0.54.0
 **Feature: SD-Karte nach Sync leeren**
 - Nach einem erfolgreichen Import von einer SD-Karte / einem Wechselmedium erscheint ein roter "Karte leeren"-Button direkt im Sync-Panel.
