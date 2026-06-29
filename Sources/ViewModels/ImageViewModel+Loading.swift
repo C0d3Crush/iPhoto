@@ -10,6 +10,7 @@ extension ImageViewModel {
         guard doc.url != currentlyLoadingURL || doc.cgImage == nil else { return }
         currentlyLoadingURL = doc.url
         let index = collection.currentIndex
+        evictFarImages(currentIndex: index)
         resetAdjustments()
         adjUndoStack.removeAll()
         adjRedoStack.removeAll()
@@ -293,6 +294,20 @@ extension ImageViewModel {
                           self.collection.documents[index].metadata.isEmpty else { return }
                     self.collection.documents[index].metadata = metadata
                 }
+            }
+        }
+    }
+
+    // MARK: - Memory Management
+
+    private func evictFarImages(currentIndex: Int) {
+        let keepRadius = 3
+        let lo = max(0, currentIndex - keepRadius)
+        let hi = min(collection.documents.count - 1, currentIndex + keepRadius)
+        for i in 0 ..< collection.documents.count where i < lo || i > hi {
+            if collection.documents[i].cgImage != nil || collection.documents[i].previewImage != nil {
+                collection.documents[i].cgImage = nil
+                collection.documents[i].previewImage = nil
             }
         }
     }

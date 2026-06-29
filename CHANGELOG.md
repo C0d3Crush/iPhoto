@@ -2,6 +2,16 @@
 
 ---
 
+## 0.60.5
+**Bugfix: Speichererschöpfung beim langen Browsen durch große Bildordner**
+
+- `cgImage`- und `previewImage`-Objekte (je ~50 MB bei 4416×2944) wurden beim Navigieren nie aus dem Speicher entlassen — alle bisher besuchten Bilder blieben dauerhaft geladen
+- Nach einigen Dutzend Bildern führte der Speicherdruck dazu, dass `CGImageSourceCreateImageAtIndex` auch für zuvor erfolgreich geladene Dateien (inkl. JPEGs) fehlschlug, gefolgt von SIGABRT oder SIGSEGV
+- `evictFarImages()` wird jetzt bei jedem Bildwechsel aufgerufen und gibt `cgImage`/`previewImage` für alle Dokumente frei, die mehr als 3 Positionen vom aktuellen Bild entfernt sind
+- Thumbnails bleiben erhalten; beim Zurückblättern zu einem eviktierten Bild wird es neu geladen
+
+---
+
 ## 0.60.4
 **Bugfix: Karte leeren trotz fehlgeschlagenem Import verhindert**
 
