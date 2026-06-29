@@ -4,19 +4,28 @@ import ImageIO
 final class MetadataService {
 
     func readPhotoMetadata(from url: URL) -> [MetadataEntry] {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return [] }
-        var props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] ?? [:]
+        var props: [String: Any]
 
-        // RAF: falls ImageIO keine vollständigen EXIF liefert (macOS 11, oder unvollständige RAF-Unterstützung),
-        // eingebetteten JPEG-Preview aus dem RAF-Binärheader lesen – dieser enthält vollständige Kamera-EXIF.
         if url.pathExtension.lowercased() == "raf" {
-            let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
-            let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
-            if (tiff[kCGImagePropertyTIFFMake as String] as? String ?? "").isEmpty,
-               (exif[kCGImagePropertyExifDateTimeOriginal as String] as? String ?? "").isEmpty,
-               let jpegProps = rafEmbeddedJPEGProperties(url: url) {
-                props = jpegProps
+            if #available(macOS 12.0, *) {
+                // macOS 12+: ImageIO unterstützt RAF nativ
+                guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return [] }
+                props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] ?? [:]
+                let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+                let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
+                if (tiff[kCGImagePropertyTIFFMake as String] as? String ?? "").isEmpty,
+                   (exif[kCGImagePropertyExifDateTimeOriginal as String] as? String ?? "").isEmpty,
+                   let jpegProps = rafEmbeddedJPEGProperties(url: url) {
+                    props = jpegProps
+                }
+            } else {
+                // macOS 11: CGImageSourceCreateWithURL auf RAF-Dateien ruft den Apple Fujifilm-Plugin auf → SIGSEGV.
+                // Direkt aus dem eingebetteten JPEG-Preview lesen.
+                props = rafEmbeddedJPEGProperties(url: url) ?? [:]
             }
+        } else {
+            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return [] }
+            props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] ?? [:]
         }
 
         let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]

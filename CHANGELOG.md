@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.7
+**Bugfix: SIGSEGV beim Lesen von RAF-Metadaten auf macOS 11**
+
+- `MetadataService.readPhotoMetadata()` rief `CGImageSourceCreateWithURL` direkt auf RAF-Dateien auf — der Apple Fujifilm-RAW-Plugin crasht dabei auf macOS 11.7.x mit SIGSEGV
+- Betroffen waren alle Codepfade, die nach einer erfolgreichen RAF-Dekodierung Metadaten lesen: `loadFullRes` (nach 1,5 s Dwell), `loadMetadataInBackground` und `loadCurrentImage` nach Album-Wechsel
+- Auf macOS 11 wird die Metadata jetzt direkt aus dem eingebetteten JPEG-Preview des RAF-Headers gelesen (gleicher Pfad wie bei der Bilddarstellung); auf macOS 12+ bleibt das Verhalten unverändert
+
+---
+
 ## 0.60.6
 **Bugfix: SIGSEGV beim Thumbnail-Laden von RAF-Dateien auf macOS 11**
 
