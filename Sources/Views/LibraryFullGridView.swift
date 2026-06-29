@@ -37,7 +37,7 @@ struct LibraryFullGridView: View {
                                     .onAppear { viewModel.requestVisibleThumbnail(at: idx) }
                                     .onTapGesture(count: 2) { openDetail(at: idx) }
                                     .onTapGesture { handleTap(at: idx) }
-                                    .contextMenu { contextMenu(for: doc) }
+                                    .contextMenu { ThumbnailContextMenu(doc: doc).environmentObject(viewModel) }
                                     .onDrag { NSItemProvider(object: doc.url as NSURL) }
                             }
                         }
@@ -89,18 +89,4 @@ struct LibraryFullGridView: View {
         }
     }
 
-    @ViewBuilder
-    private func contextMenu(for doc: ImageDocument) -> some View {
-        if !viewModel.albums.isEmpty {
-            let multi = viewModel.collection.selectedIndices.count > 1
-            Menu(multi ? "Alle (\(viewModel.collection.selectedIndices.count)) zu Album hinzufügen" : "Zu Album hinzufügen") {
-                ForEach(viewModel.albums) { album in
-                    Button(album.name) {
-                        if multi { viewModel.addSelectedToAlbum(albumID: album.id) }
-                        else      { viewModel.addToAlbum(doc, albumID: album.id) }
-                    }
-                }
-            }
-        }
-    }
 }

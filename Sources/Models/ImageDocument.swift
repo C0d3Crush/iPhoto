@@ -14,6 +14,16 @@ enum ColorLabel: String, Codable {
         case .blue:   return .systemBlue
         }
     }
+    // Finder label index (used by URLResourceKey.labelNumberKey)
+    var finderLabelNumber: Int {
+        switch self {
+        case .none:   return 0
+        case .red:    return 6
+        case .yellow: return 5
+        case .green:  return 2
+        case .blue:   return 4
+        }
+    }
 }
 
 struct ImageDocument: Identifiable, Equatable {

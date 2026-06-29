@@ -27,7 +27,7 @@ struct LibraryGridView: View {
                                 .contentShape(Rectangle())
                                 .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }
                                 .onTapGesture { handleTap(at: actualIndex) }
-                                .contextMenu { albumContextMenu(for: doc) }
+                                .contextMenu { ThumbnailContextMenu(doc: doc).environmentObject(viewModel) }
                                 .onDrag { NSItemProvider(object: doc.url as NSURL) }
                         }
                     }
@@ -50,27 +50,6 @@ struct LibraryGridView: View {
             viewModel.extendSelection(to: index)
         } else {
             viewModel.selectDocument(at: index)
-        }
-    }
-
-    @ViewBuilder
-    private func albumContextMenu(for doc: ImageDocument) -> some View {
-        if !viewModel.albums.isEmpty {
-            let multiSelect = viewModel.collection.selectedIndices.count > 1
-            Menu(multiSelect ? "Alle (\(viewModel.collection.selectedIndices.count)) zu Album hinzufügen" : "Zu Album hinzufügen") {
-                ForEach(viewModel.albums) { album in
-                    Button(album.name) {
-                        if multiSelect {
-                            viewModel.addSelectedToAlbum(albumID: album.id)
-                        } else {
-                            viewModel.addToAlbum(doc, albumID: album.id)
-                        }
-                    }
-                }
-            }
-            if case .album(let id) = viewModel.navSelection as NavSelection? {
-                Button("Aus Album entfernen") { viewModel.removeFromAlbum(doc, albumID: id) }
-            }
         }
     }
 }
