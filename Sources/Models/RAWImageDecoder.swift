@@ -46,6 +46,16 @@ struct RAWImageDecoder {
     }
 
     static func thumbnail(url: URL, maxDimension: Int = 160) throws -> CGImage {
+        // macOS 11: Der System-RAW-Decoder für RAF crasht mit SIGSEGV — ImageIO überspringen.
+        if url.pathExtension.lowercased() == "raf" {
+            if #available(macOS 12.0, *) {
+                // macOS 12+: ImageIO unterstützt RAF nativ — weiter wie üblich
+            } else {
+                if let full = decodeEmbeddedJPEG(url: url) { return scaledDown(full, maxDimension: maxDimension) }
+                throw DecoderError.cannotDecodeImage
+            }
+        }
+
         // Versuch 1: RAF – eingebettetes JPEG-Preview direkt aus dem Container lesen (schnell, hohe Qualität)
         if let full = decodeEmbeddedJPEG(url: url) {
             return scaledDown(full, maxDimension: maxDimension)

@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.6
+**Bugfix: SIGSEGV beim Thumbnail-Laden von RAF-Dateien auf macOS 11**
+
+- `RAWImageDecoder.thumbnail()` fiel bei fehlgeschlagenem `decodeEmbeddedJPEG` auf den ImageIO-Pfad zurück — der Apple Fujifilm-RAW-Plugin crasht dort auf macOS 11.7.x mit SIGSEGV
+- Der macOS-11-Guard war in `decode()` vorhanden (seit 0.60.2), aber nicht in `thumbnail()` — dadurch crashten Thumbnail-Ladeoperationen (80px, 160px, 1500px) beim Öffnen von RAF-Alben
+- `thumbnail()` überspringt den ImageIO-Pfad für RAF auf macOS 11 jetzt genauso wie `decode()`
+
+---
+
 ## 0.60.5
 **Bugfix: Speichererschöpfung beim langen Browsen durch große Bildordner**
 
