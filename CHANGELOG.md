@@ -2,6 +2,45 @@
 
 ---
 
+## 0.52.1
+**Bugfix: Thumbnail-Ladefortschritt zeigt korrekte Zahlen**
+- Der Fortschrittszähler (z. B. „1000/9250") war stark überhöht, weil noch ladende Bilder bei jedem erneuten Aufruf doppelt gezählt wurden.
+- Neu: In-Flight-Tracking verhindert, dass dasselbe Bild mehrfach in die Warteschlange kommt.
+
+---
+
+## 0.52.0
+**Feature: iTunes-Style Filter in Intelligenten Ordnern**
+- Kriterien bestehen jetzt aus drei Teilen: Attribut-Picker → Operator-Picker → Wert.
+- Operator passt sich automatisch dem Attribut an: Text-Attribute bieten „enthält / ist / beginnt mit / endet mit", numerische Attribute „ist größer als / ist im Bereich" usw., Enum-Attribute nur „ist / ist nicht".
+- Bei „ist im Bereich" erscheinen zwei Felder (von / bis).
+- Neue Attribute: Bewertung, ISO, Brennweite, Blende, Objektiv, Dateiname, Dateityp, Farblabel.
+
+---
+
+## 0.51.0
+**Feature: Erweiterte Filter für Intelligente Ordner**
+- Neue Filterkriterien: Objektiv, ISO (mindestens/höchstens), Brennweite (ab/bis), Blende (offen bis / geschlossen ab), Dateiname enthält, Dateityp (RAW / nicht RAW).
+- Blende wird als Picker mit Standard-f-Werten angeboten (f/1.0 bis f/22).
+- ISO und Brennweite werden als Zahlenfeld eingegeben.
+
+---
+
+## 0.50.1
+**Bugfix: RAF-Metadaten korrekt gelesen + Metadaten beim Start vorgeladen**
+- RAF-Dateien: Metadaten werden jetzt aus dem eingebetteten JPEG-Preview extrahiert, falls ImageIO keine vollständigen EXIF-Daten liefert (betrifft besonders macOS 11).
+- Metadaten aller Bilder werden beim Import im Hintergrund vorgeladen – kein Warten mehr auf das Vollbild nötig, um Kamerainfo/Datum zu sehen.
+- In `loadFullRes` werden bereits geladene Metadaten nicht mehr doppelt gelesen.
+
+---
+
+## 0.50.0
+**Feature: Mehrfachmarkierung als Pick / Ablehnen**
+- Wenn mehrere Bilder per Cmd+Klick oder Shift+Klick ausgewählt sind, setzt `P` (Pick) oder `X` (Ablehnen) den Status für alle markierten Bilder gleichzeitig.
+- Sind alle markierten Bilder bereits mit dem gleichen Status versehen, wird er entfernt (Toggle).
+
+---
+
 ## 0.49.1
 **Bugfix: Sync springt nicht mehr zur neu hinzugefügten Datei**
 - Beim automatischen Sync von überwachten Ordnern bleibt die aktuelle Bildauswahl erhalten. Nur beim manuellen Import per Dialog oder Drag & Drop wird das erste neue Bild automatisch fokussiert.
