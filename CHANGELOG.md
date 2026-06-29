@@ -2,6 +2,14 @@
 
 ---
 
+## 0.56.0
+**Feature: Lazy Loading — Bilder erst beim Navigieren laden**
+- Beim App-Start werden keine Bilder mehr automatisch geladen.
+- Thumbnails und Ordner-Inhalte werden erst geladen wenn der Nutzer Library, einen Ordner, ein Album oder einen Smart-Ordner anklickt.
+- Verbessert den Start drastisch bei großen Bibliotheken.
+
+---
+
 ## 0.55.0
 **Feature: Einheitliche Ladefortschrittsleiste am unteren Rand**
 - Thumbnails und Sync-Vorgänge erscheinen jetzt in einer gemeinsamen Warteschlange unten in der App.
