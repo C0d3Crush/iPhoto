@@ -4,7 +4,6 @@ struct SmartFolderSheet: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
     var editing: SmartFolder?
-
     @Binding var isPresented: Bool
 
     @State private var name: String
@@ -14,9 +13,9 @@ struct SmartFolderSheet: View {
     init(editing: SmartFolder? = nil, isPresented: Binding<Bool>) {
         self.editing = editing
         self._isPresented = isPresented
-        _name      = State(initialValue: editing?.name ?? "")
-        _matchAll  = State(initialValue: editing?.matchAll ?? true)
-        _criteria  = State(initialValue: editing?.criteria ?? [SmartFolderCriterion()])
+        _name     = State(initialValue: editing?.name ?? "")
+        _matchAll = State(initialValue: editing?.matchAll ?? true)
+        _criteria = State(initialValue: editing?.criteria ?? [SmartFolderCriterion()])
     }
 
     var body: some View {
@@ -74,41 +73,58 @@ struct SmartFolderSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 380)
+        .frame(width: 500)
     }
 
     private func save() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         if var sf = editing {
-            sf.name = trimmed
-            sf.criteria = criteria
-            sf.matchAll = matchAll
+            sf.name = trimmed; sf.criteria = criteria; sf.matchAll = matchAll
             viewModel.updateSmartFolder(sf)
         } else {
             var sf = SmartFolder(name: trimmed)
-            sf.criteria = criteria
-            sf.matchAll = matchAll
+            sf.criteria = criteria; sf.matchAll = matchAll
             viewModel.createSmartFolder(sf)
         }
     }
 }
+
+// MARK: - CriterionRow
 
 private struct CriterionRow: View {
     @Binding var criterion: SmartFolderCriterion
     let onDelete: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            Picker("", selection: $criterion.kind) {
-                ForEach(SmartFolderCriterionKind.allCases, id: \.self) { k in
-                    Text(k.displayName).tag(k)
+        HStack(spacing: 6) {
+            // 1. Attribut-Picker
+            Picker("", selection: $criterion.attribute) {
+                ForEach(SmartFolderAttribute.allCases, id: \.self) { a in
+                    Text(a.displayName).tag(a)
                 }
             }
             .labelsHidden()
             .pickerStyle(MenuPickerStyle())
-            .frame(width: 165)
+            .frame(width: 140)
+            .onChange(of: criterion.attribute) { newAttr in
+                // Operator zurücksetzen wenn er für den neuen Typ ungültig ist
+                if !newAttr.availableOperators.contains(criterion.op) {
+                    criterion.op = newAttr.defaultOperator
+                }
+            }
 
-            criterionValueView
+            // 2. Operator-Picker
+            Picker("", selection: $criterion.op) {
+                ForEach(criterion.attribute.availableOperators, id: \.self) { op in
+                    Text(op.displayName).tag(op)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(MenuPickerStyle())
+            .frame(width: 145)
+
+            // 3. Wert-Input
+            valueView
 
             Spacer(minLength: 0)
 
@@ -121,28 +137,20 @@ private struct CriterionRow: View {
         }
     }
 
+    // MARK: Value view
+
     @ViewBuilder
-    private var criterionValueView: some View {
-        switch criterion.kind {
+    private var valueView: some View {
+        switch criterion.attribute {
+
+        // --- Enum-Attribute ---
         case .flag:
             Picker("", selection: $criterion.flagValue) {
                 Text("Ausgewählt (Pick)").tag(FlagStatus.pick)
                 Text("Abgelehnt (Reject)").tag(FlagStatus.reject)
                 Text("Keine Markierung").tag(FlagStatus.none)
             }
-            .labelsHidden()
-            .pickerStyle(MenuPickerStyle())
-            .frame(width: 150)
-
-        case .ratingAtLeast:
-            HStack(spacing: 4) {
-                Stepper("", value: $criterion.ratingValue, in: 1...5)
-                    .labelsHidden()
-                    .frame(width: 60)
-                Text("\(criterion.ratingValue) ★")
-                    .font(.caption)
-                    .frame(width: 30)
-            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 160)
 
         case .colorLabel:
             Picker("", selection: $criterion.colorValue) {
@@ -151,14 +159,121 @@ private struct CriterionRow: View {
                 Text("Grün").tag(ColorLabel.green)
                 Text("Blau").tag(ColorLabel.blue)
             }
-            .labelsHidden()
-            .pickerStyle(MenuPickerStyle())
-            .frame(width: 100)
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 100)
 
-        case .cameraMake, .cameraModel:
-            TextField("z.B. Sony", text: $criterion.textValue)
+        case .isRAW:
+            Picker("", selection: $criterion.boolValue) {
+                Text("RAW").tag(true)
+                Text("Nicht RAW").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 100)
+
+        // --- Rating ---
+        case .rating:
+            if criterion.op == .inRange {
+                HStack(spacing: 4) {
+                    Stepper("", value: $criterion.ratingValue, in: 0...5).labelsHidden().frame(width: 60)
+                    Text("\(criterion.ratingValue)★").font(.caption)
+                    Text("–").font(.caption).foregroundColor(.secondary)
+                    Stepper("", value: $criterion.ratingValue2, in: 0...5).labelsHidden().frame(width: 60)
+                    Text("\(criterion.ratingValue2)★").font(.caption)
+                }
+            } else {
+                HStack(spacing: 4) {
+                    Stepper("", value: $criterion.ratingValue, in: 0...5).labelsHidden().frame(width: 60)
+                    Text("\(criterion.ratingValue) ★").font(.caption).frame(width: 30)
+                }
+            }
+
+        // --- ISO ---
+        case .iso:
+            if criterion.op == .inRange {
+                numericRangeInput(unit: "ISO")
+            } else {
+                numericSingleInput(unit: "ISO")
+            }
+
+        // --- Brennweite ---
+        case .focalLength:
+            if criterion.op == .inRange {
+                numericRangeInput(unit: "mm")
+            } else {
+                numericSingleInput(unit: "mm")
+            }
+
+        // --- Blende ---
+        case .aperture:
+            let fValues: [Double] = [1.0, 1.2, 1.4, 1.8, 2.0, 2.8, 4.0, 5.6, 8.0, 11.0, 16.0, 22.0]
+            if criterion.op == .inRange {
+                HStack(spacing: 4) {
+                    Picker("", selection: $criterion.numericValue) {
+                        ForEach(fValues, id: \.self) { f in Text(fLabel(f)).tag(f) }
+                    }
+                    .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 70)
+                    Text("–").font(.caption).foregroundColor(.secondary)
+                    Picker("", selection: $criterion.numericValue2) {
+                        ForEach(fValues, id: \.self) { f in Text(fLabel(f)).tag(f) }
+                    }
+                    .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 70)
+                }
+            } else {
+                Picker("", selection: $criterion.numericValue) {
+                    ForEach(fValues, id: \.self) { f in Text(fLabel(f)).tag(f) }
+                }
+                .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 80)
+            }
+
+        // --- Text-Attribute ---
+        case .cameraMake, .cameraModel, .lens, .filename:
+            TextField(textPlaceholder, text: $criterion.textValue)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .frame(width: 150)
         }
+    }
+
+    // MARK: Helpers
+
+    private func fLabel(_ f: Double) -> String { String(format: "f/%.1g", f) }
+
+    @ViewBuilder
+    private func numericSingleInput(unit: String) -> some View {
+        HStack(spacing: 4) {
+            TextField("", value: $criterion.numericValue, formatter: intFormatter)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .frame(width: 70)
+            Text(unit).font(.caption).foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func numericRangeInput(unit: String) -> some View {
+        HStack(spacing: 4) {
+            TextField("", value: $criterion.numericValue, formatter: intFormatter)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .frame(width: 65)
+            Text("–").font(.caption).foregroundColor(.secondary)
+            TextField("", value: $criterion.numericValue2, formatter: intFormatter)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .frame(width: 65)
+            Text(unit).font(.caption).foregroundColor(.secondary)
+        }
+    }
+
+    private var textPlaceholder: String {
+        switch criterion.attribute {
+        case .cameraMake: return "z.B. Fujifilm"
+        case .cameraModel: return "z.B. X-T5"
+        case .lens: return "z.B. 35mm"
+        case .filename: return "z.B. DSC"
+        default: return ""
+        }
+    }
+
+    private var intFormatter: NumberFormatter {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.allowsFloats = false
+        f.minimum = 0
+        return f
     }
 }

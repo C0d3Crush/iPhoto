@@ -2,6 +2,16 @@
 
 ---
 
+## 0.58.0
+**Feature: Erweiterte Smart-Ordner-Kriterien**
+- Neue Attribute: ISO, Brennweite, Blende, Objektiv, Dateiname, Dateityp (RAW/Nicht-RAW), Bewertung.
+- Neuer Operator-Picker pro Kriterium: „ist", „ist nicht", „enthält", „beginnt mit", „endet mit", „größer als", „kleiner als", „im Bereich".
+- Bereichsfilter für numerische Werte (z.B. ISO 400–1600, Blende f/1.4–f/2.8).
+- RAF-EXIF-Fallback: Kamera-Metadaten werden jetzt auch auf macOS 11 korrekt aus eingebetteten JPEG-Previews gelesen.
+- `readUInt32BE` in eigene `Data+Extensions.swift` ausgelagert.
+
+---
+
 ## 0.57.0
 **Feature: ~/Pictures/iPhoto als Standard-Bibliotheksordner**
 - Beim ersten Start wird `~/Pictures/iPhoto` automatisch angelegt und als Watched Folder eingerichtet.

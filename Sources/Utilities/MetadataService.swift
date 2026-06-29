@@ -4,9 +4,20 @@ import ImageIO
 final class MetadataService {
 
     func readPhotoMetadata(from url: URL) -> [MetadataEntry] {
-        guard let src   = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
-        else { return [] }
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return [] }
+        var props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] ?? [:]
+
+        // RAF: falls ImageIO keine vollständigen EXIF liefert (macOS 11, oder unvollständige RAF-Unterstützung),
+        // eingebetteten JPEG-Preview aus dem RAF-Binärheader lesen – dieser enthält vollständige Kamera-EXIF.
+        if url.pathExtension.lowercased() == "raf" {
+            let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+            let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
+            if (tiff[kCGImagePropertyTIFFMake as String] as? String ?? "").isEmpty,
+               (exif[kCGImagePropertyExifDateTimeOriginal as String] as? String ?? "").isEmpty,
+               let jpegProps = rafEmbeddedJPEGProperties(url: url) {
+                props = jpegProps
+            }
+        }
 
         let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
         let iptc = props[kCGImagePropertyIPTCDictionary as String] as? [String: Any] ?? [:]
@@ -221,5 +232,31 @@ final class MetadataService {
 
     private func formatShutter(_ s: Double) -> String {
         s >= 1 ? String(format: "%.1f s", s) : "1/\(Int(1 / s)) s"
+    }
+
+    // Extrahiert den eingebetteten JPEG-Preview aus einem RAF-Binärheader und liest dessen EXIF-Properties.
+    // RAF v0200/v0201: JPEG-Offset/Länge als Big-Endian UInt32 bei Byte 0x54 / 0x58.
+    private func rafEmbeddedJPEGProperties(url: URL) -> [String: Any]? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { handle.closeFile() }
+
+        let header = handle.readData(ofLength: 96)
+        guard header.count >= 96 else { return nil }
+
+        let sig = String(bytes: header.prefix(16), encoding: .ascii) ?? ""
+        guard sig.hasPrefix("FUJIFILMCCD-RAW") else { return nil }
+
+        let jpegOffset = header.readUInt32BE(at: 0x54)
+        let jpegLength = header.readUInt32BE(at: 0x58)
+        guard jpegOffset > 0, jpegLength > 0 else { return nil }
+
+        handle.seek(toFileOffset: UInt64(jpegOffset))
+        let jpegData = handle.readData(ofLength: Int(jpegLength))
+        guard jpegData.count >= 4,
+              jpegData[0] == 0xFF, jpegData[1] == 0xD8 else { return nil }
+
+        guard let src = CGImageSourceCreateWithData(jpegData as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] else { return nil }
+        return props
     }
 }
