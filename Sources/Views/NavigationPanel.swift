@@ -319,6 +319,15 @@ private struct PanelFolderRow: View {
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
+                        } else if isRemovable && viewModel.completedImports.contains(folder.id) {
+                            Button {
+                                viewModel.wipeFolder(folder)
+                            } label: {
+                                Label("Karte leeren", systemImage: "trash")
+                                    .font(.caption2)
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         } else if let destPath = folder.importDestinationPath {
                             Text("→ \(URL(fileURLWithPath: destPath).lastPathComponent)")
                                 .font(.caption2)

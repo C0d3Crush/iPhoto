@@ -27,6 +27,7 @@ class ImageViewModel: ObservableObject {
         var total: Int
     }
     @Published var importProgress: [UUID: ImportProgress] = [:]
+    @Published var completedImports: Set<UUID> = []
 
     // MARK: - Adjustments
     @Published var adjustments: AdjustmentState = AdjustmentState()
@@ -789,9 +790,50 @@ class ImageViewModel: ObservableObject {
 
             DispatchQueue.main.async {
                 self.importProgress.removeValue(forKey: folderID)
-                if !newURLs.isEmpty { self.importFiles(newURLs, selectFirst: false) }
+                if !newURLs.isEmpty {
+                    self.importFiles(newURLs, selectFirst: false)
+                    self.completedImports.insert(folderID)
+                }
             }
         }
+    }
+
+    func wipeFolder(_ folder: WatchedFolder) {
+        guard folder.isRemovableMedia,
+              let (sourceURL, stop) = folder.resolveURL() else { return }
+        defer { stop() }
+
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: sourceURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return }
+
+        var imageFiles: [URL] = []
+        for case let fileURL as URL in enumerator {
+            if (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+               ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
+                imageFiles.append(fileURL)
+            }
+        }
+        guard !imageFiles.isEmpty else {
+            completedImports.remove(folder.id)
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "\(imageFiles.count) Bilddateien von \"\(folder.name)\" löschen?"
+        alert.informativeText = "Alle Bilddateien auf dem Speichermedium werden unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden."
+        alert.addButton(withTitle: "Löschen")
+        alert.addButton(withTitle: "Abbrechen")
+        alert.alertStyle = .critical
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        for file in imageFiles {
+            try? fm.removeItem(at: file)
+        }
+        completedImports.remove(folder.id)
     }
 
     func syncFolder(_ folder: WatchedFolder) {
