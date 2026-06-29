@@ -26,8 +26,17 @@ class ImageViewModel: ObservableObject {
         var completed: Int
         var total: Int
     }
+    struct LoadingTask: Identifiable {
+        let id: UUID
+        var label: String
+        var icon: String
+        var done: Int
+        var total: Int
+        var progress: Double { total > 0 ? Double(done) / Double(total) : 0 }
+    }
     @Published var importProgress: [UUID: ImportProgress] = [:]
     @Published var completedImports: Set<UUID> = []
+    @Published var loadingQueue: [LoadingTask] = []
 
     // MARK: - Adjustments
     @Published var adjustments: AdjustmentState = AdjustmentState()
@@ -35,9 +44,6 @@ class ImageViewModel: ObservableObject {
     @Published var displayImageVersion: UUID = UUID()
     @Published var cropToolActive: Bool = false
     @Published var showOriginal: Bool = false
-    @Published var thumbnailLoadProgress: Double? = nil
-    @Published var thumbnailLoadDone: Int = 0
-    @Published var thumbnailLoadTotal: Int = 0
     @Published var copiedAdjustments: AdjustmentState? = nil
     @Published var userPresets: [Preset] = []
 
@@ -744,6 +750,8 @@ class ImageViewModel: ObservableObject {
         let folderID = folder.id
         let folderName = folder.name
         importProgress[folderID] = ImportProgress(folderName: folderName, completed: 0, total: 0)
+        enqueueLoading(id: folderID, label: "Synchronisiere \"\(folderName)\"",
+                       icon: "arrow.down.circle", done: 0, total: 0)
 
         DispatchQueue.global(qos: .userInitiated).async {
             defer { stop() }
@@ -754,7 +762,10 @@ class ImageViewModel: ObservableObject {
                 includingPropertiesForKeys: [.isRegularFileKey],
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
             ) else {
-                DispatchQueue.main.async { self.importProgress.removeValue(forKey: folderID) }
+                DispatchQueue.main.async {
+                    self.importProgress.removeValue(forKey: folderID)
+                    self.dequeueLoading(id: folderID)
+                }
                 return
             }
 
@@ -772,6 +783,7 @@ class ImageViewModel: ObservableObject {
 
             DispatchQueue.main.async {
                 self.importProgress[folderID] = ImportProgress(folderName: folderName, completed: 0, total: newFiles.count)
+                self.updateLoading(id: folderID, done: 0, total: newFiles.count)
             }
 
             var completed = 0
@@ -785,11 +797,13 @@ class ImageViewModel: ObservableObject {
                 let c = completed
                 DispatchQueue.main.async {
                     self.importProgress[folderID] = ImportProgress(folderName: folderName, completed: c, total: newFiles.count)
+                    self.updateLoading(id: folderID, done: c, total: newFiles.count)
                 }
             }
 
             DispatchQueue.main.async {
                 self.importProgress.removeValue(forKey: folderID)
+                self.dequeueLoading(id: folderID)
                 if !newURLs.isEmpty {
                     self.importFiles(newURLs, selectFirst: false)
                     self.completedImports.insert(folderID)
@@ -1896,6 +1910,28 @@ class ImageViewModel: ObservableObject {
         loadFullRes(url: doc.url, index: collection.currentIndex, token: loadToken)
     }
 
+    private let thumbnailTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+
+    private func enqueueLoading(id: UUID, label: String, icon: String, done: Int = 0, total: Int = 0) {
+        if let idx = loadingQueue.firstIndex(where: { $0.id == id }) {
+            loadingQueue[idx].label = label
+            loadingQueue[idx].done  = done
+            loadingQueue[idx].total = total
+        } else {
+            loadingQueue.append(LoadingTask(id: id, label: label, icon: icon, done: done, total: total))
+        }
+    }
+
+    private func updateLoading(id: UUID, done: Int, total: Int) {
+        guard let idx = loadingQueue.firstIndex(where: { $0.id == id }) else { return }
+        loadingQueue[idx].done  = done
+        loadingQueue[idx].total = total
+    }
+
+    private func dequeueLoading(id: UUID) {
+        loadingQueue.removeAll { $0.id == id }
+    }
+
     func loadThumbnails() {
         let pending = collection.documents.enumerated().filter {
             $0.element.placeholderThumbnailImage == nil &&
@@ -1904,14 +1940,12 @@ class ImageViewModel: ObservableObject {
         }
         guard !pending.isEmpty else { return }
 
-        // Cancel any pending "hide bar" task and add to the shared accumulator.
         thumbHideTask?.cancel()
         thumbHideTask = nil
         for (_, doc) in pending { thumbInFlight.insert(doc.url) }
         thumbQueued += pending.count
-        thumbnailLoadTotal = thumbQueued
-        thumbnailLoadDone  = thumbDone
-        thumbnailLoadProgress = thumbQueued > 0 ? Double(thumbDone) / Double(thumbQueued) : 0
+        enqueueLoading(id: thumbnailTaskID, label: "Lade Thumbnails",
+                       icon: "photo", done: thumbDone, total: thumbQueued)
 
         for (index, doc) in pending {
             let url = doc.url
@@ -1930,15 +1964,14 @@ class ImageViewModel: ObservableObject {
                         self.collection.documents[index].placeholderThumbnailImage = img
                     }
                     self.thumbDone += 1
-                    self.thumbnailLoadDone  = self.thumbDone
-                    self.thumbnailLoadTotal = self.thumbQueued
-                    self.thumbnailLoadProgress = Double(self.thumbDone) / Double(self.thumbQueued)
+                    self.updateLoading(id: self.thumbnailTaskID,
+                                       done: self.thumbDone, total: self.thumbQueued)
                     if self.thumbDone >= self.thumbQueued {
                         self.thumbDone   = 0
                         self.thumbQueued = 0
                         self.thumbInFlight.removeAll()
                         let task = DispatchWorkItem { [weak self] in
-                            self?.thumbnailLoadProgress = nil
+                            self?.dequeueLoading(id: self!.thumbnailTaskID)
                         }
                         self.thumbHideTask = task
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: task)

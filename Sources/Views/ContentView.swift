@@ -20,12 +20,10 @@ struct ContentView: View {
                         .environmentObject(viewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    if let progress = viewModel.thumbnailLoadProgress {
+                    if let task = viewModel.loadingQueue.first {
                         VStack {
                             Spacer()
-                            ThumbnailLoadBar(progress: progress,
-                                             done: viewModel.thumbnailLoadDone,
-                                             total: viewModel.thumbnailLoadTotal)
+                            LoadingBar(task: task, pending: viewModel.loadingQueue.count - 1)
                         }
                     }
                 } else {
@@ -35,10 +33,8 @@ struct ContentView: View {
                             .environmentObject(viewModel)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                        if let progress = viewModel.thumbnailLoadProgress {
-                            ThumbnailLoadBar(progress: progress,
-                                             done: viewModel.thumbnailLoadDone,
-                                             total: viewModel.thumbnailLoadTotal)
+                        if let task = viewModel.loadingQueue.first {
+                            LoadingBar(task: task, pending: viewModel.loadingQueue.count - 1)
                         }
 
                         if !viewModel.collection.documents.isEmpty {
@@ -227,28 +223,50 @@ struct DetailView: View {
     }
 }
 
-private struct ThumbnailLoadBar: View {
-    let progress: Double
-    let done: Int
-    let total: Int
+private struct LoadingBar: View {
+    let task: ImageViewModel.LoadingTask
+    let pending: Int
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
-            HStack(spacing: 10) {
-                ProgressView(value: progress)
-                    .progressViewStyle(LinearProgressViewStyle())
-                    .frame(maxWidth: .infinity)
-                Text("\(done) / \(total)")
-                    .font(.system(size: 10, design: .monospaced))
+            HStack(spacing: 8) {
+                Image(systemName: task.icon)
+                    .font(.system(size: 10))
                     .foregroundColor(.secondary)
-                    .frame(width: 60, alignment: .trailing)
+                Text(task.label)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                if task.total > 0 {
+                    ProgressView(value: task.progress)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(maxWidth: .infinity)
+                    Text("\(task.done) / \(task.total)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 60, alignment: .trailing)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(maxWidth: .infinity)
+                }
+                if pending > 0 {
+                    Text("+\(pending)")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.15))
+                        .cornerRadius(4)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
             .background(Color(NSColor.windowBackgroundColor))
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
-        .animation(.easeInOut(duration: 0.2), value: progress)
+        .animation(.easeInOut(duration: 0.2), value: task.progress)
     }
 }
