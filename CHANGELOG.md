@@ -2,6 +2,16 @@
 
 ---
 
+## 0.60.10
+**Bugfix: Thread-sicherer Logger, atomarer Signal-Handler, gedrosseltes Thumbnail-Laden**
+
+- `Log.trace()` rief `appendRaw()` direkt auf dem aufrufenden Hintergrund-Thread auf — ohne jede Serialisierung. 50+ Threads gleichzeitig → open/seek/write/close-Race → abgeschnittene und interleaved Log-Einträge; alle Writes (sync und async) laufen jetzt über die serielle Queue (`queue.sync` für `writeSync`, `queue.async` für `write`); persistentes `FileHandle` vermeidet das pro-Write open/close
+- Signal-Handler rief `write()` viermal hintereinander auf → Log-Writes aktiver Hintergrund-Threads landeten zwischen den SIGNAL-Zeilen → `[SIGNAL_LAST_OP]` zeigte fälschlicherweise eine vollständige Log-Zeile; jetzt wird der gesamte SIGNAL-Block in einem Pre-Alloc-Buffer assembled und in einem einzigen `write()`-Aufruf geleert (O_APPEND-atomar)
+- Signal-Handler feuerte von zwei Threads gleichzeitig (SIGABRT als prozessweites Signal) → `[SIGNAL_THREAD] background` erschien zweifach; `OSAtomicCompareAndSwap32`-Guard stellt sicher, dass nur der erste Thread Diagnostics schreibt
+- `loadThumbnails()` dispatched alle ausstehenden Thumbnails ohne Limit gleichzeitig; 50 RAF-Dateien → ~1,5 GB RAM-Spitze → Allocator ruft `abort()` → SIGABRT; `thumbnailDecodeSemaphore(value: 8)` begrenzt parallele Decodes auf 8 (~240 MB Peak)
+
+---
+
 ## 0.60.9
 **Bugfix: SIGABRT durch Metal-Überlastung beim parallelen Thumbnail-Laden**
 

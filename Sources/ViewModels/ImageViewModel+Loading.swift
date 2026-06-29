@@ -1,6 +1,12 @@
 import AppKit
 import Foundation
 
+// Caps concurrent thumbnail decode pipelines to prevent memory exhaustion.
+// Each RAF thumbnail reads ~5 MB JPEG and creates a ~30 MB CGImage.
+// 8 concurrent decodes ≈ 240 MB peak; combined with ciSemaphore(4) in RAWImageDecoder,
+// at most 4 of those 8 will be doing GPU rendering at any given time.
+private let thumbnailDecodeSemaphore = DispatchSemaphore(value: 8)
+
 // MARK: - Image Loading Pipeline
 
 extension ImageViewModel {
@@ -185,6 +191,8 @@ extension ImageViewModel {
         for (index, doc) in pending {
             let url = doc.url
             DispatchQueue.global(qos: .background).async { [weak self] in
+                thumbnailDecodeSemaphore.wait()
+                defer { thumbnailDecodeSemaphore.signal() }
                 autoreleasepool {
                     let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                     defer { stopAccess() }

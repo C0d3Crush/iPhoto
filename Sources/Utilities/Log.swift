@@ -14,6 +14,7 @@ final class Log {
 
     let fileURL: URL
     private let queue = DispatchQueue(label: "iphoto.logger", qos: .utility)
+    private var fileHandle: FileHandle?
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
@@ -33,16 +34,23 @@ final class Log {
         // timestamped log entry — CrashReporter.buildReport() splits on this exact string).
         let boundary = "\n\(Log.sessionMarker) \(fileURL.path)\n"
         appendRaw(boundary)
+        // Open a persistent handle for all subsequent writes — serialized through the queue.
+        // Keeps the fd open for the app's lifetime; avoids per-call open/seek/close overhead
+        // and eliminates the race when multiple threads write concurrently.
+        fileHandle = try? FileHandle(forWritingTo: fileURL)
+        fileHandle?.seekToEndOfFile()
     }
 
     // Unique marker that only appears as a standalone boundary, never inside a log entry.
     static let sessionMarker = "###SESSION_START###"
 
-    // Synchronous write — safe to call from crash/signal handlers.
+    // Synchronous write — blocks the calling thread until the line is flushed to disk.
+    // Routes through the serial queue so it cannot interleave with async writes.
     func writeSync(level: LogLevel, _ msg: String, function: String = #function) {
         let timestamp = dateFormatter.string(from: Date())
         let line = "[\(timestamp)] [\(level.rawValue)] [\(function)] \(msg)\n"
-        appendRaw(line)
+        guard let data = line.data(using: .utf8) else { return }
+        queue.sync { self.fileHandle?.write(data) }
     }
 
     private func appendRaw(_ text: String) {
@@ -79,18 +87,7 @@ final class Log {
         let timestamp = dateFormatter.string(from: Date())
         let filename = URL(fileURLWithPath: file).deletingPathExtension().lastPathComponent
         let line = "[\(timestamp)] [\(level.rawValue)] [\(filename).\(function)] \(msg)\n"
-        queue.async {
-            if let data = line.data(using: .utf8) {
-                if FileManager.default.fileExists(atPath: self.fileURL.path) {
-                    if let handle = try? FileHandle(forWritingTo: self.fileURL) {
-                        handle.seekToEndOfFile()
-                        handle.write(data)
-                        handle.closeFile()
-                    }
-                } else {
-                    try? data.write(to: self.fileURL, options: .atomic)
-                }
-            }
-        }
+        guard let data = line.data(using: .utf8) else { return }
+        queue.async { [weak self] in self?.fileHandle?.write(data) }
     }
 }

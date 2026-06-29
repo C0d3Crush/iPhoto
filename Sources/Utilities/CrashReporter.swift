@@ -85,6 +85,7 @@ enum CrashReporter {
         _ = Log.shared.fileURL.path.withCString { src in
             strlcpy(&iphotoLogPathBuf, src, iphotoLogPathBuf.count)
         }
+        iphotoSignalHandlerFired = 0
         for sig in [SIGSEGV, SIGABRT, SIGBUS, SIGILL] {
             signal(sig, iphotoSignalHandler)
         }
@@ -108,6 +109,14 @@ var iphotoMsgMainThread = Array("[SIGNAL_THREAD] main\n".utf8CString)
 var iphotoMsgBGThread   = Array("[SIGNAL_THREAD] background\n".utf8CString)
 var iphotoMsgLastOpPfx  = Array("[SIGNAL_LAST_OP] ".utf8CString)
 
+// Guards against two threads entering the signal handler simultaneously.
+// OSAtomicCompareAndSwap32 is async-signal-safe (single atomic CAS instruction).
+var iphotoSignalHandlerFired: Int32 = 0
+
+// Pre-allocated buffer for assembling all signal output — written via strlcpy/strlcat,
+// then flushed in a single write() call (atomic under O_APPEND).
+var iphotoSignalOutputBuf = [CChar](repeating: 0, count: 1024)
+
 // Must be a free function (not a closure) to be used as a C callback.
 private func iphotoUncaughtExceptionHandler(_ exception: NSException) {
     let stack = exception.callStackSymbols.prefix(10).joined(separator: "\n  ")
@@ -116,31 +125,41 @@ private func iphotoUncaughtExceptionHandler(_ exception: NSException) {
     Thread.sleep(forTimeInterval: 0.3)
 }
 
-// Async-signal-safe: only syscalls (open/write/close) + reads from pre-allocated global buffers.
+// Async-signal-safe: only syscalls + reads/writes to pre-allocated global buffers.
+// OSAtomicCompareAndSwap32, strlcpy/strlcat/strlen, pthread_main_np, open/write/close — all safe.
 private func iphotoSignalHandler(_ sig: Int32) {
+    // Only the first thread to arrive writes diagnostics — prevents duplicate [SIGNAL_THREAD] lines
+    // when a process-wide signal (e.g. SIGABRT from abort()) reaches multiple threads at once.
+    guard OSAtomicCompareAndSwap32(0, 1, &iphotoSignalHandlerFired) else {
+        signal(sig, SIG_DFL)
+        raise(sig)
+        return
+    }
+
     let fd = open(&iphotoLogPathBuf, O_WRONLY | O_CREAT | O_APPEND, 0o644)
     if fd >= 0 {
-        // Log whether crash happened on main or background thread (pthread_main_np is async-signal-safe).
+        // Assemble entire output into iphotoSignalOutputBuf, then flush with a single write().
+        // O_APPEND + single write() is atomic at the kernel level — no logger write from a live
+        // background thread can land between our SIGNAL_THREAD, SIGNAL_LAST_OP, and SIGNAL lines.
         if pthread_main_np() != 0 {
-            iphotoMsgMainThread.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
+            iphotoMsgMainThread.withUnsafeBufferPointer { strlcpy(&iphotoSignalOutputBuf, $0.baseAddress, iphotoSignalOutputBuf.count) }
         } else {
-            iphotoMsgBGThread.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
+            iphotoMsgBGThread.withUnsafeBufferPointer { strlcpy(&iphotoSignalOutputBuf, $0.baseAddress, iphotoSignalOutputBuf.count) }
         }
-        // Log last known RAF decode operation (updated via strlcpy before each risky call).
         let opLen = strlen(&iphotoLastOpBuf)
         if opLen > 0 {
-            iphotoMsgLastOpPfx.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
-            _ = write(fd, &iphotoLastOpBuf, opLen)
-            _ = write(fd, "\n", 1)
+            iphotoMsgLastOpPfx.withUnsafeBufferPointer { strlcat(&iphotoSignalOutputBuf, $0.baseAddress, iphotoSignalOutputBuf.count) }
+            strlcat(&iphotoSignalOutputBuf, &iphotoLastOpBuf, iphotoSignalOutputBuf.count)
+            strlcat(&iphotoSignalOutputBuf, "\n", iphotoSignalOutputBuf.count)
         }
-        // Log signal name.
         switch sig {
-        case SIGSEGV: iphotoMsgSIGSEGV.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
-        case SIGABRT: iphotoMsgSIGABRT.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
-        case SIGBUS:  iphotoMsgSIGBUS.withUnsafeBufferPointer  { _ = write(fd, $0.baseAddress, $0.count - 1) }
-        case SIGILL:  iphotoMsgSIGILL.withUnsafeBufferPointer  { _ = write(fd, $0.baseAddress, $0.count - 1) }
-        default:      iphotoMsgUnknown.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
+        case SIGSEGV: iphotoMsgSIGSEGV.withUnsafeBufferPointer { strlcat(&iphotoSignalOutputBuf, $0.baseAddress, iphotoSignalOutputBuf.count) }
+        case SIGABRT: iphotoMsgSIGABRT.withUnsafeBufferPointer { strlcat(&iphotoSignalOutputBuf, $0.baseAddress, iphotoSignalOutputBuf.count) }
+        case SIGBUS:  iphotoMsgSIGBUS.withUnsafeBufferPointer  { strlcat(&iphotoSignalOutputBuf, $0.baseAddress, iphotoSignalOutputBuf.count) }
+        case SIGILL:  iphotoMsgSIGILL.withUnsafeBufferPointer  { strlcat(&iphotoSignalOutputBuf, $0.baseAddress, iphotoSignalOutputBuf.count) }
+        default:      iphotoMsgUnknown.withUnsafeBufferPointer { strlcat(&iphotoSignalOutputBuf, $0.baseAddress, iphotoSignalOutputBuf.count) }
         }
+        _ = write(fd, &iphotoSignalOutputBuf, strlen(&iphotoSignalOutputBuf))
         Darwin.close(fd)
     }
     // Reset to default handler and re-raise so the OS records a proper crash report.
