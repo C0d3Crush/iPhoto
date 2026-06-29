@@ -78,6 +78,7 @@ class ImageViewModel: ObservableObject {
     private var thumbQueued: Int = 0
     private var thumbDone: Int = 0
     private var thumbHideTask: DispatchWorkItem? = nil
+    private var thumbInFlight: Set<URL> = []
 
     var currentImage: CGImage? {
         guard let doc = collection.currentDocument else { return nil }
@@ -108,19 +109,79 @@ class ImageViewModel: ObservableObject {
     private func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder) -> Bool {
         guard !sf.criteria.isEmpty else { return true }
         let results = sf.criteria.map { c -> Bool in
-            switch c.kind {
-            case .flag:          return doc.flagStatus == c.flagValue
-            case .ratingAtLeast: return doc.rating >= c.ratingValue
-            case .colorLabel:    return doc.colorLabel == c.colorValue
+            switch c.attribute {
+            case .flag:
+                return applyEnumOp(c.op, lhs: doc.flagStatus, rhs: c.flagValue)
+            case .colorLabel:
+                return applyEnumOp(c.op, lhs: doc.colorLabel, rhs: c.colorValue)
+            case .isRAW:
+                return applyEnumOp(c.op, lhs: doc.isRAW, rhs: c.boolValue)
+            case .rating:
+                return applyNumericOp(c.op, value: Double(doc.rating), lo: Double(c.ratingValue), hi: Double(c.ratingValue2))
+            case .iso:
+                guard let v = metadataDouble(doc, key: "exif.ISO", prefix: "ISO ") else { return false }
+                return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
+            case .focalLength:
+                guard let v = metadataDouble(doc, key: "exif.FocalLength", suffix: " mm") else { return false }
+                return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
+            case .aperture:
+                guard let v = metadataDouble(doc, key: "exif.FNumber", prefix: "f/") else { return false }
+                return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
             case .cameraMake:
-                guard !c.textValue.isEmpty else { return true }
-                return doc.metadata.contains { $0.key == "tiff.Make" && $0.value.localizedCaseInsensitiveContains(c.textValue) }
+                return applyTextOp(c.op, haystack: metadataString(doc, key: "tiff.Make"), needle: c.textValue)
             case .cameraModel:
-                guard !c.textValue.isEmpty else { return true }
-                return doc.metadata.contains { $0.key == "tiff.Model" && $0.value.localizedCaseInsensitiveContains(c.textValue) }
+                return applyTextOp(c.op, haystack: metadataString(doc, key: "tiff.Model"), needle: c.textValue)
+            case .lens:
+                return applyTextOp(c.op, haystack: metadataString(doc, key: "exif.LensModel"), needle: c.textValue)
+            case .filename:
+                return applyTextOp(c.op, haystack: doc.filename, needle: c.textValue)
             }
         }
         return sf.matchAll ? results.allSatisfy { $0 } : results.contains { $0 }
+    }
+
+    private func applyEnumOp<T: Equatable>(_ op: SmartFolderOperator, lhs: T, rhs: T) -> Bool {
+        switch op {
+        case .isExact: return lhs == rhs
+        case .isNot:   return lhs != rhs
+        default:       return false
+        }
+    }
+
+    private func applyNumericOp(_ op: SmartFolderOperator, value: Double, lo: Double, hi: Double) -> Bool {
+        switch op {
+        case .isExact:     return value == lo
+        case .isNot:       return value != lo
+        case .greaterThan: return value > lo
+        case .lessThan:    return value < lo
+        case .inRange:     return value >= lo && value <= hi
+        default:           return false
+        }
+    }
+
+    private func applyTextOp(_ op: SmartFolderOperator, haystack: String, needle: String) -> Bool {
+        guard !needle.isEmpty else { return true }
+        switch op {
+        case .contains:    return haystack.localizedCaseInsensitiveContains(needle)
+        case .notContains: return !haystack.localizedCaseInsensitiveContains(needle)
+        case .isExact:     return haystack.localizedCaseInsensitiveCompare(needle) == .orderedSame
+        case .isNot:       return haystack.localizedCaseInsensitiveCompare(needle) != .orderedSame
+        case .beginsWith:  return haystack.lowercased().hasPrefix(needle.lowercased())
+        case .endsWith:    return haystack.lowercased().hasSuffix(needle.lowercased())
+        default:           return false
+        }
+    }
+
+    private func metadataString(_ doc: ImageDocument, key: String) -> String {
+        doc.metadata.first(where: { $0.key == key })?.value ?? ""
+    }
+
+    private func metadataDouble(_ doc: ImageDocument, key: String, prefix: String = "", suffix: String = "") -> Double? {
+        guard let raw = doc.metadata.first(where: { $0.key == key })?.value else { return nil }
+        var s = raw
+        if !prefix.isEmpty, s.hasPrefix(prefix) { s = String(s.dropFirst(prefix.count)) }
+        if !suffix.isEmpty, s.hasSuffix(suffix) { s = String(s.dropLast(suffix.count)) }
+        return Double(s.trimmingCharacters(in: .whitespaces))
     }
 
     func collectionIndex(for document: ImageDocument) -> Int? {
@@ -349,6 +410,7 @@ class ImageViewModel: ObservableObject {
             loadCurrentImage()
         }
         loadThumbnails()
+        loadMetadataInBackground()
     }
 
     func clearAll() {
@@ -1159,11 +1221,16 @@ class ImageViewModel: ObservableObject {
     }
 
     func toggleFlag(_ flag: FlagStatus) {
-        let idx = collection.currentIndex
-        guard idx < collection.documents.count else { return }
-        let cur = collection.documents[idx].flagStatus
-        collection.documents[idx].flagStatus = (cur == flag) ? .none : flag
-        persistRating(at: idx)
+        let indices = collection.selectedIndices.isEmpty
+            ? (collection.currentIndex < collection.documents.count ? [collection.currentIndex] : [])
+            : Array(collection.selectedIndices)
+        guard !indices.isEmpty else { return }
+        let allSet = indices.allSatisfy { collection.documents[$0].flagStatus == flag }
+        let newStatus: FlagStatus = allSet ? .none : flag
+        for idx in indices {
+            collection.documents[idx].flagStatus = newStatus
+            persistRating(at: idx)
+        }
     }
 
     func setColorLabel(_ label: ColorLabel) {
@@ -1621,6 +1688,8 @@ class ImageViewModel: ObservableObject {
               collection.documents[index].url == url,
               collection.documents[index].cgImage == nil else { return }
         isLoadingFullRes = true
+        // Auf dem Main-Thread lesen bevor wir in den Hintergrund gehen (kein Data Race)
+        let preloadedMetadata = index < collection.documents.count ? collection.documents[index].metadata : []
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self, self.loadToken == token else {
@@ -1632,7 +1701,10 @@ class ImageViewModel: ObservableObject {
             do {
                 let image = try RAWImageDecoder.decode(url: accessURL)
                 let size = CGSize(width: image.width, height: image.height)
-                let metadata = self.metadataService.readPhotoMetadata(from: accessURL)
+                // Metadaten nur lesen wenn noch nicht im Hintergrund geladen
+                let metadata = preloadedMetadata.isEmpty
+                    ? self.metadataService.readPhotoMetadata(from: accessURL)
+                    : preloadedMetadata
                 Log.info("Bild dekodiert (voll): \(url.lastPathComponent) \(Int(size.width))×\(Int(size.height)), \(metadata.count) Metadaten-Einträge")
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.loadToken == token else {
@@ -1696,13 +1768,16 @@ class ImageViewModel: ObservableObject {
 
     func loadThumbnails() {
         let pending = collection.documents.enumerated().filter {
-            $0.element.placeholderThumbnailImage == nil && $0.element.thumbnailImage == nil
+            $0.element.placeholderThumbnailImage == nil &&
+            $0.element.thumbnailImage == nil &&
+            !thumbInFlight.contains($0.element.url)
         }
         guard !pending.isEmpty else { return }
 
         // Cancel any pending "hide bar" task and add to the shared accumulator.
         thumbHideTask?.cancel()
         thumbHideTask = nil
+        for (_, doc) in pending { thumbInFlight.insert(doc.url) }
         thumbQueued += pending.count
         thumbnailLoadTotal = thumbQueued
         thumbnailLoadDone  = thumbDone
@@ -1717,6 +1792,7 @@ class ImageViewModel: ObservableObject {
                     .map { NSImage(cgImage: $0, size: .zero) }
                 DispatchQueue.main.async {
                     guard let self = self else { return }
+                    self.thumbInFlight.remove(url)
                     if let img = nsImage,
                        index < self.collection.documents.count,
                        self.collection.documents[index].url == url,
@@ -1730,12 +1806,35 @@ class ImageViewModel: ObservableObject {
                     if self.thumbDone >= self.thumbQueued {
                         self.thumbDone   = 0
                         self.thumbQueued = 0
+                        self.thumbInFlight.removeAll()
                         let task = DispatchWorkItem { [weak self] in
                             self?.thumbnailLoadProgress = nil
                         }
                         self.thumbHideTask = task
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: task)
                     }
+                }
+            }
+        }
+    }
+
+    private func loadMetadataInBackground() {
+        let pending = collection.documents.enumerated().filter { $0.element.metadata.isEmpty }
+        guard !pending.isEmpty else { return }
+        for (index, doc) in pending {
+            let url = doc.url
+            DispatchQueue.global(qos: .background).async { [weak self] in
+                guard let self = self else { return }
+                let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                defer { stopAccess() }
+                let metadata = self.metadataService.readPhotoMetadata(from: accessURL)
+                guard !metadata.isEmpty else { return }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self,
+                          index < self.collection.documents.count,
+                          self.collection.documents[index].url == url,
+                          self.collection.documents[index].metadata.isEmpty else { return }
+                    self.collection.documents[index].metadata = metadata
                 }
             }
         }
