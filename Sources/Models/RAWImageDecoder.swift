@@ -8,10 +8,16 @@ import Foundation
 // Data race between concurrent BG threads is acceptable for diagnostics.
 var iphotoLastOpBuf = [CChar](repeating: 0, count: 512)
 
-// CIContext ist nicht thread-safe — jeder Decode-Aufruf erstellt seinen eigenen Context.
-private func makeCIContext() -> CIContext {
-    CIContext(options: [.useSoftwareRenderer: false])
-}
+// Geteilter CIContext — laut Apple-Dokumentation thread-safe für Rendering.
+// Einen Context pro App statt einen pro Thread: Metal/GPU erschöpft sich nicht mehr
+// wenn 20+ Thumbnails gleichzeitig dekodiert werden.
+private let sharedCIContext = CIContext(options: [.useSoftwareRenderer: false])
+
+// Begrenzt gleichzeitige GPU-Renders auf 4 — verhindert Metal-Überlastung (→ SIGABRT)
+// bei parallelem Thumbnail-Laden großer RAF-Alben.
+private let ciSemaphore = DispatchSemaphore(value: 4)
+
+private func makeCIContext() -> CIContext { sharedCIContext }
 
 enum DecoderError: LocalizedError {
     case cannotCreateSource
@@ -157,7 +163,9 @@ struct RAWImageDecoder {
         let ci = CIImage(cgImage: image).oriented(orientation)
         "applyExifOrientation: CIContext.createCGImage".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         Log.trace("CIContext.createCGImage: \(Int(ci.extent.width))×\(Int(ci.extent.height))")
-        let result = makeCIContext().createCGImage(ci, from: ci.extent)
+        ciSemaphore.wait()
+        defer { ciSemaphore.signal() }
+        let result = sharedCIContext.createCGImage(ci, from: ci.extent)
         "applyExifOrientation: done".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         return result ?? image
     }

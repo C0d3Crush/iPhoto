@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.9
+**Bugfix: SIGABRT durch Metal-Überlastung beim parallelen Thumbnail-Laden**
+
+- `loadThumbnails()` dispatcht alle ausstehenden Thumbnails ohne Limit gleichzeitig; bei großen RAF-Alben (20+ Dateien) rief jeder Thread `makeCIContext()` auf — es entstanden 20+ GPU-Kontexte gleichzeitig → Metal erschöpfte seine Ressourcen und rief `abort()` auf → SIGABRT
+- `CIContext` wird jetzt als gemeinsame Instanz (`sharedCIContext`) geteilt — laut Apple-Dokumentation ist `CIContext` thread-safe für Rendering-Operationen; der bisherige Ansatz (ein Context pro Thread) war die Ursache der GPU-Überlastung
+- Semaphore begrenzt gleichzeitige GPU-Renders (`createCGImage`) auf 4 — schützt vor Metal-Absturz auch bei sehr großen Alben
+
+---
+
 ## 0.60.8
 **Bugfix: Data Race auf `loadToken` und ungeschützter ImageIO-Fallback in HotPixelAnalyzer**
 
