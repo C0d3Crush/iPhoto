@@ -835,6 +835,10 @@ class ImageViewModel: ObservableObject {
                     self.importFiles(newURLs, selectFirst: false)
                     self.completedImports.insert(folderID)
                 }
+                // Jetzt erst Thumbnails laden, wenn kein Import mehr läuft
+                if self.importProgress.isEmpty {
+                    self.loadThumbnails()
+                }
             }
         }
     }
@@ -2000,6 +2004,7 @@ class ImageViewModel: ObservableObject {
     }
 
     func loadThumbnails() {
+        guard importProgress.isEmpty else { return }
         let pending = collection.documents.enumerated().filter {
             $0.element.placeholderThumbnailImage == nil &&
             $0.element.thumbnailImage == nil &&
