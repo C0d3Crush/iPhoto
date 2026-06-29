@@ -2,6 +2,14 @@
 
 ---
 
+## 0.53.0
+**Feature: Kontextmenü auf Thumbnails**
+- Rechtsklick auf ein Thumbnail öffnet ein Menü mit: Pick/Abgelehnt setzen, Bewertung (1–5 Sterne), Farblabel, Exportieren, Im Finder zeigen, Album-Aktionen, Aus Sammlung entfernen.
+- Farblabel wird jetzt auch im macOS Finder gesetzt (via `URLResourceKey.labelNumberKey`).
+- Bei Mehrfachauswahl werden Aktionen auf alle markierten Bilder angewendet.
+
+---
+
 ## 0.52.1
 **Bugfix: Thumbnail-Ladefortschritt zeigt korrekte Zahlen**
 - Der Fortschrittszähler (z. B. „1000/9250") war stark überhöht, weil noch ladende Bilder bei jedem erneuten Aufruf doppelt gezählt wurden.
