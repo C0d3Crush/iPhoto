@@ -2,6 +2,14 @@
 
 ---
 
+## 0.59.0
+**Feature: Externe Datenträger importieren immer in iPhoto-Bibliothek**
+- Beim Hinzufügen eines Wechselmediums (USB, SD-Karte) wird `~/Pictures/iPhoto` automatisch als Importziel gesetzt.
+- Das Importziel für Wechselmedien kann nicht mehr manuell geändert werden — „Importziel festlegen" und „Importziel entfernen" erscheinen im Kontextmenü nur noch für normale Ordner.
+- „Jetzt importieren" ist für Wechselmedien immer direkt verfügbar.
+
+---
+
 ## 0.58.0
 **Feature: Erweiterte Smart-Ordner-Kriterien**
 - Neue Attribute: ISO, Brennweite, Blende, Objektiv, Dateiname, Dateityp (RAW/Nicht-RAW), Bewertung.

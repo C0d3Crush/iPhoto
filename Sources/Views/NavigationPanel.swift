@@ -60,21 +60,23 @@ struct NavigationPanel: View {
 
                         Divider()
 
-                        Button {
-                            let panel = NSOpenPanel()
-                            panel.canChooseFiles = false
-                            panel.canChooseDirectories = true
-                            panel.canCreateDirectories = true
-                            panel.title = "Importziel wählen"
-                            panel.prompt = "Auswählen"
-                            if panel.runModal() == .OK, let url = panel.url {
-                                viewModel.setImportDestination(for: folder, path: url.path)
+                        if !folder.isRemovableMedia {
+                            Button {
+                                let panel = NSOpenPanel()
+                                panel.canChooseFiles = false
+                                panel.canChooseDirectories = true
+                                panel.canCreateDirectories = true
+                                panel.title = "Importziel wählen"
+                                panel.prompt = "Auswählen"
+                                if panel.runModal() == .OK, let url = panel.url {
+                                    viewModel.setImportDestination(for: folder, path: url.path)
+                                }
+                            } label: {
+                                Label("Importziel festlegen…", systemImage: "folder.badge.plus")
                             }
-                        } label: {
-                            Label("Importziel festlegen…", systemImage: "folder.badge.plus")
                         }
 
-                        if folder.importDestinationPath != nil {
+                        if folder.isRemovableMedia || folder.importDestinationPath != nil {
                             Button {
                                 viewModel.importImages(from: folder)
                             } label: {
@@ -82,10 +84,12 @@ struct NavigationPanel: View {
                             }
                             .disabled(!folder.isAvailable || viewModel.importProgress[folder.id] != nil)
 
-                            Button {
-                                viewModel.setImportDestination(for: folder, path: nil)
-                            } label: {
-                                Label("Importziel entfernen", systemImage: "folder.badge.minus")
+                            if !folder.isRemovableMedia {
+                                Button {
+                                    viewModel.setImportDestination(for: folder, path: nil)
+                                } label: {
+                                    Label("Importziel entfernen", systemImage: "folder.badge.minus")
+                                }
                             }
                         }
 

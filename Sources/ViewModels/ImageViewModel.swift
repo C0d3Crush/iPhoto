@@ -714,6 +714,12 @@ class ImageViewModel: ObservableObject {
         guard !watchedFolders.contains(where: { $0.resolveURL()?.url.standardized == url.standardized }) else { return }
         guard let folder = try? WatchedFolder(url: url) else { return }
         watchedFolders.append(folder)
+        if folder.isRemovableMedia {
+            let libraryPath = FileManager.default
+                .urls(for: .picturesDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("iPhoto").path
+            watchedFolders[watchedFolders.count - 1].importDestinationPath = libraryPath
+        }
         saveWatchedFolders()
         syncFolder(folder)
         startWatching(folder)
