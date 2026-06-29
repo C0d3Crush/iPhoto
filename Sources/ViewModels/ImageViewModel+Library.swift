@@ -385,11 +385,14 @@ extension ImageViewModel {
             }
 
             var completed = 0
+            var failedCount = 0
             var newURLs: [URL] = []
             for file in newFiles {
                 let dest = destURL.appendingPathComponent(file.lastPathComponent)
                 if (try? fm.copyItem(at: file, to: dest)) != nil {
                     newURLs.append(dest)
+                } else {
+                    failedCount += 1
                 }
                 completed += 1
                 let c = completed
@@ -404,7 +407,9 @@ extension ImageViewModel {
                 self.dequeueLoading(id: folderID)
                 if !newURLs.isEmpty {
                     self.importFiles(newURLs, selectFirst: false)
-                    self.completedImports.insert(folderID)
+                    if failedCount == 0 {
+                        self.completedImports.insert(folderID)
+                    }
                 }
                 if self.importProgress.isEmpty {
                     self.loadThumbnails()
@@ -435,6 +440,20 @@ extension ImageViewModel {
         guard !imageFiles.isEmpty else {
             completedImports.remove(folder.id)
             return
+        }
+
+        if let destURL = folder.importDestinationURL {
+            let destNames = Set((try? fm.contentsOfDirectory(atPath: destURL.path).map { $0.lowercased() }) ?? [])
+            let missingFiles = imageFiles.filter { !destNames.contains($0.lastPathComponent.lowercased()) }
+            if !missingFiles.isEmpty {
+                let alert = NSAlert()
+                alert.messageText = "\(missingFiles.count) Bilder nicht importiert!"
+                alert.informativeText = "\(missingFiles.count) von \(imageFiles.count) Bilddateien auf der Karte wurden nicht in den Zielordner importiert. Bitte den Import erneut ausführen, bevor die Karte geleert wird."
+                alert.addButton(withTitle: "OK")
+                alert.alertStyle = .critical
+                alert.runModal()
+                return
+            }
         }
 
         let alert = NSAlert()

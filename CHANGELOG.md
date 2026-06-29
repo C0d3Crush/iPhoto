@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.4
+**Bugfix: Karte leeren trotz fehlgeschlagenem Import verhindert**
+
+- `wipeFolder` prüft jetzt vor dem Löschen, ob alle Bilddateien auf der Karte im Zielordner vorhanden sind — fehlt auch nur eine Datei, wird der Vorgang mit einer Fehlermeldung abgebrochen
+- Beim Import werden fehlgeschlagene Kopiervorgänge separat gezählt; `completedImports` (und damit der „Karte leeren"-Button) wird nur gesetzt, wenn alle Dateien erfolgreich übertragen wurden
+- Verhindert Datenverlust durch stille Kopierfehler (z. B. bei vollem Speicher oder Berechtigungsproblemen)
+
+---
+
 ## 0.60.3
 **Bugfix: Kontextmenü-Export ignorierte Mehrfachauswahl**
 
