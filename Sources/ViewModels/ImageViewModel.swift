@@ -759,9 +759,20 @@ class ImageViewModel: ObservableObject {
     }
 
     func importImages(from folder: WatchedFolder) {
-        guard let (sourceURL, stop) = folder.resolveURL(),
-              let destURL = folder.importDestinationURL
-        else { return }
+        guard let (sourceURL, stop) = folder.resolveURL() else { return }
+
+        let destURL: URL
+        if let explicit = folder.importDestinationURL {
+            destURL = explicit
+        } else if folder.isRemovableMedia {
+            destURL = FileManager.default
+                .urls(for: .picturesDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("iPhoto")
+            // Persist so future calls and the UI reflect the destination
+            setImportDestination(for: folder, path: destURL.path)
+        } else {
+            return
+        }
 
         let folderID = folder.id
         let folderName = folder.name
