@@ -20,10 +20,10 @@ struct ContentView: View {
                         .environmentObject(viewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    if let task = viewModel.loadingQueue.first {
+                    if !viewModel.loadingQueue.isEmpty {
                         VStack {
                             Spacer()
-                            LoadingBar(task: task, pending: viewModel.loadingQueue.count - 1)
+                            LoadingBar(queue: viewModel.loadingQueue)
                         }
                     }
                 } else {
@@ -33,8 +33,8 @@ struct ContentView: View {
                             .environmentObject(viewModel)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                        if let task = viewModel.loadingQueue.first {
-                            LoadingBar(task: task, pending: viewModel.loadingQueue.count - 1)
+                        if !viewModel.loadingQueue.isEmpty {
+                            LoadingBar(queue: viewModel.loadingQueue)
                         }
 
                         if !viewModel.collection.documents.isEmpty {
@@ -224,8 +224,11 @@ struct DetailView: View {
 }
 
 private struct LoadingBar: View {
-    let task: ImageViewModel.LoadingTask
-    let pending: Int
+    let queue: [ImageViewModel.LoadingTask]
+    @State private var showPopover = false
+
+    private var task: ImageViewModel.LoadingTask { queue[0] }
+    private var pending: Int { queue.count - 1 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -253,13 +256,21 @@ private struct LoadingBar: View {
                         .frame(maxWidth: .infinity)
                 }
                 if pending > 0 {
-                    Text("+\(pending)")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.15))
-                        .cornerRadius(4)
+                    Button {
+                        showPopover.toggle()
+                    } label: {
+                        Text("+\(pending)")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .popover(isPresented: $showPopover, arrowEdge: .bottom) {
+                        QueuePopover(queue: queue)
+                    }
                 }
             }
             .padding(.horizontal, 12)
@@ -268,5 +279,64 @@ private struct LoadingBar: View {
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(.easeInOut(duration: 0.2), value: task.progress)
+    }
+}
+
+private struct QueuePopover: View {
+    let queue: [ImageViewModel.LoadingTask]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Ausstehende Aufgaben")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+            Divider()
+
+            ForEach(Array(queue.enumerated()), id: \.element.id) { i, t in
+                HStack(spacing: 10) {
+                    Image(systemName: t.icon)
+                        .font(.system(size: 12))
+                        .foregroundColor(i == 0 ? .accentColor : .secondary)
+                        .frame(width: 16)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(t.label)
+                                .font(.system(size: 12))
+                                .lineLimit(1)
+                            Spacer()
+                            if i == 0 {
+                                Text("Aktiv")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                        if t.total > 0 {
+                            HStack(spacing: 6) {
+                                ProgressView(value: t.progress)
+                                    .progressViewStyle(LinearProgressViewStyle())
+                                Text("\(t.done)/\(t.total)")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            ProgressView()
+                                .progressViewStyle(LinearProgressViewStyle())
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+
+                if i < queue.count - 1 {
+                    Divider().padding(.leading, 40)
+                }
+            }
+        }
+        .padding(.bottom, 10)
+        .frame(minWidth: 280)
     }
 }
