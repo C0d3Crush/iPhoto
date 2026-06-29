@@ -136,11 +136,21 @@ struct HotPixelAnalyzer {
         }
 
         // Fallback: standard ImageIO (JPEG, TIFF, PNG, …)
+        // RAF auf macOS 11 überspringen: CGImageSourceCreateWithURL ruft den Apple Fujifilm-Plugin auf → SIGSEGV.
+        // Fällt dann auf den RAWImageDecoder-Fallback unten durch (eingebettetes JPEG).
         if ciImage == nil {
-            let opts = [kCGImageSourceShouldCache: false] as CFDictionary
-            if let src = CGImageSourceCreateWithURL(url as CFURL, opts),
-               let cg  = CGImageSourceCreateImageAtIndex(src, 0, nil) {
-                ciImage = CIImage(cgImage: cg)
+            let skipImageIO: Bool
+            if url.pathExtension.lowercased() == "raf" {
+                if #available(macOS 12.0, *) { skipImageIO = false } else { skipImageIO = true }
+            } else {
+                skipImageIO = false
+            }
+            if !skipImageIO {
+                let opts = [kCGImageSourceShouldCache: false] as CFDictionary
+                if let src = CGImageSourceCreateWithURL(url as CFURL, opts),
+                   let cg  = CGImageSourceCreateImageAtIndex(src, 0, nil) {
+                    ciImage = CIImage(cgImage: cg)
+                }
             }
         }
 

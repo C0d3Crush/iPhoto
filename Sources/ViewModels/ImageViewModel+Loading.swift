@@ -90,14 +90,7 @@ extension ImageViewModel {
         let preloadedMetadata = index < collection.documents.count ? collection.documents[index].metadata : []
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self, self.loadToken == token else {
-                DispatchQueue.main.async {
-                    guard let self = self, self.activeFullResToken == token else { return }
-                    self.activeFullResToken = nil
-                    self.isLoadingFullRes = false
-                }
-                return
-            }
+            guard let self = self else { return }
             let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
             defer { stopAccess() }
             do {
@@ -111,6 +104,7 @@ extension ImageViewModel {
                     guard let self = self, self.loadToken == token else {
                         Log.debug("Vollbild verworfen (Token ungültig): \(url.lastPathComponent)")
                         self?.isLoadingFullRes = false
+                        self?.activeFullResToken = nil
                         return
                     }
                     guard index < self.collection.documents.count,

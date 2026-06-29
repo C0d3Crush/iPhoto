@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.8
+**Bugfix: Data Race auf `loadToken` und ungeschützter ImageIO-Fallback in HotPixelAnalyzer**
+
+- `loadFullRes()` las `self.loadToken` vom Background-Thread, während der Haupt-Thread gleichzeitig schrieb → klassischer Read-Write-Data-Race → Speicherkorruption → SIGSEGV mit Verzögerung (1–2 s nach erfolgreichem Decode sichtbar); Background-Thread-Check entfernt, Token-Validierung erfolgt ausschließlich auf dem Haupt-Thread
+- `activeFullResToken` wurde im Verwerfen-Pfad des Haupt-Thread-Callbacks nicht zurückgesetzt → künftige `loadFullRes`-Aufrufe konnten am `activeFullResToken == nil`-Guard hängen bleiben; jetzt in allen Exit-Pfaden korrekt zurückgesetzt
+- `HotPixelAnalyzer.decodeFrame()` fiel bei fehlgeschlagenem `CIFilter` auf `CGImageSourceCreateWithURL` zurück — auf macOS 11.7.x löst das den Apple Fujifilm-Plugin aus → SIGSEGV; der ImageIO-Fallback wird für RAF-Dateien auf macOS 11 übersprungen und fällt stattdessen auf den bereits vorhandenen `RAWImageDecoder`-Fallback durch
+
+---
+
 ## 0.60.7
 **Bugfix: SIGSEGV beim Lesen von RAF-Metadaten auf macOS 11**
 
