@@ -555,6 +555,14 @@ class ImageViewModel: ObservableObject {
         }
     }
 
+    func trashDocument(_ doc: ImageDocument) {
+        if let idx = collectionIndex(for: doc) {
+            let multi = collection.selectedIndices.count > 1 && collection.selectedIndices.contains(idx)
+            if !multi { collection.select(index: idx) }
+        }
+        confirmTrashFiles()
+    }
+
     private func confirmTrashFiles() {
         let count = collection.selectedIndices.count
         let alert = NSAlert()

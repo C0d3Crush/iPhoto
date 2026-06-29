@@ -27,6 +27,13 @@ struct ThumbnailContextMenu: View {
             Button("Aus Sammlung entfernen") {
                 vm.removeDocument(doc)
             }
+            Button {
+                vm.trashDocument(doc)
+            } label: {
+                let multi = isInMultiSelection
+                Label(multi ? "\(vm.collection.selectedIndices.count) Dateien in Papierkorb" : "In Papierkorb",
+                      systemImage: "trash")
+            }
         }
     }
 
