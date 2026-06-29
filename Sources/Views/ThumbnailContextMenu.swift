@@ -11,18 +11,22 @@ struct ThumbnailContextMenu: View {
     }
 
     var body: some View {
-        flagSection
-        Divider()
-        ratingMenu
-        Divider()
-        colorLabelSection
-        Divider()
-        actionSection
-        Divider()
-        albumSection
-        Divider()
-        Button("Aus Sammlung entfernen") {
-            vm.removeDocument(doc)
+        Group {
+            flagSection
+            Divider()
+            ratingMenu
+            Divider()
+            colorLabelSection
+        }
+        Group {
+            Divider()
+            actionSection
+            Divider()
+            albumSection
+            Divider()
+            Button("Aus Sammlung entfernen") {
+                vm.removeDocument(doc)
+            }
         }
     }
 
