@@ -2,6 +2,14 @@
 
 ---
 
+## 0.57.0
+**Feature: ~/Pictures/iPhoto als Standard-Bibliotheksordner**
+- Beim ersten Start wird `~/Pictures/iPhoto` automatisch angelegt und als Watched Folder eingerichtet.
+- Der Ordner erscheint immer in der Sidebar mit eigenem Icon und kann nicht entfernt werden.
+- Alle importierten Bilder können dort zentral gespeichert werden.
+
+---
+
 ## 0.56.0
 **Feature: Lazy Loading — Bilder erst beim Navigieren laden**
 - Beim App-Start werden keine Bilder mehr automatisch geladen.
