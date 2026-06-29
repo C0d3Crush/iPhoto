@@ -114,8 +114,11 @@ struct ThumbnailContextMenu: View {
     }
 
     @ViewBuilder private var actionSection: some View {
-        Button("Exportieren...") {
-            if let idx = docIndex { vm.selectDocument(at: idx) }
+        Button(isInMultiSelection
+               ? "\(vm.collection.selectedIndices.count) Bilder exportieren..."
+               : "Exportieren...") {
+            // Mehrafachauswahl beibehalten — nur umschalten wenn das Bild noch nicht ausgewählt ist
+            if !isInMultiSelection, let idx = docIndex { vm.selectDocument(at: idx) }
             vm.showExportSheet = true
         }
         Button("Im Finder zeigen") {

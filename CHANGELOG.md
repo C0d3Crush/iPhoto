@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.3
+**Bugfix: Kontextmenü-Export ignorierte Mehrfachauswahl**
+
+- Rechtsklick → „Exportieren..." auf einem bereits markierten Thumbnail hat die Mehrfachauswahl durch eine Einzelauswahl ersetzt — dadurch wurde nur ein Bild exportiert
+- Die Auswahl bleibt jetzt erhalten wenn das angeklickte Bild Teil der aktuellen Mehrfachauswahl ist
+- Kontextmenü-Eintrag zeigt bei Mehrfachauswahl die Anzahl der Bilder an: „X Bilder exportieren..."
+
+---
+
 ## 0.60.2
 **Bugfix: SIGSEGV beim Öffnen von RAF-Dateien auf macOS 11**
 
