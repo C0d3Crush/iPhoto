@@ -82,6 +82,8 @@ class ImageViewModel: ObservableObject {
     private var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
     private var syncedFolderIDs: Set<UUID> = []
     private var isLoadingFullRes = false
+    // Welcher loadToken hat isLoadingFullRes=true gesetzt — nur dieser darf es zurücksetzen.
+    private var activeFullResToken: UUID? = nil
     // Shared accumulator for all concurrent loadThumbnails() calls.
     // Written only on the main thread, so no lock needed.
     private var thumbQueued: Int = 0
@@ -1848,6 +1850,9 @@ class ImageViewModel: ObservableObject {
             adjustments = saved
         }
         lastCommittedAdjustments = adjustments
+        // Vorherige Full-Res-Sequenz freigeben — der aktive Background-Decode bleibt laufen,
+        // aber sein Token wird später nicht mehr passen und er schreibt nichts mehr.
+        activeFullResToken = nil
         isLoadingFullRes = false
 
         if doc.cgImage != nil {
@@ -1910,16 +1915,24 @@ class ImageViewModel: ObservableObject {
 
     private func loadFullRes(url: URL, index: Int, token: UUID) {
         guard !isLoadingFullRes,
+              activeFullResToken == nil,
+              token == loadToken,
               index < collection.documents.count,
               collection.documents[index].url == url,
               collection.documents[index].cgImage == nil else { return }
         isLoadingFullRes = true
+        activeFullResToken = token
         // Auf dem Main-Thread lesen bevor wir in den Hintergrund gehen (kein Data Race)
         let preloadedMetadata = index < collection.documents.count ? collection.documents[index].metadata : []
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self, self.loadToken == token else {
-                DispatchQueue.main.async { self?.isLoadingFullRes = false }
+                // Stale — isLoadingFullRes/activeFullResToken nur zurücksetzen wenn wir der aktive Decode sind
+                DispatchQueue.main.async {
+                    guard let self = self, self.activeFullResToken == token else { return }
+                    self.activeFullResToken = nil
+                    self.isLoadingFullRes = false
+                }
                 return
             }
             let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
@@ -1968,6 +1981,7 @@ class ImageViewModel: ObservableObject {
                                                     height: Int(size.height), sizeBytes: sizeBytes,
                                                     dateTaken: dateTaken, cameraMake: camMake, cameraModel: camModel)
                     self.isLoadingFullRes = false
+                    self.activeFullResToken = nil
                     self.currentlyLoadingURL = nil
                     self.displayImageVersion = UUID()
                     if self.hasActiveAdjustments { self.applyAdjustments() }
@@ -1979,6 +1993,7 @@ class ImageViewModel: ObservableObject {
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.loadToken == token else { return }
                     self.isLoadingFullRes = false
+                    self.activeFullResToken = nil
                     if self.collection.currentDocument?.url == url {
                         self.isLoading = false
                         self.errorMessage = error.localizedDescription

@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.0
+**Bugfix: SIGSEGV beim schnellen Navigieren durch RAW-Dateien**
+- `CIContext` war ein globaler Singleton und wurde von mehreren Background-Threads gleichzeitig verwendet (nicht thread-safe) — jeder Decode-Vorgang erstellt jetzt seinen eigenen Context.
+- `isLoadingFullRes` konnte durch veraltete Callbacks fälschlicherweise zurückgesetzt werden und parallele Full-Res-Dekodierungen ermöglichen — fixiert mit tokenbasiertem `activeFullResToken`-Guard.
+- `loadCurrentImage()` wird für dieselbe URL nicht mehr mehrfach parallel ausgeführt.
+- Kontextmenü: „In Papierkorb" für Thumbnails (Einzel- und Mehrfachauswahl).
+
+---
+
 ## 0.59.0
 **Feature: Externe Datenträger importieren immer in iPhoto-Bibliothek**
 - Beim Hinzufügen eines Wechselmediums (USB, SD-Karte) wird `~/Pictures/iPhoto` automatisch als Importziel gesetzt.
