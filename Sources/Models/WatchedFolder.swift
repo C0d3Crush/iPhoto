@@ -6,6 +6,7 @@ struct WatchedFolder: Identifiable, Codable {
     var bookmarkData: Data
     var autoSync: Bool = false
     var importDestinationPath: String? = nil
+    var isDefaultLibrary: Bool = false
 
     var importDestinationURL: URL? {
         guard let p = importDestinationPath else { return nil }

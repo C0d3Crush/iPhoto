@@ -270,6 +270,7 @@ private struct PanelFolderRow: View {
     private var isAvailable: Bool { folder.isAvailable }
 
     private var folderIcon: String {
+        if folder.isDefaultLibrary { return "photo.on.rectangle" }
         if isRemovable {
             return isAvailable ? "externaldrive.fill" : "externaldrive.badge.exclamationmark"
         }

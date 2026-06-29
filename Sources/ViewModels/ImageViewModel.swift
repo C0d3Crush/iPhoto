@@ -721,6 +721,7 @@ class ImageViewModel: ObservableObject {
     }
 
     func deleteWatchedFolder(_ folder: WatchedFolder) {
+        guard !folder.isDefaultLibrary else { return }
         stopWatching(folder)
         watchedFolders.removeAll { $0.id == folder.id }
         if navSelection == .folder(folder.id) { navSelection = .library }
@@ -943,12 +944,33 @@ class ImageViewModel: ObservableObject {
     }
 
     func loadWatchedFolders() {
-        guard let data = try? Data(contentsOf: watchedFoldersFileURL),
-              let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) else { return }
-        watchedFolders = decoded
+        if let data = try? Data(contentsOf: watchedFoldersFileURL),
+           let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) {
+            watchedFolders = decoded
+        }
+        ensureDefaultLibraryFolder()
         for folder in watchedFolders {
             startWatching(folder)
         }
+    }
+
+    private func ensureDefaultLibraryFolder() {
+        let fm = FileManager.default
+        let picturesURL = fm.urls(for: .picturesDirectory, in: .userDomainMask)[0]
+        let libraryURL  = picturesURL.appendingPathComponent("iPhoto")
+
+        // Create directory if needed
+        try? fm.createDirectory(at: libraryURL, withIntermediateDirectories: true)
+
+        let libraryPath = libraryURL.standardized.path
+        let alreadyWatched = watchedFolders.contains { $0.bookmarkPath == libraryPath || $0.isDefaultLibrary }
+        guard !alreadyWatched else { return }
+
+        guard var folder = try? WatchedFolder(url: libraryURL) else { return }
+        folder.isDefaultLibrary = true
+        folder.name = "iPhoto-Bibliothek"
+        watchedFolders.insert(folder, at: 0)
+        saveWatchedFolders()
     }
 
     func saveWatchedFolders() {
