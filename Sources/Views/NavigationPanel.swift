@@ -310,7 +310,7 @@ private struct PanelFolderRow: View {
                                 .font(.caption2)
                                 .foregroundColor(.orange)
                         }
-                        if folder.autoSync && folder.importDestinationPath == nil {
+                        if folder.autoSync && folder.importDestinationPath == nil && !isRemovable {
                             Text("Kein Importziel — Bilder nicht lokal gespeichert")
                                 .font(.caption2)
                                 .foregroundColor(.orange)
