@@ -79,6 +79,7 @@ class ImageViewModel: ObservableObject {
         return CIContext(options: opts)
     }()
     private var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
+    private var syncedFolderIDs: Set<UUID> = []
     private var isLoadingFullRes = false
     // Shared accumulator for all concurrent loadThumbnails() calls.
     // Written only on the main thread, so no lock needed.
@@ -260,6 +261,7 @@ class ImageViewModel: ObservableObject {
                 for folder in self.watchedFolders where folder.autoSync {
                     guard let bookmarkPath = folder.bookmarkPath,
                           bookmarkPath.hasPrefix(volumePath) else { continue }
+                    self.syncedFolderIDs.remove(folder.id)
                     self.syncFolder(folder)
                     self.navSelection = .folder(folder.id)
                     if folder.importDestinationPath != nil {
@@ -292,6 +294,13 @@ class ImageViewModel: ObservableObject {
             .filter { $0 > 1.0 }
             .throttle(for: .milliseconds(500), scheduler: DispatchQueue.main, latest: false)
             .sink { [weak self] _ in self?.upgradeToFullResIfNeeded() }
+            .store(in: &cancellables)
+
+        // Lazy loading: Ordner-Inhalte erst laden wenn der Nutzer navigiert
+        $navSelection
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] selection in self?.loadContentForSelection(selection) }
             .store(in: &cancellables)
 
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -850,8 +859,27 @@ class ImageViewModel: ObservableObject {
         completedImports.remove(folder.id)
     }
 
+    private func loadContentForSelection(_ selection: NavSelection?) {
+        let foldersToLoad: [WatchedFolder]
+        switch selection {
+        case .library, nil:
+            foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
+        case .folder(let id):
+            foldersToLoad = watchedFolders.filter { $0.id == id && !syncedFolderIDs.contains($0.id) }
+        case .album, .smartFolder:
+            foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
+        }
+        for folder in foldersToLoad {
+            syncedFolderIDs.insert(folder.id)
+            syncFolder(folder)
+        }
+    }
+
     func syncFolder(_ folder: WatchedFolder) {
         guard let (folderURL, stop) = folder.resolveURL() else { return }
+        let folderID  = folder.id
+        let folderName = folder.name
+        DispatchQueue.main.async { self.enqueueLoading(id: folderID, label: "Lade \"\(folderName)\"", icon: "folder", done: 0, total: 0) }
         DispatchQueue.global(qos: .utility).async {
             defer { stop() }
             let fm = FileManager.default
@@ -877,6 +905,7 @@ class ImageViewModel: ObservableObject {
                 self.collection.documents.removeAll { doc in toRemove.contains(where: { $0.id == doc.id }) }
                 // Import new files
                 self.importFiles(found, selectFirst: false)
+                self.dequeueLoading(id: folderID)
             }
         }
     }
@@ -918,7 +947,6 @@ class ImageViewModel: ObservableObject {
               let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) else { return }
         watchedFolders = decoded
         for folder in watchedFolders {
-            syncFolder(folder)
             startWatching(folder)
         }
     }
