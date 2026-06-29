@@ -22,6 +22,16 @@ enum DecoderError: LocalizedError {
 
 struct RAWImageDecoder {
     static func decode(url: URL) throws -> CGImage {
+        // macOS 11: Der System-RAW-Decoder für RAF crasht mit SIGSEGV — ImageIO überspringen.
+        if url.pathExtension.lowercased() == "raf" {
+            if #available(macOS 12.0, *) {
+                // macOS 12+: ImageIO unterstützt RAF nativ — weiter wie üblich
+            } else {
+                if let image = decodeEmbeddedJPEG(url: url) { return image }
+                throw DecoderError.cannotDecodeImage
+            }
+        }
+
         // Versuch 1: ImageIO (funktioniert für alle Standard-Formate + RAW auf macOS 12+)
         if let image = decodeViaImageIO(url: url) {
             return image

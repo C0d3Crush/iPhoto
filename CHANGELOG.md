@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.2
+**Bugfix: SIGSEGV beim Öffnen von RAF-Dateien auf macOS 11**
+
+- `RAWImageDecoder.decode()` überspringt auf macOS 11 den ImageIO-Pfad für RAF-Dateien — der System-RAW-Decoder von Apple crashte dort konsistent mit SIGSEGV
+- Auf macOS 11 wird direkt der Embedded-JPEG-Preview aus dem RAF-Header verwendet (gleicher Pfad wie bei Thumbnails)
+- Auf macOS 12+ bleibt das Verhalten unverändert (ImageIO mit nativem RAW-Decoder)
+
+---
+
 ## 0.60.1
 **Refactoring & Bugfixes: ViewModel-Aufteilung, Fehlerbehandlung, Navigation**
 
