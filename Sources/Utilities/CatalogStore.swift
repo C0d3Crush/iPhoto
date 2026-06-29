@@ -67,7 +67,8 @@ final class CatalogStore {
             imported_at  TEXT NOT NULL
         )
         """)
-        exec("CREATE INDEX IF NOT EXISTS idx_images_path ON images(path)")
+        exec("CREATE INDEX IF NOT EXISTS idx_images_path     ON images(path)")
+        exec("CREATE INDEX IF NOT EXISTS idx_images_filename ON images(filename)")
 
         exec("""
         CREATE TABLE IF NOT EXISTS ratings (

@@ -2,6 +2,21 @@
 
 ---
 
+## 0.60.1
+**Refactoring & Bugfixes: ViewModel-Aufteilung, Fehlerbehandlung, Navigation**
+
+- `ImageViewModel` (2158 Zeilen) in vier fokussierte Extension-Dateien aufgeteilt: `+Library`, `+Loading`, `+Adjustments`, `+Save` — bessere Übersichtlichkeit und Wartbarkeit
+- Alle stillen Schreibfehler (Albums, SmartFolders, beobachtete Ordner, Rezept-Export) zeigen jetzt eine Fehlermeldung
+- Fehlerbehandlung bei Undo/Redo und Version-Revert ergänzt
+- SmartFolder-Kriterien-Änderung aktualisiert die Ansicht sofort — das aktuelle Bild wird automatisch deselektiert wenn es nicht mehr passt
+- `autoreleasepool` in Thumbnail-Lade-Loops verhindert Speicherspitzen im Hintergrund
+- Force-Unwrap in Thumbnail-Task-Callback behoben (potentieller Crash)
+- Thumbnail-Strip scrollt beim Öffnen einer Detail-Ansicht automatisch zum aktuellen Bild
+- Shift+Pfeiltasten erweitert die Auswahl im Thumbnail-Strip
+- SQLite-Index auf `filename`-Spalte für schnelleres Sortieren
+
+---
+
 ## 0.60.0
 **Bugfix: SIGSEGV beim schnellen Navigieren durch RAW-Dateien**
 - `CIContext` war ein globaler Singleton und wurde von mehreren Background-Threads gleichzeitig verwendet (nicht thread-safe) — jeder Decode-Vorgang erstellt jetzt seinen eigenen Context.

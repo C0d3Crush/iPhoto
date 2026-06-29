@@ -36,6 +36,9 @@ struct LibraryGridView: View {
                 }
             }
             .background(Color(NSColor.controlBackgroundColor))
+            .onAppear {
+                proxy.scrollTo(viewModel.collection.currentIndex, anchor: .center)
+            }
             .onChange(of: viewModel.collection.currentIndex) { newIndex in
                 withAnimation { proxy.scrollTo(newIndex, anchor: .center) }
             }
