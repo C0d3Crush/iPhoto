@@ -1,6 +1,7 @@
 import Foundation
 
 enum LogLevel: String {
+    case trace   = "TRACE"
     case debug   = "DEBUG"
     case info    = "INFO "
     case warning = "WARN "
@@ -53,6 +54,12 @@ final class Log {
         } else {
             try? data.write(to: fileURL, options: .atomic)
         }
+    }
+
+    // Synchroner Write — wird sofort auf Disk geschrieben, bevor die nächste Operation startet.
+    // Nur für crash-diagnostisch kritische Pfade verwenden (Decode-Pipeline, BG-Task-Starts).
+    static func trace(_ msg: String, function: String = #function) {
+        shared.writeSync(level: .trace, msg, function: function)
     }
 
     static func debug(_ msg: String, file: String = #file, function: String = #function) {

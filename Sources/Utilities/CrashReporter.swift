@@ -99,11 +99,14 @@ var iphotoLogPathBuf = [CChar](repeating: 0, count: 4096)
 // Pre-allocated signal message buffers — filled at startup, never modified.
 // Using pre-allocated buffers avoids any malloc call inside the signal handler,
 // which is not async-signal-safe and caused a second SIGSEGV inside the handler.
-var iphotoMsgSIGSEGV = Array("[SIGNAL] SIGSEGV (Segmentation Fault)\n".utf8CString)
-var iphotoMsgSIGABRT = Array("[SIGNAL] SIGABRT (Abort)\n".utf8CString)
-var iphotoMsgSIGBUS  = Array("[SIGNAL] SIGBUS (Bus Error)\n".utf8CString)
-var iphotoMsgSIGILL  = Array("[SIGNAL] SIGILL (Illegal Instruction)\n".utf8CString)
-var iphotoMsgUnknown = Array("[SIGNAL] SIGNAL (unknown)\n".utf8CString)
+var iphotoMsgSIGSEGV    = Array("[SIGNAL] SIGSEGV (Segmentation Fault)\n".utf8CString)
+var iphotoMsgSIGABRT    = Array("[SIGNAL] SIGABRT (Abort)\n".utf8CString)
+var iphotoMsgSIGBUS     = Array("[SIGNAL] SIGBUS (Bus Error)\n".utf8CString)
+var iphotoMsgSIGILL     = Array("[SIGNAL] SIGILL (Illegal Instruction)\n".utf8CString)
+var iphotoMsgUnknown    = Array("[SIGNAL] SIGNAL (unknown)\n".utf8CString)
+var iphotoMsgMainThread = Array("[SIGNAL_THREAD] main\n".utf8CString)
+var iphotoMsgBGThread   = Array("[SIGNAL_THREAD] background\n".utf8CString)
+var iphotoMsgLastOpPfx  = Array("[SIGNAL_LAST_OP] ".utf8CString)
 
 // Must be a free function (not a closure) to be used as a C callback.
 private func iphotoUncaughtExceptionHandler(_ exception: NSException) {
@@ -117,6 +120,20 @@ private func iphotoUncaughtExceptionHandler(_ exception: NSException) {
 private func iphotoSignalHandler(_ sig: Int32) {
     let fd = open(&iphotoLogPathBuf, O_WRONLY | O_CREAT | O_APPEND, 0o644)
     if fd >= 0 {
+        // Log whether crash happened on main or background thread (pthread_main_np is async-signal-safe).
+        if pthread_main_np() != 0 {
+            iphotoMsgMainThread.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
+        } else {
+            iphotoMsgBGThread.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
+        }
+        // Log last known RAF decode operation (updated via strlcpy before each risky call).
+        let opLen = strlen(&iphotoLastOpBuf)
+        if opLen > 0 {
+            iphotoMsgLastOpPfx.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
+            _ = write(fd, &iphotoLastOpBuf, opLen)
+            _ = write(fd, "\n", 1)
+        }
+        // Log signal name.
         switch sig {
         case SIGSEGV: iphotoMsgSIGSEGV.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }
         case SIGABRT: iphotoMsgSIGABRT.withUnsafeBufferPointer { _ = write(fd, $0.baseAddress, $0.count - 1) }

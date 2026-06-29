@@ -3,6 +3,11 @@ import CoreGraphics
 import CoreImage
 import Foundation
 
+// Breadcrumb: last RAF decode operation. BG threads update via strlcpy before each risky call.
+// Signal handler (CrashReporter.swift) reads this to show which step crashed.
+// Data race between concurrent BG threads is acceptable for diagnostics.
+var iphotoLastOpBuf = [CChar](repeating: 0, count: 512)
+
 // CIContext ist nicht thread-safe — jeder Decode-Aufruf erstellt seinen eigenen Context.
 private func makeCIContext() -> CIContext {
     CIContext(options: [.useSoftwareRenderer: false])
@@ -27,6 +32,7 @@ struct RAWImageDecoder {
             if #available(macOS 12.0, *) {
                 // macOS 12+: ImageIO unterstützt RAF nativ — weiter wie üblich
             } else {
+                Log.trace("decode macOS11-RAF-Pfad: \(url.lastPathComponent)")
                 if let image = decodeEmbeddedJPEG(url: url) { return image }
                 throw DecoderError.cannotDecodeImage
             }
@@ -51,6 +57,7 @@ struct RAWImageDecoder {
             if #available(macOS 12.0, *) {
                 // macOS 12+: ImageIO unterstützt RAF nativ — weiter wie üblich
             } else {
+                Log.trace("thumbnail(\(maxDimension)px) macOS11-RAF-Pfad: \(url.lastPathComponent)")
                 if let full = decodeEmbeddedJPEG(url: url) { return scaledDown(full, maxDimension: maxDimension) }
                 throw DecoderError.cannotDecodeImage
             }
@@ -99,10 +106,14 @@ struct RAWImageDecoder {
         guard let ext = url.pathExtension.lowercased() as String?,
               ext == "raf" else { return nil }
 
+        let name = url.lastPathComponent
+        "decodeEmbeddedJPEG: FileHandle öffnen (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        Log.trace("FileHandle öffnen: \(name)")
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { handle.closeFile() }
 
         // Header lesen (mindestens 96 Bytes)
+        "decodeEmbeddedJPEG: Header lesen (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         let header = handle.readData(ofLength: 96)
         guard header.count >= 96 else { return nil }
 
@@ -116,14 +127,23 @@ struct RAWImageDecoder {
         guard jpegOffset > 0, jpegLength > 0 else { return nil }
 
         // JPEG-Bytes extrahieren
+        "decodeEmbeddedJPEG: JPEG-Bytes lesen @\(jpegOffset)+\(jpegLength) (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        Log.trace("JPEG-Bytes lesen: offset=\(jpegOffset) length=\(jpegLength) \(name)")
         handle.seek(toFileOffset: UInt64(jpegOffset))
         let jpegData = handle.readData(ofLength: Int(jpegLength))
         guard jpegData.count >= 4,
               jpegData[0] == 0xFF, jpegData[1] == 0xD8 else { return nil }
 
-        guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        "decodeEmbeddedJPEG: CGImageSourceCreateWithData (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        Log.trace("CGImageSourceCreateWithData: \(jpegData.count)B \(name)")
+        guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil) else { return nil }
 
+        "decodeEmbeddedJPEG: CGImageSourceCreateImageAtIndex (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        Log.trace("CGImageSourceCreateImageAtIndex: \(name)")
+        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+
+        "decodeEmbeddedJPEG: applyExifOrientation (\(name)) \(image.width)x\(image.height)".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        Log.trace("applyExifOrientation: \(image.width)×\(image.height) \(name)")
         return applyExifOrientation(image, source: source)
     }
 
@@ -132,8 +152,14 @@ struct RAWImageDecoder {
               let raw = props[kCGImagePropertyOrientation] as? UInt32,
               let orientation = CGImagePropertyOrientation(rawValue: raw),
               orientation != .up else { return image }
+        "applyExifOrientation: CIImage.oriented (raw=\(raw))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        Log.trace("CIImage.oriented: raw=\(raw) \(image.width)×\(image.height)")
         let ci = CIImage(cgImage: image).oriented(orientation)
-        return makeCIContext().createCGImage(ci, from: ci.extent) ?? image
+        "applyExifOrientation: CIContext.createCGImage".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        Log.trace("CIContext.createCGImage: \(Int(ci.extent.width))×\(Int(ci.extent.height))")
+        let result = makeCIContext().createCGImage(ci, from: ci.extent)
+        "applyExifOrientation: done".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        return result ?? image
     }
 
     private static func scaledDown(_ image: CGImage, maxDimension: Int) -> CGImage {

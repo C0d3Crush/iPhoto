@@ -53,6 +53,7 @@ extension ImageViewModel {
         Log.info("Lade Bild: \(url.lastPathComponent)")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+            Log.trace("loadCurrentImage thumbnail-Phase BG: \(url.lastPathComponent) token=\(token)")
             let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
             defer { stopAccess() }
 
@@ -91,6 +92,7 @@ extension ImageViewModel {
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+            Log.trace("loadFullRes BG gestartet: \(url.lastPathComponent) token=\(token)")
             let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
             defer { stopAccess() }
             do {
