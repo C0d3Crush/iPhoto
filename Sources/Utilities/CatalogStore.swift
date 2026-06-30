@@ -283,7 +283,7 @@ final class CatalogStore {
     func saveAdjustments(path: String, adjustments: AdjustmentState) {
         guard let data = try? JSONEncoder().encode(adjustments),
               let json = String(data: data, encoding: .utf8) else { return }
-        queue.async {
+        queue.sync {
             let stmt = self.prepare("""
                 INSERT INTO adjustments (image_path, data, updated_at) VALUES (?,?,?)
                 ON CONFLICT(image_path) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at

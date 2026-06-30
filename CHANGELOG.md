@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.12
+**Bugfix: Thread-Sicherheit in `ImageCollection`, `RatingStore` und `CatalogStore`**
+
+- `ImageCollection.update(document:at:)` und `appendDocuments(_:)` wurden von Hintergrund-Threads aufgerufen und mutierten `@Published`-Properties außerhalb des Main-Threads — beide Methoden dispatchen jetzt via `DispatchQueue.main.async`, damit alle `@Published`-Änderungen korrekt auf dem Haupt-Thread landen
+- `RatingStore.cache` (Dictionary) wurde ohne Synchronisierung von mehreren Threads gelesen und geschrieben — `NSLock` schützt jetzt alle Zugriffe auf `cache` und `loaded` in `load(for:)` und `save(_:for:)`
+- `CatalogStore.saveAdjustments()` verwendete `queue.async` statt `queue.sync` — ein unmittelbar danach gerufenes `loadAdjustments()` konnte die noch nicht persistierten Daten lesen; jetzt wie alle anderen Schreib-Operationen `queue.sync`
+
+---
+
 ## 0.60.11
 **Bugfix: SIGSEGV durch doppelte `loadCurrentImage`-Hintergrundaufgaben beim schnellen Album-Wechsel**
 

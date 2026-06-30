@@ -8,6 +8,7 @@ struct RatingEntry: Codable {
 
 final class RatingStore {
     static let shared = RatingStore()
+    private let lock = NSLock()
     private var cache: [String: RatingEntry] = [:]
     private var loaded = false
     private var fileURL: URL {
@@ -29,6 +30,12 @@ final class RatingStore {
         guard let data = try? JSONEncoder().encode(cache) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }
-    func load(for url: URL) -> RatingEntry? { ensureLoaded(); return cache[key(for: url)] }
-    func save(_ entry: RatingEntry, for url: URL) { ensureLoaded(); cache[key(for: url)] = entry; persist() }
+    func load(for url: URL) -> RatingEntry? {
+        lock.lock(); defer { lock.unlock() }
+        ensureLoaded(); return cache[key(for: url)]
+    }
+    func save(_ entry: RatingEntry, for url: URL) {
+        lock.lock(); defer { lock.unlock() }
+        ensureLoaded(); cache[key(for: url)] = entry; persist()
+    }
 }
