@@ -76,6 +76,9 @@ class ImageViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     var loadToken: UUID = UUID()
     var currentlyLoadingURL: URL? = nil
+    // Tracks URLs that have an active 1500px-preview background task.
+    // Prevents 7+ duplicate decode tasks when albums are switched rapidly.
+    var previewLoadInFlight: Set<URL> = []
     var adjToken: UUID = UUID()
     let adjCIContext: CIContext = {
         var opts: [CIContextOption: Any] = [.useSoftwareRenderer: false]

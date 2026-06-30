@@ -56,8 +56,17 @@ extension ImageViewModel {
             return
         }
 
+        // One active 1500px-preview task per URL at a time.
+        // Without this guard, rapid album switching queues 7+ duplicate decode tasks
+        // for the same file, exhausting memory and corrupting the main thread.
+        guard !previewLoadInFlight.contains(url) else { return }
+        previewLoadInFlight.insert(url)
+
         Log.info("Lade Bild: \(url.lastPathComponent)")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            defer {
+                DispatchQueue.main.async { self?.previewLoadInFlight.remove(url) }
+            }
             guard let self = self else { return }
             Log.trace("loadCurrentImage thumbnail-Phase BG: \(url.lastPathComponent) token=\(token)")
             let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)

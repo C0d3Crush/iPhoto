@@ -2,6 +2,15 @@
 
 ---
 
+## 0.60.11
+**Bugfix: SIGSEGV durch doppelte `loadCurrentImage`-Hintergrundaufgaben beim schnellen Album-Wechsel**
+
+- Bei schnellem Album-Wechsel wurden bis zu 7 gleichzeitige 1500px-Preview-Decode-Aufgaben für dieselbe Datei gestartet — `loadCurrentImage` prüfte nur ob `cgImage == nil`, nicht ob ein Decode bereits läuft; das Token-System verhinderte zwar doppelte UI-Updates, nicht aber den parallelen Speicherverbrauch
+- 7 × ~30 MB CGImage + gleichzeitige Thumbnail-Loads = Speicherkorruption → SIGSEGV auf dem Main-Thread
+- `previewLoadInFlight: Set<URL>` verhindert nun mehrere gleichzeitige 1500px-Decodes derselben URL; der Eintrag wird nach Abschluss des Background-Tasks via `defer` wieder entfernt
+
+---
+
 ## 0.60.10
 **Bugfix: Thread-sicherer Logger, atomarer Signal-Handler, gedrosseltes Thumbnail-Laden**
 
