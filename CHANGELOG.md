@@ -2,6 +2,15 @@
 
 ---
 
+## 0.64.0
+**Feature: Fujifilm MakerNote HDR-Erkennung + HDR-Badge im Bild**
+
+- Behoben: Fujifilm-RAFs wurden nie als HDR erkannt — das Standard-EXIF-Feld `CustomRendered` gibt bei Fujifilm immer „Normal" zurück; stattdessen wird jetzt der MakerNote-Tag `0x1403` (`DevelopmentDynamicRange`) im Fujifilm-IFD geparst (Werte 200/400/800 = DR-Erweiterungsmodus = HDR)
+- Im Vorschau-Bereich erscheint oben rechts ein oranger „HDR"-Badge, wenn das aktuelle Bild als HDR erkannt wurde
+- Bestehende Bibliotheken werden beim nächsten EXIF-Scan automatisch neu ausgewertet (Spalte `hdr` in der Datenbank wird korrekt befüllt)
+
+---
+
 ## 0.63.0
 **Feature: HDR-Erkennung via EXIF `CustomRendered`**
 

@@ -5,8 +5,12 @@ final class MetadataService {
 
     func readPhotoMetadata(from url: URL) -> [MetadataEntry] {
         var props: [String: Any]
+        var fujiDynamicRange: Int? = nil
 
         if url.pathExtension.lowercased() == "raf" {
+            let jpegData = rafEmbeddedJPEGData(url: url)
+            fujiDynamicRange = jpegData.flatMap { fujifilmDynamicRange(from: $0) }
+
             if #available(macOS 12.0, *) {
                 // macOS 12+: ImageIO unterstützt RAF nativ
                 guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return [] }
@@ -15,13 +19,13 @@ final class MetadataService {
                 let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
                 if (tiff[kCGImagePropertyTIFFMake as String] as? String ?? "").isEmpty,
                    (exif[kCGImagePropertyExifDateTimeOriginal as String] as? String ?? "").isEmpty,
-                   let jpegProps = rafEmbeddedJPEGProperties(url: url) {
+                   let jd = jpegData, let jpegProps = propertiesFromJPEGData(jd) {
                     props = jpegProps
                 }
             } else {
                 // macOS 11: CGImageSourceCreateWithURL auf RAF-Dateien ruft den Apple Fujifilm-Plugin auf → SIGSEGV.
                 // Direkt aus dem eingebetteten JPEG-Preview lesen.
-                props = rafEmbeddedJPEGProperties(url: url) ?? [:]
+                props = jpegData.flatMap { propertiesFromJPEGData($0) } ?? [:]
             }
         } else {
             guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return [] }
@@ -73,7 +77,8 @@ final class MetadataService {
         ]
 
         let customRendered = exif[kCGImagePropertyExifCustomRendered as String] as? Int ?? 0
-        if customRendered >= 2 {
+        let isHDR = customRendered >= 2 || (fujiDynamicRange ?? 100) > 100
+        if isHDR {
             entries.append(roEntry("HDR", "exif.HDR", .camera, "Ja"))
         }
 
@@ -248,33 +253,94 @@ final class MetadataService {
         s >= 1 ? String(format: "%.1f s", s) : "1/\(Int(1 / s)) s"
     }
 
-    // Extrahiert den eingebetteten JPEG-Preview aus einem RAF-Binärheader und liest dessen EXIF-Properties.
     // RAF v0200/v0201: JPEG-Offset/Länge als Big-Endian UInt32 bei Byte 0x54 / 0x58.
-    private func rafEmbeddedJPEGProperties(url: URL) -> [String: Any]? {
+    // Liest max. 128 KB (APP-Segmente enthalten alle EXIF/MakerNote-Daten; spart ~40× RAM).
+    private func rafEmbeddedJPEGData(url: URL) -> Data? {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { handle.closeFile() }
-
         let header = handle.readData(ofLength: 96)
-        guard header.count >= 96 else { return nil }
-
-        let sig = String(bytes: header.prefix(16), encoding: .ascii) ?? ""
-        guard sig.hasPrefix("FUJIFILMCCD-RAW") else { return nil }
-
+        guard header.count >= 96,
+              (String(bytes: header.prefix(16), encoding: .ascii) ?? "").hasPrefix("FUJIFILMCCD-RAW") else { return nil }
         let jpegOffset = header.readUInt32BE(at: 0x54)
         let jpegLength = header.readUInt32BE(at: 0x58)
         guard jpegOffset > 0, jpegLength > 0 else { return nil }
-
-        // EXIF/IPTC/GPS-Daten stehen immer in den APP-Segmenten am JPEG-Anfang (typisch 2–16 KB).
-        // 128 KB reichen auch für große APP1-Blöcke mit eingebettetem Thumbnail.
-        // Nur diesen Ausschnitt lesen statt des gesamten ~5.5 MB JPEG → 40× weniger RAM pro Task.
-        let readLength = min(Int(jpegLength), 131_072)
         handle.seek(toFileOffset: UInt64(jpegOffset))
-        let jpegData = handle.readData(ofLength: readLength)
-        guard jpegData.count >= 4,
-              jpegData[0] == 0xFF, jpegData[1] == 0xD8 else { return nil }
+        let data = handle.readData(ofLength: min(Int(jpegLength), 131_072))
+        guard data.count >= 4, data[0] == 0xFF, data[1] == 0xD8 else { return nil }
+        return data
+    }
 
-        guard let src = CGImageSourceCreateWithData(jpegData as CFData, nil),
-              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] else { return nil }
-        return props
+    private func propertiesFromJPEGData(_ data: Data) -> [String: Any]? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
+    }
+
+    // Liest das Fujifilm MakerNote-Tag 0x1403 (DevelopmentDynamicRange) aus dem eingebetteten JPEG.
+    // Werte: 100 = Standard, 200/400/800 = DR-Modus (HDR). Gibt nil zurück wenn kein Fujifilm-MakerNote gefunden.
+    private func fujifilmDynamicRange(from jpegData: Data) -> Int? {
+        var pos = 2
+        while pos + 4 <= jpegData.count {
+            guard jpegData[pos] == 0xFF else { break }
+            let marker = jpegData[pos + 1]
+            if marker == 0xD9 || marker == 0xDA { break }
+            let segLen = Int(jpegData.readUInt16BE(at: pos + 2))
+            guard segLen >= 2 else { break }
+            if marker == 0xE1 {
+                let app1 = pos + 4
+                if app1 + 6 <= jpegData.count,
+                   jpegData[app1] == 0x45, jpegData[app1+1] == 0x78,
+                   jpegData[app1+2] == 0x69, jpegData[app1+3] == 0x66,
+                   jpegData[app1+4] == 0x00, jpegData[app1+5] == 0x00 {
+                    if let dr = parseFujiMakerNote(in: jpegData, tiffBase: app1 + 6) { return dr }
+                }
+            }
+            pos += 2 + segLen
+        }
+        return nil
+    }
+
+    private func parseFujiMakerNote(in data: Data, tiffBase: Int) -> Int? {
+        guard tiffBase + 8 <= data.count else { return nil }
+        let isLE = data[tiffBase] == 0x49 && data[tiffBase + 1] == 0x49
+        guard isLE || (data[tiffBase] == 0x4D && data[tiffBase + 1] == 0x4D) else { return nil }
+
+        let ifd0Off = isLE ? Int(data.readUInt32LE(at: tiffBase + 4)) : Int(data.readUInt32BE(at: tiffBase + 4))
+        let ifd0 = tiffBase + ifd0Off
+        guard ifd0 + 2 <= data.count else { return nil }
+        let entryCount = isLE ? Int(data.readUInt16LE(at: ifd0)) : Int(data.readUInt16BE(at: ifd0))
+        guard entryCount > 0, entryCount < 500 else { return nil }
+
+        for i in 0..<entryCount {
+            let e = ifd0 + 2 + i * 12
+            guard e + 12 <= data.count else { break }
+            let tag = isLE ? data.readUInt16LE(at: e) : data.readUInt16BE(at: e)
+            guard tag == 0x927C else { continue }
+
+            // MakerNote: type=UNDEFINED, value-field contains offset from TIFF base
+            let mnOff = isLE ? Int(data.readUInt32LE(at: e + 8)) : Int(data.readUInt32BE(at: e + 8))
+            let mnBase = tiffBase + mnOff
+            guard mnBase + 14 <= data.count else { return nil }
+
+            // Verify "FUJIFILM" signature at MakerNote start
+            guard data.subdata(in: mnBase..<(mnBase + 8)) == Data("FUJIFILM".utf8) else { return nil }
+
+            // Fujifilm MakerNote: 8-byte sig + 4-byte version = 12 bytes, then uint16 LE IFD offset
+            let fujiIFDOff = Int(data.readUInt16LE(at: mnBase + 12))
+            let fujiIFD = mnBase + fujiIFDOff
+            guard fujiIFD + 2 <= data.count else { return nil }
+            let fujiCount = Int(data.readUInt16LE(at: fujiIFD))
+            guard fujiCount > 0, fujiCount < 500 else { return nil }
+
+            for j in 0..<fujiCount {
+                let fe = fujiIFD + 2 + j * 12
+                guard fe + 12 <= data.count else { break }
+                if data.readUInt16LE(at: fe) == 0x1403 {
+                    // SHORT (uint16 LE), fits inline at bytes 8–9 of the IFD entry
+                    return Int(data.readUInt16LE(at: fe + 8))
+                }
+            }
+            return nil
+        }
+        return nil
     }
 }
