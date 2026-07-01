@@ -322,19 +322,24 @@ final class MetadataService {
             // Verify "FUJIFILM" signature at MakerNote start
             guard data.subdata(in: mnBase..<(mnBase + 8)) == Data("FUJIFILM".utf8) else { return nil }
 
-            // Fujifilm MakerNote: 8-byte sig + 4-byte version = 12 bytes, then uint16 LE IFD offset
-            let fujiIFDOff = Int(data.readUInt16LE(at: mnBase + 12))
-            let fujiIFD = mnBase + fujiIFDOff
-            guard fujiIFD + 2 <= data.count else { return nil }
-            let fujiCount = Int(data.readUInt16LE(at: fujiIFD))
-            guard fujiCount > 0, fujiCount < 500 else { return nil }
+            // Fujifilm MakerNote enthält ab Byte 12 ein Mini-TIFF ("II"/42/IFD-Offset).
+            // Byte 12–13 sind die LE-Marke 0x4949, KEIN IFD-Offset.
+            let mnTIFF = mnBase + 12
+            guard mnTIFF + 8 <= data.count else { return nil }
+            let mnLE = data[mnTIFF] == 0x49 && data[mnTIFF + 1] == 0x49
+            guard mnLE || (data[mnTIFF] == 0x4D && data[mnTIFF + 1] == 0x4D) else { return nil }
+            let mnIFDOff = mnLE ? Int(data.readUInt32LE(at: mnTIFF + 4)) : Int(data.readUInt32BE(at: mnTIFF + 4))
+            let mnIFD = mnTIFF + mnIFDOff
+            guard mnIFD + 2 <= data.count else { return nil }
+            let mnCount = mnLE ? Int(data.readUInt16LE(at: mnIFD)) : Int(data.readUInt16BE(at: mnIFD))
+            guard mnCount > 0, mnCount < 500 else { return nil }
 
-            for j in 0..<fujiCount {
-                let fe = fujiIFD + 2 + j * 12
+            for j in 0..<mnCount {
+                let fe = mnIFD + 2 + j * 12
                 guard fe + 12 <= data.count else { break }
-                if data.readUInt16LE(at: fe) == 0x1403 {
-                    // SHORT (uint16 LE), fits inline at bytes 8–9 of the IFD entry
-                    return Int(data.readUInt16LE(at: fe + 8))
+                let ftag = mnLE ? data.readUInt16LE(at: fe) : data.readUInt16BE(at: fe)
+                if ftag == 0x1403 {
+                    return mnLE ? Int(data.readUInt16LE(at: fe + 8)) : Int(data.readUInt16BE(at: fe + 8))
                 }
             }
             return nil
