@@ -2,6 +2,14 @@
 
 ---
 
+## 0.62.2
+**Bugfix: SIGSEGV beim Öffnen intelligenter Ordner — EXIF-Cache verhindert blockierende SQLite-Lesevorgänge auf dem Main-Thread**
+
+- Behoben: App crashte reproduzierbar beim Öffnen eines intelligenten Ordners — `smartFolderMatches` rief bei jeder SwiftUI-Neuzeichnung `CatalogStore.exif(forPath:)` auf, das via `queue.sync` synchron SQLite vom Main-Thread las. Während des Thumbnail-Ladens (100+ Thumbnail-Completions) bedeutete das 30.000+ blockierende DB-Zugriffe pro Sekunde auf dem Main-Thread → Deadlock-Risiko → SIGSEGV
+- `CatalogStore` lädt jetzt beim Start alle EXIF-Daten aus der Datenbank in einen in-memory Cache (`[String: ExifEntry]`, geschützt durch `NSLock`). `exif(forPath:)` gibt Cache-Treffer ohne Queue-Zugriff zurück; neue Werte werden via `upsertExif` sofort in beide Orte geschrieben
+
+---
+
 ## 0.62.1
 **Bugfix: SIGABRT/SIGSEGV nach `loadFullRes`-Completion + Blenden-Picker + i-Ordner-Bearbeitungsdialog + Ladebalken in Sidebar**
 

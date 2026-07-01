@@ -27,6 +27,11 @@ final class CatalogStore {
     private let queue = DispatchQueue(label: "com.c0d3cru5h.iphoto.catalog", qos: .utility)
     private let dbPath: String
 
+    // In-memory EXIF cache — avoids queue.sync SQLite reads from the main thread during
+    // smartFolderMatches, which was causing 300+ serialised DB queries per SwiftUI re-render.
+    private var exifCache: [String: (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?)] = [:]
+    private let exifCacheLock = NSLock()
+
     init(dbPath: String? = nil) {
         if let p = dbPath {
             self.dbPath = p
@@ -49,6 +54,26 @@ final class CatalogStore {
         exec("PRAGMA foreign_keys=ON")
         createSchema()
         migrateFromJSON()
+        loadExifCache()
+    }
+
+    private func loadExifCache() {
+        let stmt = prepare("SELECT path, focal_length, iso, aperture, lens_model FROM images WHERE exif_scanned=1")
+        var rows: [(String, Double?, Int?, Double?, String?)] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let path = String(cString: sqlite3_column_text(stmt, 0))
+            let fl: Double? = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 1)
+            let iso: Int?   = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil : Int(sqlite3_column_int(stmt, 2))
+            let ap: Double? = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 3)
+            let lens: String? = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 4))
+            rows.append((path, fl, iso, ap, lens))
+        }
+        sqlite3_finalize(stmt)
+        exifCacheLock.lock()
+        for (path, fl, iso, ap, lens) in rows {
+            exifCache[path] = (focalLength: fl, iso: iso, aperture: ap, lensModel: lens)
+        }
+        exifCacheLock.unlock()
     }
 
     private func createSchema() {
@@ -228,10 +253,17 @@ final class CatalogStore {
             bind(stmt, 5, path)
             sqlite3_step(stmt); sqlite3_finalize(stmt)
         }
+        exifCacheLock.lock()
+        exifCache[path] = (focalLength: focalLength, iso: iso, aperture: aperture, lensModel: lensModel)
+        exifCacheLock.unlock()
     }
 
     func exif(forPath path: String) -> (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?)? {
-        queue.sync {
+        exifCacheLock.lock()
+        let cached = exifCache[path]
+        exifCacheLock.unlock()
+        if let hit = cached { return hit }
+        return queue.sync {
             let stmt = prepare("SELECT focal_length, iso, aperture, lens_model FROM images WHERE path=?")
             bind(stmt, 1, path)
             guard sqlite3_step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
