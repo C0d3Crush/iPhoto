@@ -168,6 +168,13 @@ private struct CriterionRow: View {
             }
             .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 100)
 
+        case .orientation:
+            Picker("", selection: $criterion.boolValue) {
+                Text("Hochformat").tag(true)
+                Text("Querformat").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 110)
+
         // --- Rating ---
         case .rating:
             if criterion.op == .inRange {

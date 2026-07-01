@@ -17,4 +17,5 @@ enum NavSelection: Hashable {
     case album(UUID)
     case folder(UUID)
     case smartFolder(UUID)
+    case volume(UUID)
 }

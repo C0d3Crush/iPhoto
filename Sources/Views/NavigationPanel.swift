@@ -98,6 +98,15 @@ struct NavigationPanel: View {
                     }
             }
 
+            if !viewModel.detectedVolumes.isEmpty {
+                panelSectionHeader("Wechseldatenträger")
+                ForEach(viewModel.detectedVolumes) { volume in
+                    PanelVolumeRow(volume: volume,
+                                   isSelected: viewModel.navSelection == .volume(volume.id))
+                        .environmentObject(viewModel)
+                }
+            }
+
             panelSectionHeader("Intelligente Ordner", trailing: AnyView(
                 Button(action: { editingSmartFolder = nil; showSmartFolderSheet = true }) {
                     Image(systemName: "plus").font(.caption)
@@ -508,6 +517,43 @@ private func navDirectDocs(of root: URL, in docs: [ImageDocument]) -> [ImageDocu
         let p = doc.url.standardized.path
         guard p.hasPrefix(rootPath) else { return false }
         return !String(p.dropFirst(rootPath.count)).contains("/")
+    }
+}
+
+private struct PanelVolumeRow: View {
+    let volume: DetectedVolume
+    let isSelected: Bool
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            viewModel.navSelection = .volume(volume.id)
+        } label: {
+            HStack(spacing: 4) {
+                Label(volume.name, systemImage: "sdcard")
+                    .foregroundColor(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if isHovered {
+                    Button {
+                        viewModel.ejectVolume(volume)
+                    } label: {
+                        Image(systemName: "eject")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Auswerfen")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .onHover { isHovered = $0 }
     }
 }
 

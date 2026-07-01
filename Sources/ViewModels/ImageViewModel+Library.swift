@@ -21,6 +21,10 @@ extension ImageViewModel {
         case .smartFolder(let id):
             guard let sf = smartFolders.first(where: { $0.id == id }) else { return [] }
             return collection.documents.filter { smartFolderMatches($0, sf: sf) }
+        case .volume(let id):
+            guard let volume = detectedVolumes.first(where: { $0.id == id }) else { return [] }
+            let prefix = volume.url.standardized.path
+            return collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
         }
     }
 
@@ -34,6 +38,18 @@ extension ImageViewModel {
                 return applyEnumOp(c.op, lhs: doc.colorLabel, rhs: c.colorValue)
             case .isRAW:
                 return applyEnumOp(c.op, lhs: doc.isRAW, rhs: c.boolValue)
+            case .orientation:
+                let size: CGSize
+                if doc.imageSize != .zero {
+                    size = doc.imageSize
+                } else if let entry = CatalogStore.shared.image(forPath: doc.url.path),
+                          entry.width > 0, entry.height > 0 {
+                    size = CGSize(width: entry.width, height: entry.height)
+                } else {
+                    return false
+                }
+                let isPortrait = size.height > size.width
+                return applyEnumOp(c.op, lhs: isPortrait, rhs: c.boolValue)
             case .rating:
                 return applyNumericOp(c.op, value: Double(doc.rating), lo: Double(c.ratingValue), hi: Double(c.ratingValue2))
             case .iso:
@@ -479,6 +495,11 @@ extension ImageViewModel {
             foldersToLoad = watchedFolders.filter { $0.id == id && !syncedFolderIDs.contains($0.id) }
         case .album, .smartFolder:
             foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
+        case .volume(let id):
+            if let vol = detectedVolumes.first(where: { $0.id == id }) {
+                syncVolume(vol)
+            }
+            foldersToLoad = []
         }
         for folder in foldersToLoad {
             syncedFolderIDs.insert(folder.id)
@@ -820,5 +841,73 @@ extension ImageViewModel {
         RatingStore.shared.save(entry, for: doc.url)
         CatalogStore.shared.saveRating(path: doc.url.path, rating: doc.rating,
                                        flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
+    }
+
+    // MARK: - Removable volume detection
+
+    func scanForRemovableVolumes() {
+        let volumesURL = URL(fileURLWithPath: "/Volumes")
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: volumesURL,
+            includingPropertiesForKeys: [.volumeIsRemovableKey, .volumeNameKey],
+            options: .skipsHiddenFiles
+        ) else { return }
+        for url in entries {
+            addDetectedVolumeIfRemovable(url)
+        }
+    }
+
+    func addDetectedVolumeIfRemovable(_ url: URL) {
+        let vals = try? url.resourceValues(forKeys: [.volumeIsRemovableKey, .volumeNameKey])
+        guard vals?.volumeIsRemovable == true else { return }
+        let name = vals?.volumeName ?? url.lastPathComponent
+        let standardPath = url.standardized.path
+        guard !detectedVolumes.contains(where: { $0.url.standardized.path == standardPath }) else { return }
+        detectedVolumes.append(DetectedVolume(id: UUID(), name: name, url: url))
+    }
+
+    func removeDetectedVolume(at url: URL) {
+        let path = url.standardized.path
+        guard let idx = detectedVolumes.firstIndex(where: { $0.url.standardized.path == path }) else { return }
+        let volumeID = detectedVolumes[idx].id
+        detectedVolumes.remove(at: idx)
+        collection.documents.removeAll { $0.url.standardized.path.hasPrefix(path) }
+        if case .volume(let id) = navSelection, id == volumeID {
+            navSelection = .library
+        }
+    }
+
+    func syncVolume(_ volume: DetectedVolume) {
+        let volumeID = volume.id
+        let volumeName = volume.name
+        let volumeURL = volume.url
+        enqueueLoading(id: volumeID, label: "Lade \"\(volumeName)\"", icon: "sdcard", done: 0, total: 0)
+        DispatchQueue.global(qos: .utility).async {
+            let fm = FileManager.default
+            guard let enumerator = fm.enumerator(
+                at: volumeURL,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else {
+                DispatchQueue.main.async { self.dequeueLoading(id: volumeID) }
+                return
+            }
+            var found: [URL] = []
+            for case let fileURL as URL in enumerator {
+                if (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+                   ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
+                    found.append(fileURL)
+                }
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.importFiles(found, selectFirst: false)
+                self.dequeueLoading(id: volumeID)
+            }
+        }
+    }
+
+    func ejectVolume(_ volume: DetectedVolume) {
+        try? NSWorkspace.shared.unmountAndEjectDevice(at: volume.url)
     }
 }

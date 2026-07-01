@@ -4,7 +4,7 @@ import Foundation
 
 enum SmartFolderAttribute: String, Codable, CaseIterable {
     // Enum-Typ
-    case flag, colorLabel, isRAW
+    case flag, colorLabel, isRAW, orientation
     // Numerisch
     case rating, iso, focalLength, aperture
     // Text
@@ -15,6 +15,7 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .flag:         return "Markierung"
         case .colorLabel:   return "Farblabel"
         case .isRAW:        return "Dateityp"
+        case .orientation:  return "Ausrichtung"
         case .rating:       return "Bewertung"
         case .iso:          return "ISO"
         case .focalLength:  return "Brennweite"
@@ -30,8 +31,8 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
 
     var type: AttributeType {
         switch self {
-        case .flag, .colorLabel, .isRAW:            return .enumType
-        case .rating, .iso, .focalLength, .aperture: return .numeric
+        case .flag, .colorLabel, .isRAW, .orientation: return .enumType
+        case .rating, .iso, .focalLength, .aperture:   return .numeric
         case .cameraMake, .cameraModel, .lens, .filename: return .text
         }
     }

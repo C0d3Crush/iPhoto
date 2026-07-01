@@ -23,6 +23,7 @@ class ImageViewModel: ObservableObject {
     @Published var albums: [Album] = []
     @Published var watchedFolders: [WatchedFolder] = []
     @Published var smartFolders: [SmartFolder] = []
+    @Published var detectedVolumes: [DetectedVolume] = []
 
     struct ImportProgress {
         var folderName: String
@@ -183,8 +184,22 @@ class ImageViewModel: ObservableObject {
                         self.importImages(from: folder)
                     }
                 }
+                self.addDetectedVolumeIfRemovable(volumeURL)
             }
             .store(in: &cancellables)
+
+        NSWorkspace.shared.notificationCenter
+            .publisher(for: Notification.Name("NSWorkspaceDidUnmountNotification"))
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self = self,
+                      let volumeURL = notification.userInfo?["NSWorkspaceVolumeURLKey"] as? URL
+                else { return }
+                self.removeDetectedVolume(at: volumeURL)
+            }
+            .store(in: &cancellables)
+
+        scanForRemovableVolumes()
 
         $adjustments
             .dropFirst()
