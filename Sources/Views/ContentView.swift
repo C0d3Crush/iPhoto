@@ -19,23 +19,12 @@ struct ContentView: View {
                     LibraryFullGridView()
                         .environmentObject(viewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    if !viewModel.loadingQueue.isEmpty {
-                        VStack {
-                            Spacer()
-                            LoadingBar(queue: viewModel.loadingQueue)
-                        }
-                    }
                 } else {
                     // Album / Ordner: Detail-Ansicht + Strip
                     VStack(spacing: 0) {
                         DetailView()
                             .environmentObject(viewModel)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                        if !viewModel.loadingQueue.isEmpty {
-                            LoadingBar(queue: viewModel.loadingQueue)
-                        }
 
                         if !viewModel.collection.documents.isEmpty {
                             Divider()
@@ -223,7 +212,7 @@ struct DetailView: View {
     }
 }
 
-private struct LoadingBar: View {
+struct LoadingBar: View {
     let queue: [ImageViewModel.LoadingTask]
     @State private var showPopover = false
 
@@ -233,48 +222,51 @@ private struct LoadingBar: View {
     var body: some View {
         VStack(spacing: 0) {
             Divider()
-            HStack(spacing: 8) {
-                Image(systemName: task.icon)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                Text(task.label)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .layoutPriority(1)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: task.icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Text(task.label)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                    if task.total > 0 {
+                        Text("\(task.done) / \(task.total)")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                    if pending > 0 {
+                        Button {
+                            showPopover.toggle()
+                        } label: {
+                            Text("+\(pending)")
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.15))
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .popover(isPresented: $showPopover, arrowEdge: .bottom) {
+                            QueuePopover(queue: queue)
+                        }
+                    }
+                }
                 if task.total > 0 {
                     ProgressView(value: task.progress)
                         .progressViewStyle(LinearProgressViewStyle())
                         .frame(maxWidth: .infinity)
-                    Text("\(task.done) / \(task.total)")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .frame(width: 60, alignment: .trailing)
                 } else {
                     ProgressView()
                         .progressViewStyle(LinearProgressViewStyle())
                         .frame(maxWidth: .infinity)
                 }
-                if pending > 0 {
-                    Button {
-                        showPopover.toggle()
-                    } label: {
-                        Text("+\(pending)")
-                            .font(.system(size: 9))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.15))
-                            .cornerRadius(4)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .popover(isPresented: $showPopover, arrowEdge: .bottom) {
-                        QueuePopover(queue: queue)
-                    }
-                }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 5)
+            .padding(.vertical, 6)
             .background(Color(NSColor.windowBackgroundColor))
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -282,7 +274,7 @@ private struct LoadingBar: View {
     }
 }
 
-private struct QueuePopover: View {
+struct QueuePopover: View {
     let queue: [ImageViewModel.LoadingTask]
 
     var body: some View {

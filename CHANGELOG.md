@@ -2,6 +2,16 @@
 
 ---
 
+## 0.62.1
+**Bugfix: SIGABRT/SIGSEGV nach `loadFullRes`-Completion + Blenden-Picker + i-Ordner-Bearbeitungsdialog + Ladebalken in Sidebar**
+
+- Behoben: `ImageCollection.update(document:at:)` und `appendDocuments(_:)` schachteln ihre SwiftUI-`@Published`-Mutationen nicht mehr in `DispatchQueue.main.async` — die vorherige Implementierung akkumulierte bei schneller Navigation N×37 MB CGImage-Closures im Main-Queue-Puffer → Speicherdruck → SIGABRT oder SIGSEGV auf dem Main-Thread
+- Behoben: Blenden-Picker in intelligenten Ordnern zeigte dreifach „f/1" (alle Werte < 2.0 wurden auf 1 gerundet) und wissenschaftliche Notation für f/11, f/16, f/22 (`%.1g` = 1 signifikante Stelle) — ersetzt durch korrekte Formatierung: ganzzahlige Werte ohne Dezimalstelle, Dezimalwerte mit einer Stelle
+- Behoben: Bearbeitungsdialog für intelligente Ordner öffnete manchmal leer statt mit vorhandenen Feldern — SwiftUI-Timing-Problem bei gleichzeitigem `editingSmartFolder = sf; showSmartFolderSheet = true`; umgestellt auf `.sheet(item:)` mit `SmartFolderSheetItem` (Identifiable) — Dialog ist jetzt immer korrekt vorausgefüllt
+- Ladebalken (EXIF-Scan, Thumbnail-Laden) aus dem Haupt-Viewer in die linke Sidebar verschoben
+
+---
+
 ## 0.62.0
 **Feature: EXIF-Metadaten-Scan beim Start + Brennweite-Speicherfehler behoben**
 

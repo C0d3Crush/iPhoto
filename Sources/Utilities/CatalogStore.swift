@@ -359,9 +359,9 @@ final class CatalogStore {
     }
 
     func deleteAdjustments(path: String) {
-        queue.async {
-            let stmt = self.prepare("DELETE FROM adjustments WHERE image_path=?")
-            self.bind(stmt, 1, path); sqlite3_step(stmt); sqlite3_finalize(stmt)
+        queue.sync {
+            let stmt = prepare("DELETE FROM adjustments WHERE image_path=?")
+            bind(stmt, 1, path); sqlite3_step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -370,16 +370,16 @@ final class CatalogStore {
     func savePreset(_ preset: Preset) {
         guard let data = try? JSONEncoder().encode(preset),
               let json = String(data: data, encoding: .utf8) else { return }
-        queue.async {
-            let stmt = self.prepare("""
+        queue.sync {
+            let stmt = prepare("""
                 INSERT INTO presets (id, name, author, data, created_at) VALUES (?,?,?,?,?)
                 ON CONFLICT(id) DO UPDATE SET name=excluded.name, author=excluded.author, data=excluded.data
             """)
-            self.bind(stmt, 1, preset.id.uuidString)
-            self.bind(stmt, 2, preset.name)
-            self.bindOpt(stmt, 3, preset.author)
-            self.bind(stmt, 4, json)
-            self.bind(stmt, 5, self.iso8601())
+            bind(stmt, 1, preset.id.uuidString)
+            bind(stmt, 2, preset.name)
+            bindOpt(stmt, 3, preset.author)
+            bind(stmt, 4, json)
+            bind(stmt, 5, iso8601())
             sqlite3_step(stmt); sqlite3_finalize(stmt)
         }
     }
@@ -401,9 +401,9 @@ final class CatalogStore {
     }
 
     func deletePreset(id: UUID) {
-        queue.async {
-            let stmt = self.prepare("DELETE FROM presets WHERE id=?")
-            self.bind(stmt, 1, id.uuidString)
+        queue.sync {
+            let stmt = prepare("DELETE FROM presets WHERE id=?")
+            bind(stmt, 1, id.uuidString)
             sqlite3_step(stmt); sqlite3_finalize(stmt)
         }
     }

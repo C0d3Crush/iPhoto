@@ -39,15 +39,11 @@ class ImageCollection: ObservableObject {
     }
 
     func update(document: ImageDocument, at index: Int) {
-        DispatchQueue.main.async {
-            guard index < self.documents.count else { return }
-            self.documents[index] = document
-        }
+        guard index < documents.count else { return }
+        documents[index] = document
     }
 
     func appendDocuments(_ newDocs: [ImageDocument]) {
-        DispatchQueue.main.async {
-            self.documents.append(contentsOf: newDocs)
-        }
+        documents.append(contentsOf: newDocs)
     }
 }

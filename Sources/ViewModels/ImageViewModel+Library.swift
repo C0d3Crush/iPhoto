@@ -74,20 +74,11 @@ extension ImageViewModel {
                 }
                 return false
             case .cameraMake:
-                let make = metadataString(doc, key: "tiff.Make").isEmpty
-                    ? (CatalogStore.shared.image(forPath: doc.url.path)?.cameraMake ?? "")
-                    : metadataString(doc, key: "tiff.Make")
-                return applyTextOp(c.op, haystack: make, needle: c.textValue)
+                return applyTextOp(c.op, haystack: catalogExifString(doc, key: "tiff.Make"), needle: c.textValue)
             case .cameraModel:
-                let model = metadataString(doc, key: "tiff.Model").isEmpty
-                    ? (CatalogStore.shared.image(forPath: doc.url.path)?.cameraModel ?? "")
-                    : metadataString(doc, key: "tiff.Model")
-                return applyTextOp(c.op, haystack: model, needle: c.textValue)
+                return applyTextOp(c.op, haystack: catalogExifString(doc, key: "tiff.Model"), needle: c.textValue)
             case .lens:
-                let lens = metadataString(doc, key: "exif.LensModel").isEmpty
-                    ? (CatalogStore.shared.exif(forPath: doc.url.path)?.lensModel ?? "")
-                    : metadataString(doc, key: "exif.LensModel")
-                return applyTextOp(c.op, haystack: lens, needle: c.textValue)
+                return applyTextOp(c.op, haystack: catalogExifString(doc, key: "exif.LensModel"), needle: c.textValue)
             case .filename:
                 return applyTextOp(c.op, haystack: doc.filename, needle: c.textValue)
             }
@@ -129,6 +120,18 @@ extension ImageViewModel {
 
     private func metadataString(_ doc: ImageDocument, key: String) -> String {
         doc.metadata.first(where: { $0.key == key })?.value ?? ""
+    }
+
+    private func catalogExifString(_ doc: ImageDocument, key: String) -> String {
+        let inMem = metadataString(doc, key: key)
+        if !inMem.isEmpty { return inMem }
+        let exif = CatalogStore.shared.exif(forPath: doc.url.path)
+        switch key {
+        case "tiff.Make":       return CatalogStore.shared.image(forPath: doc.url.path)?.cameraMake ?? ""
+        case "tiff.Model":      return CatalogStore.shared.image(forPath: doc.url.path)?.cameraModel ?? ""
+        case "exif.LensModel":  return exif?.lensModel ?? ""
+        default:                return ""
+        }
     }
 
     private func metadataDouble(_ doc: ImageDocument, key: String, prefix: String = "", suffix: String = "") -> Double? {

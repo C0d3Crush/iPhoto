@@ -6,8 +6,7 @@ struct NavigationPanel: View {
     @State private var newAlbumName = ""
     @State private var renamingAlbum: Album? = nil
     @State private var renameText = ""
-    @State private var showSmartFolderSheet = false
-    @State private var editingSmartFolder: SmartFolder? = nil
+    @State private var smartFolderSheetItem: SmartFolderSheetItem? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -108,7 +107,7 @@ struct NavigationPanel: View {
             }
 
             panelSectionHeader("Intelligente Ordner", trailing: AnyView(
-                Button(action: { editingSmartFolder = nil; showSmartFolderSheet = true }) {
+                Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
                     Image(systemName: "plus").font(.caption)
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -123,15 +122,15 @@ struct NavigationPanel: View {
                     viewModel.navSelection = .smartFolder(sf.id)
                 }
                 .contextMenu {
-                    Button("Bearbeiten") { editingSmartFolder = sf; showSmartFolderSheet = true }
+                    Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
                     Divider()
                     Button("Löschen") { viewModel.deleteSmartFolder(sf) }
                 }
             }
         }
         .padding(.bottom, 8)
-        .sheet(isPresented: $showSmartFolderSheet) {
-            SmartFolderSheet(editing: editingSmartFolder, isPresented: $showSmartFolderSheet)
+        .sheet(item: $smartFolderSheetItem) { item in
+            SmartFolderSheet(editing: item.folder)
                 .environmentObject(viewModel)
         }
         .sheet(isPresented: $showCreateAlbum) {

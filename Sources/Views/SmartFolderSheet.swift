@@ -1,18 +1,22 @@
 import SwiftUI
 
+struct SmartFolderSheetItem: Identifiable {
+    let id = UUID()
+    let folder: SmartFolder?
+}
+
 struct SmartFolderSheet: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @Environment(\.presentationMode) private var presentationMode
 
     var editing: SmartFolder?
-    @Binding var isPresented: Bool
 
     @State private var name: String
     @State private var matchAll: Bool
     @State private var criteria: [SmartFolderCriterion]
 
-    init(editing: SmartFolder? = nil, isPresented: Binding<Bool>) {
+    init(editing: SmartFolder? = nil) {
         self.editing = editing
-        self._isPresented = isPresented
         _name     = State(initialValue: editing?.name ?? "")
         _matchAll = State(initialValue: editing?.matchAll ?? true)
         _criteria = State(initialValue: editing?.criteria ?? [SmartFolderCriterion()])
@@ -62,11 +66,11 @@ struct SmartFolderSheet: View {
 
             HStack {
                 Spacer()
-                Button("Abbrechen") { isPresented = false }
+                Button("Abbrechen") { presentationMode.wrappedValue.dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(editing == nil ? "Erstellen" : "Speichern") {
                     save()
-                    isPresented = false
+                    presentationMode.wrappedValue.dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -241,7 +245,10 @@ private struct CriterionRow: View {
 
     // MARK: Helpers
 
-    private func fLabel(_ f: Double) -> String { String(format: "f/%.1g", f) }
+    private func fLabel(_ f: Double) -> String {
+        if f == f.rounded(.toNearestOrAwayFromZero) { return "f/\(Int(f.rounded()))" }
+        return String(format: "f/%.1f", f)
+    }
 
     @ViewBuilder
     private func numericSingleInput(unit: String) -> some View {
