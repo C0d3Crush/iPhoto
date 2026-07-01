@@ -334,6 +334,63 @@ extension ImageViewModel {
         }
     }
 
+    // MARK: - EXIF Background Scan for Smart Folders
+
+    func scanExifForLibrary() {
+        let paths = CatalogStore.shared.pathsNeedingExifScan()
+        guard !paths.isEmpty else { return }
+
+        let taskID = UUID()
+        enqueueLoading(id: taskID, label: "Metadaten lesen", icon: "info.circle",
+                       done: 0, total: paths.count)
+
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            guard let self = self else { return }
+            let total = paths.count
+            var done = 0
+            for path in paths {
+                metadataReadSemaphore.wait()
+                defer { metadataReadSemaphore.signal() }
+                autoreleasepool {
+                    let url = URL(fileURLWithPath: path)
+                    let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                    defer { stopAccess() }
+                    let metadata = self.metadataService.readPhotoMetadata(from: accessURL)
+                    let fl = (metadata.first(where: { $0.key == "exif.FocalLength" })?.value)
+                        .flatMap { s -> Double? in
+                            var t = s
+                            if t.hasSuffix(" mm") { t = String(t.dropLast(3)) }
+                            return Double(t)
+                        }
+                    let iso = (metadata.first(where: { $0.key == "exif.ISO" })?.value)
+                        .flatMap { s -> Int? in
+                            var t = s
+                            if t.hasPrefix("ISO ") { t = String(t.dropFirst(4)) }
+                            return Int(t)
+                        }
+                    let ap = (metadata.first(where: { $0.key == "exif.FNumber" })?.value)
+                        .flatMap { s -> Double? in
+                            var t = s
+                            if t.hasPrefix("f/") { t = String(t.dropFirst(2)) }
+                            return Double(t)
+                        }
+                    let lens = metadata.first(where: { $0.key == "exif.LensModel" })?.value
+                    CatalogStore.shared.upsertExif(path: path, focalLength: fl, iso: iso, aperture: ap, lensModel: lens)
+                    done += 1
+                    let d = done, t = total
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.updateLoading(id: taskID, done: d, total: t)
+                    }
+                }
+            }
+            DispatchQueue.main.async { [weak self] in
+                self?.dequeueLoading(id: taskID)
+                Log.info("EXIF-Scan abgeschlossen: \(total) Bilder")
+            }
+        }
+    }
+
     // MARK: - Memory Management
 
     private func evictFarImages(currentIndex: Int) {

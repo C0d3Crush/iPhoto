@@ -349,6 +349,7 @@ class ImageViewModel: ObservableObject {
         }
         loadThumbnails()
         loadMetadataInBackground()
+        scanExifForLibrary()
     }
 
     func clearAll() {

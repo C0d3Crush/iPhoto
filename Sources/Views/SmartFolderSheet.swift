@@ -77,6 +77,7 @@ struct SmartFolderSheet: View {
     }
 
     private func save() {
+        NSApp.keyWindow?.makeFirstResponder(nil)
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         if var sf = editing {
             sf.name = trimmed; sf.criteria = criteria; sf.matchAll = matchAll

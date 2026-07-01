@@ -69,6 +69,7 @@ final class CatalogStore {
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_images_path     ON images(path)")
         exec("CREATE INDEX IF NOT EXISTS idx_images_filename ON images(filename)")
+        migrateExifColumns()
 
         exec("""
         CREATE TABLE IF NOT EXISTS ratings (
@@ -115,6 +116,14 @@ final class CatalogStore {
             created_at TEXT NOT NULL
         )
         """)
+    }
+
+    private func migrateExifColumns() {
+        let cols = ["focal_length REAL", "iso INTEGER", "aperture REAL", "lens_model TEXT", "exif_scanned INTEGER NOT NULL DEFAULT 0"]
+        for col in cols {
+            exec("ALTER TABLE images ADD COLUMN \(col)")
+        }
+        exec("CREATE INDEX IF NOT EXISTS idx_images_exif_scanned ON images(exif_scanned)")
     }
 
     // MARK: - Migration from JSON
@@ -203,6 +212,46 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("DELETE FROM images WHERE path=?")
             bind(stmt, 1, path); sqlite3_step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
+    func upsertExif(path: String, focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?) {
+        queue.sync {
+            let stmt = prepare("""
+                UPDATE images SET focal_length=?, iso=?, aperture=?, lens_model=?, exif_scanned=1
+                WHERE path=?
+            """)
+            if let v = focalLength { sqlite3_bind_double(stmt, 1, v) } else { sqlite3_bind_null(stmt, 1) }
+            if let v = iso { sqlite3_bind_int(stmt, 2, Int32(v)) } else { sqlite3_bind_null(stmt, 2) }
+            if let v = aperture { sqlite3_bind_double(stmt, 3, v) } else { sqlite3_bind_null(stmt, 3) }
+            bindOpt(stmt, 4, lensModel)
+            bind(stmt, 5, path)
+            sqlite3_step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
+    func exif(forPath path: String) -> (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?)? {
+        queue.sync {
+            let stmt = prepare("SELECT focal_length, iso, aperture, lens_model FROM images WHERE path=?")
+            bind(stmt, 1, path)
+            guard sqlite3_step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
+            let fl: Double? = sqlite3_column_type(stmt, 0) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 0)
+            let iso: Int?  = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil : Int(sqlite3_column_int(stmt, 1))
+            let ap: Double? = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 2)
+            let lens: String? = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 3))
+            sqlite3_finalize(stmt)
+            return (fl, iso, ap, lens)
+        }
+    }
+
+    func pathsNeedingExifScan() -> [String] {
+        queue.sync {
+            let stmt = prepare("SELECT path FROM images WHERE exif_scanned=0 ORDER BY filename")
+            var out: [String] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                out.append(String(cString: sqlite3_column_text(stmt, 0)))
+            }
+            sqlite3_finalize(stmt); return out
         }
     }
 

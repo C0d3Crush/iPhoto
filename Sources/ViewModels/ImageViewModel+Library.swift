@@ -53,20 +53,41 @@ extension ImageViewModel {
             case .rating:
                 return applyNumericOp(c.op, value: Double(doc.rating), lo: Double(c.ratingValue), hi: Double(c.ratingValue2))
             case .iso:
-                guard let v = metadataDouble(doc, key: "exif.ISO", prefix: "ISO ") else { return false }
-                return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
+                if let v = metadataDouble(doc, key: "exif.ISO", prefix: "ISO ") {
+                    return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
+                } else if let exif = CatalogStore.shared.exif(forPath: doc.url.path), let iso = exif.iso {
+                    return applyNumericOp(c.op, value: Double(iso), lo: c.numericValue, hi: c.numericValue2)
+                }
+                return false
             case .focalLength:
-                guard let v = metadataDouble(doc, key: "exif.FocalLength", suffix: " mm") else { return false }
-                return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
+                if let v = metadataDouble(doc, key: "exif.FocalLength", suffix: " mm") {
+                    return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
+                } else if let exif = CatalogStore.shared.exif(forPath: doc.url.path), let fl = exif.focalLength {
+                    return applyNumericOp(c.op, value: fl, lo: c.numericValue, hi: c.numericValue2)
+                }
+                return false
             case .aperture:
-                guard let v = metadataDouble(doc, key: "exif.FNumber", prefix: "f/") else { return false }
-                return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
+                if let v = metadataDouble(doc, key: "exif.FNumber", prefix: "f/") {
+                    return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
+                } else if let exif = CatalogStore.shared.exif(forPath: doc.url.path), let ap = exif.aperture {
+                    return applyNumericOp(c.op, value: ap, lo: c.numericValue, hi: c.numericValue2)
+                }
+                return false
             case .cameraMake:
-                return applyTextOp(c.op, haystack: metadataString(doc, key: "tiff.Make"), needle: c.textValue)
+                let make = metadataString(doc, key: "tiff.Make").isEmpty
+                    ? (CatalogStore.shared.image(forPath: doc.url.path)?.cameraMake ?? "")
+                    : metadataString(doc, key: "tiff.Make")
+                return applyTextOp(c.op, haystack: make, needle: c.textValue)
             case .cameraModel:
-                return applyTextOp(c.op, haystack: metadataString(doc, key: "tiff.Model"), needle: c.textValue)
+                let model = metadataString(doc, key: "tiff.Model").isEmpty
+                    ? (CatalogStore.shared.image(forPath: doc.url.path)?.cameraModel ?? "")
+                    : metadataString(doc, key: "tiff.Model")
+                return applyTextOp(c.op, haystack: model, needle: c.textValue)
             case .lens:
-                return applyTextOp(c.op, haystack: metadataString(doc, key: "exif.LensModel"), needle: c.textValue)
+                let lens = metadataString(doc, key: "exif.LensModel").isEmpty
+                    ? (CatalogStore.shared.exif(forPath: doc.url.path)?.lensModel ?? "")
+                    : metadataString(doc, key: "exif.LensModel")
+                return applyTextOp(c.op, haystack: lens, needle: c.textValue)
             case .filename:
                 return applyTextOp(c.op, haystack: doc.filename, needle: c.textValue)
             }

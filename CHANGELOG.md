@@ -2,6 +2,15 @@
 
 ---
 
+## 0.62.0
+**Feature: EXIF-Metadaten-Scan beim Start + Brennweite-Speicherfehler behoben**
+
+- Beim Öffnen einer Bibliothek werden EXIF-Daten aller Bilder (Brennweite, ISO, Blende, Objektiv) im Hintergrund gelesen und in der Katalog-Datenbank gespeichert — der Fortschritt wird im Ladebalken angezeigt
+- Intelligente Ordner filtern jetzt nach Brennweite/ISO/Blende/Objektiv/Kamera auch ohne die Bilder vollständig zu laden — Metadaten werden direkt aus der SQLite-Datenbank abgerufen
+- Behoben: Werte für Brennweite (und andere numerische Felder) in intelligenten Ordnern wurden nicht gespeichert, wenn der Benutzer direkt auf „Speichern" klickte ohne die Eingabe zu bestätigen (TextField-Commit-Bug auf macOS)
+
+---
+
 ## 0.61.5
 **Bugfix: SIGILL durch doppelten Vollbild-Ladeauftrag bei mehrfachem `loadCurrentImage`-Aufruf**
 
