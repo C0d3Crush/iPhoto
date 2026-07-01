@@ -78,9 +78,7 @@ final class MetadataService {
 
         let customRendered = exif[kCGImagePropertyExifCustomRendered as String] as? Int ?? 0
         let isHDR = customRendered >= 2 || (fujiDynamicRange ?? 100) > 100
-        if isHDR {
-            entries.append(roEntry("HDR", "exif.HDR", .camera, "Ja"))
-        }
+        entries.append(roEntry("HDR", "exif.HDR", .camera, isHDR ? "Ja" : "Nein"))
 
         if !gps.isEmpty {
             let lat    = gps[kCGImagePropertyGPSLatitude     as String] as? Double ?? 0
