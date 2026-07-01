@@ -2,6 +2,16 @@
 
 ---
 
+## 0.61.0
+**Feature: SD-Karten-Erkennung in der Sidebar + Ausrichtungsfilter für intelligente Ordner**
+
+- Wechseldatenträger (SD-Karten, USB-Laufwerke) werden beim App-Start und beim Einlegen automatisch in einer neuen Sektion „Wechseldatenträger" in der Sidebar erkannt und angezeigt
+- Bilder auf der Karte werden beim Anklicken des Eintrags geladen; ⏏-Button zum Auswerfen erscheint beim Hover
+- Beim Auswerfen oder Abziehen werden die Bilder aus der Collection entfernt und die Auswahl springt zurück zur Bibliothek
+- Intelligente Ordner: neues Kriterium „Ausrichtung" — filtert nach Hochformat oder Querformat
+
+---
+
 ## 0.60.12
 **Bugfix: Thread-Sicherheit in `ImageCollection`, `RatingStore` und `CatalogStore`**
 
