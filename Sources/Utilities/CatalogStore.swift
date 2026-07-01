@@ -154,6 +154,12 @@ final class CatalogStore {
             exec("UPDATE images SET exif_scanned=0")
         }
         exec("CREATE INDEX IF NOT EXISTS idx_images_exif_scanned ON images(exif_scanned)")
+        // 0.64.x: Fujifilm MakerNote parser fixed — reset RAF files once so they get re-scanned
+        let hdrParserVersion = UserDefaults.standard.integer(forKey: "hdrParserVersion")
+        if hdrParserVersion < 2 {
+            exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf'")
+            UserDefaults.standard.set(2, forKey: "hdrParserVersion")
+        }
     }
 
     // MARK: - Migration from JSON
