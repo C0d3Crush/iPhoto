@@ -2,6 +2,50 @@
 
 ---
 
+## 0.61.5
+**Bugfix: SIGILL durch doppelten Vollbild-Ladeauftrag bei mehrfachem `loadCurrentImage`-Aufruf**
+
+- `loadCurrentImage` plante bei jedem Aufruf einen neuen `asyncAfter(1.5)`-Dwell-Timer für `loadFullRes` — wenn die Funktion mehrfach aufgerufen wurde (z. B. via SwiftUI-Observer), liefen zwei Vollbild-Decodes gleichzeitig → Speicherkorruption → SIGILL auf dem Main-Thread
+- Dwell-Timer wird jetzt als `DispatchWorkItem` (cancellable) verwaltet: jeder neue `loadCurrentImage`-Aufruf cancelt den vorherigen Timer, bevor ein neuer gesetzt wird — zu jedem Zeitpunkt ist nur ein Dwell-Timer aktiv
+
+---
+
+## 0.61.4
+**Bugfix: SIGSEGV durch `prefetchAdjacent()` nach `loadFullRes`-Abschluss**
+
+- `loadFullRes`-Completion rief `prefetchAdjacent()` auf — startete unmittelbar einen weiteren Full-Decode (~111 MB) für das Nachbar-Bild; bei Navigation startete `loadFullRes` für das neue Bild → beide in `applyExifOrientation` gleichzeitig → Speicherkorruption → SIGSEGV
+- `prefetchAdjacent()` komplett entfernt — die 1500px-Preview (via `CGImageSourceCreateThumbnailAtIndex`) lädt bereits sehr schnell und macht Prefetch überflüssig; dafür wird `evictDistantImages()` am Ende der Completion aufgerufen
+
+---
+
+## 0.61.3
+**Bugfix: SIGKILL (OOM) durch unbegrenzte parallele Metadaten-Reads + übermäßig großes JPEG-Read**
+
+- `loadMetadataInBackground()` spawnte einen Background-Task **pro Dokument** ohne Semaphore — bei 200 RAF-Dateien liefen 200 Tasks gleichzeitig, jeder rief `rafEmbeddedJPEGProperties` auf und las ~5.5 MB JPEG-Daten → 200 × 5.5 MB = ~1.1 GB RAM für Metadaten allein → SIGKILL
+- `rafEmbeddedJPEGProperties` liest jetzt nur die ersten **128 KB** des embedded JPEG (statt des gesamten ~5.5 MB-Bildes) — EXIF/IPTC/GPS-Daten stecken immer in den ersten APP-Segmenten (typisch 2–16 KB, max. 128 KB sicher)
+- `loadMetadataInBackground` wird jetzt durch `metadataReadSemaphore(4)` auf 4 gleichzeitige Reads begrenzt
+- `thumbnailDecodeSemaphore` von 4 auf 2 reduziert (zusätzliche Sicherheitsmarge)
+
+---
+
+## 0.61.2
+**Bugfix: SIGSEGV durch gleichzeitige Full-Decodes in `loadFullRes` + `prefetchAdjacent`**
+
+- `next()` und `previous()` riefen `prefetchAdjacent()` direkt nach `loadCurrentImage()` auf — `prefetchAdjacent()` startete sofort einen Full-Decode (~111 MB) für das Nachbar-Bild; 1,5 s später feuerte der Dwell-Timer `loadFullRes` für das aktuelle Bild → zwei gleichzeitige Full-Decodes (je ~111 MB = ~222 MB Peak) → Speicherkorruption → SIGSEGV auf dem Main-Thread
+- `prefetchAdjacent()` wird jetzt ausschließlich am Ende der `loadFullRes`-Completion aufgerufen — Prefetch startet erst nach Abschluss des aktuellen Full-Decodes; zu jedem Zeitpunkt läuft maximal ein Full-Decode
+
+---
+
+## 0.61.1
+**Bugfix: SIGABRT/SIGSEGV durch übermäßigen RAM-Peak beim parallelen Thumbnail-Decode auf macOS 11**
+
+- `decodeEmbeddedJPEG` dekodierte für jeden 80px/160px-Thumbnail das vollständige 4416×2944-JPEG (~37 MB) und erzeugte via `applyExifOrientation` nochmals ein CIImage + CGImage — insgesamt ~75–150 MB pro parallelem Thread; bei 8 gleichzeitigen Decodes bis zu 800 MB nur für Thumbnails → OOM → SIGABRT oder Speicherkorruption → SIGSEGV
+- `decodeEmbeddedJPEG` nutzt jetzt `CGImageSourceCreateThumbnailAtIndex` mit `kCGImageSourceThumbnailMaxPixelSize` + `kCGImageSourceCreateThumbnailWithTransform` für den Thumbnail-Pfad — dekodiert direkt auf Zielgröße (≤ 1 MB), kein CIImage-Zwischenschritt mehr; EXIF-Rotation wird automatisch vom API übernommen
+- `requestVisibleThumbnail` (160px-Thumbnails für sichtbare Zellen) fehlte jeder Semaphore — unbegrenzte parallele Decodes wurden durch denselben `thumbnailDecodeSemaphore` wie die Batch-Thumbnails begrenzt
+- `thumbnailDecodeSemaphore` von 8 auf 4 reduziert; `ciSemaphore` von 4 auf 2 (nur noch für Vollbild-Decodes relevant)
+
+---
+
 ## 0.61.0
 **Feature: SD-Karten-Erkennung in der Sidebar + Ausrichtungsfilter für intelligente Ordner**
 

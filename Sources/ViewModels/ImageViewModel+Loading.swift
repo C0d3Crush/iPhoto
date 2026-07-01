@@ -2,10 +2,16 @@ import AppKit
 import Foundation
 
 // Caps concurrent thumbnail decode pipelines to prevent memory exhaustion.
-// Each RAF thumbnail reads ~5 MB JPEG and creates a ~30 MB CGImage.
-// 8 concurrent decodes ≈ 240 MB peak; combined with ciSemaphore(4) in RAWImageDecoder,
-// at most 4 of those 8 will be doing GPU rendering at any given time.
-private let thumbnailDecodeSemaphore = DispatchSemaphore(value: 8)
+// RAF thumbnails use CGImageSourceCreateThumbnailAtIndex (direct downsample),
+// peak ~5 MB JPEG data + internal decode buffer per slot.
+// 2 concurrent decodes keep RAM well below 100 MB total for thumbnails.
+private let thumbnailDecodeSemaphore = DispatchSemaphore(value: 2)
+
+// Caps concurrent metadata reads. On macOS 11, each RAF metadata read calls
+// rafEmbeddedJPEGProperties which reads 128 KB JPEG header per file.
+// Without this limit, loadMetadataInBackground spawns one task per document —
+// for 200 files that's 200 parallel reads filling GCD's thread pool.
+private let metadataReadSemaphore = DispatchSemaphore(value: 4)
 
 // MARK: - Image Loading Pipeline
 
@@ -27,6 +33,8 @@ extension ImageViewModel {
         lastCommittedAdjustments = adjustments
         activeFullResToken = nil
         isLoadingFullRes = false
+        fullResWorkItem?.cancel()
+        fullResWorkItem = nil
 
         if doc.cgImage != nil {
             fitToWindowRequested = true
@@ -49,10 +57,13 @@ extension ImageViewModel {
         }
 
         if doc.previewImage != nil {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            let item = DispatchWorkItem { [weak self] in
                 guard let self = self, self.loadToken == token else { return }
+                self.fullResWorkItem = nil
                 self.loadFullRes(url: url, index: index, token: token)
             }
+            fullResWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: item)
             return
         }
 
@@ -87,9 +98,16 @@ extension ImageViewModel {
             }
 
             // Phase 3: Vollbild nach Dwell-Zeit (1.5 s)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            DispatchQueue.main.async { [weak self] in
                 guard let self = self, self.loadToken == token else { return }
-                self.loadFullRes(url: url, index: index, token: token)
+                self.fullResWorkItem?.cancel()
+                let item = DispatchWorkItem { [weak self] in
+                    guard let self = self, self.loadToken == token else { return }
+                    self.fullResWorkItem = nil
+                    self.loadFullRes(url: url, index: index, token: token)
+                }
+                self.fullResWorkItem = item
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: item)
             }
         }
     }
@@ -158,6 +176,7 @@ extension ImageViewModel {
                     if self.hasActiveAdjustments { self.applyAdjustments() }
                     self.loadVersionsForCurrentImage()
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
+                    self.evictDistantImages()
                 }
             } catch {
                 Log.error("Vollbild laden fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
@@ -242,6 +261,8 @@ extension ImageViewModel {
         guard doc.thumbnailImage == nil else { return }
         let url = doc.url
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            thumbnailDecodeSemaphore.wait()
+            defer { thumbnailDecodeSemaphore.signal() }
             autoreleasepool {
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
@@ -295,6 +316,8 @@ extension ImageViewModel {
         for (index, doc) in pending {
             let url = doc.url
             DispatchQueue.global(qos: .background).async { [weak self] in
+                metadataReadSemaphore.wait()
+                defer { metadataReadSemaphore.signal() }
                 guard let self = self else { return }
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }

@@ -13,9 +13,11 @@ var iphotoLastOpBuf = [CChar](repeating: 0, count: 512)
 // wenn 20+ Thumbnails gleichzeitig dekodiert werden.
 private let sharedCIContext = CIContext(options: [.useSoftwareRenderer: false])
 
-// Begrenzt gleichzeitige GPU-Renders auf 4 — verhindert Metal-Überlastung (→ SIGABRT)
+// Begrenzt gleichzeitige GPU-Renders auf 2 — verhindert Metal-Überlastung (→ SIGABRT)
 // bei parallelem Thumbnail-Laden großer RAF-Alben.
-private let ciSemaphore = DispatchSemaphore(value: 4)
+// Niedrig halten: ciSemaphore ist nur für Vollbild-Decodes (decode()), nicht für Thumbnails,
+// da Thumbnails jetzt CGImageSourceCreateThumbnailAtIndex nutzen (kein CIImage nötig).
+private let ciSemaphore = DispatchSemaphore(value: 2)
 
 private func makeCIContext() -> CIContext { sharedCIContext }
 
@@ -64,14 +66,14 @@ struct RAWImageDecoder {
                 // macOS 12+: ImageIO unterstützt RAF nativ — weiter wie üblich
             } else {
                 Log.trace("thumbnail(\(maxDimension)px) macOS11-RAF-Pfad: \(url.lastPathComponent)")
-                if let full = decodeEmbeddedJPEG(url: url) { return scaledDown(full, maxDimension: maxDimension) }
+                if let thumb = decodeEmbeddedJPEG(url: url, maxDimension: maxDimension) { return thumb }
                 throw DecoderError.cannotDecodeImage
             }
         }
 
-        // Versuch 1: RAF – eingebettetes JPEG-Preview direkt aus dem Container lesen (schnell, hohe Qualität)
-        if let full = decodeEmbeddedJPEG(url: url) {
-            return scaledDown(full, maxDimension: maxDimension)
+        // Versuch 1: RAF – eingebettetes JPEG-Preview direkt aus dem Container lesen (schnell, kleine Bitmap)
+        if let thumb = decodeEmbeddedJPEG(url: url, maxDimension: maxDimension) {
+            return thumb
         }
 
         // Versuch 2: ImageIO-Thumbnail für JPEG/PNG/HEIC/TIFF und RAW auf macOS 12+
@@ -108,7 +110,15 @@ struct RAWImageDecoder {
     // Liest den JPEG-Preview der im RAF-Dateiheader referenziert ist.
     // RAF v0200/v0201 (Fujifilm X-T1 bis X-T5 u.a.) speichert Offset+Länge
     // des embedded JPEG als Big-Endian UInt32 bei Byte 0x54 / 0x58.
-    private static func decodeEmbeddedJPEG(url: URL) -> CGImage? {
+    //
+    // maxDimension != nil → Thumbnail-Pfad: CGImageSourceCreateThumbnailAtIndex mit
+    // kCGImageSourceThumbnailMaxPixelSize + kCGImageSourceCreateThumbnailWithTransform.
+    // Dekodiert direkt auf Zielgröße (≤ 1 MB), kein volles 37-MB-Zwischenbild, kein CIImage.
+    // Verhindert den OOM/SIGABRT bei parallelem Batch-Laden großer RAF-Alben.
+    //
+    // maxDimension == nil → Vollbild-Pfad: CGImageSourceCreateImageAtIndex + applyExifOrientation
+    // (nur für decode() genutzt).
+    private static func decodeEmbeddedJPEG(url: URL, maxDimension: Int? = nil) -> CGImage? {
         guard let ext = url.pathExtension.lowercased() as String?,
               ext == "raf" else { return nil }
 
@@ -144,6 +154,20 @@ struct RAWImageDecoder {
         Log.trace("CGImageSourceCreateWithData: \(jpegData.count)B \(name)")
         guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil) else { return nil }
 
+        if let maxDim = maxDimension {
+            // Thumbnail-Pfad: direkt auf Zielgröße dekodieren — kein volles 37-MB-Bild im Speicher.
+            // kCGImageSourceCreateThumbnailWithTransform wendet EXIF-Rotation an, kein CIImage nötig.
+            "decodeEmbeddedJPEG: CGImageSourceCreateThumbnailAtIndex (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+            Log.trace("CGImageSourceCreateThumbnailAtIndex: \(maxDim)px \(name)")
+            let opts: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxDim
+            ]
+            return CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary)
+        }
+
+        // Vollbild-Pfad: volle Auflösung + manuelle EXIF-Rotation (für decode())
         "decodeEmbeddedJPEG: CGImageSourceCreateImageAtIndex (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         Log.trace("CGImageSourceCreateImageAtIndex: \(name)")
         guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }

@@ -259,8 +259,12 @@ final class MetadataService {
         let jpegLength = header.readUInt32BE(at: 0x58)
         guard jpegOffset > 0, jpegLength > 0 else { return nil }
 
+        // EXIF/IPTC/GPS-Daten stehen immer in den APP-Segmenten am JPEG-Anfang (typisch 2–16 KB).
+        // 128 KB reichen auch für große APP1-Blöcke mit eingebettetem Thumbnail.
+        // Nur diesen Ausschnitt lesen statt des gesamten ~5.5 MB JPEG → 40× weniger RAM pro Task.
+        let readLength = min(Int(jpegLength), 131_072)
         handle.seek(toFileOffset: UInt64(jpegOffset))
-        let jpegData = handle.readData(ofLength: Int(jpegLength))
+        let jpegData = handle.readData(ofLength: readLength)
         guard jpegData.count >= 4,
               jpegData[0] == 0xFF, jpegData[1] == 0xD8 else { return nil }
 

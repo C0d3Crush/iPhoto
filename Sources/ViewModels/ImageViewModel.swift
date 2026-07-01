@@ -93,6 +93,7 @@ class ImageViewModel: ObservableObject {
     var syncedFolderIDs: Set<UUID> = []
     var isLoadingFullRes = false
     var activeFullResToken: UUID? = nil
+    var fullResWorkItem: DispatchWorkItem? = nil
     var thumbQueued: Int = 0
     var thumbDone: Int = 0
     var thumbHideTask: DispatchWorkItem? = nil
@@ -376,7 +377,6 @@ class ImageViewModel: ObservableObject {
         collection.select(index: nextIdx)
         evictDistantImages()
         loadCurrentImage()
-        prefetchAdjacent()
     }
 
     func previous() {
@@ -389,7 +389,6 @@ class ImageViewModel: ObservableObject {
         collection.select(index: prevIdx)
         evictDistantImages()
         loadCurrentImage()
-        prefetchAdjacent()
     }
 
     func zoomIn()          { zoomFactor = min(zoomFactor * 1.25, 32.0) }
