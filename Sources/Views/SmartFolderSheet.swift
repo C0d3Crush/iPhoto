@@ -180,6 +180,13 @@ private struct CriterionRow: View {
             }
             .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 110)
 
+        case .hdr:
+            Picker("", selection: $criterion.boolValue) {
+                Text("HDR").tag(true)
+                Text("Standard").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 100)
+
         // --- Rating ---
         case .rating:
             if criterion.op == .inRange {

@@ -50,6 +50,15 @@ extension ImageViewModel {
                 }
                 let isPortrait = size.height > size.width
                 return applyEnumOp(c.op, lhs: isPortrait, rhs: c.boolValue)
+            case .hdr:
+                let inMemHDR = doc.metadata.first(where: { $0.key == "exif.HDR" })?.value
+                let isHDR: Bool
+                if let v = inMemHDR {
+                    isHDR = (v == "Ja")
+                } else {
+                    isHDR = CatalogStore.shared.exif(forPath: doc.url.path)?.hdr ?? false
+                }
+                return applyEnumOp(c.op, lhs: isHDR, rhs: c.boolValue)
             case .rating:
                 return applyNumericOp(c.op, value: Double(doc.rating), lo: Double(c.ratingValue), hi: Double(c.ratingValue2))
             case .iso:

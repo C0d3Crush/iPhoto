@@ -29,7 +29,7 @@ final class CatalogStore {
 
     // In-memory EXIF cache — avoids queue.sync SQLite reads from the main thread during
     // smartFolderMatches, which was causing 300+ serialised DB queries per SwiftUI re-render.
-    private var exifCache: [String: (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?)] = [:]
+    private var exifCache: [String: (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool)] = [:]
     private let exifCacheLock = NSLock()
 
     init(dbPath: String? = nil) {
@@ -58,20 +58,21 @@ final class CatalogStore {
     }
 
     private func loadExifCache() {
-        let stmt = prepare("SELECT path, focal_length, iso, aperture, lens_model FROM images WHERE exif_scanned=1")
-        var rows: [(String, Double?, Int?, Double?, String?)] = []
+        let stmt = prepare("SELECT path, focal_length, iso, aperture, lens_model, hdr FROM images WHERE exif_scanned=1")
+        var rows: [(String, Double?, Int?, Double?, String?, Bool)] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
             let path = String(cString: sqlite3_column_text(stmt, 0))
             let fl: Double? = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 1)
             let iso: Int?   = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil : Int(sqlite3_column_int(stmt, 2))
             let ap: Double? = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 3)
             let lens: String? = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 4))
-            rows.append((path, fl, iso, ap, lens))
+            let hdr: Bool = sqlite3_column_int(stmt, 5) != 0
+            rows.append((path, fl, iso, ap, lens, hdr))
         }
         sqlite3_finalize(stmt)
         exifCacheLock.lock()
-        for (path, fl, iso, ap, lens) in rows {
-            exifCache[path] = (focalLength: fl, iso: iso, aperture: ap, lensModel: lens)
+        for (path, fl, iso, ap, lens, hdr) in rows {
+            exifCache[path] = (focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr)
         }
         exifCacheLock.unlock()
     }
@@ -147,6 +148,10 @@ final class CatalogStore {
         let cols = ["focal_length REAL", "iso INTEGER", "aperture REAL", "lens_model TEXT", "exif_scanned INTEGER NOT NULL DEFAULT 0"]
         for col in cols {
             exec("ALTER TABLE images ADD COLUMN \(col)")
+        }
+        // hdr added in 0.63.0 — reset exif_scanned to trigger rescan so existing photos get HDR detection
+        if exec("ALTER TABLE images ADD COLUMN hdr INTEGER NOT NULL DEFAULT 0") {
+            exec("UPDATE images SET exif_scanned=0")
         }
         exec("CREATE INDEX IF NOT EXISTS idx_images_exif_scanned ON images(exif_scanned)")
     }
@@ -240,39 +245,41 @@ final class CatalogStore {
         }
     }
 
-    func upsertExif(path: String, focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?) {
+    func upsertExif(path: String, focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool = false) {
         queue.sync {
             let stmt = prepare("""
-                UPDATE images SET focal_length=?, iso=?, aperture=?, lens_model=?, exif_scanned=1
+                UPDATE images SET focal_length=?, iso=?, aperture=?, lens_model=?, exif_scanned=1, hdr=?
                 WHERE path=?
             """)
             if let v = focalLength { sqlite3_bind_double(stmt, 1, v) } else { sqlite3_bind_null(stmt, 1) }
             if let v = iso { sqlite3_bind_int(stmt, 2, Int32(v)) } else { sqlite3_bind_null(stmt, 2) }
             if let v = aperture { sqlite3_bind_double(stmt, 3, v) } else { sqlite3_bind_null(stmt, 3) }
             bindOpt(stmt, 4, lensModel)
-            bind(stmt, 5, path)
+            sqlite3_bind_int(stmt, 5, hdr ? 1 : 0)
+            bind(stmt, 6, path)
             sqlite3_step(stmt); sqlite3_finalize(stmt)
         }
         exifCacheLock.lock()
-        exifCache[path] = (focalLength: focalLength, iso: iso, aperture: aperture, lensModel: lensModel)
+        exifCache[path] = (focalLength: focalLength, iso: iso, aperture: aperture, lensModel: lensModel, hdr: hdr)
         exifCacheLock.unlock()
     }
 
-    func exif(forPath path: String) -> (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?)? {
+    func exif(forPath path: String) -> (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool)? {
         exifCacheLock.lock()
         let cached = exifCache[path]
         exifCacheLock.unlock()
         if let hit = cached { return hit }
         return queue.sync {
-            let stmt = prepare("SELECT focal_length, iso, aperture, lens_model FROM images WHERE path=?")
+            let stmt = prepare("SELECT focal_length, iso, aperture, lens_model, hdr FROM images WHERE path=?")
             bind(stmt, 1, path)
             guard sqlite3_step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
             let fl: Double? = sqlite3_column_type(stmt, 0) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 0)
             let iso: Int?  = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil : Int(sqlite3_column_int(stmt, 1))
             let ap: Double? = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 2)
             let lens: String? = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 3))
+            let hdr: Bool = sqlite3_column_int(stmt, 4) != 0
             sqlite3_finalize(stmt)
-            return (fl, iso, ap, lens)
+            return (fl, iso, ap, lens, hdr)
         }
     }
 

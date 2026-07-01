@@ -2,6 +2,16 @@
 
 ---
 
+## 0.63.0
+**Feature: HDR-Erkennung via EXIF `CustomRendered`**
+
+- Bilder mit HDR-Aufnahme werden automatisch erkannt: der EXIF-Wert `CustomRendered ≥ 2` (Werte 6 = HDR nicht final, 7 = HDR final, wie von Fujifilm, Sony und anderen Kameras geschrieben) markiert ein Bild als HDR
+- Im Inspector (Metadaten-Tab) erscheint bei HDR-Fotos der Eintrag „HDR: Ja" im Kamera-Abschnitt — Standard-Fotos zeigen dieses Feld nicht
+- Intelligente Ordner unterstützen jetzt das Kriterium „HDR" (ist / ist nicht) — damit lassen sich z.B. alle HDR-Aufnahmen in einem Ordner zusammenfassen
+- Beim EXIF-Scan (`scanExifForLibrary`) wird `CustomRendered` mit gespeichert und in der Katalog-Datenbank in der neuen Spalte `hdr` hinterlegt; bestehende Bilder werden automatisch neu gescannt
+
+---
+
 ## 0.62.2
 **Bugfix: SIGSEGV beim Öffnen intelligenter Ordner — EXIF-Cache verhindert blockierende SQLite-Lesevorgänge auf dem Main-Thread**
 

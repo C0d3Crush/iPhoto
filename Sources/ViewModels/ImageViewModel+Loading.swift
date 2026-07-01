@@ -375,7 +375,8 @@ extension ImageViewModel {
                             return Double(t)
                         }
                     let lens = metadata.first(where: { $0.key == "exif.LensModel" })?.value
-                    CatalogStore.shared.upsertExif(path: path, focalLength: fl, iso: iso, aperture: ap, lensModel: lens)
+                    let hdr = metadata.first(where: { $0.key == "exif.HDR" })?.value == "Ja"
+                    CatalogStore.shared.upsertExif(path: path, focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr)
                     done += 1
                     let d = done, t = total
                     DispatchQueue.main.async { [weak self] in

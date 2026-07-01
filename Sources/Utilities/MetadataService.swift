@@ -72,6 +72,11 @@ final class MetadataService {
                     ((exif[kCGImagePropertyExifISOSpeedRatings as String] as? [Int])?.first).map { "ISO \($0)" } ?? ""),
         ]
 
+        let customRendered = exif[kCGImagePropertyExifCustomRendered as String] as? Int ?? 0
+        if customRendered >= 2 {
+            entries.append(roEntry("HDR", "exif.HDR", .camera, "Ja"))
+        }
+
         if !gps.isEmpty {
             let lat    = gps[kCGImagePropertyGPSLatitude     as String] as? Double ?? 0
             let latRef = gps[kCGImagePropertyGPSLatitudeRef  as String] as? String ?? "N"
