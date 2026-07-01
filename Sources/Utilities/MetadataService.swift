@@ -308,41 +308,56 @@ final class MetadataService {
         let entryCount = isLE ? Int(data.readUInt16LE(at: ifd0)) : Int(data.readUInt16BE(at: ifd0))
         guard entryCount > 0, entryCount < 500 else { return nil }
 
+        // MakerNote (0x927C) sitzt im ExifIFD (0x8769 in IFD0), nicht direkt in IFD0.
+        var makerNoteOff: Int? = nil
         for i in 0..<entryCount {
             let e = ifd0 + 2 + i * 12
             guard e + 12 <= data.count else { break }
             let tag = isLE ? data.readUInt16LE(at: e) : data.readUInt16BE(at: e)
-            guard tag == 0x927C else { continue }
-
-            // MakerNote: type=UNDEFINED, value-field contains offset from TIFF base
-            let mnOff = isLE ? Int(data.readUInt32LE(at: e + 8)) : Int(data.readUInt32BE(at: e + 8))
-            let mnBase = tiffBase + mnOff
-            guard mnBase + 14 <= data.count else { return nil }
-
-            // Verify "FUJIFILM" signature at MakerNote start
-            guard data.subdata(in: mnBase..<(mnBase + 8)) == Data("FUJIFILM".utf8) else { return nil }
-
-            // Fujifilm MakerNote enthält ab Byte 12 ein Mini-TIFF ("II"/42/IFD-Offset).
-            // Byte 12–13 sind die LE-Marke 0x4949, KEIN IFD-Offset.
-            let mnTIFF = mnBase + 12
-            guard mnTIFF + 8 <= data.count else { return nil }
-            let mnLE = data[mnTIFF] == 0x49 && data[mnTIFF + 1] == 0x49
-            guard mnLE || (data[mnTIFF] == 0x4D && data[mnTIFF + 1] == 0x4D) else { return nil }
-            let mnIFDOff = mnLE ? Int(data.readUInt32LE(at: mnTIFF + 4)) : Int(data.readUInt32BE(at: mnTIFF + 4))
-            let mnIFD = mnTIFF + mnIFDOff
-            guard mnIFD + 2 <= data.count else { return nil }
-            let mnCount = mnLE ? Int(data.readUInt16LE(at: mnIFD)) : Int(data.readUInt16BE(at: mnIFD))
-            guard mnCount > 0, mnCount < 500 else { return nil }
-
-            for j in 0..<mnCount {
-                let fe = mnIFD + 2 + j * 12
-                guard fe + 12 <= data.count else { break }
-                let ftag = mnLE ? data.readUInt16LE(at: fe) : data.readUInt16BE(at: fe)
-                if ftag == 0x1403 {
-                    return mnLE ? Int(data.readUInt16LE(at: fe + 8)) : Int(data.readUInt16BE(at: fe + 8))
-                }
+            if tag == 0x927C {
+                makerNoteOff = isLE ? Int(data.readUInt32LE(at: e + 8)) : Int(data.readUInt32BE(at: e + 8))
+                break
             }
-            return nil
+            if tag == 0x8769 {
+                let exifOff = isLE ? Int(data.readUInt32LE(at: e + 8)) : Int(data.readUInt32BE(at: e + 8))
+                let exifIFD = tiffBase + exifOff
+                guard exifIFD + 2 <= data.count else { continue }
+                let exifCount = isLE ? Int(data.readUInt16LE(at: exifIFD)) : Int(data.readUInt16BE(at: exifIFD))
+                guard exifCount > 0, exifCount < 500 else { continue }
+                for j in 0..<exifCount {
+                    let fe = exifIFD + 2 + j * 12
+                    guard fe + 12 <= data.count else { break }
+                    if (isLE ? data.readUInt16LE(at: fe) : data.readUInt16BE(at: fe)) == 0x927C {
+                        makerNoteOff = isLE ? Int(data.readUInt32LE(at: fe + 8)) : Int(data.readUInt32BE(at: fe + 8))
+                        break
+                    }
+                }
+                if makerNoteOff != nil { break }
+            }
+        }
+        guard let mnOff = makerNoteOff else { return nil }
+
+        let mnBase = tiffBase + mnOff
+        guard mnBase + 12 <= data.count else { return nil }
+
+        // Verify "FUJIFILM" signature
+        guard data.subdata(in: mnBase..<(mnBase + 8)) == Data("FUJIFILM".utf8) else { return nil }
+
+        // Fujifilm MakerNote: "FUJIFILM"(8) + uint32 LE IFD-Offset(4) + IFD direkt danach.
+        // Getestet: MN+8 uint32LE = 12 → IFD bei MN+12, count = Anzahl Einträge.
+        let fujiIFDOff = Int(data.readUInt32LE(at: mnBase + 8))
+        let fujiIFD = mnBase + fujiIFDOff
+        guard fujiIFD + 2 <= data.count else { return nil }
+        let fujiCount = Int(data.readUInt16LE(at: fujiIFD))
+        guard fujiCount > 0, fujiCount < 500 else { return nil }
+
+        for j in 0..<fujiCount {
+            let fe = fujiIFD + 2 + j * 12
+            guard fe + 12 <= data.count else { break }
+            if data.readUInt16LE(at: fe) == 0x1403 {
+                // SHORT (uint16 LE), count=1, fits inline at entry+8
+                return Int(data.readUInt16LE(at: fe + 8))
+            }
         }
         return nil
     }

@@ -38,6 +38,25 @@ struct ThumbnailCell: View {
                     .frame(width: 148, height: 99)
                 }
 
+                // HDR badge — bottom trailing
+                if document.metadata.first(where: { $0.key == "exif.HDR" })?.value == "Ja" {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Text("HDR")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.orange)
+                                .cornerRadius(3)
+                                .padding([.bottom, .trailing], 4)
+                        }
+                    }
+                    .frame(width: 148, height: 99)
+                }
+
                 // Flag badge — top trailing
                 if document.flagStatus != .none {
                     VStack {

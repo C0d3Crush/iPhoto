@@ -105,23 +105,7 @@ struct DetailView: View {
                     fitToWindow: $viewModel.fitToWindowRequested
                 )
 
-                if viewModel.collection.currentDocument?.metadata.first(where: { $0.key == "exif.HDR" })?.value == "Ja" {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Text("HDR")
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(Color.orange)
-                                .cornerRadius(5)
-                                .padding(.top, 10)
-                                .padding(.trailing, 10)
-                        }
-                        Spacer()
-                    }
-                }
+
             } else if let err = viewModel.errorMessage {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
