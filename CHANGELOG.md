@@ -2,6 +2,14 @@
 
 ---
 
+## 0.65.2
+**Bugfix: SIGSEGV beim RAF-Thumbnail-Laden durch ~120 MB RAM-Spike behoben**
+
+- Behoben: `CGImageSourceCreateThumbnailFromImageAlways` dekodierte das volle 7728×5152-Bild (~120 MB) nur um ein 80px-Thumbnail zu erzeugen — bei zwei parallelen Decodes ~240 MB Peak → SIGSEGV
+- Fix: `CGImageSourceCreateThumbnailFromImageIfAbsent` nutzt jetzt das eingebettete EXIF-Thumbnail (IFD1, ~9 KB) direkt, ohne das Vollbild zu dekodieren
+
+---
+
 ## 0.65.1
 **Bugfix: SIGILL/SIGSEGV-Absturz beim Thumbnail-Laden behoben**
 

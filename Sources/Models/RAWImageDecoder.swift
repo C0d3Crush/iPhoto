@@ -159,8 +159,10 @@ struct RAWImageDecoder {
             // kCGImageSourceCreateThumbnailWithTransform wendet EXIF-Rotation an, kein CIImage nötig.
             "decodeEmbeddedJPEG: CGImageSourceCreateThumbnailAtIndex (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
             Log.trace("CGImageSourceCreateThumbnailAtIndex: \(maxDim)px \(name)")
+            // FromImageIfAbsent: nutzt eingebettetes EXIF-Thumbnail (IFD1, ~9 KB) statt das volle
+            // Bild (~120 MB) zu dekodieren — verhindert Speicherdruck-Crash bei parallelen Decodes.
             let opts: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxDim
             ]
