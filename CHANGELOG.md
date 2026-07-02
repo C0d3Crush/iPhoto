@@ -2,6 +2,15 @@
 
 ---
 
+## 0.65.3
+**Bugfix: Absturz beim Löschen eines aktiven Ordners behoben**
+
+- Behoben: Ordner löschen während Thumbnails laden → navSelection wechselt zu Library → 100+ Thumbnail-Decodes mit je ~120 MB RAM → SIGILL
+- `deleteWatchedFolder` entfernt jetzt die Bilder des gelöschten Ordners aus `collection.documents` — sie erschienen zuvor fälschlicherweise weiter in der Library
+- `syncedFolderIDs` wird beim Löschen ebenfalls bereinigt, sodass der Ordner bei erneutem Hinzufügen korrekt neu synchronisiert wird
+
+---
+
 ## 0.65.2
 **Bugfix: SIGSEGV beim RAF-Thumbnail-Laden durch ~120 MB RAM-Spike behoben**
 

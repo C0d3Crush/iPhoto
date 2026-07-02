@@ -351,7 +351,13 @@ extension ImageViewModel {
     func deleteWatchedFolder(_ folder: WatchedFolder) {
         guard !folder.isDefaultLibrary else { return }
         stopWatching(folder)
+        syncedFolderIDs.remove(folder.id)
         watchedFolders.removeAll { $0.id == folder.id }
+        if let (folderURL, stop) = folder.resolveURL() {
+            let prefix = folderURL.standardized.path
+            stop()
+            collection.documents.removeAll { $0.url.standardized.path.hasPrefix(prefix) }
+        }
         if navSelection == .folder(folder.id) { navSelection = .library }
         saveWatchedFolders()
     }
