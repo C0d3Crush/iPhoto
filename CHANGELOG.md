@@ -2,6 +2,16 @@
 
 ---
 
+## 0.65.0
+**Feature: Lazy Thumbnail-Loading — nur sichtbare Bilder laden**
+
+- Thumbnails werden jetzt nur noch für den aktuell ausgewählten Ordner/Album geladen, nicht mehr für die gesamte Bibliothek
+- EXIF-Metadaten werden weiterhin für alle Bilder im Hintergrund gescannt (damit intelligente Ordner korrekt funktionieren)
+- Beim Wechsel des Ordners/Albums werden automatisch die Thumbnails des neuen Kontexts nachgeladen
+- Deutlich geringerer Speicherverbrauch und schnellerer Start bei großen Bibliotheken
+
+---
+
 ## 0.64.1
 **Bugfix: Fujifilm Auto-DR-Modus jetzt als HDR erkannt**
 

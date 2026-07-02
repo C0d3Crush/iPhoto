@@ -202,7 +202,9 @@ extension ImageViewModel {
 
     func loadThumbnails() {
         guard importProgress.isEmpty else { return }
+        let visibleURLs = Set(visibleDocuments.map { $0.url })
         let pending = collection.documents.enumerated().filter {
+            visibleURLs.contains($0.element.url) &&
             $0.element.placeholderThumbnailImage == nil &&
             $0.element.thumbnailImage == nil &&
             !thumbInFlight.contains($0.element.url)

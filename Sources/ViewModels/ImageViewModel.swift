@@ -164,6 +164,7 @@ class ImageViewModel: ObservableObject {
                     self.loadCurrentImage()
                 }
                 self.evictDistantImages()
+                self.loadThumbnails()
             }
             .store(in: &cancellables)
 
