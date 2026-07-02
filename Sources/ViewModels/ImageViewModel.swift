@@ -98,6 +98,7 @@ class ImageViewModel: ObservableObject {
     var thumbDone: Int = 0
     var thumbHideTask: DispatchWorkItem? = nil
     var thumbInFlight: Set<URL> = []
+    var hiResInFlight: Set<URL> = []
     let thumbnailTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
     // MARK: - Computed properties

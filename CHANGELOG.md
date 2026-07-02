@@ -2,6 +2,14 @@
 
 ---
 
+## 0.65.1
+**Bugfix: SIGILL/SIGSEGV-Absturz beim Thumbnail-Laden behoben**
+
+- Behoben: Bei schnellen SwiftUI-Re-Renders (z. B. nach Inspector-Änderungen) wurde dasselbe Bild bis zu 7× gleichzeitig als 160px-Thumbnail dekodiert — das führte zu Speicherüberlauf und anschließendem SIGILL/SIGSEGV/SIGABRT
+- `requestVisibleThumbnail` prüft jetzt per `hiResInFlight`-Set, ob ein 160px-Decode bereits läuft, und überspringt doppelte Anfragen
+
+---
+
 ## 0.65.0
 **Feature: Lazy Thumbnail-Loading — nur sichtbare Bilder laden**
 

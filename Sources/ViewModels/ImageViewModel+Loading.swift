@@ -262,17 +262,23 @@ extension ImageViewModel {
         let doc = collection.documents[index]
         guard doc.thumbnailImage == nil else { return }
         let url = doc.url
+        guard !hiResInFlight.contains(url) else { return }
+        hiResInFlight.insert(url)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             thumbnailDecodeSemaphore.wait()
             defer { thumbnailDecodeSemaphore.signal() }
             autoreleasepool {
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
-                guard let thumb = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 160) else { return }
+                guard let thumb = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 160) else {
+                    DispatchQueue.main.async { self?.hiResInFlight.remove(url) }
+                    return
+                }
                 let nsImage = NSImage(cgImage: thumb, size: .zero)
                 DispatchQueue.main.async {
-                    guard let self = self,
-                          index < self.collection.documents.count,
+                    guard let self = self else { return }
+                    self.hiResInFlight.remove(url)
+                    guard index < self.collection.documents.count,
                           self.collection.documents[index].url == url else { return }
                     self.collection.documents[index].thumbnail = thumb
                     self.collection.documents[index].thumbnailImage = nsImage
