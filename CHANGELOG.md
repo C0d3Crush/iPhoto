@@ -2,6 +2,14 @@
 
 ---
 
+## 0.64.1
+**Bugfix: Fujifilm Auto-DR-Modus jetzt als HDR erkannt**
+
+- Behoben: Bilder im automatischen DR-Erweiterungsmodus (Tag `0x140B` – `AutoDynamicRange`) wurden nicht als HDR erkannt — jetzt wird zusätzlich zu `0x1403` auch `0x140B` ausgewertet
+- Alle betroffenen RAF-Dateien in bestehenden Bibliotheken werden automatisch neu gescannt
+
+---
+
 ## 0.64.0
 **Feature: Fujifilm MakerNote HDR-Erkennung + HDR-Badge im Bild**
 

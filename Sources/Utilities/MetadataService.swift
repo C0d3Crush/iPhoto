@@ -351,14 +351,17 @@ final class MetadataService {
         let fujiCount = Int(data.readUInt16LE(at: fujiIFD))
         guard fujiCount > 0, fujiCount < 500 else { return nil }
 
+        // 0x1403 = DevelopmentDynamicRange (manueller DR-Modus)
+        // 0x140B = AutoDynamicRange (automatischer DR-Modus) — nur eines der beiden ist gesetzt
+        var dr1403: Int? = nil
+        var dr140B: Int? = nil
         for j in 0..<fujiCount {
             let fe = fujiIFD + 2 + j * 12
             guard fe + 12 <= data.count else { break }
-            if data.readUInt16LE(at: fe) == 0x1403 {
-                // SHORT (uint16 LE), count=1, fits inline at entry+8
-                return Int(data.readUInt16LE(at: fe + 8))
-            }
+            let ftag = data.readUInt16LE(at: fe)
+            if ftag == 0x1403 { dr1403 = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x140B { dr140B = Int(data.readUInt16LE(at: fe + 8)) }
         }
-        return nil
+        return dr1403 ?? dr140B
     }
 }
