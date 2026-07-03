@@ -88,6 +88,11 @@ extension ImageViewModel {
                 return applyTextOp(c.op, haystack: catalogExifString(doc, key: "tiff.Model"), needle: c.textValue)
             case .lens:
                 return applyTextOp(c.op, haystack: catalogExifString(doc, key: "exif.LensModel"), needle: c.textValue)
+            case .captureDate:
+                let raw = metadataString(doc, key: "exif.DateTimeOriginal")
+                let dateStr = raw.isEmpty ? (CatalogStore.shared.image(forPath: doc.url.path)?.dateTaken ?? "") : raw
+                guard !dateStr.isEmpty, let date = parseExifDate(dateStr) else { return false }
+                return applyDateOp(c.op, date: date, lo: c.dateValue, hi: c.dateValue2, dynamic: c.dynamicDateRange)
             case .filename:
                 return applyTextOp(c.op, haystack: doc.filename, needle: c.textValue)
             }
@@ -140,6 +145,23 @@ extension ImageViewModel {
         case "tiff.Model":      return CatalogStore.shared.image(forPath: doc.url.path)?.cameraModel ?? ""
         case "exif.LensModel":  return exif?.lensModel ?? ""
         default:                return ""
+        }
+    }
+
+    private func parseExifDate(_ s: String) -> Date? {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        return f.date(from: s)
+    }
+
+    private func applyDateOp(_ op: SmartFolderOperator, date: Date, lo: Date, hi: Date, dynamic: DynamicDateRange) -> Bool {
+        switch op {
+        case .isBefore:    return date < lo
+        case .isAfter:     return date > lo
+        case .inDateRange: return date >= lo && date <= hi
+        case .isDynamic:   return dynamic.matches(date)
+        default:           return false
         }
     }
 

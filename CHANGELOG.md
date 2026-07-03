@@ -2,6 +2,16 @@
 
 ---
 
+## 0.66.0
+**Feature: Datumsfilter mit dynamischen Zeiträumen in intelligenten Ordnern**
+
+- Neues Kriterium „Aufnahmedatum" in intelligenten Ordnern — Fotos lassen sich jetzt nach EXIF-Aufnahmedatum filtern
+- Operatoren: „ist vor", „ist nach", „liegt zwischen" (mit DatePicker) und „ist in" für dynamische Zeiträume
+- Dynamische Zeiträume: Heute, Gestern, Diese Woche, Letzte Woche, Dieser Monat, Letzter Monat, Dieses Jahr, Letzte 7/30/90 Tage
+- Abwärtskompatibel: bestehende gespeicherte intelligente Ordner werden weiterhin korrekt geladen
+
+---
+
 ## 0.65.3
 **Bugfix: Absturz beim Löschen eines aktiven Ordners behoben**
 

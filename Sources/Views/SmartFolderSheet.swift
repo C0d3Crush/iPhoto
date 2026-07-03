@@ -242,6 +242,28 @@ private struct CriterionRow: View {
                 .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 80)
             }
 
+        // --- Aufnahmedatum ---
+        case .captureDate:
+            if criterion.op == .isDynamic {
+                Picker("", selection: $criterion.dynamicDateRange) {
+                    ForEach(DynamicDateRange.allCases, id: \.self) { d in
+                        Text(d.displayName).tag(d)
+                    }
+                }
+                .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 150)
+            } else if criterion.op == .inDateRange {
+                HStack(spacing: 4) {
+                    DatePicker("", selection: $criterion.dateValue, displayedComponents: .date)
+                        .labelsHidden().frame(width: 110)
+                    Text("–").font(.caption).foregroundColor(.secondary)
+                    DatePicker("", selection: $criterion.dateValue2, displayedComponents: .date)
+                        .labelsHidden().frame(width: 110)
+                }
+            } else {
+                DatePicker("", selection: $criterion.dateValue, displayedComponents: .date)
+                    .labelsHidden().frame(width: 120)
+            }
+
         // --- Text-Attribute ---
         case .cameraMake, .cameraModel, .lens, .filename:
             TextField(textPlaceholder, text: $criterion.textValue)
