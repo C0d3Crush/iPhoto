@@ -15,29 +15,51 @@ struct AdjustmentsPanel: View {
         } else {
             VStack(alignment: .leading, spacing: 20) {
                     Group {
-                        // Crop tool
-                        Button(action: { viewModel.cropToolActive = true }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "crop")
-                                    .font(.caption)
-                                Text("Zuschneiden & Begradigen")
-                                    .font(.caption)
-                                Spacer()
-                                if hasCropOrRotation {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.caption)
-                                        .foregroundColor(.accentColor)
-                                }
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
+                        // Rotate + Crop row
+                        HStack(spacing: 6) {
+                            Button(action: { viewModel.rotateLeft() }) {
+                                Image(systemName: "rotate.left")
+                                    .font(.system(size: 13))
+                                    .frame(width: 28, height: 28)
                             }
+                            .buttonStyle(PlainButtonStyle())
                             .foregroundColor(.primary)
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 10)
                             .background(Color(NSColor.controlBackgroundColor).cornerRadius(6))
+                            .help("90° links drehen (⌘[)")
+
+                            Button(action: { viewModel.rotateRight() }) {
+                                Image(systemName: "rotate.right")
+                                    .font(.system(size: 13))
+                                    .frame(width: 28, height: 28)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .foregroundColor(.primary)
+                            .background(Color(NSColor.controlBackgroundColor).cornerRadius(6))
+                            .help("90° rechts drehen (⌘])")
+
+                            Button(action: { viewModel.cropToolActive = true }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "crop")
+                                        .font(.caption)
+                                    Text("Zuschneiden & Begradigen")
+                                        .font(.caption)
+                                    Spacer()
+                                    if hasCropOrRotation {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.accentColor)
+                                    }
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                .foregroundColor(.primary)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 10)
+                                .background(Color(NSColor.controlBackgroundColor).cornerRadius(6))
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
-                        .buttonStyle(PlainButtonStyle())
 
                         Divider()
 
@@ -180,6 +202,7 @@ struct AdjustmentsPanel: View {
 
     private var hasCropOrRotation: Bool {
         viewModel.adjustments.rotation != 0 ||
+        viewModel.adjustments.turns    != 0 ||
         viewModel.adjustments.cropRect != CGRect(x: 0, y: 0, width: 1, height: 1)
     }
 

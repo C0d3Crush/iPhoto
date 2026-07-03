@@ -169,6 +169,20 @@ struct DetailView: View {
             }
 
             ToolbarItemGroup(placement: .automatic) {
+                Button(action: { viewModel.rotateLeft() }) {
+                    Image(systemName: "rotate.left")
+                }
+                .help("90° links drehen (⌘[)")
+                .keyboardShortcut("[", modifiers: .command)
+                .disabled(viewModel.currentImage == nil)
+
+                Button(action: { viewModel.rotateRight() }) {
+                    Image(systemName: "rotate.right")
+                }
+                .help("90° rechts drehen (⌘])")
+                .keyboardShortcut("]", modifiers: .command)
+                .disabled(viewModel.currentImage == nil)
+
                 Button(action: { viewModel.zoomOut() }) {
                     Image(systemName: "minus.magnifyingglass")
                 }

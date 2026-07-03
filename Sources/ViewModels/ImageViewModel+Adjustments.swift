@@ -226,6 +226,17 @@ extension ImageViewModel {
 
     private func applyGeometryAndCrop(_ ci: CIImage, snap: AdjustmentState) -> CIImage {
         var out = ci
+        let normalizedTurns = ((snap.turns % 4) + 4) % 4
+        if normalizedTurns != 0 {
+            let angle = -CGFloat(normalizedTurns) * (.pi / 2)
+            let cx = out.extent.midX, cy = out.extent.midY
+            var t = CGAffineTransform(translationX: cx, y: cy)
+            t = t.rotated(by: angle)
+            t = t.translatedBy(x: -cx, y: -cy)
+            let rotated = out.transformed(by: t)
+            out = rotated.transformed(by: CGAffineTransform(translationX: -rotated.extent.minX,
+                                                             y: -rotated.extent.minY))
+        }
         if snap.rotation != 0 {
             let angle = CGFloat(snap.rotation) * .pi / 180.0
             let cx = out.extent.midX, cy = out.extent.midY
@@ -342,6 +353,24 @@ extension ImageViewModel {
 
     private func isDefaultCurve(_ pts: [CGPoint]) -> Bool {
         zip(pts, CurvesView.defaultPoints).allSatisfy { abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001 }
+    }
+
+    // MARK: - Rotation
+
+    func rotateLeft() {
+        adjUndoStack.append(lastCommittedAdjustments)
+        adjRedoStack.removeAll()
+        adjustments.turns = ((adjustments.turns - 1) % 4 + 4) % 4
+        lastCommittedAdjustments = adjustments
+        applyAdjustments()
+    }
+
+    func rotateRight() {
+        adjUndoStack.append(lastCommittedAdjustments)
+        adjRedoStack.removeAll()
+        adjustments.turns = (adjustments.turns + 1) % 4
+        lastCommittedAdjustments = adjustments
+        applyAdjustments()
     }
 
     // MARK: - Undo / Redo
@@ -464,6 +493,7 @@ extension ImageViewModel {
         if adjustments.contrast   != 1 { parts.append(String(format: "Kontrast %.2f",       adjustments.contrast)) }
         if adjustments.saturation != 1 { parts.append(String(format: "Sättigung %.2f",      adjustments.saturation)) }
         if adjustments.warmth     != 0 { parts.append(String(format: "Wärme %+.2f",         adjustments.warmth)) }
+        if adjustments.turns      != 0 { parts.append("\(adjustments.turns * 90)° gedreht") }
         if adjustments.rotation   != 0 { parts.append(String(format: "Rotation %.1f°",      adjustments.rotation)) }
         if adjustments.cropRect != CGRect(x: 0, y: 0, width: 1, height: 1) { parts.append("Zugeschnitten") }
         let curveDefault = zip(adjustments.curvePoints, CurvesView.defaultPoints).allSatisfy {

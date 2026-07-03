@@ -2,6 +2,16 @@
 
 ---
 
+## 0.68.0
+**Feature: Bilder in 90°-Schritten drehen**
+
+- Neue Schaltflächen „90° links drehen" und „90° rechts drehen" in der Toolbar und im Anpassungen-Panel
+- Tastaturkürzel: ⌘[ (links) und ⌘] (rechts)
+- Rotation wird als Anpassung gespeichert (Undo/Redo unterstützt) und beim Export angewendet
+- Mehrfaches Drehen akkumuliert sich korrekt (0° → 90° → 180° → 270° → 0°)
+
+---
+
 ## 0.67.3
 **Bugfix: SIGSEGV bei schneller Navigation durch RAF-Bilder**
 

@@ -16,6 +16,7 @@ struct AdjustmentState: Codable, Equatable {
     var curveB:      [CGPoint] = AdjustmentState.defaultCurve
     var cropRect:         CGRect             = CGRect(x: 0, y: 0, width: 1, height: 1)
     var rotation:         Double             = 0.0
+    var turns:            Int               = 0    // 90°-Schritte im Uhrzeigersinn: 0=0°, 1=90°, 2=180°, 3=270°
     var localAdjustments: [LocalAdjustment] = []
 
     // Capture Sharpening
