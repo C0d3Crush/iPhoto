@@ -97,6 +97,7 @@ struct SmartFolderSheet: View {
 // MARK: - CriterionRow
 
 private struct CriterionRow: View {
+    @EnvironmentObject var viewModel: ImageViewModel
     @Binding var criterion: SmartFolderCriterion
     let onDelete: () -> Void
 
@@ -269,6 +270,29 @@ private struct CriterionRow: View {
             TextField(textPlaceholder, text: $criterion.textValue)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .frame(width: 150)
+
+        // --- Album ---
+        case .album:
+            if viewModel.albums.isEmpty {
+                Text("Keine Alben vorhanden")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            } else {
+                Picker("", selection: $criterion.textValue) {
+                    Text("Bitte wählen").tag("")
+                    ForEach(viewModel.albums) { album in
+                        Text(album.name).tag(album.id.uuidString)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(MenuPickerStyle())
+                .frame(width: 160)
+                .onAppear {
+                    if criterion.textValue.isEmpty, let first = viewModel.albums.first {
+                        criterion.textValue = first.id.uuidString
+                    }
+                }
+            }
         }
     }
 

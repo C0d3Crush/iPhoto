@@ -62,6 +62,8 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
     case captureDate
     // Text
     case cameraMake, cameraModel, lens, filename
+    // Album
+    case album
 
     var displayName: String {
         switch self {
@@ -79,10 +81,11 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .cameraModel:  return "Kamera-Modell"
         case .lens:         return "Objektiv"
         case .filename:     return "Dateiname"
+        case .album:        return "Album"
         }
     }
 
-    enum AttributeType { case enumType, numeric, dateType, text }
+    enum AttributeType { case enumType, numeric, dateType, text, albumType }
 
     var type: AttributeType {
         switch self {
@@ -90,24 +93,27 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .rating, .iso, .focalLength, .aperture:   return .numeric
         case .captureDate:                             return .dateType
         case .cameraMake, .cameraModel, .lens, .filename: return .text
+        case .album:                                   return .albumType
         }
     }
 
     var defaultOperator: SmartFolderOperator {
         switch type {
-        case .enumType: return .isExact
-        case .numeric:  return .greaterThan
-        case .dateType: return .isDynamic
-        case .text:     return .contains
+        case .enumType:  return .isExact
+        case .numeric:   return .greaterThan
+        case .dateType:  return .isDynamic
+        case .text:      return .contains
+        case .albumType: return .isExact
         }
     }
 
     var availableOperators: [SmartFolderOperator] {
         switch type {
-        case .enumType: return [.isExact, .isNot]
-        case .numeric:  return [.isExact, .isNot, .greaterThan, .lessThan, .inRange]
-        case .dateType: return [.isDynamic, .isAfter, .isBefore, .inDateRange]
-        case .text:     return [.contains, .notContains, .isExact, .isNot, .beginsWith, .endsWith]
+        case .enumType:  return [.isExact, .isNot]
+        case .numeric:   return [.isExact, .isNot, .greaterThan, .lessThan, .inRange]
+        case .dateType:  return [.isDynamic, .isAfter, .isBefore, .inDateRange]
+        case .text:      return [.contains, .notContains, .isExact, .isNot, .beginsWith, .endsWith]
+        case .albumType: return [.isExact, .isNot]
         }
     }
 }

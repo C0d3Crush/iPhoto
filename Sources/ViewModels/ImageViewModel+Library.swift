@@ -95,6 +95,11 @@ extension ImageViewModel {
                 return applyDateOp(c.op, date: date, lo: c.dateValue, hi: c.dateValue2, dynamic: c.dynamicDateRange)
             case .filename:
                 return applyTextOp(c.op, haystack: doc.filename, needle: c.textValue)
+            case .album:
+                guard let albumID = UUID(uuidString: c.textValue),
+                      let album = albums.first(where: { $0.id == albumID }) else { return false }
+                let inAlbum = album.photoURLs.contains(doc.url)
+                return applyEnumOp(c.op, lhs: inAlbum, rhs: true)
             }
         }
         return sf.matchAll ? results.allSatisfy { $0 } : results.contains { $0 }

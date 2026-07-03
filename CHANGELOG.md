@@ -2,6 +2,15 @@
 
 ---
 
+## 0.67.0
+**Feature: Album-Filter in intelligenten Ordnern**
+
+- Neues Kriterium „Album" in intelligenten Ordnern — Fotos lassen sich nach Zugehörigkeit zu einem Album filtern
+- Operatoren: „ist" (Foto ist im Album) und „ist nicht" (Foto ist nicht im Album)
+- Album wird per Dropdown aus allen vorhandenen Alben ausgewählt
+
+---
+
 ## 0.66.0
 **Feature: Datumsfilter mit dynamischen Zeiträumen in intelligenten Ordnern**
 
