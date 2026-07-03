@@ -2,6 +2,15 @@
 
 ---
 
+## 0.67.3
+**Bugfix: SIGSEGV bei schneller Navigation durch RAF-Bilder**
+
+- Behoben: SIGSEGV wenn der Nutzer schnell durch Bilder navigiert und zwei Vollbild-Decodes gleichzeitig liefen
+- Ursache: `loadCurrentImage` setzt `isLoadingFullRes=false` sofort zurück (für flüssige UX), der alte Hintergrund-Thread lief aber noch und belegte ~37–100 MB — der Guard im neuen `loadFullRes`-Aufruf passierte, beide Decodes liefen parallel → OOM
+- Fix: `fullResDecodeSemaphore(value: 1)` serialisiert alle Vollbild-Decodes im BG-Task; stale Tokens werden nach dem Warten erkannt und `upgradeToFullResIfNeeded()` lädt das aktuelle Bild nach
+
+---
+
 ## 0.67.2
 **Bugfix: SIGSEGV/SIGILL beim Laden von Thumbnails neuerer Fujifilm-RAFs**
 

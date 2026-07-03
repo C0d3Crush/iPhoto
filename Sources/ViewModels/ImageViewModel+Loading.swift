@@ -13,6 +13,12 @@ private let thumbnailDecodeSemaphore = DispatchSemaphore(value: 2)
 // for 200 files that's 200 parallel reads filling GCD's thread pool.
 private let metadataReadSemaphore = DispatchSemaphore(value: 4)
 
+// Serializes full-res decodes — only one RAF/JPEG full-decode in flight at a time.
+// loadCurrentImage resets isLoadingFullRes=false eagerly (for UX), but the BG task
+// is already dispatched and still consuming ~37–100 MB. Without this semaphore,
+// rapid navigation starts a second decode before the first finishes → OOM → SIGSEGV.
+private let fullResDecodeSemaphore = DispatchSemaphore(value: 1)
+
 // MARK: - Image Loading Pipeline
 
 extension ImageViewModel {
@@ -124,7 +130,18 @@ extension ImageViewModel {
         let preloadedMetadata = index < collection.documents.count ? collection.documents[index].metadata : []
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            fullResDecodeSemaphore.wait()
+            defer { fullResDecodeSemaphore.signal() }
             guard let self = self else { return }
+            // Token-Prüfung nach dem Warten: stale wenn Nutzer weitergeklickt hat.
+            guard self.loadToken == token else {
+                DispatchQueue.main.async {
+                    self.isLoadingFullRes = false
+                    self.activeFullResToken = nil
+                    self.upgradeToFullResIfNeeded()
+                }
+                return
+            }
             Log.trace("loadFullRes BG gestartet: \(url.lastPathComponent) token=\(token)")
             let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
             defer { stopAccess() }
