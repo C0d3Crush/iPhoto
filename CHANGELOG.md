@@ -2,6 +2,15 @@
 
 ---
 
+## 0.68.1
+**Feature: Album-Häkchen und Entfernen im Rechtsklick-Menü**
+
+- Alben, in denen das Bild bereits enthalten ist, werden im Kontextmenü mit einem Häkchen markiert
+- Klick auf ein bereits enthaltenes Album entfernt das Bild daraus (Toggle)
+- „Aus Album entfernen" erscheint weiterhin direkt wenn man sich in einem Album befindet
+
+---
+
 ## 0.68.0
 **Feature: Bilder in 90°-Schritten drehen**
 

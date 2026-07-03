@@ -131,9 +131,21 @@ struct ThumbnailContextMenu: View {
             let multi = isInMultiSelection
             Menu(multi ? "Alle (\(vm.collection.selectedIndices.count)) zu Album hinzufügen" : "Zu Album hinzufügen") {
                 ForEach(vm.albums) { album in
-                    Button(album.name) {
-                        if multi { vm.addSelectedToAlbum(albumID: album.id) }
-                        else      { vm.addToAlbum(doc, albumID: album.id) }
+                    let inAlbum = !multi && album.photoURLs.contains(doc.url)
+                    Button {
+                        if multi {
+                            vm.addSelectedToAlbum(albumID: album.id)
+                        } else if inAlbum {
+                            vm.removeFromAlbum(doc, albumID: album.id)
+                        } else {
+                            vm.addToAlbum(doc, albumID: album.id)
+                        }
+                    } label: {
+                        if inAlbum {
+                            Label(album.name, systemImage: "checkmark")
+                        } else {
+                            Text(album.name)
+                        }
                     }
                 }
             }
