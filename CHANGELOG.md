@@ -2,6 +2,15 @@
 
 ---
 
+## 0.67.1
+**Bugfix: Absturz beim Entfernen von Kriterien in intelligenten Ordnern**
+
+- Behoben: SIGILL beim Klick auf Minus-Button in einem intelligenten Ordner mit mehreren Kriterien
+- Ursache: `ForEach` über Array-Indices — beim Entfernen eines Elements griff SwiftUI noch auf den verschobenen Index zu (Out-of-Bounds → Swift Bounds-Check → SIGILL)
+- Fix: stabiles `ForEach` mit UUID-Identity + Custom Binding per Element + Löschung via `removeAll(where:)`
+
+---
+
 ## 0.67.0
 **Feature: Album-Filter in intelligenten Ordnern**
 

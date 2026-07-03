@@ -45,9 +45,18 @@ struct SmartFolderSheet: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(criteria.indices, id: \.self) { i in
-                    CriterionRow(criterion: $criteria[i]) {
-                        criteria.remove(at: i)
+                ForEach(criteria) { criterion in
+                    CriterionRow(
+                        criterion: Binding(
+                            get: { criteria.first(where: { $0.id == criterion.id }) ?? criterion },
+                            set: { new in
+                                if let i = criteria.firstIndex(where: { $0.id == new.id }) {
+                                    criteria[i] = new
+                                }
+                            }
+                        )
+                    ) {
+                        criteria.removeAll { $0.id == criterion.id }
                     }
                 }
 
