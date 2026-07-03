@@ -2,6 +2,15 @@
 
 ---
 
+## 0.67.2
+**Bugfix: SIGSEGV/SIGILL beim Laden von Thumbnails neuerer Fujifilm-RAFs**
+
+- Behoben: 3 Abstürze (SIGSEGV + SIGILL) beim Laden von 80px-Thumbnails aus RAF-Dateien mit großem embedded JPEG (>3 MB, z.B. neuere Fujifilm-Kameras)
+- Ursache: `kCGImageSourceCreateThumbnailFromImageIfAbsent` nutzt ein eingebettetes EXIF-Thumbnail (9 KB) wenn vorhanden — fehlt dieses in neueren RAFs, dekodierte ImageIO das komplette JPEG (~52–100 MB Zwischenbild) → Speicherkorruption
+- Fix: `kCGImageSourceCreateThumbnailFromImageAlways` — ImageIO nutzt immer JPEG-DCT-Sub-Sampling und respektiert die maximale Pixelgröße effizient (~1 MB Zwischenbild statt 100 MB)
+
+---
+
 ## 0.67.1
 **Bugfix: Absturz beim Entfernen von Kriterien in intelligenten Ordnern**
 

@@ -159,10 +159,12 @@ struct RAWImageDecoder {
             // kCGImageSourceCreateThumbnailWithTransform wendet EXIF-Rotation an, kein CIImage nötig.
             "decodeEmbeddedJPEG: CGImageSourceCreateThumbnailAtIndex (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
             Log.trace("CGImageSourceCreateThumbnailAtIndex: \(maxDim)px \(name)")
-            // FromImageIfAbsent: nutzt eingebettetes EXIF-Thumbnail (IFD1, ~9 KB) statt das volle
-            // Bild (~120 MB) zu dekodieren — verhindert Speicherdruck-Crash bei parallelen Decodes.
+            // FromImageAlways: erzwingt JPEG-DCT-Sub-Sampling (1/8 Zwischenstufe) statt des
+            // vollen Bildes. FromImageIfAbsent crashte bei großen embedded JPEGs ohne IFD1-Thumbnail
+            // (z.B. neuere Fujifilm-Kameras mit 5 MB+ Preview) — ImageIO dekodierte dort das
+            // komplette JPEG (~52–100 MB Zwischenbild) → OOM → SIGSEGV/SIGILL.
             let opts: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxDim
             ]
