@@ -250,9 +250,11 @@ extension ImageViewModel {
         saveAlbums()
         CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: album.name)
         navSelection = .album(album.id) as NavSelection?
+        syncAlbumToFilesystem(album)
     }
 
     func deleteAlbum(_ album: Album) {
+        removeAlbumFromFilesystem(album)
         albums.removeAll { $0.id == album.id }
         if navSelection == .album(album.id) { navSelection = .library as NavSelection? }
         saveAlbums()
@@ -261,9 +263,11 @@ extension ImageViewModel {
 
     func renameAlbum(_ album: Album, to name: String) {
         guard let idx = albums.firstIndex(where: { $0.id == album.id }) else { return }
+        let oldDir = albumSystemPath(for: album)
         albums[idx].name = name
         saveAlbums()
         CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: name)
+        syncAlbumToFilesystem(albums[idx], removingOldAt: oldDir)
     }
 
     func addToAlbum(_ document: ImageDocument, albumID: UUID) {
@@ -273,6 +277,7 @@ extension ImageViewModel {
         saveAlbums()
         CatalogStore.shared.addImage(path: document.url.path, toAlbum: albumID.uuidString,
                                      order: albums[idx].photoURLs.count - 1)
+        syncAlbumToFilesystem(albums[idx])
     }
 
     func addSelectedToAlbum(albumID: UUID) {
@@ -286,6 +291,7 @@ extension ImageViewModel {
                                          order: albums[idx].photoURLs.count - 1)
         }
         saveAlbums()
+        syncAlbumToFilesystem(albums[idx])
     }
 
     func removeFromAlbum(_ document: ImageDocument, albumID: UUID) {
@@ -293,6 +299,7 @@ extension ImageViewModel {
         albums[idx].photoURLs.removeAll { $0 == document.url }
         saveAlbums()
         CatalogStore.shared.removeImage(path: document.url.path, fromAlbum: albumID.uuidString)
+        syncAlbumToFilesystem(albums[idx])
     }
 
     private var albumsFileURL: URL {
@@ -306,11 +313,82 @@ extension ImageViewModel {
         guard let data = try? Data(contentsOf: albumsFileURL),
               let decoded = try? JSONDecoder().decode([Album].self, from: data) else { return }
         albums = decoded
+        // Backward compat: create filesystem directories for all existing albums
+        for album in albums { syncAlbumToFilesystem(album) }
     }
 
     func saveAlbums() {
         guard let data = try? JSONEncoder().encode(albums) else { return }
         persistFileData(data, to: albumsFileURL, description: "Album-Datei")
+    }
+
+    // MARK: - Album Filesystem Sync
+
+    static let albumsSystemFolderName = "Alben"
+
+    var albumsSystemRoot: URL {
+        FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto")
+            .appendingPathComponent(Self.albumsSystemFolderName)
+    }
+
+    func albumSystemPath(for album: Album) -> URL {
+        albumsSystemRoot.appendingPathComponent(album.name)
+    }
+
+    func syncAlbumToFilesystem(_ album: Album, removingOldAt oldDir: URL? = nil) {
+        let photoURLs = album.photoURLs
+        let dir = albumSystemPath(for: album)
+        let capturedOld = oldDir
+
+        DispatchQueue.global(qos: .utility).async {
+            let fm = FileManager.default
+            if let old = capturedOld {
+                try? fm.removeItem(at: old)
+            }
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+            let targetPaths = Set(photoURLs.map { $0.standardized.path })
+
+            // Remove stale symlinks
+            if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isSymbolicLinkKey]) {
+                for link in contents {
+                    guard (try? link.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true else { continue }
+                    let target = (try? fm.destinationOfSymbolicLink(atPath: link.path)).map {
+                        URL(fileURLWithPath: $0).standardized.path
+                    }
+                    if target.map({ !targetPaths.contains($0) }) ?? true {
+                        try? fm.removeItem(at: link)
+                    }
+                }
+            }
+
+            // Add new symlinks
+            var existingLinks = Set((try? fm.contentsOfDirectory(atPath: dir.path)) ?? [])
+            for photoURL in photoURLs {
+                var linkName = photoURL.lastPathComponent
+                var counter  = 1
+                while existingLinks.contains(linkName) {
+                    let base = (photoURL.lastPathComponent as NSString).deletingPathExtension
+                    let ext  = (photoURL.lastPathComponent as NSString).pathExtension
+                    linkName = ext.isEmpty ? "\(base)_\(counter)" : "\(base)_\(counter).\(ext)"
+                    counter += 1
+                }
+                let linkURL = dir.appendingPathComponent(linkName)
+                if !fm.fileExists(atPath: linkURL.path, isDirectory: nil) {
+                    try? fm.createSymbolicLink(at: linkURL, withDestinationURL: photoURL)
+                    existingLinks.insert(linkName)
+                }
+            }
+            Log.info("Album Filesystem-Sync: \"\(album.name)\" → \(photoURLs.count) Symlinks in \(dir.path)")
+        }
+    }
+
+    private func removeAlbumFromFilesystem(_ album: Album) {
+        let dir = albumSystemPath(for: album)
+        DispatchQueue.global(qos: .utility).async {
+            try? FileManager.default.removeItem(at: dir)
+        }
     }
 }
 
@@ -768,8 +846,10 @@ extension ImageViewModel {
             ) else { return }
             var found: [URL] = []
             for case let fileURL as URL in enumerator {
-                // Symlink-Verzeichnis der intelligenten Ordner überspringen
-                if fileURL.lastPathComponent == ImageViewModel.smartFoldersSystemFolderName {
+                // Symlink-Verzeichnisse der virtuellen Ordner überspringen
+                let lastName = fileURL.lastPathComponent
+                if lastName == ImageViewModel.smartFoldersSystemFolderName ||
+                   lastName == ImageViewModel.albumsSystemFolderName {
                     enumerator.skipDescendants()
                     continue
                 }

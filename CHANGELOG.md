@@ -2,6 +2,17 @@
 
 ---
 
+## 0.73.0
+**Feature: Alben als echte Systemordner mit Symlinks**
+
+- Für jedes Album wird jetzt automatisch ein Ordner unter `~/Pictures/iPhoto/Alben/<Albumname>/` angelegt
+- Der Ordner enthält Symlinks zu allen Fotos des Albums — so sind Alben direkt im Finder sichtbar
+- Beim Erstellen, Umbenennen, Löschen und bei jeder Änderung der Album-Mitglieder wird der Ordner aktualisiert
+- Bestehende Alben erhalten ihre Systemordner automatisch beim nächsten App-Start (rückwärtskompatibel)
+- Die Bibliothek-Synchronisation überspringt `Alben/` genauso wie `Intelligente Ordner/`, um Symlinks nicht als echte Fotos zu importieren
+
+---
+
 ## 0.72.0
 **Feature: Einklappbare Seitenleisten-Sektionen**
 
