@@ -1,5 +1,7 @@
 import SwiftUI
 
+private let kSmartFolderIDType = "com.c0d3cru5h.iphoto.smartfolder-id"
+
 struct NavSidebarView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var showCreateAlbum = false
@@ -16,14 +18,15 @@ struct NavSidebarView: View {
     @State private var dropTargetGroups: Set<String> = []
     @State private var dropOnUngrouped: Bool = false
 
-    // macOS returns NSString directly from loadItem on some versions, Data on others.
-    private func smartFolderID(from item: NSSecureCoding?) -> UUID? {
-        let str: String?
-        if let s = item as? String       { str = s }
-        else if let s = item as? NSString { str = s as String }
-        else if let d = item as? Data    { str = String(data: d, encoding: .utf8) }
-        else                              { str = nil }
-        return str.flatMap { UUID(uuidString: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    private func loadSmartFolderID(from providers: [NSItemProvider], completion: @escaping (SmartFolder?) -> Void) {
+        providers.first?.loadDataRepresentation(forTypeIdentifier: kSmartFolderIDType) { data, _ in
+            guard let data = data,
+                  let idStr = String(data: data, encoding: .utf8),
+                  let id = UUID(uuidString: idStr) else { completion(nil); return }
+            DispatchQueue.main.async {
+                completion(self.viewModel.smartFolders.first(where: { $0.id == id }))
+            }
+        }
     }
 
     var body: some View {
@@ -116,24 +119,43 @@ struct NavSidebarView: View {
 
     @ViewBuilder
     private func smartFolderRow(_ sf: SmartFolder, indented: Bool = false) -> some View {
+        let count = viewModel.collection.documents.filter { viewModel.smartFolderMatches($0, sf: sf) }.count
         // Button + onDrag conflict: button gesture swallows the drag.
         // Using plain view + onTapGesture allows onDrag to work correctly.
-        Label(sf.name, systemImage: "folder.badge.gearshape")
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, indented ? 24 : 10)
-            .padding(.vertical, 5)
-            .background(viewModel.navSelection == .smartFolder(sf.id) ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
-            .contentShape(Rectangle())
-            .padding(.horizontal, 4)
-            .onTapGesture { viewModel.navSelection = .smartFolder(sf.id) }
-            .onDrag { NSItemProvider(object: sf.id.uuidString as NSString) }
-            .contextMenu {
-                Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
-                Button("In Gruppe verschieben") { movingFolder = sf }
-                Divider()
-                Button("Löschen") { viewModel.deleteSmartFolder(sf) }
+        HStack(spacing: 4) {
+            Label(sf.name, systemImage: "folder.badge.gearshape")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
+            if count > 0 {
+                Text("\(count)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.trailing, 2)
             }
+        }
+        .padding(.horizontal, indented ? 24 : 10)
+        .padding(.vertical, 5)
+        .background(viewModel.navSelection == .smartFolder(sf.id) ? Color.accentColor.opacity(0.2) : Color.clear)
+        .cornerRadius(6)
+        .contentShape(Rectangle())
+        .padding(.horizontal, 4)
+        .onTapGesture { viewModel.navSelection = .smartFolder(sf.id) }
+        .onDrag {
+            let provider = NSItemProvider()
+            let idData = sf.id.uuidString.data(using: .utf8) ?? Data()
+            provider.registerDataRepresentation(forTypeIdentifier: kSmartFolderIDType,
+                                                visibility: .all) { completion in
+                completion(idData, nil)
+                return nil
+            }
+            return provider
+        }
+        .contextMenu {
+            Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
+            Button("In Gruppe verschieben") { movingFolder = sf }
+            Divider()
+            Button("Löschen") { viewModel.deleteSmartFolder(sf) }
+        }
     }
 
     @ViewBuilder private var albumsSection: some View {
@@ -169,15 +191,14 @@ struct NavSidebarView: View {
             ))
             .background(dropOnUngrouped ? Color.accentColor.opacity(0.15) : Color.clear)
             .cornerRadius(6)
-            .onDrop(of: ["public.plain-text"],
+            .onDrop(of: [kSmartFolderIDType],
                     isTargeted: Binding(
                         get: { dropOnUngrouped },
                         set: { dropOnUngrouped = $0 }
                     )) { providers in
-                providers.first?.loadItem(forTypeIdentifier: "public.plain-text", options: nil) { item, _ in
-                    guard let id = self.smartFolderID(from: item),
-                          let sf = viewModel.smartFolders.first(where: { $0.id == id }) else { return }
-                    DispatchQueue.main.async { viewModel.moveSmartFolder(sf, toGroup: nil) }
+                loadSmartFolderID(from: providers) { sf in
+                    guard let sf = sf else { return }
+                    viewModel.moveSmartFolder(sf, toGroup: nil)
                 }
                 return true
             }
@@ -223,7 +244,7 @@ struct NavSidebarView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .padding(.horizontal, 4)
-        .onDrop(of: ["public.plain-text"],
+        .onDrop(of: [kSmartFolderIDType],
                 isTargeted: Binding(
                     get: { dropTargetGroups.contains(groupName) },
                     set: { v in
@@ -231,10 +252,9 @@ struct NavSidebarView: View {
                         else { dropTargetGroups.remove(groupName) }
                     }
                 )) { providers in
-            providers.first?.loadItem(forTypeIdentifier: "public.plain-text", options: nil) { item, _ in
-                guard let id = self.smartFolderID(from: item),
-                      let sf = viewModel.smartFolders.first(where: { $0.id == id }) else { return }
-                DispatchQueue.main.async { viewModel.moveSmartFolder(sf, toGroup: groupName) }
+            loadSmartFolderID(from: providers) { sf in
+                guard let sf = sf else { return }
+                viewModel.moveSmartFolder(sf, toGroup: groupName)
             }
             return true
         }
@@ -316,12 +336,21 @@ private struct AlbumRow: View {
 
     var body: some View {
         Button(action: { viewModel.selectAlbum(album) }) {
-            Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(isSelected ? Color.accentColor.opacity(0.2) : (isTargeted ? Color.accentColor.opacity(0.1) : Color.clear))
-                .cornerRadius(6)
+            HStack(spacing: 4) {
+                Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineLimit(1)
+                if album.photoURLs.count > 0 {
+                    Text("\(album.photoURLs.count)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(isSelected ? Color.accentColor.opacity(0.2) : (isTargeted ? Color.accentColor.opacity(0.1) : Color.clear))
+            .cornerRadius(6)
         }
         .buttonStyle(PlainButtonStyle())
         .padding(.horizontal, 4)
@@ -388,6 +417,7 @@ private struct FolderRow: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Label(folder.name, systemImage: folderIcon)
                             .foregroundColor(isRemovable && !isAvailable ? .secondary : .primary)
+                            .lineLimit(1)
                         if isRemovable && !isAvailable {
                             Text("Speichermedium nicht verfügbar")
                                 .font(.caption2)
@@ -395,6 +425,12 @@ private struct FolderRow: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    let count = folderImages.count
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 5)

@@ -2,6 +2,14 @@
 
 ---
 
+## 0.76.0
+**Feature: Bildanzahl in der Seitenleiste & Drag-and-Drop Gruppen repariert**
+
+- Alben, intelligente Ordner und Ordner zeigen jetzt die Anzahl der enthaltenen Bilder rechts in der Seitenleiste
+- Drag-and-Drop von intelligenten Ordnern in Gruppen funktioniert jetzt zuverlässig — das Problem war ein UTI-Mismatch (`public.plain-text` vs. `public.utf8-plain-text`); es wird jetzt ein privater App-eigener Typ (`com.c0d3cru5h.iphoto.smartfolder-id`) verwendet
+
+---
+
 ## 0.75.2
 **Bugfix: Drag-and-Drop in Gruppen, Doppelklick und Crash-Log**
 
