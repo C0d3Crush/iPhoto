@@ -106,23 +106,24 @@ struct NavSidebarView: View {
 
     @ViewBuilder
     private func smartFolderRow(_ sf: SmartFolder, indented: Bool = false) -> some View {
-        Button(action: { viewModel.navSelection = .smartFolder(sf.id) }) {
-            Label(sf.name, systemImage: "folder.badge.gearshape")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, indented ? 24 : 10)
-                .padding(.vertical, 5)
-                .background(viewModel.navSelection == .smartFolder(sf.id) ? Color.accentColor.opacity(0.2) : Color.clear)
-                .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .padding(.horizontal, 4)
-        .onDrag { NSItemProvider(object: sf.id.uuidString as NSString) }
-        .contextMenu {
-            Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
-            Button("In Gruppe verschieben") { movingFolder = sf }
-            Divider()
-            Button("Löschen") { viewModel.deleteSmartFolder(sf) }
-        }
+        // Button + onDrag conflict: button gesture swallows the drag.
+        // Using plain view + onTapGesture allows onDrag to work correctly.
+        Label(sf.name, systemImage: "folder.badge.gearshape")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, indented ? 24 : 10)
+            .padding(.vertical, 5)
+            .background(viewModel.navSelection == .smartFolder(sf.id) ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+            .contentShape(Rectangle())
+            .padding(.horizontal, 4)
+            .onTapGesture { viewModel.navSelection = .smartFolder(sf.id) }
+            .onDrag { NSItemProvider(object: sf.id.uuidString as NSString) }
+            .contextMenu {
+                Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
+                Button("In Gruppe verschieben") { movingFolder = sf }
+                Divider()
+                Button("Löschen") { viewModel.deleteSmartFolder(sf) }
+            }
     }
 
     @ViewBuilder private var albumsSection: some View {

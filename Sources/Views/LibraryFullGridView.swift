@@ -5,9 +5,9 @@ struct LibraryFullGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
     private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: viewModel.gridThumbnailSize))]
+        [GridItem(.adaptive(minimum: viewModel.gridThumbnailSize + 8))]
     }
-    private var cellWidth: CGFloat { viewModel.gridThumbnailSize - 4 }
+    private var cellWidth: CGFloat { viewModel.gridThumbnailSize }
 
     var body: some View {
         ZStack {
@@ -33,9 +33,9 @@ struct LibraryFullGridView: View {
                             ForEach(viewModel.visibleDocuments, id: \.id) { doc in
                                 let idx = viewModel.collectionIndex(for: doc) ?? 0
                                 let isSel = viewModel.collection.selectedIndices.contains(idx)
-                                ThumbnailCell(document: doc, isSelected: isSel)
+                                ThumbnailCell(document: doc, isSelected: isSel, thumbnailWidth: cellWidth)
                                     .id(idx)
-                                    .frame(width: cellWidth)
+                                    .frame(width: cellWidth + 8)
                                     .contentShape(Rectangle())
                                     .onAppear { viewModel.requestVisibleThumbnail(at: idx) }
                                     .onTapGesture(count: 2) { openDetail(at: idx) }

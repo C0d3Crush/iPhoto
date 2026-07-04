@@ -2,6 +2,15 @@
 
 ---
 
+## 0.75.1
+**Bugfix: Drag-and-Drop für iOrdner-Gruppen und Rastergröße**
+
+- Drag-and-Drop von intelligenten Ordnern in Gruppen funktioniert jetzt korrekt — der Button-Gesture-Konflikt mit `onDrag` wurde behoben (Plain-View statt Button)
+- Der Größenregler im Raster skaliert jetzt die Thumbnails selbst (Bild + Textzeile), nicht nur die äußere Box
+- Die Thumbnail-Größe im Detail-Strip (untere Leiste) bleibt weiterhin fest auf 148 px
+
+---
+
 ## 0.75.0
 **Feature: Ladeindikator beim App-Start & schnelleres Starten**
 

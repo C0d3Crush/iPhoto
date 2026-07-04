@@ -3,19 +3,22 @@ import SwiftUI
 struct ThumbnailCell: View {
     let document: ImageDocument
     let isSelected: Bool
+    var thumbnailWidth: CGFloat = 148
+
+    private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
 
     var body: some View {
         VStack(spacing: 2) {
             ZStack {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(Color(NSColor.quaternaryLabelColor))
-                    .frame(width: 148, height: 99)
+                    .frame(width: thumbnailWidth, height: thumbH)
 
                 if let thumb = document.thumbnailImage ?? document.placeholderThumbnailImage {
                     Image(nsImage: thumb)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 148, height: 99)
+                        .frame(width: thumbnailWidth, height: thumbH)
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                         .animation(.easeIn(duration: 0.15), value: document.thumbnailImage != nil)
                 } else {
@@ -35,7 +38,7 @@ struct ThumbnailCell: View {
                             Spacer()
                         }
                     }
-                    .frame(width: 148, height: 99)
+                    .frame(width: thumbnailWidth, height: thumbH)
                 }
 
                 // HDR badge — bottom trailing
@@ -54,7 +57,7 @@ struct ThumbnailCell: View {
                                 .padding([.bottom, .trailing], 4)
                         }
                     }
-                    .frame(width: 148, height: 99)
+                    .frame(width: thumbnailWidth, height: thumbH)
                 }
 
                 // Flag badge — top trailing
@@ -69,14 +72,14 @@ struct ThumbnailCell: View {
                         }
                         Spacer()
                     }
-                    .frame(width: 148, height: 99)
+                    .frame(width: thumbnailWidth, height: thumbH)
                 }
             }
 
             Text(document.filename)
                 .font(.caption2)
                 .lineLimit(1)
-                .frame(width: 148)
+                .frame(width: thumbnailWidth)
                 .foregroundColor(isSelected ? .primary : .secondary)
 
             // Star rating
@@ -88,7 +91,7 @@ struct ThumbnailCell: View {
                             .foregroundColor(star <= document.rating ? .yellow : Color(NSColor.tertiaryLabelColor))
                     }
                 }
-                .frame(width: 148)
+                .frame(width: thumbnailWidth)
             }
         }
         .padding(2)
