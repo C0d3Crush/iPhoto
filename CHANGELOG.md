@@ -2,6 +2,13 @@
 
 ---
 
+## 0.77.1
+**Bugfix: Falsches Bild nach Metadaten-Änderung in intelligentem Ordner**
+
+- Wenn ein Bild durch eine Metadaten-Änderung (Bewertung, Flagge, Farbmarkierung) nicht mehr in einen intelligenten Ordner passt, springt der Fokus jetzt korrekt zum nächsten Bild in der aktuellen Reihenfolge (inkl. Zufalls-Sortierung) — anstatt zu einem falschen Bild zu springen
+
+---
+
 ## 0.77.0
 **Feature: Sortierung innerhalb jeder Ansicht**
 

@@ -1164,13 +1164,16 @@ extension ImageViewModel {
 extension ImageViewModel {
 
     func setRating(_ r: Int) {
+        let prev = visibleDocuments
         let idx = collection.currentIndex
         guard idx < collection.documents.count else { return }
         collection.documents[idx].rating = r
         persistRating(at: idx)
+        advanceIfCurrentExcluded(previousVisible: prev)
     }
 
     func toggleFlag(_ flag: FlagStatus) {
+        let prev = visibleDocuments
         let indices = collection.selectedIndices.isEmpty
             ? (collection.currentIndex < collection.documents.count ? [collection.currentIndex] : [])
             : Array(collection.selectedIndices)
@@ -1181,9 +1184,11 @@ extension ImageViewModel {
             collection.documents[idx].flagStatus = newStatus
             persistRating(at: idx)
         }
+        advanceIfCurrentExcluded(previousVisible: prev)
     }
 
     func setColorLabel(_ label: ColorLabel) {
+        let prev = visibleDocuments
         let idx = collection.currentIndex
         guard idx < collection.documents.count else { return }
         let cur = collection.documents[idx].colorLabel
@@ -1191,6 +1196,21 @@ extension ImageViewModel {
         collection.documents[idx].colorLabel = newLabel
         persistRating(at: idx)
         applyFinderColorLabel(newLabel, to: collection.documents[idx].url)
+        advanceIfCurrentExcluded(previousVisible: prev)
+    }
+
+    func advanceIfCurrentExcluded(previousVisible: [ImageDocument]) {
+        guard case .smartFolder = navSelection else { return }
+        guard let cur = collection.currentDocument else { return }
+        let newVisible = visibleDocuments
+        guard !newVisible.contains(where: { $0.id == cur.id }) else { return }
+        guard let pos = previousVisible.firstIndex(where: { $0.id == cur.id }) else { return }
+        let targetPos = min(pos, newVisible.count - 1)
+        guard targetPos >= 0 else { return }
+        let nextDoc = newVisible[targetPos]
+        guard let nextIdx = collectionIndex(for: nextDoc) else { return }
+        collection.select(index: nextIdx)
+        loadCurrentImage()
     }
 
     func setRating(_ r: Int, for doc: ImageDocument) {
