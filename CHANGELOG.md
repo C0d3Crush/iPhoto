@@ -2,6 +2,15 @@
 
 ---
 
+## 0.70.1
+**Bugfix: SIGSEGV durch Data-Race beim Synchronisieren intelligenter Ordner**
+
+- `syncSmartFolderToFilesystem` las `collection.documents` von einem Background-Thread während Main gleichzeitig schrieb → Read-Write-Race auf Swift-Array-CoW-Buffer → Speicherkorruption → SIGSEGV (oft erst 2–3 s verzögert beim nächsten Album-Wechsel)
+- Fix: Filterung (`collection.documents.filter { smartFolderMatches(...) }`) läuft jetzt immer auf dem Main-Thread; nur das langsame Filesystem-I/O (Symlinks anlegen/löschen) wird in den Background dispatched
+- Zusätzlich: Bug im Symlink-Namens-Loop behoben — doppelte Dateinamen wurden nicht korrekt in `existingLinks` eingetragen, was beim nächsten Anlauf wieder den selben Namen produzieren konnte
+
+---
+
 ## 0.70.0
 **Feature: Seitenleisten-Scrolling & Seitenverhältnis-Presets beim Zuschnitt**
 

@@ -354,50 +354,54 @@ extension ImageViewModel {
     }
 
     func syncSmartFolderToFilesystem(_ sf: SmartFolder, oldName: String? = nil) {
-        let fm = FileManager.default
-        let root = smartFoldersSystemRoot
+        // Filter on the calling thread (always main) — collection.documents must not be
+        // read from a background thread while main writes it (data race → SIGSEGV).
+        let matchURLs   = Set(collection.documents.filter { smartFolderMatches($0, sf: sf) }.map { $0.url.standardized.path })
+        let matchDocURLs = collection.documents.filter { smartFolderMatches($0, sf: sf) }.map { $0.url }
+        let sfName      = sf.name
+        let root        = smartFoldersSystemRoot
+        let capturedOld = oldName
 
-        if let old = oldName {
-            let oldDir = root.appendingPathComponent(old)
-            try? fm.removeItem(at: oldDir)
-        }
+        DispatchQueue.global(qos: .utility).async {
+            let fm = FileManager.default
+            if let old = capturedOld {
+                try? fm.removeItem(at: root.appendingPathComponent(old))
+            }
+            let dir = root.appendingPathComponent(sfName)
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        let dir = root.appendingPathComponent(sf.name)
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-
-        let matches = collection.documents.filter { smartFolderMatches($0, sf: sf) }
-        let matchURLs = Set(matches.map { $0.url.standardized.path })
-
-        // Veraltete Symlinks entfernen
-        if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isSymbolicLinkKey]) {
-            for link in contents {
-                guard (try? link.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true else { continue }
-                let target = (try? fm.destinationOfSymbolicLink(atPath: link.path)).map {
-                    URL(fileURLWithPath: $0).standardized.path
+            // Veraltete Symlinks entfernen
+            if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isSymbolicLinkKey]) {
+                for link in contents {
+                    guard (try? link.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true else { continue }
+                    let target = (try? fm.destinationOfSymbolicLink(atPath: link.path)).map {
+                        URL(fileURLWithPath: $0).standardized.path
+                    }
+                    if target.map({ !matchURLs.contains($0) }) ?? true {
+                        try? fm.removeItem(at: link)
+                    }
                 }
-                if target.map({ !matchURLs.contains($0) }) ?? true {
-                    try? fm.removeItem(at: link)
+            }
+
+            // Neue Symlinks anlegen
+            var existingLinks = Set((try? fm.contentsOfDirectory(atPath: dir.path)) ?? [])
+            for docURL in matchDocURLs {
+                var linkName = docURL.lastPathComponent
+                var counter  = 1
+                while existingLinks.contains(linkName) {
+                    let base = (docURL.lastPathComponent as NSString).deletingPathExtension
+                    let ext  = (docURL.lastPathComponent as NSString).pathExtension
+                    linkName = ext.isEmpty ? "\(base)_\(counter)" : "\(base)_\(counter).\(ext)"
+                    counter += 1
+                }
+                let linkURL = dir.appendingPathComponent(linkName)
+                if !fm.fileExists(atPath: linkURL.path, isDirectory: nil) {
+                    try? fm.createSymbolicLink(at: linkURL, withDestinationURL: docURL)
+                    existingLinks.insert(linkName)
                 }
             }
+            Log.info("iOrdner Filesystem-Sync: \"\(sfName)\" → \(matchDocURLs.count) Symlinks in \(dir.path)")
         }
-
-        // Neue Symlinks anlegen
-        let existingLinks = Set((try? fm.contentsOfDirectory(atPath: dir.path)) ?? [])
-        for doc in matches {
-            var linkName = doc.url.lastPathComponent
-            var counter = 1
-            while existingLinks.contains(linkName) {
-                let base = (doc.url.lastPathComponent as NSString).deletingPathExtension
-                let ext  = (doc.url.lastPathComponent as NSString).pathExtension
-                linkName = ext.isEmpty ? "\(base)_\(counter)" : "\(base)_\(counter).\(ext)"
-                counter += 1
-            }
-            let linkURL = dir.appendingPathComponent(linkName)
-            if !fm.fileExists(atPath: linkURL.path, isDirectory: nil) {
-                try? fm.createSymbolicLink(at: linkURL, withDestinationURL: doc.url)
-            }
-        }
-        Log.info("iOrdner Filesystem-Sync: \"\(sf.name)\" → \(matches.count) Symlinks in \(dir.path)")
     }
 
     private func removeSmartFolderFromFilesystem(_ sf: SmartFolder) {
@@ -639,10 +643,7 @@ extension ImageViewModel {
         case .smartFolder(let id):
             foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
             if let sf = smartFolders.first(where: { $0.id == id }) {
-                DispatchQueue.global(qos: .utility).async { [weak self] in
-                    guard let self = self else { return }
-                    self.syncSmartFolderToFilesystem(sf)
-                }
+                syncSmartFolderToFilesystem(sf)
             }
         case .volume(let id):
             if let vol = detectedVolumes.first(where: { $0.id == id }) {
