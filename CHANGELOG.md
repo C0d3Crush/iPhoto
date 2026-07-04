@@ -2,6 +2,17 @@
 
 ---
 
+## 0.74.0
+**Feature: Rasteransicht für alle Kontexte & Drag-and-Drop für iOrdner-Gruppen**
+
+- Rasteransicht ist jetzt in allen Kontexten verfügbar — nicht mehr nur in der Bibliothek, sondern auch in Alben, Ordnern und intelligenten Ordnern
+- Umschalten zwischen Raster- und Detail-Ansicht per Toolbar-Button (Raster-Icon) in der oberen Leiste
+- Neuer Größenregler in der Toolbar der Rasteransicht: Thumbnails können zwischen 80 und 400 px angepasst werden
+- Intelligente Ordner können jetzt per Drag-and-Drop in eine Gruppe gezogen werden — einfach einen iOrdner auf einen Gruppen-Header ziehen
+- Auf die Sektion „Intelligente Ordner" ziehen entfernt einen Ordner aus seiner Gruppe
+
+---
+
 ## 0.73.0
 **Feature: Alben als echte Systemordner mit Symlinks**
 

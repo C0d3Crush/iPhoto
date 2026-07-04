@@ -4,7 +4,10 @@ import AppKit
 struct LibraryFullGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
-    private let columns = [GridItem(.adaptive(minimum: 160))]
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: viewModel.gridThumbnailSize))]
+    }
+    private var cellWidth: CGFloat { viewModel.gridThumbnailSize - 4 }
 
     var body: some View {
         ZStack {
@@ -32,7 +35,7 @@ struct LibraryFullGridView: View {
                                 let isSel = viewModel.collection.selectedIndices.contains(idx)
                                 ThumbnailCell(document: doc, isSelected: isSel)
                                     .id(idx)
-                                    .frame(width: 156)
+                                    .frame(width: cellWidth)
                                     .contentShape(Rectangle())
                                     .onAppear { viewModel.requestVisibleThumbnail(at: idx) }
                                     .onTapGesture(count: 2) { openDetail(at: idx) }
@@ -61,6 +64,19 @@ struct LibraryFullGridView: View {
                         .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
                 }
                 .help("Navigation ein-/ausblenden")
+            }
+            ToolbarItemGroup(placement: .automatic) {
+                HStack(spacing: 6) {
+                    Image(systemName: "square.grid.3x3")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Slider(value: $viewModel.gridThumbnailSize, in: 80...400, step: 10)
+                        .frame(width: 120)
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                .help("Rastergröße anpassen")
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: { viewModel.toggleInspector() }) {

@@ -20,6 +20,8 @@ class ImageViewModel: ObservableObject {
     @Published var navSidebarVisible: Bool = true
     @Published var navSelection: NavSelection? = .library
     @Published var showingLibraryDetail: Bool = false
+    @Published var showFullGrid: Bool = false
+    @Published var gridThumbnailSize: CGFloat = 160
     @Published var albums: [Album] = []
     @Published var watchedFolders: [WatchedFolder] = []
     @Published var smartFolders: [SmartFolder] = []

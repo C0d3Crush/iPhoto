@@ -13,6 +13,8 @@ struct NavSidebarView: View {
     @State private var movingFolder: SmartFolder? = nil
     @State private var renamingGroupName: String? = nil
     @State private var renameGroupText = ""
+    @State private var dropTargetGroups: Set<String> = []
+    @State private var dropOnUngrouped: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,6 +99,7 @@ struct NavSidebarView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .padding(.horizontal, 4)
+        .onDrag { NSItemProvider(object: sf.id.uuidString as NSString) }
         .contextMenu {
             Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
             Button("In Gruppe verschieben") { movingFolder = sf }
@@ -136,6 +139,22 @@ struct NavSidebarView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
             ))
+            .background(dropOnUngrouped ? Color.accentColor.opacity(0.15) : Color.clear)
+            .cornerRadius(6)
+            .onDrop(of: ["public.plain-text"],
+                    isTargeted: Binding(
+                        get: { dropOnUngrouped },
+                        set: { dropOnUngrouped = $0 }
+                    )) { providers in
+                providers.first?.loadItem(forTypeIdentifier: "public.plain-text", options: nil) { item, _ in
+                    guard let data = item as? Data,
+                          let idStr = String(data: data, encoding: .utf8),
+                          let id = UUID(uuidString: idStr),
+                          let sf = viewModel.smartFolders.first(where: { $0.id == id }) else { return }
+                    DispatchQueue.main.async { viewModel.moveSmartFolder(sf, toGroup: nil) }
+                }
+                return true
+            }
         if !smartFoldersCollapsed {
             smartFoldersContent
         }
@@ -157,6 +176,7 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private func groupHeaderRow(_ groupName: String) -> some View {
+        let isDropTarget = dropTargetGroups.contains(groupName)
         Button(action: {
             if collapsedGroups.contains(groupName) { collapsedGroups.remove(groupName) }
             else { collapsedGroups.insert(groupName) }
@@ -172,11 +192,28 @@ struct NavSidebarView: View {
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 5)
-            .background(Color.clear)
+            .background(isDropTarget ? Color.accentColor.opacity(0.2) : Color.clear)
             .cornerRadius(6)
         }
         .buttonStyle(PlainButtonStyle())
         .padding(.horizontal, 4)
+        .onDrop(of: ["public.plain-text"],
+                isTargeted: Binding(
+                    get: { dropTargetGroups.contains(groupName) },
+                    set: { v in
+                        if v { dropTargetGroups.insert(groupName) }
+                        else { dropTargetGroups.remove(groupName) }
+                    }
+                )) { providers in
+            providers.first?.loadItem(forTypeIdentifier: "public.plain-text", options: nil) { item, _ in
+                guard let data = item as? Data,
+                      let idStr = String(data: data, encoding: .utf8),
+                      let id = UUID(uuidString: idStr),
+                      let sf = viewModel.smartFolders.first(where: { $0.id == id }) else { return }
+                DispatchQueue.main.async { viewModel.moveSmartFolder(sf, toGroup: groupName) }
+            }
+            return true
+        }
         .contextMenu {
             Button("Umbenennen") { renameGroupText = groupName; renamingGroupName = groupName }
             Button("Auflösen") { viewModel.dissolveGroup(groupName) }

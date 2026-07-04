@@ -14,13 +14,16 @@ struct ContentView: View {
             }
 
             ZStack {
-                if (viewModel.navSelection == .library || viewModel.navSelection == nil) && !viewModel.showingLibraryDetail {
-                    // Library: Vollbild-Raster aller Bilder
+                let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
+                let showGrid = (isLibrary && !viewModel.showingLibraryDetail) || (!isLibrary && viewModel.showFullGrid)
+
+                if showGrid {
+                    // Vollbild-Raster
                     LibraryFullGridView()
                         .environmentObject(viewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // Album / Ordner: Detail-Ansicht + Strip
+                    // Detail-Ansicht + Strip
                     VStack(spacing: 0) {
                         DetailView()
                             .environmentObject(viewModel)
@@ -145,6 +148,15 @@ struct DetailView: View {
                         Image(systemName: "square.grid.3x3")
                     }
                     .help("Zurück zur Bibliothek")
+                }
+
+                let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
+                if !isLibrary {
+                    Button(action: { viewModel.showFullGrid.toggle() }) {
+                        Image(systemName: viewModel.showFullGrid ? "rectangle.split.2x1" : "square.grid.3x3")
+                            .opacity(viewModel.showFullGrid ? 1.0 : 0.6)
+                    }
+                    .help(viewModel.showFullGrid ? "Detail-Ansicht" : "Rasteransicht")
                 }
 
                 Button(action: { viewModel.previous() }) {
