@@ -9,77 +9,78 @@ struct NavSidebarView: View {
     @State private var smartFolderSheetItem: SmartFolderSheetItem? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Bibliothek")
+        VStack(spacing: 0) {
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 0) {
+                    sectionHeader("Bibliothek")
 
-            navRow(
-                label: "Library",
-                icon: "photo.stack",
-                isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil
-            ) {
-                viewModel.navSelection = .library
-            }
+                    navRow(
+                        label: "Library",
+                        icon: "photo.stack",
+                        isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil
+                    ) {
+                        viewModel.navSelection = .library
+                    }
 
-            sectionHeader("Alben", trailing: AnyView(
-                Button(action: { newAlbumName = ""; showCreateAlbum = true }) {
-                    Image(systemName: "plus").font(.caption)
-                }
-                .buttonStyle(PlainButtonStyle())
-            ))
+                    sectionHeader("Alben", trailing: AnyView(
+                        Button(action: { newAlbumName = ""; showCreateAlbum = true }) {
+                            Image(systemName: "plus").font(.caption)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    ))
 
-            ForEach(viewModel.albums) { album in
-                AlbumRow(
-                    album: album,
-                    isSelected: viewModel.navSelection == .album(album.id)
-                )
-                .environmentObject(viewModel)
-                .contextMenu {
-                    Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
-                    Divider()
-                    Button("Album löschen") { viewModel.deleteAlbum(album) }
-                }
-            }
-
-
-            sectionHeader("Intelligente Ordner", trailing: AnyView(
-                Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
-                    Image(systemName: "plus").font(.caption)
-                }
-                .buttonStyle(PlainButtonStyle())
-            ))
-
-            ForEach(viewModel.smartFolders) { sf in
-                navRow(
-                    label: sf.name,
-                    icon: "folder.badge.gearshape",
-                    isSelected: viewModel.navSelection == .smartFolder(sf.id)
-                ) {
-                    viewModel.navSelection = .smartFolder(sf.id)
-                }
-                .contextMenu {
-                    Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
-                    Divider()
-                    Button("Löschen") { viewModel.deleteSmartFolder(sf) }
-                }
-            }
-
-            if !viewModel.detectedVolumes.isEmpty {
-                sectionHeader("Wechseldatenträger")
-                ForEach(viewModel.detectedVolumes) { volume in
-                    VolumeRow(volume: volume,
-                              isSelected: viewModel.navSelection == .volume(volume.id))
+                    ForEach(viewModel.albums) { album in
+                        AlbumRow(
+                            album: album,
+                            isSelected: viewModel.navSelection == .album(album.id)
+                        )
                         .environmentObject(viewModel)
-                }
-            }
+                        .contextMenu {
+                            Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
+                            Divider()
+                            Button("Album löschen") { viewModel.deleteAlbum(album) }
+                        }
+                    }
 
-            Spacer()
+                    sectionHeader("Intelligente Ordner", trailing: AnyView(
+                        Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
+                            Image(systemName: "plus").font(.caption)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    ))
+
+                    ForEach(viewModel.smartFolders) { sf in
+                        navRow(
+                            label: sf.name,
+                            icon: "folder.badge.gearshape",
+                            isSelected: viewModel.navSelection == .smartFolder(sf.id)
+                        ) {
+                            viewModel.navSelection = .smartFolder(sf.id)
+                        }
+                        .contextMenu {
+                            Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
+                            Divider()
+                            Button("Löschen") { viewModel.deleteSmartFolder(sf) }
+                        }
+                    }
+
+                    if !viewModel.detectedVolumes.isEmpty {
+                        sectionHeader("Wechseldatenträger")
+                        ForEach(viewModel.detectedVolumes) { volume in
+                            VolumeRow(volume: volume,
+                                      isSelected: viewModel.navSelection == .volume(volume.id))
+                                .environmentObject(viewModel)
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+            }
 
             if !viewModel.loadingQueue.isEmpty {
                 Divider()
                 LoadingBar(queue: viewModel.loadingQueue)
             }
         }
-        .padding(.vertical, 8)
         .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
         .background(Color(NSColor.controlBackgroundColor))
         .sheet(item: $smartFolderSheetItem) { item in

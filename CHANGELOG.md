@@ -2,6 +2,17 @@
 
 ---
 
+## 0.70.0
+**Feature: Seitenleisten-Scrolling & Seitenverhältnis-Presets beim Zuschnitt**
+
+- Seitenleiste scrollt jetzt korrekt, wenn viele Alben/Ordner vorhanden sind
+- Zuschnitt-Editor hat jetzt Seitenverhältnis-Presets: Frei, Original, 1:1, 4:3, 3:2, 16:9
+- Aktiver Preset wird hervorgehoben; Auswahl eines Presets passt den Zuschnitt sofort an
+- Beim freien Ziehen wird das gewählte Seitenverhältnis automatisch beibehalten
+- „Zurücksetzen" setzt auch das Seitenverhältnis auf Frei zurück
+
+---
+
 ## 0.69.1
 **Bugfix: Fokus springt beim Filtern in intelligenten Ordnern auf das nächste Bild**
 

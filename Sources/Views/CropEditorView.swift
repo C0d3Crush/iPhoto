@@ -10,9 +10,28 @@ struct CropEditorView: View {
     @State private var isDragging = false
     @State private var activeHandle: HandleKind? = nil
     @State private var dragStartCrop = CGRect(x: 0, y: 0, width: 1, height: 1)
+    @State private var lockedAspect: CGFloat? = nil
 
     private static let defaultCrop = CGRect(x: 0, y: 0, width: 1, height: 1)
-    private let bottomBarH: CGFloat = 72
+    private let bottomBarH: CGFloat = 100
+
+    private struct AspectPreset: Identifiable {
+        let id: String
+        let label: String
+        let ratio: CGFloat?
+    }
+
+    private var aspectPresets: [AspectPreset] {
+        let orig = CGFloat(sourceImage.width) / CGFloat(sourceImage.height)
+        return [
+            AspectPreset(id: "free",     label: "Frei",  ratio: nil),
+            AspectPreset(id: "original", label: "Orig.", ratio: orig),
+            AspectPreset(id: "1:1",      label: "1:1",   ratio: 1),
+            AspectPreset(id: "4:3",      label: "4:3",   ratio: 4/3),
+            AspectPreset(id: "3:2",      label: "3:2",   ratio: 3/2),
+            AspectPreset(id: "16:9",     label: "16:9",  ratio: 16/9),
+        ]
+    }
 
     enum HandleKind: Equatable, Hashable {
         case tl, tc, tr, ml, mr, bl, bc, br, move
@@ -244,7 +263,47 @@ struct CropEditorView: View {
         r.size.width  = min(1 - r.origin.x, max(minS, r.size.width))
         r.size.height = min(1 - r.origin.y, max(minS, r.size.height))
 
+        if let aspect = lockedAspect, kind != .move {
+            switch kind {
+            case .tc, .bc:
+                let targetW = min(1, r.height * aspect)
+                let midX = r.midX
+                r.size.width  = targetW
+                r.origin.x    = max(0, min(1 - targetW, midX - targetW / 2))
+            default:
+                let targetH = min(1, r.width / aspect)
+                let anchorY: CGFloat = (kind == .tl || kind == .tr || kind == .tc) ? r.maxY : r.minY
+                r.size.height = targetH
+                r.origin.y    = (kind == .tl || kind == .tr || kind == .tc)
+                    ? max(0, anchorY - targetH)
+                    : max(0, min(1 - targetH, anchorY))
+            }
+            r.origin.x    = max(0, min(1 - r.size.width,  r.origin.x))
+            r.size.width  = min(1 - r.origin.x, max(minS, r.size.width))
+        }
+
         cropRect = r
+    }
+
+    private func applyAspectPreset(_ aspect: CGFloat?) {
+        lockedAspect = aspect
+        guard let aspect = aspect else { return }
+        let midX = cropRect.midX
+        let midY = cropRect.midY
+        var newW = cropRect.width
+        var newH = newW / aspect
+        if newH > cropRect.height {
+            newH = cropRect.height
+            newW = newH * aspect
+        }
+        newW = min(newW, 1.0)
+        newH = min(newH, 1.0)
+        cropRect = CGRect(
+            x: max(0, min(1 - newW, midX - newW / 2)),
+            y: max(0, min(1 - newH, midY - newH / 2)),
+            width: newW,
+            height: newH
+        )
     }
 
     // MARK: - Bottom bar
@@ -252,6 +311,26 @@ struct CropEditorView: View {
     private var bottomBar: some View {
         VStack(spacing: 0) {
             Divider()
+            HStack(spacing: 8) {
+                ForEach(aspectPresets) { preset in
+                    let isActive = lockedAspect == preset.ratio
+                    Button(preset.label) {
+                        applyAspectPreset(preset.ratio)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(isActive ? Color.accentColor.opacity(0.25) : Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(5)
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(isActive ? Color.accentColor : Color(NSColor.separatorColor), lineWidth: 1))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+
             HStack(spacing: 12) {
                 Button("Abbrechen") { viewModel.cropToolActive = false }
 
@@ -279,6 +358,7 @@ struct CropEditorView: View {
                 Button("Zurücksetzen") {
                     cropRect = Self.defaultCrop
                     rotation = 0
+                    lockedAspect = nil
                 }
                 .disabled(cropRect == Self.defaultCrop && rotation == 0)
 
@@ -286,7 +366,7 @@ struct CropEditorView: View {
                     .keyboardShortcut(.return, modifiers: [])
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
         }
     }
 
