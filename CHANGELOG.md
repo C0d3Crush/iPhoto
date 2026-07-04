@@ -2,6 +2,16 @@
 
 ---
 
+## 0.72.0
+**Feature: Einklappbare Seitenleisten-Sektionen**
+
+- „Alben" und „Intelligente Ordner" in der Seitenleiste können jetzt einzeln ein- und ausgeklappt werden
+- Chevron-Icon zeigt den aktuellen Zustand an (animiert)
+- Gruppen innerhalb der intelligenten Ordner sind ebenfalls einklappbar
+- Einrückung und Zustände bleiben innerhalb der Sitzung erhalten
+
+---
+
 ## 0.71.0
 **Feature: Gruppen für intelligente Ordner**
 

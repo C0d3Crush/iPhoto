@@ -7,6 +7,8 @@ struct NavSidebarView: View {
     @State private var renamingAlbum: Album? = nil
     @State private var renameText = ""
     @State private var smartFolderSheetItem: SmartFolderSheetItem? = nil
+    @State private var albumsCollapsed = false
+    @State private var smartFoldersCollapsed = false
     @State private var collapsedGroups: Set<String> = []
     @State private var movingFolder: SmartFolder? = nil
     @State private var renamingGroupName: String? = nil
@@ -17,7 +19,6 @@ struct NavSidebarView: View {
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
                     sectionHeader("Bibliothek")
-
                     navRow(
                         label: "Library",
                         icon: "photo.stack",
@@ -25,92 +26,9 @@ struct NavSidebarView: View {
                     ) {
                         viewModel.navSelection = .library
                     }
-
-                    sectionHeader("Alben", trailing: AnyView(
-                        Button(action: { newAlbumName = ""; showCreateAlbum = true }) {
-                            Image(systemName: "plus").font(.caption)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    ))
-
-                    ForEach(viewModel.albums) { album in
-                        AlbumRow(
-                            album: album,
-                            isSelected: viewModel.navSelection == .album(album.id)
-                        )
-                        .environmentObject(viewModel)
-                        .contextMenu {
-                            Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
-                            Divider()
-                            Button("Album löschen") { viewModel.deleteAlbum(album) }
-                        }
-                    }
-
-                    sectionHeader("Intelligente Ordner", trailing: AnyView(
-                        Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
-                            Image(systemName: "plus").font(.caption)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    ))
-
-                    // Ungrouped smart folders
-                    ForEach(viewModel.smartFolders.filter { $0.group == nil || $0.group?.isEmpty == true }) { sf in
-                        smartFolderRow(sf)
-                    }
-
-                    // Grouped smart folders
-                    let groups = Array(Set(viewModel.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
-                    ForEach(groups, id: \.self) { groupName in
-                        // Group header row
-                        Button(action: {
-                            if collapsedGroups.contains(groupName) {
-                                collapsedGroups.remove(groupName)
-                            } else {
-                                collapsedGroups.insert(groupName)
-                            }
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .rotationEffect(.degrees(collapsedGroups.contains(groupName) ? 0 : 90))
-                                    .frame(width: 12)
-                                Label(groupName, systemImage: "folder")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 5)
-                            .background(Color.clear)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding(.horizontal, 4)
-                        .contextMenu {
-                            Button("Umbenennen") {
-                                renameGroupText = groupName
-                                renamingGroupName = groupName
-                            }
-                            Button("Auflösen") {
-                                viewModel.dissolveGroup(groupName)
-                            }
-                        }
-
-                        // Group members (when expanded)
-                        if !collapsedGroups.contains(groupName) {
-                            ForEach(viewModel.smartFolders.filter { $0.group == groupName }) { sf in
-                                smartFolderRow(sf, indented: true)
-                            }
-                        }
-                    }
-
-                    if !viewModel.detectedVolumes.isEmpty {
-                        sectionHeader("Wechseldatenträger")
-                        ForEach(viewModel.detectedVolumes) { volume in
-                            VolumeRow(volume: volume,
-                                      isSelected: viewModel.navSelection == .volume(volume.id))
-                                .environmentObject(viewModel)
-                        }
-                    }
+                    albumsSection
+                    smartFoldersSection
+                    volumesSection
                 }
                 .padding(.vertical, 8)
             }
@@ -185,6 +103,119 @@ struct NavSidebarView: View {
             Divider()
             Button("Löschen") { viewModel.deleteSmartFolder(sf) }
         }
+    }
+
+    @ViewBuilder private var albumsSection: some View {
+        collapsibleSectionHeader("Alben", isCollapsed: albumsCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { albumsCollapsed.toggle() } },
+            trailing: AnyView(
+                Button(action: { newAlbumName = ""; showCreateAlbum = true }) {
+                    Image(systemName: "plus").font(.caption)
+                }
+                .buttonStyle(PlainButtonStyle())
+            ))
+        if !albumsCollapsed {
+            ForEach(viewModel.albums) { album in
+                AlbumRow(album: album, isSelected: viewModel.navSelection == .album(album.id))
+                    .environmentObject(viewModel)
+                    .contextMenu {
+                        Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
+                        Divider()
+                        Button("Album löschen") { viewModel.deleteAlbum(album) }
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder private var smartFoldersSection: some View {
+        collapsibleSectionHeader("Intelligente Ordner", isCollapsed: smartFoldersCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { smartFoldersCollapsed.toggle() } },
+            trailing: AnyView(
+                Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
+                    Image(systemName: "plus").font(.caption)
+                }
+                .buttonStyle(PlainButtonStyle())
+            ))
+        if !smartFoldersCollapsed {
+            smartFoldersContent
+        }
+    }
+
+    @ViewBuilder private var smartFoldersContent: some View {
+        ForEach(viewModel.smartFolders.filter { $0.group == nil || $0.group?.isEmpty == true }) { sf in
+            smartFolderRow(sf)
+        }
+        let groups = Array(Set(viewModel.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
+        ForEach(groups, id: \.self) { groupName in
+            groupHeaderRow(groupName)
+            if !collapsedGroups.contains(groupName) {
+                ForEach(viewModel.smartFolders.filter { $0.group == groupName }) { sf in
+                    smartFolderRow(sf, indented: true)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func groupHeaderRow(_ groupName: String) -> some View {
+        Button(action: {
+            if collapsedGroups.contains(groupName) { collapsedGroups.remove(groupName) }
+            else { collapsedGroups.insert(groupName) }
+        }) {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .rotationEffect(.degrees(collapsedGroups.contains(groupName) ? 0 : 90))
+                    .frame(width: 12)
+                Label(groupName, systemImage: "folder")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .background(Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .contextMenu {
+            Button("Umbenennen") { renameGroupText = groupName; renamingGroupName = groupName }
+            Button("Auflösen") { viewModel.dissolveGroup(groupName) }
+        }
+    }
+
+    @ViewBuilder private var volumesSection: some View {
+        if !viewModel.detectedVolumes.isEmpty {
+            sectionHeader("Wechseldatenträger")
+            ForEach(viewModel.detectedVolumes) { volume in
+                VolumeRow(volume: volume, isSelected: viewModel.navSelection == .volume(volume.id))
+                    .environmentObject(viewModel)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func collapsibleSectionHeader(_ title: String, isCollapsed: Bool, onToggle: @escaping () -> Void, trailing: AnyView? = nil) -> some View {
+        HStack(spacing: 4) {
+            Button(action: onToggle) {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                        .frame(width: 10)
+                    Text(title)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+            Spacer()
+            trailing
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 12)
+        .padding(.bottom, 2)
     }
 
     @ViewBuilder
