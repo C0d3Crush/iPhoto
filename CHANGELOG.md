@@ -2,6 +2,16 @@
 
 ---
 
+## 0.75.0
+**Feature: Ladeindikator beim App-Start & schnelleres Starten**
+
+- Beim App-Start erscheint in der linken Seitenleiste ein Ladeindikator „Bibliothek wird geladen…" mit einem Spinner
+- Der Ladeindikator verschwindet automatisch, sobald die Bibliothek vollständig initialisiert ist
+- `CatalogStore` (SQLite-Datenbank, Migrations, EXIF-Cache) wird jetzt im Hintergrund initialisiert statt auf dem Main-Thread — die UI ist sofort nach dem Start bedienbar
+- Der bisherige Einfriereffekt (200–800 ms je nach Bibliotheksgröße) beim ersten Öffnen entfällt
+
+---
+
 ## 0.74.0
 **Feature: Rasteransicht für alle Kontexte & Drag-and-Drop für iOrdner-Gruppen**
 

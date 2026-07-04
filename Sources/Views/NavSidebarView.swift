@@ -18,6 +18,23 @@ struct NavSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if viewModel.isStartupLoading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(0.6)
+                        .frame(width: 14, height: 14)
+                    Text("Bibliothek wird geladen…")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(NSColor.controlBackgroundColor))
+                Divider()
+            }
+
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
                     sectionHeader("Bibliothek")

@@ -22,6 +22,7 @@ class ImageViewModel: ObservableObject {
     @Published var showingLibraryDetail: Bool = false
     @Published var showFullGrid: Bool = false
     @Published var gridThumbnailSize: CGFloat = 160
+    @Published var isStartupLoading: Bool = true
     @Published var albums: [Album] = []
     @Published var watchedFolders: [WatchedFolder] = []
     @Published var smartFolders: [SmartFolder] = []
@@ -122,7 +123,17 @@ class ImageViewModel: ObservableObject {
         loadAlbums()
         loadWatchedFolders()
         loadSmartFolders()
-        userPresets = CatalogStore.shared.allUserPresets()
+
+        // CatalogStore.init() opens SQLite, runs schema migrations, and loads the full EXIF
+        // cache — this can take 200–800 ms on large libraries. Warm it up on a background
+        // thread so the UI is not frozen while the first frame renders.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let presets = CatalogStore.shared.allUserPresets()
+            DispatchQueue.main.async {
+                self?.userPresets = presets
+                self?.isStartupLoading = false
+            }
+        }
 
         collection.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
