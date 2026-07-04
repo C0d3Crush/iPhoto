@@ -16,6 +16,16 @@ struct NavSidebarView: View {
     @State private var dropTargetGroups: Set<String> = []
     @State private var dropOnUngrouped: Bool = false
 
+    // macOS returns NSString directly from loadItem on some versions, Data on others.
+    private func smartFolderID(from item: NSSecureCoding?) -> UUID? {
+        let str: String?
+        if let s = item as? String       { str = s }
+        else if let s = item as? NSString { str = s as String }
+        else if let d = item as? Data    { str = String(data: d, encoding: .utf8) }
+        else                              { str = nil }
+        return str.flatMap { UUID(uuidString: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if viewModel.isStartupLoading {
@@ -165,9 +175,7 @@ struct NavSidebarView: View {
                         set: { dropOnUngrouped = $0 }
                     )) { providers in
                 providers.first?.loadItem(forTypeIdentifier: "public.plain-text", options: nil) { item, _ in
-                    guard let data = item as? Data,
-                          let idStr = String(data: data, encoding: .utf8),
-                          let id = UUID(uuidString: idStr),
+                    guard let id = self.smartFolderID(from: item),
                           let sf = viewModel.smartFolders.first(where: { $0.id == id }) else { return }
                     DispatchQueue.main.async { viewModel.moveSmartFolder(sf, toGroup: nil) }
                 }
@@ -224,9 +232,7 @@ struct NavSidebarView: View {
                     }
                 )) { providers in
             providers.first?.loadItem(forTypeIdentifier: "public.plain-text", options: nil) { item, _ in
-                guard let data = item as? Data,
-                      let idStr = String(data: data, encoding: .utf8),
-                      let id = UUID(uuidString: idStr),
+                guard let id = self.smartFolderID(from: item),
                       let sf = viewModel.smartFolders.first(where: { $0.id == id }) else { return }
                 DispatchQueue.main.async { viewModel.moveSmartFolder(sf, toGroup: groupName) }
             }

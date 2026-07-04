@@ -3,10 +3,13 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        CrashReporter.installCrashHandlers()
+        // Read the crash log BEFORE installCrashHandlers() — because installCrashHandlers()
+        // accesses Log.shared which triggers Log.init() which may rotate (delete) the log
+        // file if it exceeds 2 MB, destroying the crashed session's data.
         if let report = CrashReporter.checkAndMark() {
             CrashReporter.saveReport(report)
         }
+        CrashReporter.installCrashHandlers()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

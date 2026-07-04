@@ -91,7 +91,12 @@ struct LibraryFullGridView: View {
 
     private func openDetail(at index: Int) {
         viewModel.selectDocument(at: index)
-        viewModel.showingLibraryDetail = true
+        let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
+        if isLibrary {
+            viewModel.showingLibraryDetail = true
+        } else {
+            viewModel.showFullGrid = false
+        }
     }
 
     private func handleTap(at index: Int) {

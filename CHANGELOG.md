@@ -2,6 +2,15 @@
 
 ---
 
+## 0.75.2
+**Bugfix: Drag-and-Drop in Gruppen, Doppelklick und Crash-Log**
+
+- Drag-and-Drop von intelligenten Ordnern in Gruppen funktioniert jetzt zuverlässig — auf macOS 11 liefert `loadItem` einen `NSString` statt `Data`; beide Fälle werden jetzt abgefangen
+- Doppelklick in der Rasteransicht öffnet wieder die Detailansicht (auch in Album- und Ordner-Kontexten)
+- Crash-Log-Rotation behoben: der Absturzbericht wird jetzt gelesen, bevor `Log.init()` die Logdatei eventuell rotiert (löscht) — leere Berichte werden damit verhindert
+
+---
+
 ## 0.75.1
 **Bugfix: Drag-and-Drop für iOrdner-Gruppen und Rastergröße**
 
