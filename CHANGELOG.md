@@ -2,6 +2,19 @@
 
 ---
 
+## 0.71.0
+**Feature: Gruppen für intelligente Ordner**
+
+- Intelligente Ordner können jetzt in benannte Gruppen organisiert werden (Ordner in Ordnern)
+- Im Sheet „Intelligenter Ordner bearbeiten" gibt es ein neues Feld „Gruppe" mit Freitexteingabe und Menü zur Auswahl bestehender Gruppen
+- In der Seitenleiste werden Gruppen als aufklappbare Zeilen (Chevron + Ordner-Icon) angezeigt; Mitglieder werden eingerückt darunter aufgelistet
+- Kontextmenü auf einer Gruppe: „Umbenennen" und „Auflösen" (Ordner werden ungrouped)
+- Kontextmenü auf einem intelligenten Ordner: neuer Eintrag „In Gruppe verschieben" öffnet ein Sheet zur Gruppen-Auswahl oder -Erstellung
+- Filesystem-Sync: Gruppenordner werden als Unterverzeichnis in `~/Pictures/iPhoto/Intelligente Ordner/GruppenName/` angelegt; beim Umbenennen oder Auflösen werden veraltete, leere Verzeichnisse automatisch bereinigt
+- Rückwärtskompatibel: bestehende gespeicherte intelligente Ordner ohne Gruppe funktionieren weiterhin
+
+---
+
 ## 0.70.1
 **Bugfix: SIGSEGV durch Data-Race beim Synchronisieren intelligenter Ordner**
 

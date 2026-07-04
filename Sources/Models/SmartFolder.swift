@@ -192,11 +192,23 @@ struct SmartFolder: Identifiable, Codable {
     var name: String
     var criteria: [SmartFolderCriterion]
     var matchAll: Bool
+    var group: String?
 
     init(name: String) {
         id = UUID()
         self.name = name
         criteria = []
         matchAll = true
+        group = nil
+    }
+
+    // Custom decode for backward compatibility with saved folders that lack the group field.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id       = try c.decodeIfPresent(UUID.self,                    forKey: .id)       ?? UUID()
+        name     = try c.decodeIfPresent(String.self,                  forKey: .name)     ?? ""
+        criteria = try c.decodeIfPresent([SmartFolderCriterion].self,  forKey: .criteria) ?? []
+        matchAll = try c.decodeIfPresent(Bool.self,                    forKey: .matchAll) ?? true
+        group    = try c.decodeIfPresent(String.self,                  forKey: .group)
     }
 }

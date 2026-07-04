@@ -14,12 +14,14 @@ struct SmartFolderSheet: View {
     @State private var name: String
     @State private var matchAll: Bool
     @State private var criteria: [SmartFolderCriterion]
+    @State private var group: String
 
     init(editing: SmartFolder? = nil) {
         self.editing = editing
         _name     = State(initialValue: editing?.name ?? "")
         _matchAll = State(initialValue: editing?.matchAll ?? true)
         _criteria = State(initialValue: editing?.criteria ?? [SmartFolderCriterion()])
+        _group    = State(initialValue: editing?.group ?? "")
     }
 
     var body: some View {
@@ -29,6 +31,26 @@ struct SmartFolderSheet: View {
 
             TextField("Name", text: $name)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
+
+            HStack(spacing: 8) {
+                Text("Gruppe:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("Gruppenname (optional)", text: $group)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                let existingGroups = Array(Set(viewModel.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
+                if !existingGroups.isEmpty {
+                    Menu("Gruppe wählen") {
+                        ForEach(existingGroups, id: \.self) { g in
+                            Button(g) { group = g }
+                        }
+                        Divider()
+                        Button("Keine Gruppe") { group = "" }
+                    }
+                    .menuStyle(BorderlessButtonMenuStyle())
+                    .fixedSize()
+                }
+            }
 
             HStack(spacing: 8) {
                 Text("Übereinstimmung:")
@@ -92,12 +114,14 @@ struct SmartFolderSheet: View {
     private func save() {
         NSApp.keyWindow?.makeFirstResponder(nil)
         let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let trimmedGroup = group.trimmingCharacters(in: .whitespaces)
+        let resolvedGroup: String? = trimmedGroup.isEmpty ? nil : trimmedGroup
         if var sf = editing {
-            sf.name = trimmed; sf.criteria = criteria; sf.matchAll = matchAll
+            sf.name = trimmed; sf.criteria = criteria; sf.matchAll = matchAll; sf.group = resolvedGroup
             viewModel.updateSmartFolder(sf)
         } else {
             var sf = SmartFolder(name: trimmed)
-            sf.criteria = criteria; sf.matchAll = matchAll
+            sf.criteria = criteria; sf.matchAll = matchAll; sf.group = resolvedGroup
             viewModel.createSmartFolder(sf)
         }
     }

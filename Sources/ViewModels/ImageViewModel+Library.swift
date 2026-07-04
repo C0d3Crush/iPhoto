@@ -334,12 +334,85 @@ extension ImageViewModel {
 
     func updateSmartFolder(_ sf: SmartFolder) {
         guard let idx = smartFolders.firstIndex(where: { $0.id == sf.id }) else { return }
-        let oldName = smartFolders[idx].name
+        let old = smartFolders[idx]
+        let oldDir: URL? = (old.name != sf.name || old.group != sf.group)
+            ? smartFolderSystemPath(for: old)
+            : nil
+        let oldGroup = old.group
         smartFolders[idx] = sf
         saveSmartFolders()
-        syncSmartFolderToFilesystem(sf, oldName: oldName != sf.name ? oldName : nil)
+        syncSmartFolderToFilesystem(sf, removingOldAt: oldDir)
+        // Clean up empty old group directory in BG if group changed
+        if let grp = oldGroup, grp != sf.group {
+            let groupDir = smartFoldersSystemRoot.appendingPathComponent(grp)
+            DispatchQueue.global(qos: .utility).async {
+                let fm = FileManager.default
+                if let contents = try? fm.contentsOfDirectory(atPath: groupDir.path), contents.isEmpty {
+                    try? fm.removeItem(at: groupDir)
+                }
+            }
+        }
         if case .smartFolder(let selectedID) = navSelection, selectedID == sf.id {
             revalidateSelectionForCurrentContext()
+        }
+    }
+
+    // MARK: - Smart Folder Group Operations
+
+    func moveSmartFolder(_ sf: SmartFolder, toGroup group: String?) {
+        guard let idx = smartFolders.firstIndex(where: { $0.id == sf.id }) else { return }
+        let old = smartFolders[idx]
+        let oldDir = smartFolderSystemPath(for: old)
+        let oldGroup = old.group
+        smartFolders[idx].group = group
+        saveSmartFolders()
+        syncSmartFolderToFilesystem(smartFolders[idx], removingOldAt: oldDir)
+        // Remove empty old group dir
+        if let grp = oldGroup {
+            let groupDir = smartFoldersSystemRoot.appendingPathComponent(grp)
+            DispatchQueue.global(qos: .utility).async {
+                let fm = FileManager.default
+                if let contents = try? fm.contentsOfDirectory(atPath: groupDir.path), contents.isEmpty {
+                    try? fm.removeItem(at: groupDir)
+                }
+            }
+        }
+    }
+
+    func renameGroup(_ oldName: String, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != oldName else { return }
+        let oldGroupDir = smartFoldersSystemRoot.appendingPathComponent(oldName)
+        let newGroupDir = smartFoldersSystemRoot.appendingPathComponent(trimmed)
+        for idx in smartFolders.indices where smartFolders[idx].group == oldName {
+            smartFolders[idx].group = trimmed
+        }
+        saveSmartFolders()
+        // Move entire group directory on filesystem
+        DispatchQueue.global(qos: .utility).async {
+            let fm = FileManager.default
+            if fm.fileExists(atPath: oldGroupDir.path) {
+                try? fm.moveItem(at: oldGroupDir, to: newGroupDir)
+            }
+        }
+        // Re-sync all smart folders in the renamed group
+        for sf in smartFolders where sf.group == trimmed {
+            syncSmartFolderToFilesystem(sf)
+        }
+    }
+
+    func dissolveGroup(_ groupName: String) {
+        for idx in smartFolders.indices where smartFolders[idx].group == groupName {
+            let old = smartFolders[idx]
+            let oldDir = smartFolderSystemPath(for: old)
+            smartFolders[idx].group = nil
+            syncSmartFolderToFilesystem(smartFolders[idx], removingOldAt: oldDir)
+        }
+        saveSmartFolders()
+        // Remove the (now-empty) group directory
+        let groupDir = smartFoldersSystemRoot.appendingPathComponent(groupName)
+        DispatchQueue.global(qos: .utility).async {
+            try? FileManager.default.removeItem(at: groupDir)
         }
     }
 
@@ -353,21 +426,34 @@ extension ImageViewModel {
             .appendingPathComponent(Self.smartFoldersSystemFolderName)
     }
 
-    func syncSmartFolderToFilesystem(_ sf: SmartFolder, oldName: String? = nil) {
+    func smartFolderSystemPath(for sf: SmartFolder) -> URL {
+        if let grp = sf.group, !grp.isEmpty {
+            return smartFoldersSystemRoot.appendingPathComponent(grp).appendingPathComponent(sf.name)
+        }
+        return smartFoldersSystemRoot.appendingPathComponent(sf.name)
+    }
+
+    func syncSmartFolderToFilesystem(_ sf: SmartFolder, removingOldAt oldDir: URL? = nil) {
         // Filter on the calling thread (always main) — collection.documents must not be
         // read from a background thread while main writes it (data race → SIGSEGV).
-        let matchURLs   = Set(collection.documents.filter { smartFolderMatches($0, sf: sf) }.map { $0.url.standardized.path })
+        let matchURLs    = Set(collection.documents.filter { smartFolderMatches($0, sf: sf) }.map { $0.url.standardized.path })
         let matchDocURLs = collection.documents.filter { smartFolderMatches($0, sf: sf) }.map { $0.url }
-        let sfName      = sf.name
-        let root        = smartFoldersSystemRoot
-        let capturedOld = oldName
+        let sfName       = sf.name
+        let dir          = smartFolderSystemPath(for: sf)
+        let capturedOld  = oldDir
 
         DispatchQueue.global(qos: .utility).async {
             let fm = FileManager.default
             if let old = capturedOld {
-                try? fm.removeItem(at: root.appendingPathComponent(old))
+                try? fm.removeItem(at: old)
+                // Remove empty parent group dir of old location
+                let oldParent = old.deletingLastPathComponent()
+                if oldParent.path != self.smartFoldersSystemRoot.path,
+                   let contents = try? fm.contentsOfDirectory(atPath: oldParent.path),
+                   contents.isEmpty {
+                    try? fm.removeItem(at: oldParent)
+                }
             }
-            let dir = root.appendingPathComponent(sfName)
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
             // Veraltete Symlinks entfernen
@@ -405,8 +491,18 @@ extension ImageViewModel {
     }
 
     private func removeSmartFolderFromFilesystem(_ sf: SmartFolder) {
-        let dir = smartFoldersSystemRoot.appendingPathComponent(sf.name)
+        let dir = smartFolderSystemPath(for: sf)
+        let groupDir: URL? = sf.group.flatMap { grp in
+            grp.isEmpty ? nil : smartFoldersSystemRoot.appendingPathComponent(grp)
+        }
         try? FileManager.default.removeItem(at: dir)
+        // Remove empty group dir
+        if let gd = groupDir {
+            let fm = FileManager.default
+            if let contents = try? fm.contentsOfDirectory(atPath: gd.path), contents.isEmpty {
+                try? fm.removeItem(at: gd)
+            }
+        }
     }
 
     private var smartFoldersFileURL: URL {
