@@ -186,8 +186,19 @@ extension ImageViewModel {
             visible.contains(where: { $0.id == doc.id })
         } ?? false
         guard !curInVisible else { return }
-        if let first = visible.first, let idx = collectionIndex(for: first) {
-            collection.select(index: idx)
+
+        // Nächstbestes Bild: das im Collection-Index direkt nach dem entfernten,
+        // Fallback auf das davor.
+        let removedIdx = collection.currentIndex
+        let candidates = visible.compactMap { doc -> (doc: ImageDocument, colIdx: Int)? in
+            guard let i = collectionIndex(for: doc) else { return nil }
+            return (doc, i)
+        }
+        let next = candidates.filter { $0.colIdx > removedIdx }.min(by: { $0.colIdx < $1.colIdx })
+                ?? candidates.filter { $0.colIdx < removedIdx }.max(by: { $0.colIdx < $1.colIdx })
+
+        if let best = next {
+            collection.select(index: best.colIdx)
             loadCurrentImage()
         } else {
             collection.selectedIndices = []
@@ -986,6 +997,11 @@ extension ImageViewModel {
         RatingStore.shared.save(entry, for: doc.url)
         CatalogStore.shared.saveRating(path: doc.url.path, rating: doc.rating,
                                        flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
+        // In einem intelligenten Ordner kann eine Metadatenänderung das Bild aus den
+        // Kriterien herausfallen lassen — Fokus sofort auf das nächste Bild verschieben.
+        if case .smartFolder = navSelection {
+            revalidateSelectionForCurrentContext()
+        }
     }
 
     // MARK: - Removable volume detection

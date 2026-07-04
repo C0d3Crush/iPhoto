@@ -2,6 +2,15 @@
 
 ---
 
+## 0.69.1
+**Bugfix: Fokus springt beim Filtern in intelligenten Ordnern auf das nächste Bild**
+
+- Wenn ein Bild durch eine Bewertungs-/Flag-/Label-Änderung aus einem intelligenten Ordner herausfällt, wird sofort das nächste Bild in der Reihenfolge fokussiert (statt das ausgeblendete Bild weiter anzuzeigen)
+- Fällt kein nächstes Bild, wird das vorherige gewählt
+- Gilt auch für alle anderen Kontextwechsel (z.B. Kriterien-Änderung am Ordner)
+
+---
+
 ## 0.69.0
 **Feature: Intelligente Ordner als echte Systemordner**
 
