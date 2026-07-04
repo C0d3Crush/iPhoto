@@ -1,31 +1,99 @@
 import AppKit
 import Foundation
 
+// MARK: - Sort Criterion
+
+enum SortCriterion: String, CaseIterable {
+    case filenameAsc  = "filenameAsc"
+    case filenameDesc = "filenameDesc"
+    case dateAsc      = "dateAsc"
+    case dateDesc     = "dateDesc"
+    case ratingDesc   = "ratingDesc"
+    case random       = "random"
+
+    var displayName: String {
+        switch self {
+        case .filenameAsc:  return "Name ↑"
+        case .filenameDesc: return "Name ↓"
+        case .dateAsc:      return "Datum ↑"
+        case .dateDesc:     return "Datum ↓"
+        case .ratingDesc:   return "Bewertung"
+        case .random:       return "Zufall"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .filenameAsc:  return "textformat.abc"
+        case .filenameDesc: return "textformat.abc"
+        case .dateAsc:      return "calendar.badge.clock"
+        case .dateDesc:     return "calendar.badge.clock"
+        case .ratingDesc:   return "star"
+        case .random:       return "shuffle"
+        }
+    }
+}
+
 // MARK: - Library: Navigation Context
 
 extension ImageViewModel {
 
     var visibleDocuments: [ImageDocument] {
+        let filtered: [ImageDocument]
         switch navSelection {
         case .library, nil:
-            return collection.documents
+            filtered = collection.documents
         case .album(let id):
             guard let album = albums.first(where: { $0.id == id }) else { return [] }
-            return collection.documents.filter { album.photoURLs.contains($0.url) }
+            filtered = collection.documents.filter { album.photoURLs.contains($0.url) }
         case .folder(let id):
             guard let folder = watchedFolders.first(where: { $0.id == id }),
                   let (folderURL, stop) = folder.resolveURL() else { return [] }
             defer { stop() }
             let prefix = folderURL.standardized.path
-            return collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
+            filtered = collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
         case .smartFolder(let id):
             guard let sf = smartFolders.first(where: { $0.id == id }) else { return [] }
-            return collection.documents.filter { smartFolderMatches($0, sf: sf) }
+            filtered = collection.documents.filter { smartFolderMatches($0, sf: sf) }
         case .volume(let id):
             guard let volume = detectedVolumes.first(where: { $0.id == id }) else { return [] }
             let prefix = volume.url.standardized.path
-            return collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
+            filtered = collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
         }
+        return applySortCriterion(to: filtered)
+    }
+
+    func applySortCriterion(to docs: [ImageDocument]) -> [ImageDocument] {
+        switch sortCriterion {
+        case .filenameAsc:
+            return docs.sorted { $0.filename.localizedStandardCompare($1.filename) == .orderedAscending }
+        case .filenameDesc:
+            return docs.sorted { $0.filename.localizedStandardCompare($1.filename) == .orderedDescending }
+        case .dateAsc:
+            return docs.sorted { dateSortKey($0) < dateSortKey($1) }
+        case .dateDesc:
+            return docs.sorted { dateSortKey($0) > dateSortKey($1) }
+        case .ratingDesc:
+            return docs.sorted { ($0.rating, $0.filename) > ($1.rating, $1.filename) }
+        case .random:
+            let orderMap = Dictionary(uniqueKeysWithValues: shuffledOrder.enumerated().map { ($1, $0) })
+            return docs.sorted {
+                (orderMap[$0.id] ?? Int.max) < (orderMap[$1.id] ?? Int.max)
+            }
+        }
+    }
+
+    private func dateSortKey(_ doc: ImageDocument) -> String {
+        // Try in-memory EXIF first, then catalog, then filename as fallback
+        if let v = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value, !v.isEmpty {
+            return v
+        }
+        if let d = CatalogStore.shared.image(forPath: doc.url.path)?.dateTaken { return d }
+        return doc.filename
+    }
+
+    func applyRandomShuffle() {
+        shuffledOrder = visibleDocuments.map { $0.id }.shuffled()
     }
 
     func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder) -> Bool {

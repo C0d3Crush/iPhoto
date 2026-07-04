@@ -66,6 +66,8 @@ struct LibraryFullGridView: View {
                 .help("Navigation ein-/ausblenden")
             }
             ToolbarItemGroup(placement: .automatic) {
+                SortMenuButton()
+                    .environmentObject(viewModel)
                 HStack(spacing: 6) {
                     Image(systemName: "square.grid.3x3")
                         .font(.system(size: 10))

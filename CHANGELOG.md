@@ -2,6 +2,16 @@
 
 ---
 
+## 0.77.0
+**Feature: Sortierung innerhalb jeder Ansicht**
+
+- Bilder können jetzt in jeder Ansicht (Bibliothek, Alben, Ordner, intelligente Ordner) nach Kriterium sortiert werden
+- Sortieroptionen: Name ↑/↓, Datum ↑/↓, Bewertung, Zufall
+- Sortiermenü (↑↓-Symbol) erscheint in der Toolbar der Rasteransicht und der Detailansicht
+- Zufalls-Sortierung bleibt stabil über Renders hinweg (kein Neuordnen beim Scrollen)
+
+---
+
 ## 0.76.0
 **Feature: Bildanzahl in der Seitenleiste & Drag-and-Drop Gruppen repariert**
 

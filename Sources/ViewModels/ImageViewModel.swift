@@ -23,6 +23,8 @@ class ImageViewModel: ObservableObject {
     @Published var showFullGrid: Bool = false
     @Published var gridThumbnailSize: CGFloat = 160
     @Published var isStartupLoading: Bool = true
+    @Published var sortCriterion: SortCriterion = .filenameAsc
+    @Published var shuffledOrder: [UUID] = []
     @Published var albums: [Album] = []
     @Published var watchedFolders: [WatchedFolder] = []
     @Published var smartFolders: [SmartFolder] = []

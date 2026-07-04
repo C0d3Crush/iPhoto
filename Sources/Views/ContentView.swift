@@ -173,6 +173,9 @@ struct DetailView: View {
             }
 
             ToolbarItemGroup(placement: .automatic) {
+                SortMenuButton()
+                    .environmentObject(viewModel)
+
                 Button(action: { viewModel.showOriginal.toggle() }) {
                     Image(systemName: viewModel.showOriginal ? "eye.slash" : "eye")
                 }
