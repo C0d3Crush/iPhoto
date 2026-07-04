@@ -28,7 +28,7 @@ extension ImageViewModel {
         }
     }
 
-    private func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder) -> Bool {
+    func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder) -> Bool {
         guard !sf.criteria.isEmpty else { return true }
         let results = sf.criteria.map { c -> Bool in
             switch c.attribute {
@@ -311,9 +311,11 @@ extension ImageViewModel {
         smartFolders.append(sf)
         saveSmartFolders()
         navSelection = .smartFolder(sf.id)
+        syncSmartFolderToFilesystem(sf)
     }
 
     func deleteSmartFolder(_ sf: SmartFolder) {
+        removeSmartFolderFromFilesystem(sf)
         smartFolders.removeAll { $0.id == sf.id }
         if navSelection == .smartFolder(sf.id) { navSelection = .library }
         saveSmartFolders()
@@ -321,13 +323,75 @@ extension ImageViewModel {
 
     func updateSmartFolder(_ sf: SmartFolder) {
         guard let idx = smartFolders.firstIndex(where: { $0.id == sf.id }) else { return }
+        let oldName = smartFolders[idx].name
         smartFolders[idx] = sf
         saveSmartFolders()
-        // When currently viewing this smart folder, re-validate — stricter criteria may
-        // exclude the current image.
+        syncSmartFolderToFilesystem(sf, oldName: oldName != sf.name ? oldName : nil)
         if case .smartFolder(let selectedID) = navSelection, selectedID == sf.id {
             revalidateSelectionForCurrentContext()
         }
+    }
+
+    // MARK: - Smart Folder Filesystem Sync
+
+    static let smartFoldersSystemFolderName = "Intelligente Ordner"
+
+    var smartFoldersSystemRoot: URL {
+        FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto")
+            .appendingPathComponent(Self.smartFoldersSystemFolderName)
+    }
+
+    func syncSmartFolderToFilesystem(_ sf: SmartFolder, oldName: String? = nil) {
+        let fm = FileManager.default
+        let root = smartFoldersSystemRoot
+
+        if let old = oldName {
+            let oldDir = root.appendingPathComponent(old)
+            try? fm.removeItem(at: oldDir)
+        }
+
+        let dir = root.appendingPathComponent(sf.name)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let matches = collection.documents.filter { smartFolderMatches($0, sf: sf) }
+        let matchURLs = Set(matches.map { $0.url.standardized.path })
+
+        // Veraltete Symlinks entfernen
+        if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isSymbolicLinkKey]) {
+            for link in contents {
+                guard (try? link.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true else { continue }
+                let target = (try? fm.destinationOfSymbolicLink(atPath: link.path)).map {
+                    URL(fileURLWithPath: $0).standardized.path
+                }
+                if target.map({ !matchURLs.contains($0) }) ?? true {
+                    try? fm.removeItem(at: link)
+                }
+            }
+        }
+
+        // Neue Symlinks anlegen
+        let existingLinks = Set((try? fm.contentsOfDirectory(atPath: dir.path)) ?? [])
+        for doc in matches {
+            var linkName = doc.url.lastPathComponent
+            var counter = 1
+            while existingLinks.contains(linkName) {
+                let base = (doc.url.lastPathComponent as NSString).deletingPathExtension
+                let ext  = (doc.url.lastPathComponent as NSString).pathExtension
+                linkName = ext.isEmpty ? "\(base)_\(counter)" : "\(base)_\(counter).\(ext)"
+                counter += 1
+            }
+            let linkURL = dir.appendingPathComponent(linkName)
+            if !fm.fileExists(atPath: linkURL.path, isDirectory: nil) {
+                try? fm.createSymbolicLink(at: linkURL, withDestinationURL: doc.url)
+            }
+        }
+        Log.info("iOrdner Filesystem-Sync: \"\(sf.name)\" → \(matches.count) Symlinks in \(dir.path)")
+    }
+
+    private func removeSmartFolderFromFilesystem(_ sf: SmartFolder) {
+        let dir = smartFoldersSystemRoot.appendingPathComponent(sf.name)
+        try? FileManager.default.removeItem(at: dir)
     }
 
     private var smartFoldersFileURL: URL {
@@ -559,8 +623,16 @@ extension ImageViewModel {
             foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
         case .folder(let id):
             foldersToLoad = watchedFolders.filter { $0.id == id && !syncedFolderIDs.contains($0.id) }
-        case .album, .smartFolder:
+        case .album:
             foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
+        case .smartFolder(let id):
+            foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
+            if let sf = smartFolders.first(where: { $0.id == id }) {
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    guard let self = self else { return }
+                    self.syncSmartFolderToFilesystem(sf)
+                }
+            }
         case .volume(let id):
             if let vol = detectedVolumes.first(where: { $0.id == id }) {
                 syncVolume(vol)
@@ -588,7 +660,14 @@ extension ImageViewModel {
             ) else { return }
             var found: [URL] = []
             for case let fileURL as URL in enumerator {
-                if (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+                // Symlink-Verzeichnis der intelligenten Ordner überspringen
+                if fileURL.lastPathComponent == ImageViewModel.smartFoldersSystemFolderName {
+                    enumerator.skipDescendants()
+                    continue
+                }
+                let vals = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                if vals?.isRegularFile == true,
+                   vals?.isSymbolicLink != true,
                    ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
                     found.append(fileURL)
                 }

@@ -2,6 +2,17 @@
 
 ---
 
+## 0.69.0
+**Feature: Intelligente Ordner als echte Systemordner**
+
+- Jeder intelligente Ordner bekommt einen echten Ordner unter `~/Pictures/iPhoto/Intelligente Ordner/<Name>/`
+- Der Ordner enthält Symlinks zu allen passenden Fotos — keine Kopien, keine Duplikate
+- Wird automatisch aktualisiert beim Erstellen, Bearbeiten, Umbenennen, Löschen und beim Navigieren zum Ordner
+- Beim Umbenennen wird der alte Ordner entfernt und ein neuer angelegt
+- Der Bibliotheks-Watcher ignoriert dieses Verzeichnis (Symlinks werden nicht als Duplikate eingelesen)
+
+---
+
 ## 0.68.1
 **Feature: Album-Häkchen und Entfernen im Rechtsklick-Menü**
 
