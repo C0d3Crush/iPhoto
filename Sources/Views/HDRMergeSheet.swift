@@ -98,7 +98,7 @@ struct HDRMergeSheet: View {
     }
 
     private var infoText: some View {
-        Text("Die Belichtungsreihe wird nach Mertens Exposure Fusion zusammengeführt und als TIFF im gleichen Ordner gespeichert.")
+        Text("EV-Versatz wird automatisch aus den EXIF-Daten gelesen. Die Bilder werden in linearem Licht normiert, gemischt und mit Extended-Reinhard tone-gemappt. Ergebnis als TIFF im selben Ordner.")
             .font(.caption)
             .foregroundColor(.secondary)
             .padding(.horizontal)
