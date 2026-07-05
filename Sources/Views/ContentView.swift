@@ -65,6 +65,16 @@ struct ContentView: View {
         .onAppear {
             NSApp.mainWindow?.title = viewModel.windowTitle
         }
+        .sheet(isPresented: $viewModel.showHDRMergeSheet, onDismiss: {
+            viewModel.hdrMergeError = nil
+            viewModel.hdrMergeResultURL = nil
+        }) {
+            HDRMergeSheet(
+                isPresented: $viewModel.showHDRMergeSheet,
+                docs: viewModel.selectedDocsForHDR
+            )
+            .environmentObject(viewModel)
+        }
         .sheet(isPresented: $viewModel.showExportSheet) {
             let selectedDocs = viewModel.collection.selectedIndices
                 .sorted()

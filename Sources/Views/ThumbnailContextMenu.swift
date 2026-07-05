@@ -114,6 +114,12 @@ struct ThumbnailContextMenu: View {
     }
 
     @ViewBuilder private var actionSection: some View {
+        if isInMultiSelection && vm.collection.selectedIndices.count >= 2 {
+            Button("HDR zusammenführen…") {
+                vm.showHDRMergeSheet = true
+            }
+            Divider()
+        }
         Button(isInMultiSelection
                ? "\(vm.collection.selectedIndices.count) Bilder exportieren..."
                : "Exportieren...") {

@@ -75,6 +75,12 @@ class ImageViewModel: ObservableObject {
     var isUndoRedoing = false
     var lastCommittedAdjustments = AdjustmentState()
 
+    // MARK: - HDR Merge
+    @Published var showHDRMergeSheet: Bool = false
+    @Published var isHDRMerging: Bool = false
+    @Published var hdrMergeError: String? = nil
+    @Published var hdrMergeResultURL: URL? = nil
+
     // MARK: - Internal state (accessible from extension files via internal access)
 
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []

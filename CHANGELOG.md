@@ -2,6 +2,18 @@
 
 ---
 
+## 0.78.0
+**Feature: HDR-Zusammenführung für Belichtungsreihen (Fuji BKT)**
+
+- Mehrere Belichtungen (z. B. aus dem Fuji X-T4 BKT-Modus) können per Rechtsklick → „HDR zusammenführen…" zu einem Bild kombiniert werden
+- Algorithmus: Mertens Exposure Fusion — jedes Bild trägt pixelweise nach dem Anteil optimal belichteter Pixel bei, kein Tone-Mapping nötig
+- EV-Versatz wird aus den EXIF-Daten ausgelesen und im Dialog angezeigt
+- Belichtungstoleranz (σ) einstellbar: engerer Wert bevorzugt exakt mittelgraue Pixel, größerer Wert weichere Übergänge
+- Ergebnis wird als TIFF im selben Ordner gespeichert und automatisch importiert
+- Fortschrittsanzeige in der Statusleiste während der Berechnung
+
+---
+
 ## 0.77.1
 **Bugfix: Falsches Bild nach Metadaten-Änderung in intelligentem Ordner**
 
