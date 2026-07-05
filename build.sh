@@ -105,6 +105,7 @@ echo ""
 echo "==> Baue iphoto-cli…"
 CLI_SOURCES="\
     $ROOT/Sources/Models/RAWImageDecoder.swift \
+    $ROOT/Sources/Models/HDRMerger.swift \
     $ROOT/Sources/Models/HotPixelResult.swift \
     $ROOT/Sources/Utilities/Data+Extensions.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \

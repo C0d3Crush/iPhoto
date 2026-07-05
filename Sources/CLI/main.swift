@@ -10,11 +10,13 @@ private func printUsage() {
     Verwendung:
       iphoto-cli export <eingabe> --format jpeg|png|tiff|heif [--output <pfad>] [--quality 0.9]
       iphoto-cli export <datei1> <datei2> ... --format jpeg --output-dir <ordner>
+      iphoto-cli hdr <ordner> --output-dir <ziel>
       iphoto-cli info <eingabe>
       iphoto-cli hotpixel <ordner>
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
+    hdr:      Erzeugt 6 Preset-Varianten aus allen RAWs im Ordner (Vergleich)
     """)
 }
 
@@ -226,6 +228,126 @@ private func runHotPixel(_ args: CLIArgs) -> Int32 {
     return 0
 }
 
+// MARK: - HDR Test
+
+private struct HDRPreset {
+    let name: String       // Dateiname-Suffix
+    let label: String      // Beschreibung
+    let contrast: Float
+    let saturation: Float
+    let exposedness: Float
+}
+
+private let hdrPresets: [HDRPreset] = [
+    HDRPreset(name: "A_default",      label: "Standard      c=1.0 s=1.0 e=1.0",  contrast: 1.0, saturation: 1.0, exposedness: 1.0),
+    HDRPreset(name: "B_no_sat",       label: "Kein Sättigung c=1.0 s=0.0 e=1.0",  contrast: 1.0, saturation: 0.0, exposedness: 1.0),
+    HDRPreset(name: "C_contrast",     label: "Kontrast-Heavy c=2.0 s=0.5 e=1.0",  contrast: 2.0, saturation: 0.5, exposedness: 1.0),
+    HDRPreset(name: "D_exposure",     label: "Exposition-Hvy c=1.0 s=1.0 e=2.0",  contrast: 1.0, saturation: 1.0, exposedness: 2.0),
+    HDRPreset(name: "E_natural",      label: "Natural        c=1.5 s=0.0 e=1.5",  contrast: 1.5, saturation: 0.0, exposedness: 1.5),
+    HDRPreset(name: "F_gentle",       label: "Sanft          c=0.5 s=0.5 e=1.5",  contrast: 0.5, saturation: 0.5, exposedness: 1.5),
+]
+
+private func runHDR(_ args: CLIArgs) -> Int32 {
+    let rawExts: Set<String> = ["raf","cr2","cr3","nef","arw","dng","orf","rw2","nrw","pef",
+                                 "srw","erf","kdc","dcr","raw","rwl","mrw","3fr","mef","iiq",
+                                 "x3f","srf","sr2","jpg","jpeg","tiff","tif","png","heic","heif"]
+
+    // Eingabe: Ordner oder explizite Dateien
+    var inputURLs: [URL]
+    if args.inputs.count == 1 {
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: args.inputs[0].path, isDirectory: &isDir)
+        if isDir.boolValue {
+            inputURLs = (try? FileManager.default.contentsOfDirectory(
+                at: args.inputs[0], includingPropertiesForKeys: nil
+            ))?.filter { rawExts.contains($0.pathExtension.lowercased()) }
+              .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
+        } else {
+            inputURLs = args.inputs
+        }
+    } else {
+        inputURLs = args.inputs
+    }
+
+    guard inputURLs.count >= 2 else {
+        fputs("Fehler: Mindestens 2 Bilder für HDR-Merge benötigt (gefunden: \(inputURLs.count))\n", stderr)
+        return 1
+    }
+
+    let outDir: URL
+    if let d = args.outputDir {
+        outDir = d
+    } else if let d = args.inputs.first.map({ $0.deletingLastPathComponent() }) {
+        outDir = d
+    } else {
+        fputs("Fehler: --output-dir <ordner> angeben\n", stderr)
+        return 1
+    }
+    try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+
+    print("HDR-Merge: \(inputURLs.count) Bilder")
+    for url in inputURLs { print("  · \(url.lastPathComponent)") }
+    print("")
+    print("Dekodiere RAWs…")
+
+    // Alle Bilder einmalig dekodieren
+    var cgImages: [CGImage] = []
+    for url in inputURLs {
+        do {
+            let img = try RAWImageDecoder.decode(url: url)
+            cgImages.append(img)
+            print("  ✓ \(url.lastPathComponent)  \(img.width)×\(img.height)")
+        } catch {
+            fputs("  ✗ \(url.lastPathComponent): \(error.localizedDescription)\n", stderr)
+        }
+    }
+
+    guard cgImages.count >= 2 else {
+        fputs("Fehler: Weniger als 2 Bilder dekodierbar\n", stderr)
+        return 1
+    }
+
+    print("")
+    print("Erzeuge \(hdrPresets.count) Preset-Varianten…")
+    print(String(repeating: "─", count: 56))
+
+    var failed = 0
+    for preset in hdrPresets {
+        let outURL = outDir.appendingPathComponent("hdr_\(preset.name).tiff")
+        let opts = HDRMerger.Options(
+            contrastWeight:   preset.contrast,
+            saturationWeight: preset.saturation,
+            exposednessWeight: preset.exposedness
+        )
+        print("[\(preset.name)]  \(preset.label)")
+        let t0 = Date()
+        guard let merged = HDRMerger.merge(cgImages: cgImages, options: opts) else {
+            fputs("  ✗ Merge fehlgeschlagen\n", stderr)
+            failed += 1
+            continue
+        }
+        let elapsed = Date().timeIntervalSince(t0)
+
+        // Als TIFF speichern (verlustfrei)
+        guard let dest = CGImageDestinationCreateWithURL(outURL as CFURL, "public.tiff" as CFString, 1, nil) else {
+            fputs("  ✗ TIFF-Ziel konnte nicht erstellt werden\n", stderr)
+            failed += 1
+            continue
+        }
+        CGImageDestinationAddImage(dest, merged, nil)
+        if CGImageDestinationFinalize(dest) {
+            print("  → \(outURL.lastPathComponent)  (\(String(format: "%.1f", elapsed))s)")
+        } else {
+            fputs("  ✗ TIFF schreiben fehlgeschlagen\n", stderr)
+            failed += 1
+        }
+    }
+
+    print(String(repeating: "─", count: 56))
+    print("Fertig. \(hdrPresets.count - failed)/\(hdrPresets.count) erfolgreich → \(outDir.path)")
+    return failed == 0 ? 0 : 1
+}
+
 // MARK: - Entry Point
 
 let args = CommandLine.arguments
@@ -239,6 +361,8 @@ case "export":
     exitCode = runExport(parsed)
 case "info":
     exitCode = runInfo(parsed)
+case "hdr":
+    exitCode = runHDR(parsed)
 case "hotpixel":
     exitCode = runHotPixel(parsed)
 case "--help", "-h", "help":

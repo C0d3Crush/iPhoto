@@ -2,6 +2,15 @@
 
 ---
 
+## 0.78.4
+**Bugfix: HDR-Ergebnis zu hell — Farbraum auf sRGB (gamma) zurückgestellt**
+
+- HDR-Merge erzeugte überbelichtete Ausgaben, weil die Well-Exposedness-Funktion (σ=0.2, Mittlton 0.216) für lineares Licht falsch kalibriert war: Im linearen Farbraum deckt σ=0.2 zu großen Helligkeitsbereich ab und bevorzugt helle Pixel
+- Farbraum-Verarbeitung auf **sRGB (gamma)** zurückgestellt — exakt wie im Mertens-Original-Paper und OpenCV MergeMertens; Well-Exposedness-Mittelpunkt wieder bei 0.5 (perceptual Mittlton in gamma)
+- Guided Image Filter und Laplacian-Pyramid-Blending bleiben erhalten
+
+---
+
 ## 0.78.3
 **Bugfix: HDR-Halo-Artefakte — state-of-the-art Überarbeitung**
 

@@ -4,13 +4,12 @@ import Foundation
 
 // Mertens Exposure Fusion mit Laplacian-Pyramid-Blending (Mertens et al. 2007/2009).
 //
-// HALO-REDUKTION — Drei Maßnahmen in Prioritätsreihenfolge:
+// IMPLEMENTIERUNGSDETAILS:
 //
-// 1. Lineares Licht (höchste Wirkung):
-//    Bilder werden in linearem sRGB (keine Gamma-Kurve) dekodiert. Alle Gauß-Blur-
-//    und Pyramid-Operationen in Gamma-Raum erzeugen physikalisch falsche Werte an
-//    Hell-Dunkel-Grenzen (~1⅓ Stop zu dunkel) → dunkle Halo-Kränze an jeder Level.
-//    Gamma-Kodierung erfolgt erst beim Schreiben der 8-Bit-Ausgabe (IEC 61966-2-1).
+// 1. sRGB (gamma) Farbraum:
+//    Bilder werden als gamma-kodiertes sRGB verarbeitet — genau wie im Original-Paper
+//    und in OpenCV MergeMertens. Well-Exposedness σ=0.2 zentriert auf 0.5 (Mittlton).
+//    In linearem Licht wäre σ=0.2 viel zu breit und würde helle Pixel bevorzugen.
 //
 // 2. Guided Image Filter für Gewichtskarten (He et al. 2013):
 //    Rohe Gewichtskarten haben scharfe Sprünge an Helligkeitsgrenzen. Der Guided
@@ -40,10 +39,10 @@ struct HDRMerger {
         let L = pyramidLevels(w: W, h: H)
         let sizes = computeLevelSizes(w: W, h: H, L: L)
 
-        // Alle Bilder als Float32 in linearem sRGB rastern (kein Gamma)
+        // Alle Bilder als Float32 in sRGB (gamma) rastern — Mertens-Paper-konform
         var rasters: [[Float]] = []
         for image in cgImages {
-            if let px = rasterizeLinear(image, width: W, height: H) {
+            if let px = rasterizeSRGB(image, width: W, height: H) {
                 rasters.append(px)
             }
         }
@@ -172,11 +171,8 @@ struct HDRMerger {
         let contrast = absLaplacian(gray, w: w, h: h)
 
         var result = [Float](repeating: 0, count: n)
-        let sig2: Float = 0.08  // 2 × 0.2² — kanonischer Mertens-Wert
-
-        // In linearem Licht liegt der Mittlton bei ~0.216 (= 0.5^2.2 perceptual midpoint).
-        // Die Well-Exposedness-Glocke wird darauf zentriert.
-        let expCenter: Float = 0.216
+        let sig2: Float = 0.08  // 2 × 0.2² — kanonischer Mertens-Wert (für sRGB gamma)
+        let expCenter: Float = 0.5  // Mittlton im gamma-kodierten sRGB
 
         for i in 0..<n {
             let r = rgba[i*4], g = rgba[i*4+1], b = rgba[i*4+2]
@@ -374,10 +370,9 @@ struct HDRMerger {
 
     // MARK: - Rastern & Ausgabe
 
-    // Lineares sRGB (kein Gamma) — alle Pyramid-Operationen in linearem Licht.
-    // Gamma-kodierung nur beim finalen 8-Bit-Output (makeOutput → linearToSRGB).
-    private static func rasterizeLinear(_ image: CGImage, width: Int, height: Int) -> [Float]? {
-        guard let space = CGColorSpace(name: CGColorSpace.linearSRGB) else { return nil }
+    // sRGB (gamma) — Mertens-Paper-konform; Werte in [0,1] gamma-kodiert.
+    private static func rasterizeSRGB(_ image: CGImage, width: Int, height: Int) -> [Float]? {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         let rowBytes = width * 4 * MemoryLayout<Float>.size
         var data = [Float](repeating: 0, count: height * width * 4)
         let info = CGBitmapInfo(rawValue:
@@ -396,13 +391,13 @@ struct HDRMerger {
         let n = width * height
         var rgba = [UInt8](repeating: 255, count: n * 4)
         for i in 0..<n {
-            rgba[i*4+0] = clampByte(r[i])
-            rgba[i*4+1] = clampByte(g[i])
-            rgba[i*4+2] = clampByte(b[i])
+            // Daten sind bereits in sRGB (gamma) — direkt clampan, keine weitere Konvertierung
+            rgba[i*4+0] = UInt8(max(0, min(255, r[i] * 255 + 0.5)))
+            rgba[i*4+1] = UInt8(max(0, min(255, g[i] * 255 + 0.5)))
+            rgba[i*4+2] = UInt8(max(0, min(255, b[i] * 255 + 0.5)))
             rgba[i*4+3] = 255
         }
         guard let provider = CGDataProvider(data: Data(rgba) as CFData) else { return nil }
-        // Output als sRGB — Gamma wurde bereits in clampByte kodiert
         guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         return CGImage(width: width, height: height,
                        bitsPerComponent: 8, bitsPerPixel: 32,
@@ -452,13 +447,4 @@ struct HDRMerger {
         return plane
     }
 
-    // sRGB-Gamma-Kodierung (IEC 61966-2-1) für Linear-zu-8bit-Konvertierung
-    private static func linearToSRGB(_ v: Float) -> Float {
-        let c = max(0, min(1, v))
-        return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1.0 / 2.4) - 0.055
-    }
-
-    private static func clampByte(_ v: Float) -> UInt8 {
-        UInt8(linearToSRGB(v) * 255 + 0.5)
-    }
 }
