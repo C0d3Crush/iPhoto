@@ -2,6 +2,16 @@
 
 ---
 
+## 0.78.3
+**Bugfix: HDR-Halo-Artefakte — state-of-the-art Überarbeitung**
+
+- **Lineares Licht** (größter Einzeleffekt): Bilder werden jetzt in linearem sRGB dekodiert statt in Gamma-sRGB. Gauß-Blur und Pyramid-Operationen in Gamma-Raum erzeugen physikalisch falsche dunkle Werte an Hell-Dunkel-Grenzen — ≈1⅓ Stop zu dunkel pro Stufe — was dunkle Halo-Kränze erzeugt. Gamma-Kodierung erfolgt erst beim 8-Bit-Output (IEC 61966-2-1)
+- **Guided Image Filter** (He et al. 2013): Gewichtskarten werden edge-aware geglättet bevor sie in die Pyramide fließen. Der Filter nutzt das Graustufenbild als Guide — Gewichtsübergänge folgen damit Bildkanten statt eigene Halo-Formen zu bilden. Implementiert als O(N) separable Box-Blur-Approximation
+- **Well-Exposedness-Mittelpunkt** auf lineares Licht angepasst (0.216 statt 0.5 — entspricht dem perceptual Mittlton in linearem Raum)
+- **Laplacian Randpixel**: Edge-Extension statt Null-Auffüllung an Bildrändern
+
+---
+
 ## 0.78.2
 **Bugfix: Halo-Artefakte beim HDR-Merge behoben**
 

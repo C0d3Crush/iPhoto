@@ -4,17 +4,24 @@ import Foundation
 
 // Mertens Exposure Fusion mit Laplacian-Pyramid-Blending (Mertens et al. 2007/2009).
 //
-// Warum Laplacian-Pyramid statt einfacher Gewichtsmittelung:
-// Ein per-Pixel gewichteter Durchschnitt im Ortsbereich erzeugt sichtbare Übergänge,
-// weil die Niederfrequenz-Anteile verschiedener Belichtungen nicht übereinstimmen.
-// Die Pyramid zerlegt jedes Bild in Frequenzbänder:
-//   - Grobe Level (große Skala): Gewichtskarte wird viele Male geblurrt → Übergänge
-//     erstrecken sich über viele Pixel → unsichtbar.
-//   - Feine Level (kleine Skala): Laplacian enthält nur lokale Details, keine globale
-//     Helligkeit → scharfes lokales Blending ohne Halos.
+// HALO-REDUKTION — Drei Maßnahmen in Prioritätsreihenfolge:
+//
+// 1. Lineares Licht (höchste Wirkung):
+//    Bilder werden in linearem sRGB (keine Gamma-Kurve) dekodiert. Alle Gauß-Blur-
+//    und Pyramid-Operationen in Gamma-Raum erzeugen physikalisch falsche Werte an
+//    Hell-Dunkel-Grenzen (~1⅓ Stop zu dunkel) → dunkle Halo-Kränze an jeder Level.
+//    Gamma-Kodierung erfolgt erst beim Schreiben der 8-Bit-Ausgabe (IEC 61966-2-1).
+//
+// 2. Guided Image Filter für Gewichtskarten (He et al. 2013):
+//    Rohe Gewichtskarten haben scharfe Sprünge an Helligkeitsgrenzen. Der Guided
+//    Filter glättet sie edge-aware — Übergänge folgen Bildkanten statt eigene
+//    Halo-Formen zu erzeugen. Implementiert als O(N) Box-Blur-Approximation.
+//
+// 3. Edge-Extended Laplacian (Randpixel):
+//    Randpixel haben keinen Nachbarn auf einer Seite; wird mit Null aufgefüllt
+//    statt Edge-Extension, entstehen künstliche Kanten am Bildrand.
 //
 // Kein EV-Wert nötig — der Algorithmus wählt automatisch die bestbelichteten Pixel.
-// Arbeitet in sRGB (Gamma), wie im Originalpaper spezifiziert.
 
 struct HDRMerger {
 
@@ -33,18 +40,35 @@ struct HDRMerger {
         let L = pyramidLevels(w: W, h: H)
         let sizes = computeLevelSizes(w: W, h: H, L: L)
 
-        // Alle Bilder als Float32-sRGB rastern
+        // Alle Bilder als Float32 in linearem sRGB rastern (kein Gamma)
         var rasters: [[Float]] = []
         for image in cgImages {
-            if let px = rasterizeSRGB(image, width: W, height: H) {
+            if let px = rasterizeLinear(image, width: W, height: H) {
                 rasters.append(px)
             }
         }
         guard rasters.count >= 2 else { return nil }
         let N = rasters.count
 
-        // Gewichtskarten berechnen und normieren
-        var weights: [[Float]] = rasters.map { computeWeight($0, w: W, h: H, options: options) }
+        // Graustufenbilder — Guide für den Guided Filter
+        let grayImages = rasters.map { computeGrayscale($0, n: W * H) }
+
+        // Gewichtskarten (Kontrast × Sättigung × Well-Exposedness)
+        var weights: [[Float]] = zip(rasters, grayImages).map {
+            computeWeight($0, gray: $1, w: W, h: H, options: options)
+        }
+
+        // Guided Image Filter (He et al. 2013) — edge-aware Glättung der Gewichtskarten.
+        // Radius skaliert mit Auflösung (≈1% der kürzeren Seite, mind. 10 px).
+        // ε = 0.01: Kanten (hohe Varianz) → Gewicht folgt Bildkante. Flächen → geglättet.
+        let gfRadius = max(10, min(W, H) / 100)
+        let gfEps: Float = 0.01
+        for k in 0..<N {
+            weights[k] = guidedFilter(weights[k], guide: grayImages[k],
+                                      w: W, h: H, radius: gfRadius, eps: gfEps)
+        }
+
+        // Normieren nach Guided Filter (GF verändert absolute Werte — danach neu normieren)
         normalizeWeights(&weights, n: W * H)
 
         // Output-Pyramide (3 Kanäle, L+1 Level) mit 0 initialisieren
@@ -52,14 +76,12 @@ struct HDRMerger {
         var outG: [[Float]] = sizes.map { [Float](repeating: 0, count: $0.w * $0.h) }
         var outB: [[Float]] = sizes.map { [Float](repeating: 0, count: $0.w * $0.h) }
 
-        // Jedes Bild einzeln akkumulieren
         for k in 0..<N {
             accumulateImage(rasters[k], weight: weights[k],
                             outR: &outR, outG: &outG, outB: &outB,
                             sizes: sizes, W: W, H: H, L: L)
         }
 
-        // Aus der geblendeten Pyramide rekonstruieren
         let (resR, resG, resB) = reconstruct(outR: outR, outG: outG, outB: outB, sizes: sizes, L: L)
         return makeOutput(r: resR, g: resG, b: resB, width: W, height: H)
     }
@@ -79,18 +101,15 @@ struct HDRMerger {
             let sw = sizes[l].w, sh = sizes[l].h
             let dw = sizes[l+1].w, dh = sizes[l+1].h
 
-            // Gauß-Blur → Downsample für nächstes Level
             let rNext = downsampleHalf(gaussianBlur(r, w: sw, h: sh), sw: sw, sh: sh, dw: dw, dh: dh)
             let gNext = downsampleHalf(gaussianBlur(g, w: sw, h: sh), sw: sw, sh: sh, dw: dw, dh: dh)
             let bNext = downsampleHalf(gaussianBlur(b, w: sw, h: sh), sw: sw, sh: sh, dw: dw, dh: dh)
             let wNext = downsampleHalf(gaussianBlur(w, w: sw, h: sh), sw: sw, sh: sh, dw: dw, dh: dh)
 
-            // Nächstes Level hochskalieren → Laplacian-Differenz
             let rUp = upsample(rNext, srcW: dw, srcH: dh, dstW: sw, dstH: sh)
             let gUp = upsample(gNext, srcW: dw, srcH: dh, dstW: sw, dstH: sh)
             let bUp = upsample(bNext, srcW: dw, srcH: dh, dstW: sw, dstH: sh)
 
-            // LF[l] += weight * (aktuell − upsample(nächstes))
             let pn = sw * sh
             for i in 0..<pn {
                 outR[l][i] += w[i] * (r[i] - rUp[i])
@@ -101,7 +120,6 @@ struct HDRMerger {
             r = rNext; g = gNext; b = bNext; w = wNext
         }
 
-        // Gröbstes Level: Gauß-Rest direkt akkumulieren
         let cn = sizes[L].w * sizes[L].h
         for i in 0..<cn {
             outR[L][i] += w[i] * r[i]
@@ -140,28 +158,34 @@ struct HDRMerger {
 
     // MARK: - Gewichtskarten
 
-    private static func computeWeight(_ rgba: [Float], w: Int, h: Int, options: Options) -> [Float] {
-        let n = w * h
+    private static func computeGrayscale(_ rgba: [Float], n: Int) -> [Float] {
         var gray = [Float](repeating: 0, count: n)
         for i in 0..<n {
             gray[i] = 0.2126 * rgba[i*4] + 0.7152 * rgba[i*4+1] + 0.0722 * rgba[i*4+2]
         }
+        return gray
+    }
+
+    private static func computeWeight(_ rgba: [Float], gray: [Float], w: Int, h: Int,
+                                       options: Options) -> [Float] {
+        let n = w * h
         let contrast = absLaplacian(gray, w: w, h: h)
 
         var result = [Float](repeating: 0, count: n)
         let sig2: Float = 0.08  // 2 × 0.2² — kanonischer Mertens-Wert
 
+        // In linearem Licht liegt der Mittlton bei ~0.216 (= 0.5^2.2 perceptual midpoint).
+        // Die Well-Exposedness-Glocke wird darauf zentriert.
+        let expCenter: Float = 0.216
+
         for i in 0..<n {
             let r = rgba[i*4], g = rgba[i*4+1], b = rgba[i*4+2]
             let mu = (r + g + b) * (1.0/3.0)
-
-            // Sättigung: Standardabweichung der Kanäle
             let sat = sqrt(((r-mu)*(r-mu) + (g-mu)*(g-mu) + (b-mu)*(b-mu)) * (1.0/3.0))
 
-            // Well-Exposedness: Gaußglocke pro Kanal, zentriert bei 0.5
-            let er = exp(-(r-0.5)*(r-0.5)/sig2)
-            let eg = exp(-(g-0.5)*(g-0.5)/sig2)
-            let eb = exp(-(b-0.5)*(b-0.5)/sig2)
+            let er = exp(-(r - expCenter)*(r - expCenter) / sig2)
+            let eg = exp(-(g - expCenter)*(g - expCenter) / sig2)
+            let eb = exp(-(b - expCenter)*(b - expCenter) / sig2)
 
             let c = max(contrast[i], 1e-6)
             let s = max(sat, 1e-6)
@@ -174,13 +198,17 @@ struct HDRMerger {
         return result
     }
 
+    // Randpixel per Edge-Extension statt 0 — verhindert künstliche Kanten am Bildrand
     private static func absLaplacian(_ plane: [Float], w: Int, h: Int) -> [Float] {
         var out = [Float](repeating: 0, count: w * h)
-        for y in 1..<(h-1) {
-            for x in 1..<(w-1) {
-                let c = plane[y*w + x]
-                out[y*w + x] = abs(plane[(y-1)*w+x] + plane[(y+1)*w+x]
-                                 + plane[y*w+(x-1)] + plane[y*w+(x+1)] - 4*c)
+        for y in 0..<h {
+            for x in 0..<w {
+                let c   = plane[y * w + x]
+                let top = plane[max(y-1, 0) * w + x]
+                let bot = plane[min(y+1, h-1) * w + x]
+                let lft = plane[y * w + max(x-1, 0)]
+                let rgt = plane[y * w + min(x+1, w-1)]
+                out[y * w + x] = abs(top + bot + lft + rgt - 4 * c)
             }
         }
         return out
@@ -190,15 +218,90 @@ struct HDRMerger {
         let N = maps.count
         let eps: Float = 1e-6
         var sumMap = [Float](repeating: eps, count: n)
-        for k in 0..<N {
-            for i in 0..<n { sumMap[i] += maps[k][i] }
-        }
-        for k in 0..<N {
-            for i in 0..<n { maps[k][i] /= sumMap[i] }
-        }
+        for k in 0..<N { for i in 0..<n { sumMap[i] += maps[k][i] } }
+        for k in 0..<N { for i in 0..<n { maps[k][i] /= sumMap[i] } }
     }
 
-    // MARK: - Pyramidenoperationen (vImage)
+    // MARK: - Guided Image Filter (He et al. 2013)
+    //
+    // Glättet Gewichtskarte p edge-aware anhand Graustufenbild I.
+    // Lokales lineares Modell: q_i = a_k · I_i + b_k  ∀i ∈ window k
+    //   a_k = Cov(I,p) / (Var(I) + ε)   — groß an Kanten, klein in Flächen
+    //   b_k = mean(p) − a_k · mean(I)
+    // Output q = mean(a) · I + mean(b)  — über alle Fenster gemittelt.
+    // An Kanten (Var(I) >> ε): a ≈ 1, Gewicht folgt Bildkante → kein Halo.
+    // In Flächen (Var(I) << ε): a ≈ 0, b ≈ mean(p) → geglättet.
+
+    private static func guidedFilter(_ p: [Float], guide I: [Float], w: Int, h: Int,
+                                      radius r: Int, eps: Float) -> [Float] {
+        let n = w * h
+        var II = [Float](repeating: 0, count: n)
+        var IP = [Float](repeating: 0, count: n)
+        for i in 0..<n { II[i] = I[i] * I[i]; IP[i] = I[i] * p[i] }
+
+        let mI  = boxBlur(I,  w: w, h: h, r: r)
+        let mP  = boxBlur(p,  w: w, h: h, r: r)
+        let mII = boxBlur(II, w: w, h: h, r: r)
+        let mIP = boxBlur(IP, w: w, h: h, r: r)
+
+        var a = [Float](repeating: 0, count: n)
+        var b = [Float](repeating: 0, count: n)
+        for i in 0..<n {
+            let varI = mII[i] - mI[i] * mI[i]
+            a[i] = (mIP[i] - mI[i] * mP[i]) / (varI + eps)
+            b[i] = mP[i] - a[i] * mI[i]
+        }
+
+        let mA = boxBlur(a, w: w, h: h, r: r)
+        let mB = boxBlur(b, w: w, h: h, r: r)
+
+        var q = [Float](repeating: 0, count: n)
+        for i in 0..<n { q[i] = max(0, mA[i] * I[i] + mB[i]) }
+        return q
+    }
+
+    // O(N) Box-Blur: separable 1D-Faltung mit Einheitskern (äquivalent zu vImageBoxConvolve).
+    // Zwei Passes (H + V) via vImageConvolve_PlanarF — Radius-unabhängige Laufzeit.
+    private static func boxBlur(_ plane: [Float], w: Int, h: Int, r: Int) -> [Float] {
+        let rowBytes = w * MemoryLayout<Float>.size
+        let n = w * h
+        let kLen = r * 2 + 1
+        let kernel = [Float](repeating: 1.0 / Float(kLen), count: kLen)
+        let ku32 = UInt32(kLen)
+        var src = plane
+        var tmp = [Float](repeating: 0, count: n)
+        var dst = [Float](repeating: 0, count: n)
+
+        // Horizontaler Pass: src → tmp
+        src.withUnsafeMutableBufferPointer { sp in
+            tmp.withUnsafeMutableBufferPointer { tp in
+                var s = vImage_Buffer(data: UnsafeMutableRawPointer(sp.baseAddress!),
+                                      height: UInt(h), width: UInt(w), rowBytes: rowBytes)
+                var d = vImage_Buffer(data: UnsafeMutableRawPointer(tp.baseAddress!),
+                                      height: UInt(h), width: UInt(w), rowBytes: rowBytes)
+                kernel.withUnsafeBufferPointer { k in
+                    vImageConvolve_PlanarF(&s, &d, nil, 0, 0, k.baseAddress!, 1, ku32, 0,
+                                          vImage_Flags(kvImageEdgeExtend))
+                }
+            }
+        }
+        // Vertikaler Pass: tmp → dst
+        tmp.withUnsafeMutableBufferPointer { sp in
+            dst.withUnsafeMutableBufferPointer { dp in
+                var s = vImage_Buffer(data: UnsafeMutableRawPointer(sp.baseAddress!),
+                                      height: UInt(h), width: UInt(w), rowBytes: rowBytes)
+                var d = vImage_Buffer(data: UnsafeMutableRawPointer(dp.baseAddress!),
+                                      height: UInt(h), width: UInt(w), rowBytes: rowBytes)
+                kernel.withUnsafeBufferPointer { k in
+                    vImageConvolve_PlanarF(&s, &d, nil, 0, 0, k.baseAddress!, ku32, 1, 0,
+                                          vImage_Flags(kvImageEdgeExtend))
+                }
+            }
+        }
+        return dst
+    }
+
+    // MARK: - Pyramidenoperationen
 
     private static func gaussianBlur(_ plane: [Float], w: Int, h: Int) -> [Float] {
         guard w >= 5 && h >= 5 else { return plane }
@@ -206,10 +309,9 @@ struct HDRMerger {
         let rowBytes = w * MemoryLayout<Float>.size
         let kernel: [Float] = [1/16.0, 4/16.0, 6/16.0, 4/16.0, 1/16.0]
 
-        var buf0 = plane                           // Ergebnis landet hier
-        var buf1 = [Float](repeating: 0, count: n) // Zwischenpuffer
+        var buf0 = plane
+        var buf1 = [Float](repeating: 0, count: n)
 
-        // Horizontaler Pass: buf0 → buf1
         buf0.withUnsafeMutableBufferPointer { src in
             buf1.withUnsafeMutableBufferPointer { dst in
                 var s = vImage_Buffer(data: UnsafeMutableRawPointer(src.baseAddress!),
@@ -222,8 +324,6 @@ struct HDRMerger {
                 }
             }
         }
-
-        // Vertikaler Pass: buf1 → buf0
         buf1.withUnsafeMutableBufferPointer { src in
             buf0.withUnsafeMutableBufferPointer { dst in
                 var s = vImage_Buffer(data: UnsafeMutableRawPointer(src.baseAddress!),
@@ -247,7 +347,6 @@ struct HDRMerger {
             for x in 0..<dw {
                 let sx0 = min(x * 2,     sw - 1)
                 let sx1 = min(x * 2 + 1, sw - 1)
-                // 2×2 box average statt Punkt-Sampling — reduziert Aliasing in Gewichtskarten
                 dst[y * dw + x] = (plane[sy0 * sw + sx0] + plane[sy0 * sw + sx1]
                                  + plane[sy1 * sw + sx0] + plane[sy1 * sw + sx1]) * 0.25
             }
@@ -266,8 +365,7 @@ struct HDRMerger {
                                       height: UInt(srcH), width: UInt(srcW), rowBytes: srcRowBytes)
                 var d = vImage_Buffer(data: UnsafeMutableRawPointer(dp.baseAddress!),
                                       height: UInt(dstH), width: UInt(dstW), rowBytes: dstRowBytes)
-                // Bilinear statt Lanczos (kvImageHighQualityResampling): Lanczos hat negative
-                // Nebenkeulen die im Laplacian r−upsample(rNext) als Ringing/Halo landen.
+                // Bilinear: kein Ringing/Halo wie beim Lanczos-Filter
                 vImageScale_PlanarF(&s, &d, nil, vImage_Flags(kvImageNoFlags))
             }
         }
@@ -276,9 +374,10 @@ struct HDRMerger {
 
     // MARK: - Rastern & Ausgabe
 
-    // Float32 in sRGB (Gamma) — wie im Mertens-Originalpaper spezifiziert.
-    private static func rasterizeSRGB(_ image: CGImage, width: Int, height: Int) -> [Float]? {
-        guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+    // Lineares sRGB (kein Gamma) — alle Pyramid-Operationen in linearem Licht.
+    // Gamma-kodierung nur beim finalen 8-Bit-Output (makeOutput → linearToSRGB).
+    private static func rasterizeLinear(_ image: CGImage, width: Int, height: Int) -> [Float]? {
+        guard let space = CGColorSpace(name: CGColorSpace.linearSRGB) else { return nil }
         let rowBytes = width * 4 * MemoryLayout<Float>.size
         var data = [Float](repeating: 0, count: height * width * 4)
         let info = CGBitmapInfo(rawValue:
@@ -303,10 +402,12 @@ struct HDRMerger {
             rgba[i*4+3] = 255
         }
         guard let provider = CGDataProvider(data: Data(rgba) as CFData) else { return nil }
+        // Output als sRGB — Gamma wurde bereits in clampByte kodiert
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         return CGImage(width: width, height: height,
                        bitsPerComponent: 8, bitsPerPixel: 32,
                        bytesPerRow: width * 4,
-                       space: CGColorSpaceCreateDeviceRGB(),
+                       space: space,
                        bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
                        provider: provider, decode: nil,
                        shouldInterpolate: true, intent: .perceptual)
@@ -328,7 +429,9 @@ struct HDRMerger {
     }
 
     private static func pyramidLevels(w: Int, h: Int) -> Int {
-        min(8, Int(log2(Double(min(w, h)))))
+        let minDim = min(w, h)
+        // Mindestens 3 Level, maximal 8; Grobstes Level ≥ 16px breit
+        return min(8, max(3, Int(log2(Double(minDim) / 16.0))))
     }
 
     private static func targetSize(for images: [CGImage]) -> (Int, Int)? {
@@ -349,7 +452,13 @@ struct HDRMerger {
         return plane
     }
 
+    // sRGB-Gamma-Kodierung (IEC 61966-2-1) für Linear-zu-8bit-Konvertierung
+    private static func linearToSRGB(_ v: Float) -> Float {
+        let c = max(0, min(1, v))
+        return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1.0 / 2.4) - 0.055
+    }
+
     private static func clampByte(_ v: Float) -> UInt8 {
-        UInt8(max(0, min(255, v * 255 + 0.5)))
+        UInt8(linearToSRGB(v) * 255 + 0.5)
     }
 }
