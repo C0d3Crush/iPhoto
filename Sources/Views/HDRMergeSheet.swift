@@ -6,8 +6,6 @@ struct HDRMergeSheet: View {
 
     let docs: [ImageDocument]
 
-    @State private var sigma: Double = 0.2
-
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -16,7 +14,6 @@ struct HDRMergeSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     exposureList
                     Divider().padding(.vertical, 2)
-                    sigmaControl
                     infoText
                     statusArea
                 }
@@ -39,11 +36,8 @@ struct HDRMergeSheet: View {
             Text("HDR zusammenführen")
                 .font(.headline)
             Spacer()
-            Button {
-                isPresented = false
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.secondary)
+            Button { isPresented = false } label: {
+                Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
             }
             .buttonStyle(PlainButtonStyle())
         }
@@ -61,13 +55,10 @@ struct HDRMergeSheet: View {
                 HStack(spacing: 10) {
                     thumbnailView(for: doc)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(doc.filename)
-                            .font(.caption)
-                            .lineLimit(1)
+                        Text(doc.filename).font(.caption).lineLimit(1)
                         if let bias = ImageViewModel.exposureBias(at: doc.url) {
-                            Text(formatBias(bias))
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                            Text(bias == 0 ? "0 EV" : String(format: "%+.1f EV", bias))
+                                .font(.caption2).foregroundColor(.secondary)
                         }
                     }
                     Spacer()
@@ -77,28 +68,8 @@ struct HDRMergeSheet: View {
         }
     }
 
-    private var sigmaControl: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Belichtungstoleranz")
-                    .font(.subheadline)
-                Spacer()
-                Text(String(format: "σ = %.2f", sigma))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-            }
-            Slider(value: $sigma, in: 0.05...0.5)
-            Text("Kleiner = nur optimal belichtete Pixel; größer = sanftere Übergänge.")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal)
-        .disabled(vm.isHDRMerging)
-    }
-
     private var infoText: some View {
-        Text("EV-Versatz wird automatisch aus den EXIF-Daten gelesen. Die Bilder werden in linearem Licht normiert, gemischt und mit Extended-Reinhard tone-gemappt. Ergebnis als TIFF im selben Ordner.")
+        Text("Belichtungsreihe wird per Laplacian-Pyramid-Fusion zusammengeführt. Alle Gewichte (Kontrast, Sättigung, Belichtung) werden automatisch berechnet. Ergebnis als TIFF im selben Ordner.")
             .font(.caption)
             .foregroundColor(.secondary)
             .padding(.horizontal)
@@ -108,21 +79,15 @@ struct HDRMergeSheet: View {
     private var statusArea: some View {
         if let err = vm.hdrMergeError {
             HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.red)
-                Text(err)
-                    .font(.caption)
-                    .foregroundColor(.red)
+                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.red)
+                Text(err).font(.caption).foregroundColor(.red)
             }
             .padding(.horizontal)
         } else if let url = vm.hdrMergeResultURL {
             HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
+                Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
                 Text("Gespeichert: \(url.lastPathComponent)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
+                    .font(.caption).foregroundColor(.secondary).lineLimit(1)
             }
             .padding(.horizontal)
         }
@@ -132,15 +97,11 @@ struct HDRMergeSheet: View {
         HStack {
             Button("Abbrechen") { isPresented = false }
                 .keyboardShortcut(.escape, modifiers: [])
-
             Spacer()
-
             if vm.isHDRMerging {
                 HStack(spacing: 8) {
                     ProgressView().scaleEffect(0.7)
-                    Text("Wird berechnet…")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Text("Wird berechnet…").font(.caption).foregroundColor(.secondary)
                 }
             } else if vm.hdrMergeResultURL != nil {
                 Button("Fertig") { isPresented = false }
@@ -148,9 +109,7 @@ struct HDRMergeSheet: View {
                     .buttonStyle(DefaultButtonStyle())
             } else {
                 Button("Zusammenführen") {
-                    var opts = HDRMerger.Options()
-                    opts.sigma = Float(sigma)
-                    vm.mergeHDR(docs: docs, options: opts)
+                    vm.mergeHDR(docs: docs)
                 }
                 .keyboardShortcut(.return, modifiers: [])
                 .buttonStyle(DefaultButtonStyle())
@@ -165,19 +124,12 @@ struct HDRMergeSheet: View {
     private func thumbnailView(for doc: ImageDocument) -> some View {
         Group {
             if let img = doc.thumbnailImage {
-                Image(nsImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
             } else {
                 Color.secondary.opacity(0.2)
             }
         }
         .frame(width: 52, height: 36)
         .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-
-    private func formatBias(_ bias: Double) -> String {
-        if bias == 0 { return "0 EV" }
-        return String(format: "%+.1f EV", bias)
     }
 }

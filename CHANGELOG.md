@@ -2,6 +2,17 @@
 
 ---
 
+## 0.78.1
+**Bugfix: HDR-Merge ohne abrupte Übergänge (Laplacian-Pyramid-Fusion)**
+
+- Abrupte Pixelübergänge beim Reinzoomen behoben — Ursache war einfacher gewichteter Durchschnitt im Ortsbereich
+- Algorithmus komplett neu: **Mertens Exposure Fusion mit Laplacian-Pyramid-Blending** (State of the Art für LDR-Ausgabe, identisch mit OpenCV MergeMertens und Photomatix Exposure Blending)
+- Gewichte werden vollautomatisch aus Kontrast × Sättigung × Belichtung berechnet — kein manueller Sigma-Slider mehr nötig
+- Sigma-Slider im Dialog entfernt, EV-Versatz weiterhin zur Information angezeigt
+- Arbeitet in sRGB (Gamma) wie im Originalpaper spezifiziert; kein fehlerhaftes Linearisieren mehr
+
+---
+
 ## 0.78.0
 **Feature: HDR-Zusammenführung für Belichtungsreihen (Fuji BKT)**
 
