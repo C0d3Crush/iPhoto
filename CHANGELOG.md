@@ -2,6 +2,15 @@
 
 ---
 
+## 0.78.2
+**Bugfix: Halo-Artefakte beim HDR-Merge behoben**
+
+- Beim Zusammenführen von Belichtungen entstanden dunkle/helle Übergangszonen (Halos) — Ursache war der Lanczos-Upsampler im Laplacian-Pyramid-Blending: Lanczos hat negative Nebenkeulen, die beim `r − upsample(rBlurred)` Schritt als Ringing in die Residualdaten übernommen wurden
+- Upsample jetzt mit bilinearer Interpolation (`kvImageNoFlags`) statt Lanczos (`kvImageHighQualityResampling`) — kein Ringing, saubere Übergänge
+- Downsample nutzt jetzt 2×2-Box-Mittelwert statt Punkt-Sampling für genauere Gewichtskarten in der Pyramide
+
+---
+
 ## 0.78.1
 **Bugfix: HDR-Merge ohne abrupte Übergänge (Laplacian-Pyramid-Fusion)**
 

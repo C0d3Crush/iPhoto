@@ -242,9 +242,14 @@ struct HDRMerger {
     private static func downsampleHalf(_ plane: [Float], sw: Int, sh: Int, dw: Int, dh: Int) -> [Float] {
         var dst = [Float](repeating: 0, count: dw * dh)
         for y in 0..<dh {
-            let sy = min(y * 2, sh - 1)
+            let sy0 = min(y * 2,     sh - 1)
+            let sy1 = min(y * 2 + 1, sh - 1)
             for x in 0..<dw {
-                dst[y * dw + x] = plane[sy * sw + min(x * 2, sw - 1)]
+                let sx0 = min(x * 2,     sw - 1)
+                let sx1 = min(x * 2 + 1, sw - 1)
+                // 2×2 box average statt Punkt-Sampling — reduziert Aliasing in Gewichtskarten
+                dst[y * dw + x] = (plane[sy0 * sw + sx0] + plane[sy0 * sw + sx1]
+                                 + plane[sy1 * sw + sx0] + plane[sy1 * sw + sx1]) * 0.25
             }
         }
         return dst
@@ -254,14 +259,16 @@ struct HDRMerger {
         let srcRowBytes = srcW * MemoryLayout<Float>.size
         let dstRowBytes = dstW * MemoryLayout<Float>.size
         var dst = [Float](repeating: 0, count: dstW * dstH)
-        var src = plane  // Kopie für mutablee vImage_Buffer-Anforderung
+        var src = plane
         src.withUnsafeMutableBufferPointer { sp in
             dst.withUnsafeMutableBufferPointer { dp in
                 var s = vImage_Buffer(data: UnsafeMutableRawPointer(sp.baseAddress!),
                                       height: UInt(srcH), width: UInt(srcW), rowBytes: srcRowBytes)
                 var d = vImage_Buffer(data: UnsafeMutableRawPointer(dp.baseAddress!),
                                       height: UInt(dstH), width: UInt(dstW), rowBytes: dstRowBytes)
-                vImageScale_PlanarF(&s, &d, nil, vImage_Flags(kvImageHighQualityResampling))
+                // Bilinear statt Lanczos (kvImageHighQualityResampling): Lanczos hat negative
+                // Nebenkeulen die im Laplacian r−upsample(rNext) als Ringing/Halo landen.
+                vImageScale_PlanarF(&s, &d, nil, vImage_Flags(kvImageNoFlags))
             }
         }
         return dst
