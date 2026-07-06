@@ -2,6 +2,13 @@
 
 ---
 
+## 0.79.2
+**Bugfix: Filmsimulation bei bereits gescannten Fuji-Dateien fehlte nach Update**
+
+- Dateien, die unter v0.79.0 gescannt wurden, behielten leere Filmsimulations-Felder, weil die Migrations-Version nicht erhöht war — alle Fuji-Dateien werden beim nächsten App-Start erneut gescannt (Migration v2)
+
+---
+
 ## 0.79.1
 **Bugfix: Fuji Schwarz-Weiß-Filmsimulationen (Monochrome, Acros) wurden nicht erkannt**
 
