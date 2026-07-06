@@ -165,11 +165,11 @@ final class CatalogStore {
         if exec("ALTER TABLE images ADD COLUMN film_simulation TEXT") {
             exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf' OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg'")
         }
-        // 0.79.2: UInt32-Maske + ImageIO-Fallback für alle Fuji-Dateien neu erzwingen
+        // 0.79.3: Brute-force "FUJIFILM"-Signatursuche — alle Fuji-Dateien neu scannen
         let filmSimParserVersion = UserDefaults.standard.integer(forKey: "filmSimParserVersion")
-        if filmSimParserVersion < 2 {
+        if filmSimParserVersion < 3 {
             exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf' OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg'")
-            UserDefaults.standard.set(2, forKey: "filmSimParserVersion")
+            UserDefaults.standard.set(3, forKey: "filmSimParserVersion")
         }
     }
 

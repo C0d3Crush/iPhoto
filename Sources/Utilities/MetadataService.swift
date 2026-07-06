@@ -331,27 +331,14 @@ final class MetadataService {
         return (dr1403 ?? dr140B, filmSim)
     }
 
-    // Liest Fujifilm MakerNote-Tags aus JPEG-Daten (eingebettetes Preview bei RAF oder Datei selbst bei JPEG).
-    // Gibt (dynamicRange, filmSimulation) zurück — nil wenn kein Fujifilm-MakerNote gefunden.
-    func fujiMakerNoteValues(from jpegData: Data) -> (dr: Int?, filmSim: Int?) {
-        var pos = 2
-        while pos + 4 <= jpegData.count {
-            guard jpegData[pos] == 0xFF else { break }
-            let marker = jpegData[pos + 1]
-            if marker == 0xD9 || marker == 0xDA { break }
-            let segLen = Int(jpegData.readUInt16BE(at: pos + 2))
-            guard segLen >= 2 else { break }
-            if marker == 0xE1 {
-                let app1 = pos + 4
-                if app1 + 6 <= jpegData.count,
-                   jpegData[app1] == 0x45, jpegData[app1+1] == 0x78,
-                   jpegData[app1+2] == 0x69, jpegData[app1+3] == 0x66,
-                   jpegData[app1+4] == 0x00, jpegData[app1+5] == 0x00 {
-                    let result = parseFujiMakerNote(in: jpegData, tiffBase: app1 + 6)
-                    if result.dr != nil || result.filmSim != nil { return result }
-                }
-            }
-            pos += 2 + segLen
+    // Sucht die "FUJIFILM"-MakerNote-Signatur direkt in den Rohdaten (kein TIFF-Traversal nötig).
+    func fujiMakerNoteValues(from data: Data) -> (dr: Int?, filmSim: Int?) {
+        let sig = Data("FUJIFILM".utf8)
+        var lo = data.startIndex
+        while let r = data.range(of: sig, options: [], in: lo..<data.endIndex) {
+            let result = parseFujiMakerNoteBytes(data.subdata(in: r.lowerBound..<data.endIndex))
+            if result.dr != nil || result.filmSim != nil { return result }
+            lo = r.upperBound
         }
         return (nil, nil)
     }
@@ -391,72 +378,5 @@ final class MetadataService {
         "Sepia", "Acros", "Acros+R Filter", "Acros+Ye Filter", "Acros+G Filter",
     ]
 
-    private func parseFujiMakerNote(in data: Data, tiffBase: Int) -> (dr: Int?, filmSim: Int?) {
-        guard tiffBase + 8 <= data.count else { return (nil, nil) }
-        let isLE = data[tiffBase] == 0x49 && data[tiffBase + 1] == 0x49
-        guard isLE || (data[tiffBase] == 0x4D && data[tiffBase + 1] == 0x4D) else { return (nil, nil) }
-
-        let ifd0Off = isLE ? Int(data.readUInt32LE(at: tiffBase + 4)) : Int(data.readUInt32BE(at: tiffBase + 4))
-        let ifd0 = tiffBase + ifd0Off
-        guard ifd0 + 2 <= data.count else { return (nil, nil) }
-        let entryCount = isLE ? Int(data.readUInt16LE(at: ifd0)) : Int(data.readUInt16BE(at: ifd0))
-        guard entryCount > 0, entryCount < 500 else { return (nil, nil) }
-
-        // MakerNote (0x927C) sitzt im ExifIFD (0x8769 in IFD0), nicht direkt in IFD0.
-        var makerNoteOff: Int? = nil
-        for i in 0..<entryCount {
-            let e = ifd0 + 2 + i * 12
-            guard e + 12 <= data.count else { break }
-            let tag = isLE ? data.readUInt16LE(at: e) : data.readUInt16BE(at: e)
-            if tag == 0x927C {
-                makerNoteOff = isLE ? Int(data.readUInt32LE(at: e + 8)) : Int(data.readUInt32BE(at: e + 8))
-                break
-            }
-            if tag == 0x8769 {
-                let exifOff = isLE ? Int(data.readUInt32LE(at: e + 8)) : Int(data.readUInt32BE(at: e + 8))
-                let exifIFD = tiffBase + exifOff
-                guard exifIFD + 2 <= data.count else { continue }
-                let exifCount = isLE ? Int(data.readUInt16LE(at: exifIFD)) : Int(data.readUInt16BE(at: exifIFD))
-                guard exifCount > 0, exifCount < 500 else { continue }
-                for j in 0..<exifCount {
-                    let fe = exifIFD + 2 + j * 12
-                    guard fe + 12 <= data.count else { break }
-                    if (isLE ? data.readUInt16LE(at: fe) : data.readUInt16BE(at: fe)) == 0x927C {
-                        makerNoteOff = isLE ? Int(data.readUInt32LE(at: fe + 8)) : Int(data.readUInt32BE(at: fe + 8))
-                        break
-                    }
-                }
-                if makerNoteOff != nil { break }
-            }
-        }
-        guard let mnOff = makerNoteOff else { return (nil, nil) }
-
-        let mnBase = tiffBase + mnOff
-        guard mnBase + 12 <= data.count else { return (nil, nil) }
-
-        // Verify "FUJIFILM" signature
-        guard data.subdata(in: mnBase..<(mnBase + 8)) == Data("FUJIFILM".utf8) else { return (nil, nil) }
-
-        // Fujifilm MakerNote: "FUJIFILM"(8) + uint32 LE IFD-Offset(4) + IFD direkt danach.
-        let fujiIFDOff = Int(data.readUInt32LE(at: mnBase + 8))
-        let fujiIFD = mnBase + fujiIFDOff
-        guard fujiIFD + 2 <= data.count else { return (nil, nil) }
-        let fujiCount = Int(data.readUInt16LE(at: fujiIFD))
-        guard fujiCount > 0, fujiCount < 500 else { return (nil, nil) }
-
-        // 0x1401 = FilmSimulation, 0x1403 = DevelopmentDynamicRange, 0x140B = AutoDynamicRange
-        var filmSim1401: Int? = nil
-        var dr1403: Int? = nil
-        var dr140B: Int? = nil
-        for j in 0..<fujiCount {
-            let fe = fujiIFD + 2 + j * 12
-            guard fe + 12 <= data.count else { break }
-            let ftag = data.readUInt16LE(at: fe)
-            // UInt32 für 0x1401 — deckt sowohl SHORT- als auch LONG-Typ-Einträge ab
-            if ftag == 0x1401 { filmSim1401 = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
-            if ftag == 0x1403 { dr1403 = Int(data.readUInt16LE(at: fe + 8)) }
-            if ftag == 0x140B { dr140B = Int(data.readUInt16LE(at: fe + 8)) }
-        }
-        return (dr1403 ?? dr140B, filmSim1401)
-    }
 }
+

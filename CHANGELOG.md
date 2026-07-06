@@ -2,6 +2,15 @@
 
 ---
 
+## 0.79.3
+**Bugfix: Fuji Filmsimulation — alle Simulationen außer Provia wurden nicht erkannt**
+
+- Ursache: Die TIFF-IFD-Navigation (IFD0 → ExifIFD → MakerNote-Zeiger) schlug bei vielen Dateien still fehl; da 0x0000 (Provia) dem Rückgabewert 0 bei Out-of-Bounds-Reads entspricht, schien nur Provia zu funktionieren
+- Lösung: TIFF-Navigation vollständig ersetzt durch direkte Suche nach der „FUJIFILM"-Byte-Signatur im Rohdaten-Buffer — kein IFD-Traversal mehr nötig
+- Alle Fuji-Dateien werden beim nächsten App-Start erneut gescannt (Migration v3)
+
+---
+
 ## 0.79.2
 **Bugfix: Filmsimulation bei bereits gescannten Fuji-Dateien fehlte nach Update**
 
