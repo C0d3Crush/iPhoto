@@ -401,7 +401,8 @@ extension ImageViewModel {
                         }
                     let lens = metadata.first(where: { $0.key == "exif.LensModel" })?.value
                     let hdr = metadata.first(where: { $0.key == "exif.HDR" })?.value == "Ja"
-                    CatalogStore.shared.upsertExif(path: path, focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr)
+                    let filmSim = metadata.first(where: { $0.key == "exif.FilmSimulation" })?.value
+                    CatalogStore.shared.upsertExif(path: path, focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr, filmSimulation: filmSim)
                     done += 1
                     let d = done, t = total
                     DispatchQueue.main.async { [weak self] in

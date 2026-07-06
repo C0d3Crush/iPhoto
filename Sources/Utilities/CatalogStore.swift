@@ -29,7 +29,7 @@ final class CatalogStore {
 
     // In-memory EXIF cache — avoids queue.sync SQLite reads from the main thread during
     // smartFolderMatches, which was causing 300+ serialised DB queries per SwiftUI re-render.
-    private var exifCache: [String: (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool)] = [:]
+    private var exifCache: [String: (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool, filmSimulation: String?)] = [:]
     private let exifCacheLock = NSLock()
 
     init(dbPath: String? = nil) {
@@ -58,8 +58,8 @@ final class CatalogStore {
     }
 
     private func loadExifCache() {
-        let stmt = prepare("SELECT path, focal_length, iso, aperture, lens_model, hdr FROM images WHERE exif_scanned=1")
-        var rows: [(String, Double?, Int?, Double?, String?, Bool)] = []
+        let stmt = prepare("SELECT path, focal_length, iso, aperture, lens_model, hdr, film_simulation FROM images WHERE exif_scanned=1")
+        var rows: [(String, Double?, Int?, Double?, String?, Bool, String?)] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
             let path = String(cString: sqlite3_column_text(stmt, 0))
             let fl: Double? = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 1)
@@ -67,12 +67,13 @@ final class CatalogStore {
             let ap: Double? = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 3)
             let lens: String? = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 4))
             let hdr: Bool = sqlite3_column_int(stmt, 5) != 0
-            rows.append((path, fl, iso, ap, lens, hdr))
+            let filmSim: String? = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 6))
+            rows.append((path, fl, iso, ap, lens, hdr, filmSim))
         }
         sqlite3_finalize(stmt)
         exifCacheLock.lock()
-        for (path, fl, iso, ap, lens, hdr) in rows {
-            exifCache[path] = (focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr)
+        for (path, fl, iso, ap, lens, hdr, filmSim) in rows {
+            exifCache[path] = (focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr, filmSimulation: filmSim)
         }
         exifCacheLock.unlock()
     }
@@ -159,6 +160,10 @@ final class CatalogStore {
         if hdrParserVersion < 2 {
             exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf'")
             UserDefaults.standard.set(2, forKey: "hdrParserVersion")
+        }
+        // film_simulation added — reset Fuji files to trigger rescan
+        if exec("ALTER TABLE images ADD COLUMN film_simulation TEXT") {
+            exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf' OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg'")
         }
     }
 
@@ -251,10 +256,10 @@ final class CatalogStore {
         }
     }
 
-    func upsertExif(path: String, focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool = false) {
+    func upsertExif(path: String, focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool = false, filmSimulation: String? = nil) {
         queue.sync {
             let stmt = prepare("""
-                UPDATE images SET focal_length=?, iso=?, aperture=?, lens_model=?, exif_scanned=1, hdr=?
+                UPDATE images SET focal_length=?, iso=?, aperture=?, lens_model=?, exif_scanned=1, hdr=?, film_simulation=?
                 WHERE path=?
             """)
             if let v = focalLength { sqlite3_bind_double(stmt, 1, v) } else { sqlite3_bind_null(stmt, 1) }
@@ -262,21 +267,22 @@ final class CatalogStore {
             if let v = aperture { sqlite3_bind_double(stmt, 3, v) } else { sqlite3_bind_null(stmt, 3) }
             bindOpt(stmt, 4, lensModel)
             sqlite3_bind_int(stmt, 5, hdr ? 1 : 0)
-            bind(stmt, 6, path)
+            bindOpt(stmt, 6, filmSimulation)
+            bind(stmt, 7, path)
             sqlite3_step(stmt); sqlite3_finalize(stmt)
         }
         exifCacheLock.lock()
-        exifCache[path] = (focalLength: focalLength, iso: iso, aperture: aperture, lensModel: lensModel, hdr: hdr)
+        exifCache[path] = (focalLength: focalLength, iso: iso, aperture: aperture, lensModel: lensModel, hdr: hdr, filmSimulation: filmSimulation)
         exifCacheLock.unlock()
     }
 
-    func exif(forPath path: String) -> (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool)? {
+    func exif(forPath path: String) -> (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool, filmSimulation: String?)? {
         exifCacheLock.lock()
         let cached = exifCache[path]
         exifCacheLock.unlock()
         if let hit = cached { return hit }
         return queue.sync {
-            let stmt = prepare("SELECT focal_length, iso, aperture, lens_model, hdr FROM images WHERE path=?")
+            let stmt = prepare("SELECT focal_length, iso, aperture, lens_model, hdr, film_simulation FROM images WHERE path=?")
             bind(stmt, 1, path)
             guard sqlite3_step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
             let fl: Double? = sqlite3_column_type(stmt, 0) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 0)
@@ -284,8 +290,20 @@ final class CatalogStore {
             let ap: Double? = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 2)
             let lens: String? = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 3))
             let hdr: Bool = sqlite3_column_int(stmt, 4) != 0
+            let filmSim: String? = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(stmt, 5))
             sqlite3_finalize(stmt)
-            return (fl, iso, ap, lens, hdr)
+            return (fl, iso, ap, lens, hdr, filmSim)
+        }
+    }
+
+    func allFilmSimulations() -> [String] {
+        queue.sync {
+            let stmt = prepare("SELECT DISTINCT film_simulation FROM images WHERE film_simulation IS NOT NULL AND film_simulation != '' ORDER BY film_simulation")
+            var out: [String] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                out.append(String(cString: sqlite3_column_text(stmt, 0)))
+            }
+            sqlite3_finalize(stmt); return out
         }
     }
 

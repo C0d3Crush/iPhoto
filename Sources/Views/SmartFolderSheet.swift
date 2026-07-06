@@ -298,6 +298,22 @@ private struct CriterionRow: View {
                     .labelsHidden().frame(width: 120)
             }
 
+        // --- Film Simulation ---
+        case .filmSimulation:
+            Picker("", selection: $criterion.textValue) {
+                ForEach(MetadataService.allFilmSimulations, id: \.self) { sim in
+                    Text(sim).tag(sim)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(MenuPickerStyle())
+            .frame(width: 180)
+            .onAppear {
+                if criterion.textValue.isEmpty {
+                    criterion.textValue = MetadataService.allFilmSimulations.first ?? ""
+                }
+            }
+
         // --- Text-Attribute ---
         case .cameraMake, .cameraModel, .lens, .filename:
             TextField(textPlaceholder, text: $criterion.textValue)

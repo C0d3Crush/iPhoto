@@ -6,10 +6,13 @@ final class MetadataService {
     func readPhotoMetadata(from url: URL) -> [MetadataEntry] {
         var props: [String: Any]
         var fujiDynamicRange: Int? = nil
+        var fujiFilmSim: String? = nil
 
         if url.pathExtension.lowercased() == "raf" {
             let jpegData = rafEmbeddedJPEGData(url: url)
-            fujiDynamicRange = jpegData.flatMap { fujifilmDynamicRange(from: $0) }
+            let mnValues = jpegData.flatMap { fujiMakerNoteValues(from: $0) }
+            fujiDynamicRange = mnValues?.dr
+            fujiFilmSim = mnValues?.filmSim.flatMap { MetadataService.filmSimulationName($0) }.flatMap { $0.isEmpty ? nil : $0 }
 
             if #available(macOS 12.0, *) {
                 // macOS 12+: ImageIO unterstützt RAF nativ
@@ -30,6 +33,22 @@ final class MetadataService {
         } else {
             guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return [] }
             props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] ?? [:]
+            // Fuji JPEG: MakerNote aus rohen Dateidaten parsen (ImageIO liefert MakerNote nicht)
+            let ext = url.pathExtension.lowercased()
+            if ["jpg", "jpeg"].contains(ext) {
+                let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+                let make = tiff[kCGImagePropertyTIFFMake as String] as? String ?? ""
+                if make.localizedCaseInsensitiveContains("fuji"),
+                   let handle = try? FileHandle(forReadingFrom: url) {
+                    let raw = handle.readData(ofLength: 131_072)
+                    handle.closeFile()
+                    if raw.count >= 2, raw[0] == 0xFF, raw[1] == 0xD8 {
+                        let mnValues = fujiMakerNoteValues(from: raw)
+                        fujiDynamicRange = mnValues.dr
+                        fujiFilmSim = mnValues.filmSim.flatMap { MetadataService.filmSimulationName($0) }.flatMap { $0.isEmpty ? nil : $0 }
+                    }
+                }
+            }
         }
 
         let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
@@ -79,6 +98,9 @@ final class MetadataService {
         let customRendered = exif[kCGImagePropertyExifCustomRendered as String] as? Int ?? 0
         let isHDR = customRendered >= 2 || (fujiDynamicRange ?? 100) > 100
         entries.append(roEntry("HDR", "exif.HDR", .camera, isHDR ? "Ja" : "Nein"))
+        if let sim = fujiFilmSim {
+            entries.append(roEntry("Filmsimulation", "exif.FilmSimulation", .camera, sim))
+        }
 
         if !gps.isEmpty {
             let lat    = gps[kCGImagePropertyGPSLatitude     as String] as? Double ?? 0
@@ -273,9 +295,9 @@ final class MetadataService {
         return CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
     }
 
-    // Liest das Fujifilm MakerNote-Tag 0x1403 (DevelopmentDynamicRange) aus dem eingebetteten JPEG.
-    // Werte: 100 = Standard, 200/400/800 = DR-Modus (HDR). Gibt nil zurück wenn kein Fujifilm-MakerNote gefunden.
-    private func fujifilmDynamicRange(from jpegData: Data) -> Int? {
+    // Liest Fujifilm MakerNote-Tags aus JPEG-Daten (eingebettetes Preview bei RAF oder Datei selbst bei JPEG).
+    // Gibt (dynamicRange, filmSimulation) zurück — nil wenn kein Fujifilm-MakerNote gefunden.
+    func fujiMakerNoteValues(from jpegData: Data) -> (dr: Int?, filmSim: Int?) {
         var pos = 2
         while pos + 4 <= jpegData.count {
             guard jpegData[pos] == 0xFF else { break }
@@ -289,24 +311,60 @@ final class MetadataService {
                    jpegData[app1] == 0x45, jpegData[app1+1] == 0x78,
                    jpegData[app1+2] == 0x69, jpegData[app1+3] == 0x66,
                    jpegData[app1+4] == 0x00, jpegData[app1+5] == 0x00 {
-                    if let dr = parseFujiMakerNote(in: jpegData, tiffBase: app1 + 6) { return dr }
+                    let result = parseFujiMakerNote(in: jpegData, tiffBase: app1 + 6)
+                    if result.dr != nil || result.filmSim != nil { return result }
                 }
             }
             pos += 2 + segLen
         }
-        return nil
+        return (nil, nil)
     }
 
-    private func parseFujiMakerNote(in data: Data, tiffBase: Int) -> Int? {
-        guard tiffBase + 8 <= data.count else { return nil }
+    static func filmSimulationName(_ raw: Int) -> String {
+        switch raw {
+        case 0x0000: return "Provia/Standard"
+        case 0x0100: return "Velvia/Vivid"
+        case 0x0110: return "Velvia"
+        case 0x0200: return "Astia/Soft"
+        case 0x0300: return "Classic Chrome"
+        case 0x0400: return "Pro Neg. Hi"
+        case 0x0500: return "Pro Neg. Std"
+        case 0x0600: return "Classic Neg."
+        case 0x0700: return "Eterna/Cinema"
+        case 0x0800: return "Eterna Bleach Bypass"
+        case 0x0900: return "Nostalgic Neg."
+        case 0x0A00: return "Reala ACE"
+        case 0x8000: return "Monochrome"
+        case 0x8001: return "Monochrome+R Filter"
+        case 0x8002: return "Monochrome+Ye Filter"
+        case 0x8003: return "Monochrome+G Filter"
+        case 0x8100: return "Sepia"
+        case 0x8200: return "Acros"
+        case 0x8201: return "Acros+R Filter"
+        case 0x8202: return "Acros+Ye Filter"
+        case 0x8203: return "Acros+G Filter"
+        default: return ""
+        }
+    }
+
+    static let allFilmSimulations: [String] = [
+        "Provia/Standard", "Velvia/Vivid", "Velvia", "Astia/Soft",
+        "Classic Chrome", "Pro Neg. Hi", "Pro Neg. Std", "Classic Neg.",
+        "Eterna/Cinema", "Eterna Bleach Bypass", "Nostalgic Neg.", "Reala ACE",
+        "Monochrome", "Monochrome+R Filter", "Monochrome+Ye Filter", "Monochrome+G Filter",
+        "Sepia", "Acros", "Acros+R Filter", "Acros+Ye Filter", "Acros+G Filter",
+    ]
+
+    private func parseFujiMakerNote(in data: Data, tiffBase: Int) -> (dr: Int?, filmSim: Int?) {
+        guard tiffBase + 8 <= data.count else { return (nil, nil) }
         let isLE = data[tiffBase] == 0x49 && data[tiffBase + 1] == 0x49
-        guard isLE || (data[tiffBase] == 0x4D && data[tiffBase + 1] == 0x4D) else { return nil }
+        guard isLE || (data[tiffBase] == 0x4D && data[tiffBase + 1] == 0x4D) else { return (nil, nil) }
 
         let ifd0Off = isLE ? Int(data.readUInt32LE(at: tiffBase + 4)) : Int(data.readUInt32BE(at: tiffBase + 4))
         let ifd0 = tiffBase + ifd0Off
-        guard ifd0 + 2 <= data.count else { return nil }
+        guard ifd0 + 2 <= data.count else { return (nil, nil) }
         let entryCount = isLE ? Int(data.readUInt16LE(at: ifd0)) : Int(data.readUInt16BE(at: ifd0))
-        guard entryCount > 0, entryCount < 500 else { return nil }
+        guard entryCount > 0, entryCount < 500 else { return (nil, nil) }
 
         // MakerNote (0x927C) sitzt im ExifIFD (0x8769 in IFD0), nicht direkt in IFD0.
         var makerNoteOff: Int? = nil
@@ -335,33 +393,33 @@ final class MetadataService {
                 if makerNoteOff != nil { break }
             }
         }
-        guard let mnOff = makerNoteOff else { return nil }
+        guard let mnOff = makerNoteOff else { return (nil, nil) }
 
         let mnBase = tiffBase + mnOff
-        guard mnBase + 12 <= data.count else { return nil }
+        guard mnBase + 12 <= data.count else { return (nil, nil) }
 
         // Verify "FUJIFILM" signature
-        guard data.subdata(in: mnBase..<(mnBase + 8)) == Data("FUJIFILM".utf8) else { return nil }
+        guard data.subdata(in: mnBase..<(mnBase + 8)) == Data("FUJIFILM".utf8) else { return (nil, nil) }
 
         // Fujifilm MakerNote: "FUJIFILM"(8) + uint32 LE IFD-Offset(4) + IFD direkt danach.
-        // Getestet: MN+8 uint32LE = 12 → IFD bei MN+12, count = Anzahl Einträge.
         let fujiIFDOff = Int(data.readUInt32LE(at: mnBase + 8))
         let fujiIFD = mnBase + fujiIFDOff
-        guard fujiIFD + 2 <= data.count else { return nil }
+        guard fujiIFD + 2 <= data.count else { return (nil, nil) }
         let fujiCount = Int(data.readUInt16LE(at: fujiIFD))
-        guard fujiCount > 0, fujiCount < 500 else { return nil }
+        guard fujiCount > 0, fujiCount < 500 else { return (nil, nil) }
 
-        // 0x1403 = DevelopmentDynamicRange (manueller DR-Modus)
-        // 0x140B = AutoDynamicRange (automatischer DR-Modus) — nur eines der beiden ist gesetzt
+        // 0x1401 = FilmSimulation, 0x1403 = DevelopmentDynamicRange, 0x140B = AutoDynamicRange
+        var filmSim1401: Int? = nil
         var dr1403: Int? = nil
         var dr140B: Int? = nil
         for j in 0..<fujiCount {
             let fe = fujiIFD + 2 + j * 12
             guard fe + 12 <= data.count else { break }
             let ftag = data.readUInt16LE(at: fe)
+            if ftag == 0x1401 { filmSim1401 = Int(data.readUInt16LE(at: fe + 8)) }
             if ftag == 0x1403 { dr1403 = Int(data.readUInt16LE(at: fe + 8)) }
             if ftag == 0x140B { dr140B = Int(data.readUInt16LE(at: fe + 8)) }
         }
-        return dr1403 ?? dr140B
+        return (dr1403 ?? dr140B, filmSim1401)
     }
 }

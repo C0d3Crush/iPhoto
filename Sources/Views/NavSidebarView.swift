@@ -184,10 +184,17 @@ struct NavSidebarView: View {
         collapsibleSectionHeader("Intelligente Ordner", isCollapsed: smartFoldersCollapsed,
             onToggle: { withAnimation(.easeInOut(duration: 0.18)) { smartFoldersCollapsed.toggle() } },
             trailing: AnyView(
-                Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
-                    Image(systemName: "plus").font(.caption)
+                HStack(spacing: 4) {
+                    Button(action: { viewModel.createFilmSimulationSmartFolders() }) {
+                        Image(systemName: "camera.filters").font(.caption)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Filmsimulationsordner automatisch erstellen")
+                    Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
+                        Image(systemName: "plus").font(.caption)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
             ))
             .background(dropOnUngrouped ? Color.accentColor.opacity(0.15) : Color.clear)
             .cornerRadius(6)

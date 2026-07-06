@@ -150,6 +150,8 @@ extension ImageViewModel {
                     return applyNumericOp(c.op, value: ap, lo: c.numericValue, hi: c.numericValue2)
                 }
                 return false
+            case .filmSimulation:
+                return applyTextOp(c.op, haystack: catalogExifString(doc, key: "exif.FilmSimulation"), needle: c.textValue)
             case .cameraMake:
                 return applyTextOp(c.op, haystack: catalogExifString(doc, key: "tiff.Make"), needle: c.textValue)
             case .cameraModel:
@@ -214,10 +216,11 @@ extension ImageViewModel {
         if !inMem.isEmpty { return inMem }
         let exif = CatalogStore.shared.exif(forPath: doc.url.path)
         switch key {
-        case "tiff.Make":       return CatalogStore.shared.image(forPath: doc.url.path)?.cameraMake ?? ""
-        case "tiff.Model":      return CatalogStore.shared.image(forPath: doc.url.path)?.cameraModel ?? ""
-        case "exif.LensModel":  return exif?.lensModel ?? ""
-        default:                return ""
+        case "tiff.Make":             return CatalogStore.shared.image(forPath: doc.url.path)?.cameraMake ?? ""
+        case "tiff.Model":            return CatalogStore.shared.image(forPath: doc.url.path)?.cameraModel ?? ""
+        case "exif.LensModel":        return exif?.lensModel ?? ""
+        case "exif.FilmSimulation":   return exif?.filmSimulation ?? ""
+        default:                      return ""
         }
     }
 
@@ -667,6 +670,28 @@ extension ImageViewModel {
     func saveSmartFolders() {
         guard let data = try? JSONEncoder().encode(smartFolders) else { return }
         persistFileData(data, to: smartFoldersFileURL, description: "SmartFolder-Datei")
+    }
+
+    func createFilmSimulationSmartFolders() {
+        let known = CatalogStore.shared.allFilmSimulations()
+        let group = "Filmsimulationen"
+        var created = 0
+        for sim in known {
+            guard !sim.isEmpty else { continue }
+            guard !smartFolders.contains(where: { $0.name == sim && $0.group == group }) else { continue }
+            var criterion = SmartFolderCriterion()
+            criterion.attribute = .filmSimulation
+            criterion.op = .isExact
+            criterion.textValue = sim
+            var sf = SmartFolder(name: sim)
+            sf.criteria = [criterion]
+            sf.matchAll = true
+            sf.group = group
+            smartFolders.append(sf)
+            syncSmartFolderToFilesystem(sf)
+            created += 1
+        }
+        if created > 0 { saveSmartFolders() }
     }
 }
 
