@@ -2,6 +2,15 @@
 
 ---
 
+## 0.79.4
+**Feature: `iphoto-cli info` gibt jetzt alle EXIF/IPTC/GPS-Metadaten aus**
+
+- `iphoto-cli info <datei>` nutzt jetzt `MetadataService` — zeigt Kamera, Objektiv, ISO, Blende, Belichtung, Datum, Filmsimulation, GPS u.v.m. in gruppierten Abschnitten
+- `--json`-Flag für maschinenlesbare JSON-Ausgabe
+- `MetadataService.swift` und `MetadataEntry.swift` in den CLI-Build aufgenommen
+
+---
+
 ## 0.79.3
 **Bugfix: Fuji Filmsimulation — alle Simulationen außer Provia wurden nicht erkannt**
 

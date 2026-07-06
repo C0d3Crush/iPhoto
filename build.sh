@@ -107,11 +107,13 @@ CLI_SOURCES="\
     $ROOT/Sources/Models/RAWImageDecoder.swift \
     $ROOT/Sources/Models/HDRMerger.swift \
     $ROOT/Sources/Models/HotPixelResult.swift \
+    $ROOT/Sources/Models/MetadataEntry.swift \
     $ROOT/Sources/Utilities/Data+Extensions.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \
     $ROOT/Sources/Utilities/Log.swift \
     $ROOT/Sources/Utilities/BookmarkStore.swift \
     $ROOT/Sources/Utilities/HotPixelAnalyzer.swift \
+    $ROOT/Sources/Utilities/MetadataService.swift \
     $ROOT/Sources/CLI/main.swift"
 
 "$SWIFTC" \

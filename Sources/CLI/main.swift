@@ -11,12 +11,13 @@ private func printUsage() {
       iphoto-cli export <eingabe> --format jpeg|png|tiff|heif [--output <pfad>] [--quality 0.9]
       iphoto-cli export <datei1> <datei2> ... --format jpeg --output-dir <ordner>
       iphoto-cli hdr <ordner> --output-dir <ziel>
-      iphoto-cli info <eingabe>
+      iphoto-cli info <eingabe> [--json]
       iphoto-cli hotpixel <ordner>
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
     hdr:      Erzeugt 6 Preset-Varianten aus allen RAWs im Ordner (Vergleich)
+    info:     Gibt alle EXIF/IPTC/GPS-Metadaten aus; --json für maschinenlesbare Ausgabe
     """)
 }
 
@@ -29,6 +30,7 @@ private struct CLIArgs {
     var outputDir: URL? = nil
     var quality: Double = 0.9
     var command: String = "export"
+    var jsonOutput: Bool = false
 }
 
 private func parseArgs(_ args: [String]) -> CLIArgs? {
@@ -62,6 +64,8 @@ private func parseArgs(_ args: [String]) -> CLIArgs? {
                 fputs("Fehler: --quality braucht eine Zahl (0.0–1.0)\n", stderr); return nil
             }
             result.quality = max(0, min(1, q))
+        case "--json":
+            result.jsonOutput = true
         default:
             result.inputs.append(URL(fileURLWithPath: arg))
         }
@@ -128,26 +132,41 @@ private func runInfo(_ args: CLIArgs) -> Int32 {
         fputs("Fehler: Keine Eingabedatei angegeben\n", stderr)
         return 1
     }
-    guard let source = CGImageSourceCreateWithURL(input as CFURL, nil) else {
-        fputs("Fehler: Datei konnte nicht geöffnet werden: \(input.path)\n", stderr)
+    guard FileManager.default.fileExists(atPath: input.path) else {
+        fputs("Fehler: Datei nicht gefunden: \(input.path)\n", stderr)
         return 1
     }
-    let type = CGImageSourceGetType(source) as String? ?? "Unbekannt"
-    print("Datei  : \(input.lastPathComponent)")
-    print("Typ    : \(type)")
-    if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] {
-        let w = props["PixelWidth"] as? Int ?? 0
-        let h = props["PixelHeight"] as? Int ?? 0
-        if w > 0 { print("Größe  : \(w) × \(h) px") }
-        if let exif = props["{Exif}"] as? [String: Any] {
-            if let iso = exif["ISOSpeedRatings"] as? [Int] { print("ISO    : \(iso.first ?? 0)") }
-            if let ss = exif["ExposureTime"] as? Double { print("Belicht: 1/\(Int(1/ss))s") }
-            if let ap = exif["FNumber"] as? Double { print("Blende : f/\(ap)") }
+
+    let entries = MetadataService().readPhotoMetadata(from: input)
+
+    if args.jsonOutput {
+        var dict: [String: String] = [:]
+        dict["file"] = input.lastPathComponent
+        for e in entries where !e.value.isEmpty { dict[e.key] = e.value }
+        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
+           let str = String(data: data, encoding: .utf8) {
+            print(str)
         }
-        if let tiff = props["{TIFF}"] as? [String: Any] {
-            if let make = tiff["Make"] as? String { print("Kamera : \(make) \(tiff["Model"] as? String ?? "")") }
+        return 0
+    }
+
+    // Gruppenüberschriften
+    let groups: [(String, MetadataCategory)] = [
+        ("Allgemein", .general), ("Aufnahme", .dateTime),
+        ("Kamera",    .camera),  ("GPS",      .location),
+    ]
+    print("━━━  \(input.lastPathComponent)  ━━━")
+    for (title, cat) in groups {
+        let inCat = entries.filter { $0.category == cat && !$0.value.isEmpty }
+        guard !inCat.isEmpty else { continue }
+        print("\n[\(title)]")
+        let maxLen = inCat.map { $0.displayName.count }.max() ?? 0
+        for e in inCat {
+            let pad = String(repeating: " ", count: maxLen - e.displayName.count)
+            print("  \(e.displayName)\(pad)  \(e.value)")
         }
     }
+    print("")
     return 0
 }
 
