@@ -165,6 +165,12 @@ final class CatalogStore {
         if exec("ALTER TABLE images ADD COLUMN film_simulation TEXT") {
             exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf' OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg'")
         }
+        // 0.79.1: MakerNote-Fallback via ImageIO hinzugefügt — B&W-Simulationen wurden nicht erkannt
+        let filmSimParserVersion = UserDefaults.standard.integer(forKey: "filmSimParserVersion")
+        if filmSimParserVersion < 1 {
+            exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf' OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg'")
+            UserDefaults.standard.set(1, forKey: "filmSimParserVersion")
+        }
     }
 
     // MARK: - Migration from JSON

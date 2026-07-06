@@ -2,6 +2,16 @@
 
 ---
 
+## 0.79.1
+**Bugfix: Fuji Schwarz-Weiß-Filmsimulationen (Monochrome, Acros) wurden nicht erkannt**
+
+- Monochrome, Monochrome+R/G/Ye-Filter, Acros und Acros+R/G/Ye-Filter haben im MakerNote-Tag 0x1401 Werte mit gesetztem High-Bit (≥ 0x8000) — diese wurden beim 16-Bit-Lesen abgeschnitten; Lesen auf UInt32-Maske umgestellt
+- Zusätzlicher Fallback über `kCGImagePropertyExifMakerNote` (ImageIO) eingebaut: liefert den rohen MakerNote-Block direkt, ohne manuelles JPEG-Segment-Parsing
+- Leselimit für eingebettete JPEG-Previews und JPEG-Dateien von 128 KB auf 512 KB erhöht
+- Bestehende Fuji-Dateien werden beim nächsten App-Start automatisch neu gescannt (einmalige Migration via `filmSimParserVersion`)
+
+---
+
 ## 0.79.0
 **Feature: Fuji Filmsimulation — Filterkriterium und automatische Ordner**
 

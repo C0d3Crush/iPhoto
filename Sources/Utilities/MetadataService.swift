@@ -40,7 +40,7 @@ final class MetadataService {
                 let make = tiff[kCGImagePropertyTIFFMake as String] as? String ?? ""
                 if make.localizedCaseInsensitiveContains("fuji"),
                    let handle = try? FileHandle(forReadingFrom: url) {
-                    let raw = handle.readData(ofLength: 131_072)
+                    let raw = handle.readData(ofLength: 524_288)
                     handle.closeFile()
                     if raw.count >= 2, raw[0] == 0xFF, raw[1] == 0xD8 {
                         let mnValues = fujiMakerNoteValues(from: raw)
@@ -55,6 +55,17 @@ final class MetadataService {
         let iptc = props[kCGImagePropertyIPTCDictionary as String] as? [String: Any] ?? [:]
         let gps  = props[kCGImagePropertyGPSDictionary  as String] as? [String: Any] ?? [:]
         let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+
+        // Fallback: kCGImagePropertyExifMakerNote direkt von ImageIO parsen.
+        // ImageIO liefert die rohen MakerNote-Bytes bei Fuji RAFs und JPEGs — zuverlässiger als
+        // manuelles JPEG-Segment-Scanning und deckt B&W-Simulationen (Monochrome/Acros) ab.
+        if fujiFilmSim == nil {
+            if let mnData = exif[kCGImagePropertyExifMakerNote as String] as? Data {
+                let r = parseFujiMakerNoteBytes(mnData)
+                if fujiDynamicRange == nil { fujiDynamicRange = r.dr }
+                fujiFilmSim = r.filmSim.flatMap { MetadataService.filmSimulationName($0) }.flatMap { $0.isEmpty ? nil : $0 }
+            }
+        }
 
         var entries: [MetadataEntry] = []
 
@@ -285,7 +296,7 @@ final class MetadataService {
         let jpegLength = header.readUInt32BE(at: 0x58)
         guard jpegOffset > 0, jpegLength > 0 else { return nil }
         handle.seek(toFileOffset: UInt64(jpegOffset))
-        let data = handle.readData(ofLength: min(Int(jpegLength), 131_072))
+        let data = handle.readData(ofLength: min(Int(jpegLength), 524_288))
         guard data.count >= 4, data[0] == 0xFF, data[1] == 0xD8 else { return nil }
         return data
     }
@@ -293,6 +304,31 @@ final class MetadataService {
     private func propertiesFromJPEGData(_ data: Data) -> [String: Any]? {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         return CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
+    }
+
+    // Parst rohe Fujifilm MakerNote-Bytes (Signatur "FUJIFILM" + LE IFD-Offset + IFD).
+    // Genutzt als Fallback wenn ImageIO die MakerNote via kCGImagePropertyExifMakerNote liefert.
+    func parseFujiMakerNoteBytes(_ data: Data) -> (dr: Int?, filmSim: Int?) {
+        guard data.count >= 12,
+              data.subdata(in: 0..<8) == Data("FUJIFILM".utf8) else { return (nil, nil) }
+        let ifdOff = Int(data.readUInt32LE(at: 8))
+        let ifd = ifdOff
+        guard ifd + 2 <= data.count else { return (nil, nil) }
+        let count = Int(data.readUInt16LE(at: ifd))
+        guard count > 0, count < 500 else { return (nil, nil) }
+        var filmSim: Int? = nil
+        var dr1403: Int? = nil
+        var dr140B: Int? = nil
+        for j in 0..<count {
+            let fe = ifd + 2 + j * 12
+            guard fe + 12 <= data.count else { break }
+            let ftag = data.readUInt16LE(at: fe)
+            // UInt32 lesen und auf 16 Bit maskieren — robuster als reines UInt16 für LONG-Einträge
+            if ftag == 0x1401 { filmSim = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
+            if ftag == 0x1403 { dr1403  = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x140B { dr140B  = Int(data.readUInt16LE(at: fe + 8)) }
+        }
+        return (dr1403 ?? dr140B, filmSim)
     }
 
     // Liest Fujifilm MakerNote-Tags aus JPEG-Daten (eingebettetes Preview bei RAF oder Datei selbst bei JPEG).
@@ -416,7 +452,8 @@ final class MetadataService {
             let fe = fujiIFD + 2 + j * 12
             guard fe + 12 <= data.count else { break }
             let ftag = data.readUInt16LE(at: fe)
-            if ftag == 0x1401 { filmSim1401 = Int(data.readUInt16LE(at: fe + 8)) }
+            // UInt32 für 0x1401 — deckt sowohl SHORT- als auch LONG-Typ-Einträge ab
+            if ftag == 0x1401 { filmSim1401 = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
             if ftag == 0x1403 { dr1403 = Int(data.readUInt16LE(at: fe + 8)) }
             if ftag == 0x140B { dr140B = Int(data.readUInt16LE(at: fe + 8)) }
         }
