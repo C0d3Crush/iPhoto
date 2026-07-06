@@ -2,6 +2,15 @@
 
 ---
 
+## 0.79.0
+**Feature: Fuji Filmsimulation — Filterkriterium und automatische Ordner**
+
+- Fuji Filmsimulation wird jetzt aus RAW- und JPEG-Dateien von Fujifilm-Kameras ausgelesen (Provia, Velvia, Classic Chrome, Eterna, Acros u.v.m.)
+- Die erkannte Simulation erscheint im Metadaten-Panel als „Filmsimulation"
+- Neues Kriterium „Filmsimulation" in Intelligenten Ordnern — Dropdown mit allen 21 bekannten Simulationsnamen
+- Neuer Kamera-Filter-Button in der Sidebar erstellt automatisch einen Intelligenten Ordner pro erkannter Simulation (Gruppe „Filmsimulationen")
+- Bestehende Fuji-Dateien werden beim nächsten App-Start automatisch neu gescannt
+
 ## 0.78.4
 **Bugfix: HDR-Ergebnis zu hell — Farbraum auf sRGB (gamma) zurückgestellt**
 
