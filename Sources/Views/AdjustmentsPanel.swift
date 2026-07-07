@@ -64,32 +64,32 @@ struct AdjustmentsPanel: View {
                         Divider()
 
                         adjRow(label: "Belichtung",
-                               value: $viewModel.adjustments.exposure,
+                               key: \.exposure,
                                range: -2...2,
                                format: "%+.1f EV")
 
                         adjRow(label: "Helligkeit",
-                               value: $viewModel.adjustments.brightness,
+                               key: \.brightness,
                                range: -0.5...0.5,
                                format: "%+.2f")
 
                         adjRow(label: "Kontrast",
-                               value: $viewModel.adjustments.contrast,
+                               key: \.contrast,
                                range: 0.5...1.5,
                                format: "%.2f")
 
                         adjRow(label: "Sättigung",
-                               value: $viewModel.adjustments.saturation,
+                               key: \.saturation,
                                range: 0...2,
                                format: "%.2f")
 
                         adjRow(label: "Wärme",
-                               value: $viewModel.adjustments.warmth,
+                               key: \.warmth,
                                range: -1...1,
                                format: "%+.2f")
 
                         adjRow(label: "Farbstich",
-                               value: $viewModel.adjustments.tint,
+                               key: \.tint,
                                range: -1...1,
                                format: "%+.2f")
                     }
@@ -103,17 +103,17 @@ struct AdjustmentsPanel: View {
                             .fontWeight(.semibold)
 
                         adjRow(label: "Klarheit",
-                               value: $viewModel.adjustments.clarity,
+                               key: \.clarity,
                                range: -1...1,
                                format: "%+.2f")
 
                         adjRow(label: "Textur",
-                               value: $viewModel.adjustments.texture,
+                               key: \.texture,
                                range: -1...1,
                                format: "%+.2f")
 
                         adjRow(label: "Dunst",
-                               value: $viewModel.adjustments.dehaze,
+                               key: \.dehaze,
                                range: -1...1,
                                format: "%+.2f")
                     }
@@ -127,22 +127,22 @@ struct AdjustmentsPanel: View {
                             .fontWeight(.semibold)
 
                         adjRow(label: "Schärfen",
-                               value: $viewModel.adjustments.sharpenAmount,
+                               key: \.sharpenAmount,
                                range: 0...150,
                                format: "%.0f")
 
                         adjRow(label: "Schärfen-Radius",
-                               value: $viewModel.adjustments.sharpenRadius,
+                               key: \.sharpenRadius,
                                range: 0.5...3.0,
                                format: "%.1f px")
 
                         adjRow(label: "Luma-Rauschen",
-                               value: $viewModel.adjustments.lumaNoise,
+                               key: \.lumaNoise,
                                range: 0...100,
                                format: "%.0f")
 
                         adjRow(label: "Farb-Rauschen",
-                               value: $viewModel.adjustments.colorNoise,
+                               key: \.colorNoise,
                                range: 0...100,
                                format: "%.0f")
                     }
@@ -156,17 +156,17 @@ struct AdjustmentsPanel: View {
                             .fontWeight(.semibold)
 
                         adjRow(label: "Vignette",
-                               value: $viewModel.adjustments.vignetteAmount,
+                               key: \.vignetteAmount,
                                range: -100...100,
                                format: "%+.0f")
 
                         adjRow(label: "Verzeichnung",
-                               value: $viewModel.adjustments.distortion,
+                               key: \.distortion,
                                range: -100...100,
                                format: "%+.0f")
 
                         adjRow(label: "Farbsaum",
-                               value: $viewModel.adjustments.caAmount,
+                               key: \.caAmount,
                                range: 0...100,
                                format: "%.0f")
 
@@ -210,21 +210,40 @@ struct AdjustmentsPanel: View {
         viewModel.collection.currentDocument?.isRAW ?? false
     }
 
-    @ViewBuilder
-    private func adjRow(label: String, value: Binding<Double>, range: ClosedRange<Double>, format: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func adjRow(label: String, key: WritableKeyPath<AdjustmentState, Double>, range: ClosedRange<Double>, format: String) -> some View {
+        let value = Binding<Double>(
+            get: { viewModel.adjustments[keyPath: key] },
+            set: { viewModel.adjustments[keyPath: key] = $0 }
+        )
+        let bypassed = viewModel.bypassedAdjustments.contains(key)
+        return VStack(alignment: .leading, spacing: 4) {
             HStack {
+                Button(action: {
+                    if bypassed {
+                        viewModel.bypassedAdjustments.remove(key)
+                    } else {
+                        viewModel.bypassedAdjustments.insert(key)
+                    }
+                    viewModel.applyAdjustments()
+                }) {
+                    Image(systemName: bypassed ? "eye.slash" : "eye")
+                        .font(.caption2)
+                        .foregroundColor(bypassed ? .accentColor : .secondary)
+                        .frame(width: 16)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(bypassed ? "Effekt wieder einblenden" : "Effekt temporär ausblenden")
+
                 Text(label)
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                Text(String(format: format, value.wrappedValue))
-                    .font(.caption.monospacedDigit())
-                    .foregroundColor(.primary)
+                AdjustmentValueField(value: value, range: range, format: format)
             }
             Slider(value: value, in: range)
                 .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity)
+        .opacity(bypassed ? 0.5 : 1.0)
     }
 }

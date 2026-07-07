@@ -72,17 +72,17 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.80.1</string>
+	<string>0.81.0</string>
 	<key>CFBundleVersion</key>
-	<string>0.80.1</string>
+	<string>0.81.0</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>11.0</string>
 	<key>NSCameraUsageDescription</key>
 	<string>iPhoto verwendet die Kamera für Live-Vorschau und Tethered Shooting.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>iPhoto verwendet das Mikrofon für Videoaufnahmen via Tethering.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>iPhoto verwendet das Mikrofon für Videoaufnahmen via Tethering.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticTermination</key>

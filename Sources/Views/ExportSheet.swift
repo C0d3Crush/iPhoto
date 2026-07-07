@@ -18,6 +18,7 @@ struct ExportSheet: View {
     let documents: [ImageDocument]
     let selectedDocuments: [ImageDocument]
     let currentDocument: ImageDocument?
+    var currentAdjustments: AdjustmentState? = nil
     @Binding var isPresented: Bool
 
     @StateObject private var state = ExportState()
@@ -183,6 +184,19 @@ struct ExportSheet: View {
 
     // MARK: - Export
 
+    /// Anpassungen für ein Dokument: aktuelle Session-Anpassungen fürs aktive Bild,
+    /// sonst gespeicherte aus dem Katalog. Nil wenn neutral.
+    private func effectiveAdjustments(for doc: ImageDocument) -> AdjustmentState? {
+        let adj: AdjustmentState?
+        if doc.url == currentDocument?.url, let cur = currentAdjustments {
+            adj = cur
+        } else {
+            adj = CatalogStore.shared.loadAdjustments(path: doc.url.path)
+        }
+        guard let result = adj, result != AdjustmentState() else { return nil }
+        return result
+    }
+
     private func beginExport() {
         switch state.scope {
         case .current:   exportCurrent()
@@ -208,10 +222,14 @@ struct ExportSheet: View {
             state.totalCount = 1
             state.completedCount = 0
 
+            let adjustments = effectiveAdjustments(for: doc)
+
             DispatchQueue.global(qos: .userInitiated).async {
                 let image: CGImage
                 do {
-                    if let cached = doc.cgImage {
+                    if let adj = adjustments {
+                        image = try AdjustmentRenderer.renderForExport(document: doc, adjustments: adj)
+                    } else if let cached = doc.cgImage {
                         image = cached
                     } else {
                         image = try RAWImageDecoder.decode(url: doc.url)
@@ -257,6 +275,7 @@ struct ExportSheet: View {
                 to: folder,
                 format: fmt,
                 quality: q,
+                adjustmentsProvider: { effectiveAdjustments(for: $0) },
                 progressHandler: { completed, _ in
                     DispatchQueue.main.async { state.completedCount = completed }
                 },

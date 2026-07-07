@@ -6,6 +6,7 @@ extension ImageExporter {
         to folderURL: URL,
         format: ExportFormat,
         quality: Double,
+        adjustmentsProvider: @escaping (ImageDocument) -> AdjustmentState? = { _ in nil },
         progressHandler: @escaping (Int, Int) -> Void,
         completion: @escaping (ExportResult) -> Void
     ) {
@@ -17,7 +18,9 @@ extension ImageExporter {
             for (i, doc) in documents.enumerated() {
                 let image: CGImage
                 do {
-                    if let cached = doc.cgImage {
+                    if let adj = adjustmentsProvider(doc) {
+                        image = try AdjustmentRenderer.renderForExport(document: doc, adjustments: adj)
+                    } else if let cached = doc.cgImage {
                         image = cached
                     } else {
                         image = try RAWImageDecoder.decode(url: doc.url)

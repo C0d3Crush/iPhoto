@@ -190,7 +190,7 @@ private struct LocalAdjEditor: View {
 
             // Intensity + invert
             miniRow("Stärke", value: binding(\.intensity), range: 0...1, format: "%.0f%%",
-                    displayTransform: { $0 * 100 })
+                    displayScale: 100)
             Toggle("Maske invertieren", isOn: binding(\.inverted))
                 .font(.caption2)
                 .toggleStyle(CheckboxToggleStyle())
@@ -263,17 +263,16 @@ private struct LocalAdjEditor: View {
                          value: Binding<Double>,
                          range: ClosedRange<Double>,
                          format: String,
-                         displayTransform: ((Double) -> Double)? = nil) -> some View {
+                         displayScale: Double = 1) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(label)
                     .font(.caption2)
                     .foregroundColor(.secondary)
                 Spacer()
-                let display = displayTransform?(value.wrappedValue) ?? value.wrappedValue
-                Text(String(format: format, display))
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.primary)
+                AdjustmentValueField(value: value, range: range, format: format,
+                                     displayScale: displayScale,
+                                     font: .system(size: 9, design: .monospaced))
             }
             Slider(value: value, in: range)
         }

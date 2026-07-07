@@ -2,6 +2,16 @@
 
 ---
 
+## 0.81.0
+**Feature: Werte eintippen + Auge-Toggle bei Anpassungen — Export rendert jetzt Anpassungen mit**
+
+- Der Wert neben jedem Anpassungs-Regler ist jetzt ein Textfeld — Zahl eintippen und mit Enter bestätigen (Komma oder Punkt als Dezimaltrenner, Werte werden auf den gültigen Bereich begrenzt)
+- Neues Auge-Symbol neben jedem Regler: Effekt einzeln temporär ausblenden, um den Unterschied zu sehen — Reglerwert bleibt dabei erhalten
+- Bugfix: Exportieren rendert jetzt die Anpassungen ins exportierte Bild (volle Auflösung, inkl. lokaler Anpassungen, Kurven, Zuschnitt) — vorher wurde nur das unbearbeitete Original gespeichert
+- Batch-Export wendet gespeicherte Anpassungen jedes Bildes aus dem Katalog an
+
+---
+
 ## 0.80.1
 **Bugfix: Crash beim Navigieren durch Thumbnails behoben (macOS 11)**
 

@@ -86,6 +86,7 @@ struct ContentView: View {
                 documents: viewModel.collection.documents,
                 selectedDocuments: selectedDocs,
                 currentDocument: viewModel.collection.currentDocument,
+                currentAdjustments: viewModel.hasActiveAdjustments ? viewModel.adjustments : nil,
                 isPresented: $viewModel.showExportSheet
             )
         }

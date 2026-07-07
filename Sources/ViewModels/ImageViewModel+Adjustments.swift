@@ -12,7 +12,15 @@ extension ImageViewModel {
             return
         }
 
-        let snap        = adjustments
+        var snap = adjustments
+        if !bypassedAdjustments.isEmpty {
+            let neutral = AdjustmentState()
+            for kp in bypassedAdjustments {
+                if let dkp = kp as? WritableKeyPath<AdjustmentState, Double> {
+                    snap[keyPath: dkp] = neutral[keyPath: dkp]
+                }
+            }
+        }
         let token       = UUID()
         adjToken        = token
         let useRAW      = collection.currentDocument?.isRAW ?? false
@@ -26,8 +34,12 @@ extension ImageViewModel {
             var exposureApplied = false
             var wbApplied = false
 
+            let longestEdge  = max(nativeSize.width, nativeSize.height)
+            let previewScale = longestEdge > 0 ? min(1.0, 1500.0 / Double(longestEdge)) : 1.0
+
             if useRAW, let url = rawURL,
-               let result = self.applyRAWPipeline(url: url, snap: snap, nativeSize: nativeSize) {
+               let result = AdjustmentRenderer.rawPipeline(url: url, snap: snap,
+                                                           scale: previewScale, draftMode: true) {
                 ci = result.image
                 exposureApplied = result.exposureApplied
                 wbApplied = result.wbApplied
@@ -35,13 +47,8 @@ extension ImageViewModel {
                 ci = CIImage(cgImage: source)
             }
 
-            ci = self.applyLensCorrections(ci, snap: snap)
-            ci = self.applyToneAndColor(ci, snap: snap, exposureApplied: exposureApplied, wbApplied: wbApplied)
-            ci = self.applyNoiseAndSharpening(ci, snap: snap)
-            ci = self.applyDetailAndHaze(ci, snap: snap)
-            ci = self.applyRGBCurvesLUT(ci, snap: snap)
-            if !snap.localAdjustments.isEmpty { ci = self.applyLocalAdjustments(snap.localAdjustments, to: ci) }
-            ci = self.applyGeometryAndCrop(ci, snap: snap)
+            ci = AdjustmentRenderer.pipeline(ci, snap: snap,
+                                             exposureApplied: exposureApplied, wbApplied: wbApplied)
 
             let result = self.adjCIContext.createCGImage(ci, from: ci.extent)
             DispatchQueue.main.async { [weak self] in
@@ -50,309 +57,6 @@ extension ImageViewModel {
                 self.displayImageVersion = UUID()
             }
         }
-    }
-
-    // MARK: - Pipeline Stages
-
-    private struct RAWResult { let image: CIImage; let exposureApplied: Bool; let wbApplied: Bool }
-
-    private func applyRAWPipeline(url: URL, snap: AdjustmentState, nativeSize: CGSize) -> RAWResult? {
-        let longestEdge  = max(nativeSize.width, nativeSize.height)
-        let previewScale = longestEdge > 0 ? min(1.0, 1500.0 / Double(longestEdge)) : 1.0
-        let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
-        defer { stopAccess() }
-        guard let rf = CIFilter(imageURL: accessURL, options: nil) else { return nil }
-
-        let keys = rf.inputKeys
-        if keys.contains(kCIInputEVKey as String) {
-            rf.setValue(Float(snap.exposure), forKey: kCIInputEVKey)
-        }
-        if keys.contains("inputAllowDraftMode") {
-            rf.setValue(true, forKey: "inputAllowDraftMode")
-        }
-        if keys.contains("inputScaleFactor") {
-            rf.setValue(Float(previewScale), forKey: "inputScaleFactor")
-        }
-        var wbApplied = false
-        if snap.warmth != 0 || snap.tint != 0 {
-            let kelvin  = Float(6500.0 - snap.warmth * 2500.0)
-            let tintVal = Float(-snap.tint * 150.0)
-            if keys.contains("inputNeutralTemperature") { rf.setValue(kelvin,  forKey: "inputNeutralTemperature") }
-            if keys.contains("inputNeutralTint")        { rf.setValue(tintVal, forKey: "inputNeutralTint") }
-            wbApplied = true
-        }
-        guard let rawCI = rf.outputImage else { return nil }
-        return RAWResult(image: rawCI, exposureApplied: true, wbApplied: wbApplied)
-    }
-
-    private func applyLensCorrections(_ ci: CIImage, snap: AdjustmentState) -> CIImage {
-        var out = ci
-        if snap.caAmount > 0, let k = LensFilters.caKernel,
-           let result = k.apply(extent: out.extent, roiCallback: { _, r in r }, arguments: [out, Float(snap.caAmount)]) {
-            out = result
-        }
-        if snap.distortion != 0, let k = LensFilters.distortKernel {
-            let k1  = Float(-snap.distortion * 0.003)
-            let ext = CIVector(cgRect: out.extent)
-            if let result = k.apply(extent: out.extent,
-                                    roiCallback: { _, r in r.insetBy(dx: -4, dy: -4) },
-                                    image: out, arguments: [ext, k1]) {
-                out = result.cropped(to: out.extent)
-            }
-        }
-        return out
-    }
-
-    private func applyToneAndColor(_ ci: CIImage, snap: AdjustmentState,
-                                   exposureApplied: Bool, wbApplied: Bool) -> CIImage {
-        var out = ci
-        if !exposureApplied, snap.exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
-            f.setValue(out, forKey: kCIInputImageKey)
-            f.setValue(snap.exposure, forKey: kCIInputEVKey)
-            if let r = f.outputImage { out = r }
-        }
-        if snap.brightness != 0 || snap.contrast != 1 || snap.saturation != 1,
-           let f = CIFilter(name: "CIColorControls") {
-            f.setValue(out, forKey: kCIInputImageKey)
-            f.setValue(snap.brightness, forKey: kCIInputBrightnessKey)
-            f.setValue(snap.contrast,   forKey: kCIInputContrastKey)
-            f.setValue(snap.saturation, forKey: kCIInputSaturationKey)
-            if let r = f.outputImage { out = r }
-        }
-        if !wbApplied, snap.warmth != 0 || snap.tint != 0, let f = CIFilter(name: "CITemperatureAndTint") {
-            f.setValue(out, forKey: kCIInputImageKey)
-            f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-            f.setValue(CIVector(x: CGFloat(6500 - snap.warmth * 2500), y: CGFloat(-snap.tint * 150)),
-                       forKey: "inputTargetNeutral")
-            if let r = f.outputImage { out = r }
-        }
-        if snap.dehaze != 0, let f = CIFilter(name: "CIColorControls") {
-            f.setValue(out, forKey: kCIInputImageKey)
-            f.setValue(-snap.dehaze * 0.05,      forKey: kCIInputBrightnessKey)
-            f.setValue(1.0 + snap.dehaze * 0.25, forKey: kCIInputContrastKey)
-            f.setValue(1.0,                      forKey: kCIInputSaturationKey)
-            if let r = f.outputImage { out = r }
-        }
-        return out
-    }
-
-    private func applyNoiseAndSharpening(_ ci: CIImage, snap: AdjustmentState) -> CIImage {
-        var out = ci
-        if snap.lumaNoise > 0, let f = CIFilter(name: "CINoiseReduction") {
-            f.setValue(out, forKey: kCIInputImageKey)
-            f.setValue(snap.lumaNoise * 0.001, forKey: "inputNoiseLevel")
-            f.setValue(0.4, forKey: kCIInputSharpnessKey)
-            if let r = f.outputImage { out = r }
-        }
-        if snap.colorNoise > 0, let blurF = CIFilter(name: "CIGaussianBlur") {
-            blurF.setValue(out, forKey: kCIInputImageKey)
-            blurF.setValue(snap.colorNoise * 0.25, forKey: kCIInputRadiusKey)
-            if let blurred = blurF.outputImage?.cropped(to: out.extent),
-               let blendF  = CIFilter(name: "CILuminosityBlendMode") {
-                blendF.setValue(out,     forKey: kCIInputImageKey)
-                blendF.setValue(blurred, forKey: kCIInputBackgroundImageKey)
-                if let r = blendF.outputImage { out = r }
-            }
-        }
-        if snap.sharpenAmount > 0, let f = CIFilter(name: "CIUnsharpMask") {
-            f.setValue(out, forKey: kCIInputImageKey)
-            f.setValue(snap.sharpenRadius,         forKey: kCIInputRadiusKey)
-            f.setValue(snap.sharpenAmount / 100.0, forKey: kCIInputIntensityKey)
-            if let r = f.outputImage { out = r }
-        }
-        return out
-    }
-
-    private func applyDetailAndHaze(_ ci: CIImage, snap: AdjustmentState) -> CIImage {
-        var out = ci
-        if snap.clarity != 0, let f = CIFilter(name: "CIUnsharpMask") {
-            f.setValue(out, forKey: kCIInputImageKey)
-            f.setValue(20.0, forKey: kCIInputRadiusKey)
-            f.setValue(Swift.max(0, snap.clarity) * 2.0, forKey: kCIInputIntensityKey)
-            if let r = f.outputImage { out = r }
-        }
-        if snap.texture != 0, let f = CIFilter(name: "CIUnsharpMask") {
-            f.setValue(out, forKey: kCIInputImageKey)
-            f.setValue(4.0, forKey: kCIInputRadiusKey)
-            f.setValue(Swift.max(0, snap.texture) * 2.5, forKey: kCIInputIntensityKey)
-            if let r = f.outputImage { out = r }
-        }
-        return out
-    }
-
-    private func applyRGBCurvesLUT(_ ci: CIImage, snap: AdjustmentState) -> CIImage {
-        var out = ci
-
-        let curveDef = zip(snap.curvePoints, CurvesView.defaultPoints)
-            .allSatisfy { abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001 }
-        if !curveDef, let f = CIFilter(name: "CIToneCurve") {
-            f.setValue(out, forKey: kCIInputImageKey)
-            for (i, pt) in snap.curvePoints.enumerated() {
-                f.setValue(CIVector(x: pt.x, y: pt.y), forKey: "inputPoint\(i)")
-            }
-            if let r = f.outputImage { out = r }
-        }
-
-        let rDef = isDefaultCurve(snap.curveR)
-        let gDef = isDefaultCurve(snap.curveG)
-        let bDef = isDefaultCurve(snap.curveB)
-        guard !rDef || !gDef || !bDef else { return out }
-
-        let lutR = CurvesView.evaluateSpline(snap.curveR)
-        let lutG = CurvesView.evaluateSpline(snap.curveG)
-        let lutB = CurvesView.evaluateSpline(snap.curveB)
-        let size = 32
-        var cubeData = [Float]()
-        cubeData.reserveCapacity(size * size * size * 4)
-        for b in 0..<size {
-            for g in 0..<size {
-                for r in 0..<size {
-                    cubeData.append(Float(lutR[Swift.min(255, r * 255 / (size - 1))]))
-                    cubeData.append(Float(lutG[Swift.min(255, g * 255 / (size - 1))]))
-                    cubeData.append(Float(lutB[Swift.min(255, b * 255 / (size - 1))]))
-                    cubeData.append(1.0)
-                }
-            }
-        }
-        if let f = CIFilter(name: "CIColorCube") {
-            f.setValue(size, forKey: "inputCubeDimension")
-            f.setValue(Data(bytes: cubeData, count: cubeData.count * MemoryLayout<Float>.size) as NSData,
-                       forKey: "inputCubeData")
-            f.setValue(out, forKey: kCIInputImageKey)
-            if let r = f.outputImage { out = r }
-        }
-        return out
-    }
-
-    private func applyGeometryAndCrop(_ ci: CIImage, snap: AdjustmentState) -> CIImage {
-        var out = ci
-        let normalizedTurns = ((snap.turns % 4) + 4) % 4
-        if normalizedTurns != 0 {
-            let angle = -CGFloat(normalizedTurns) * (.pi / 2)
-            let cx = out.extent.midX, cy = out.extent.midY
-            var t = CGAffineTransform(translationX: cx, y: cy)
-            t = t.rotated(by: angle)
-            t = t.translatedBy(x: -cx, y: -cy)
-            let rotated = out.transformed(by: t)
-            out = rotated.transformed(by: CGAffineTransform(translationX: -rotated.extent.minX,
-                                                             y: -rotated.extent.minY))
-        }
-        if snap.rotation != 0 {
-            let angle = CGFloat(snap.rotation) * .pi / 180.0
-            let cx = out.extent.midX, cy = out.extent.midY
-            var t = CGAffineTransform(translationX: cx, y: cy)
-            t = t.rotated(by: angle)
-            t = t.translatedBy(x: -cx, y: -cy)
-            let rotated = out.transformed(by: t)
-            out = rotated.transformed(by: CGAffineTransform(translationX: -rotated.extent.minX,
-                                                             y: -rotated.extent.minY))
-        }
-        let identityRect = CGRect(x: 0, y: 0, width: 1, height: 1)
-        if !snap.cropRect.equalTo(identityRect) {
-            let ext = out.extent
-            let px = CGRect(x: ext.minX + snap.cropRect.minX * ext.width,
-                            y: ext.minY + (1.0 - snap.cropRect.maxY) * ext.height,
-                            width:  snap.cropRect.width  * ext.width,
-                            height: snap.cropRect.height * ext.height)
-            let cropped = out.cropped(to: px)
-            out = cropped.transformed(by: CGAffineTransform(translationX: -cropped.extent.minX,
-                                                             y: -cropped.extent.minY))
-        }
-        if snap.vignetteAmount != 0, let f = CIFilter(name: "CIVignetteEffect") {
-            let center = CIVector(x: out.extent.midX, y: out.extent.midY)
-            let radius = hypot(out.extent.width, out.extent.height) * 0.55
-            f.setValue(out,                          forKey: kCIInputImageKey)
-            f.setValue(center,                       forKey: kCIInputCenterKey)
-            f.setValue(radius,                       forKey: kCIInputRadiusKey)
-            f.setValue(-snap.vignetteAmount / 100.0, forKey: kCIInputIntensityKey)
-            f.setValue(0.5,                          forKey: "inputFalloff")
-            if let r = f.outputImage { out = r }
-        }
-        return out
-    }
-
-    // MARK: - Local Adjustments
-
-    private func applyLocalAdjustments(_ locals: [LocalAdjustment], to ci: CIImage) -> CIImage {
-        var result = ci
-        let ext = ci.extent
-
-        for adj in locals {
-            guard !adj.delta.isNeutral else { continue }
-            guard var mask = buildMask(adj.mask, extent: ext) else { continue }
-
-            if adj.intensity < 1.0, let f = CIFilter(name: "CIColorMatrix") {
-                let v = CGFloat(adj.intensity)
-                f.setValue(mask, forKey: kCIInputImageKey)
-                f.setValue(CIVector(x: v, y: 0, z: 0, w: 0), forKey: "inputRVector")
-                f.setValue(CIVector(x: 0, y: v, z: 0, w: 0), forKey: "inputGVector")
-                f.setValue(CIVector(x: 0, y: 0, z: v, w: 0), forKey: "inputBVector")
-                f.setValue(CIVector(x: 0, y: 0, z: 0, w: v), forKey: "inputAVector")
-                if let out = f.outputImage { mask = out }
-            }
-            if adj.inverted, let f = CIFilter(name: "CIColorInvert") {
-                f.setValue(mask, forKey: kCIInputImageKey)
-                if let out = f.outputImage { mask = out }
-            }
-            mask = mask.cropped(to: ext)
-
-            var deltaCI = result
-            let d = adj.delta
-            if d.exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
-                f.setValue(deltaCI, forKey: kCIInputImageKey)
-                f.setValue(d.exposure, forKey: kCIInputEVKey)
-                if let out = f.outputImage { deltaCI = out }
-            }
-            if d.brightness != 0 || d.contrast != 1.0 || d.saturation != 1.0,
-               let f = CIFilter(name: "CIColorControls") {
-                f.setValue(deltaCI, forKey: kCIInputImageKey)
-                f.setValue(d.brightness, forKey: kCIInputBrightnessKey)
-                f.setValue(d.contrast,   forKey: kCIInputContrastKey)
-                f.setValue(d.saturation, forKey: kCIInputSaturationKey)
-                if let out = f.outputImage { deltaCI = out }
-            }
-            if (d.warmth != 0 || d.tint != 0), let f = CIFilter(name: "CITemperatureAndTint") {
-                f.setValue(deltaCI, forKey: kCIInputImageKey)
-                f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-                f.setValue(CIVector(x: CGFloat(6500 - d.warmth * 2500), y: CGFloat(-d.tint * 150)),
-                           forKey: "inputTargetNeutral")
-                if let out = f.outputImage { deltaCI = out }
-            }
-            if let blend = CIFilter(name: "CIBlendWithMask") {
-                blend.setValue(result,  forKey: kCIInputBackgroundImageKey)
-                blend.setValue(deltaCI, forKey: kCIInputImageKey)
-                blend.setValue(mask,    forKey: kCIInputMaskImageKey)
-                if let out = blend.outputImage { result = out }
-            }
-        }
-        return result
-    }
-
-    private func buildMask(_ shape: MaskShape, extent: CGRect) -> CIImage? {
-        let w = extent.width, h = extent.height
-        switch shape {
-        case .linearGradient(let sx, let sy, let ex, let ey):
-            guard let f = CIFilter(name: "CILinearGradient") else { return nil }
-            f.setValue(CIVector(x: extent.minX + CGFloat(sx) * w, y: extent.minY + (1 - CGFloat(sy)) * h), forKey: "inputPoint0")
-            f.setValue(CIVector(x: extent.minX + CGFloat(ex) * w, y: extent.minY + (1 - CGFloat(ey)) * h), forKey: "inputPoint1")
-            f.setValue(CIColor.white, forKey: "inputColor0")
-            f.setValue(CIColor.black, forKey: "inputColor1")
-            return f.outputImage
-        case .radialGradient(let cx, let cy, let r, let feather):
-            guard let f = CIFilter(name: "CIRadialGradient") else { return nil }
-            let center = CIVector(x: extent.minX + CGFloat(cx) * w, y: extent.minY + (1 - CGFloat(cy)) * h)
-            let innerR = CGFloat(r) * min(w, h)
-            f.setValue(center, forKey: "inputCenter")
-            f.setValue(innerR, forKey: "inputRadius0")
-            f.setValue(innerR * CGFloat(1 + max(0.01, feather)), forKey: "inputRadius1")
-            f.setValue(CIColor.white, forKey: "inputColor0")
-            f.setValue(CIColor.black, forKey: "inputColor1")
-            return f.outputImage
-        }
-    }
-
-    private func isDefaultCurve(_ pts: [CGPoint]) -> Bool {
-        zip(pts, CurvesView.defaultPoints).allSatisfy { abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001 }
     }
 
     // MARK: - Rotation

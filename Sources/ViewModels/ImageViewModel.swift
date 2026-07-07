@@ -54,6 +54,8 @@ class ImageViewModel: ObservableObject {
     @Published var displayImageVersion: UUID = UUID()
     @Published var cropToolActive: Bool = false
     @Published var showOriginal: Bool = false
+    /// Temporär ausgeblendete Einzel-Effekte (Auge-Toggle) — wird nicht persistiert
+    @Published var bypassedAdjustments: Set<PartialKeyPath<AdjustmentState>> = []
     @Published var copiedAdjustments: AdjustmentState? = nil
     @Published var userPresets: [Preset] = []
 
