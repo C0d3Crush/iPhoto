@@ -675,23 +675,28 @@ extension ImageViewModel {
     func createFilmSimulationSmartFolders() {
         let known = CatalogStore.shared.allFilmSimulations()
         let group = "Filmsimulationen"
-        var created = 0
+        var changed = 0
         for sim in known {
             guard !sim.isEmpty else { continue }
-            guard !smartFolders.contains(where: { $0.name == sim && $0.group == group }) else { continue }
-            var criterion = SmartFolderCriterion()
-            criterion.attribute = .filmSimulation
-            criterion.op = .isExact
-            criterion.textValue = sim
-            var sf = SmartFolder(name: sim)
-            sf.criteria = [criterion]
-            sf.matchAll = true
-            sf.group = group
-            smartFolders.append(sf)
-            syncSmartFolderToFilesystem(sf)
-            created += 1
+            if let idx = smartFolders.firstIndex(where: { $0.name == sim && ($0.group == nil || $0.group != group) }) {
+                smartFolders[idx].group = group
+                syncSmartFolderToFilesystem(smartFolders[idx])
+                changed += 1
+            } else if !smartFolders.contains(where: { $0.name == sim && $0.group == group }) {
+                var criterion = SmartFolderCriterion()
+                criterion.attribute = .filmSimulation
+                criterion.op = .isExact
+                criterion.textValue = sim
+                var sf = SmartFolder(name: sim)
+                sf.criteria = [criterion]
+                sf.matchAll = true
+                sf.group = group
+                smartFolders.append(sf)
+                syncSmartFolderToFilesystem(sf)
+                changed += 1
+            }
         }
-        if created > 0 { saveSmartFolders() }
+        if changed > 0 { saveSmartFolders() }
     }
 }
 

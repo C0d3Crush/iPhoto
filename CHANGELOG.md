@@ -2,6 +2,19 @@
 
 ---
 
+## 0.80.0
+**Feature: Metadaten-Ladefortschritt in der Loading-Bar + Fuji B&W/Acros-Erkennung**
+
+- Metadaten werden jetzt beim App-Start und beim Öffnen eines Ordners automatisch im Hintergrund geladen — Fortschritt erscheint in der Loading-Bar unten links
+- Ladebalken zeigt genau die Anzahl der Bilder des aktuell geladenen Ordners (nicht die gesamte Bibliothek)
+- Fuji B&W-Filmsimulationen (Monochrome, Monochrome+Filter, Sepia, Acros, Acros+Filter) werden jetzt über EXIF-Tag 0x1003 (Saturation) erkannt — betrifft X-T4 und neuere Modelle
+- Neue Filmsimualtions-Codes: Astia/Soft (0x0120) und Pro Neg. Hi (0x0501) für X-T4
+- Alle Fuji-Dateien werden beim nächsten App-Start erneut gescannt (Migration v4)
+- Bugfix: Smart-Folder-Erstellen duplizierte ungegruppierte Ordner statt sie zu verschieben
+- Bugfix: Crash-Fixes in RAF-Decoder — Semaphore-Limit für parallele ImageIO-Decodes, korrekte Semaphore-Position vor CIImage-Rotation, FileHandle auf werfende API umgestellt
+
+---
+
 ## 0.79.4
 **Feature: `iphoto-cli info` gibt jetzt alle EXIF/IPTC/GPS-Metadaten aus**
 

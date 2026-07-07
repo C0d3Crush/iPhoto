@@ -13,11 +13,13 @@ var iphotoLastOpBuf = [CChar](repeating: 0, count: 512)
 // wenn 20+ Thumbnails gleichzeitig dekodiert werden.
 private let sharedCIContext = CIContext(options: [.useSoftwareRenderer: false])
 
-// Begrenzt gleichzeitige GPU-Renders auf 2 — verhindert Metal-Überlastung (→ SIGABRT)
-// bei parallelem Thumbnail-Laden großer RAF-Alben.
-// Niedrig halten: ciSemaphore ist nur für Vollbild-Decodes (decode()), nicht für Thumbnails,
-// da Thumbnails jetzt CGImageSourceCreateThumbnailAtIndex nutzen (kein CIImage nötig).
+// Begrenzt gleichzeitige CIContext-Renders auf 2 (GPU-Schutz bei Vollbild-Decodes).
 private let ciSemaphore = DispatchSemaphore(value: 2)
+
+// Begrenzt gleichzeitige ImageIO-Thumbnail-Decodes auf 3.
+// CGImageSourceCreateThumbnailAtIndex ist auf macOS 11 nicht thread-safe
+// bei parallelem Zugriff auf viele RAF-embedded-JPEGs → SIGSEGV.
+private let imageIOSemaphore = DispatchSemaphore(value: 3)
 
 private func makeCIContext() -> CIContext { sharedCIContext }
 
@@ -126,12 +128,11 @@ struct RAWImageDecoder {
         "decodeEmbeddedJPEG: FileHandle öffnen (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         Log.trace("FileHandle öffnen: \(name)")
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
-        defer { handle.closeFile() }
+        defer { try? handle.close() }
 
-        // Header lesen (mindestens 96 Bytes)
+        // Header lesen (mindestens 96 Bytes) — werfende API verhindert ObjC-Exception → SIGABRT
         "decodeEmbeddedJPEG: Header lesen (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
-        let header = handle.readData(ofLength: 96)
-        guard header.count >= 96 else { return nil }
+        guard let header = try? handle.read(upToCount: 96), header.count >= 96 else { return nil }
 
         // RAF-Signatur prüfen
         let sig = String(bytes: header.prefix(16), encoding: .ascii) ?? ""
@@ -145,10 +146,13 @@ struct RAWImageDecoder {
         // JPEG-Bytes extrahieren
         "decodeEmbeddedJPEG: JPEG-Bytes lesen @\(jpegOffset)+\(jpegLength) (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         Log.trace("JPEG-Bytes lesen: offset=\(jpegOffset) length=\(jpegLength) \(name)")
-        handle.seek(toFileOffset: UInt64(jpegOffset))
-        let jpegData = handle.readData(ofLength: Int(jpegLength))
-        guard jpegData.count >= 4,
+        guard (try? handle.seek(toOffset: UInt64(jpegOffset))) != nil else { return nil }
+        guard let jpegData = try? handle.read(upToCount: Int(jpegLength)),
+              jpegData.count >= 4,
               jpegData[0] == 0xFF, jpegData[1] == 0xD8 else { return nil }
+
+        imageIOSemaphore.wait()
+        defer { imageIOSemaphore.signal() }
 
         "decodeEmbeddedJPEG: CGImageSourceCreateWithData (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         Log.trace("CGImageSourceCreateWithData: \(jpegData.count)B \(name)")
@@ -186,13 +190,13 @@ struct RAWImageDecoder {
               let raw = props[kCGImagePropertyOrientation] as? UInt32,
               let orientation = CGImagePropertyOrientation(rawValue: raw),
               orientation != .up else { return image }
+        ciSemaphore.wait()
+        defer { ciSemaphore.signal() }
         "applyExifOrientation: CIImage.oriented (raw=\(raw))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         Log.trace("CIImage.oriented: raw=\(raw) \(image.width)×\(image.height)")
         let ci = CIImage(cgImage: image).oriented(orientation)
         "applyExifOrientation: CIContext.createCGImage".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         Log.trace("CIContext.createCGImage: \(Int(ci.extent.width))×\(Int(ci.extent.height))")
-        ciSemaphore.wait()
-        defer { ciSemaphore.signal() }
         let result = sharedCIContext.createCGImage(ci, from: ci.extent)
         "applyExifOrientation: done".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
         return result ?? image

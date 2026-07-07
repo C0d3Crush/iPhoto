@@ -335,10 +335,20 @@ extension ImageViewModel {
         }
     }
 
-    func loadMetadataInBackground() {
-        let pending = collection.documents.enumerated().filter { $0.element.metadata.isEmpty }
+    // urls: die gerade importierten Bilder — zeigt genau deren Anzahl in der Loading-Bar.
+    // Auf startup werden alle Ordner importiert, d.h. alle Bilder erscheinen hier.
+    func loadMetadataInBackground(for urls: [URL]) {
+        let urlSet = Set(urls)
+        let pending = collection.documents.filter {
+            urlSet.contains($0.url) && $0.metadata.isEmpty
+        }
         guard !pending.isEmpty else { return }
-        for (index, doc) in pending {
+
+        metaTotal += pending.count
+        enqueueLoading(id: metaTaskID, label: "Metadaten laden",
+                       icon: "doc.text.magnifyingglass", done: metaDone, total: metaTotal)
+
+        for doc in pending {
             let url = doc.url
             DispatchQueue.global(qos: .background).async { [weak self] in
                 metadataReadSemaphore.wait()
@@ -347,13 +357,21 @@ extension ImageViewModel {
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
                 let metadata = self.metadataService.readPhotoMetadata(from: accessURL)
-                guard !metadata.isEmpty else { return }
                 DispatchQueue.main.async { [weak self] in
-                    guard let self = self,
-                          index < self.collection.documents.count,
-                          self.collection.documents[index].url == url,
-                          self.collection.documents[index].metadata.isEmpty else { return }
-                    self.collection.documents[index].metadata = metadata
+                    guard let self = self else { return }
+                    if !metadata.isEmpty,
+                       let idx = self.collection.documents.firstIndex(where: { $0.url == url }),
+                       self.collection.documents[idx].metadata.isEmpty {
+                        self.collection.documents[idx].metadata = metadata
+                    }
+                    self.metaDone += 1
+                    self.updateLoading(id: self.metaTaskID,
+                                       done: self.metaDone, total: self.metaTotal)
+                    if self.metaDone >= self.metaTotal {
+                        self.metaDone  = 0
+                        self.metaTotal = 0
+                        self.dequeueLoading(id: self.metaTaskID)
+                    }
                 }
             }
         }

@@ -166,10 +166,11 @@ final class CatalogStore {
             exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf' OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg'")
         }
         // 0.79.3: Brute-force "FUJIFILM"-Signatursuche — alle Fuji-Dateien neu scannen
+        // 0.80.0: tag 0x1003 (B&W/Acros) + neue Codes 0x0120/0x0501 — Fuji-Dateien neu scannen
         let filmSimParserVersion = UserDefaults.standard.integer(forKey: "filmSimParserVersion")
-        if filmSimParserVersion < 3 {
+        if filmSimParserVersion < 4 {
             exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf' OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg'")
-            UserDefaults.standard.set(3, forKey: "filmSimParserVersion")
+            UserDefaults.standard.set(4, forKey: "filmSimParserVersion")
         }
     }
 

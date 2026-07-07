@@ -111,6 +111,9 @@ class ImageViewModel: ObservableObject {
     var thumbInFlight: Set<URL> = []
     var hiResInFlight: Set<URL> = []
     let thumbnailTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    var metaDone: Int = 0
+    var metaTotal: Int = 0
+    let metaTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
 
     // MARK: - Computed properties
 
@@ -361,6 +364,7 @@ class ImageViewModel: ObservableObject {
                     doc.flagStatus = entry.flagStatus
                     doc.colorLabel = entry.colorLabel
                 }
+                CatalogStore.shared.upsertImage(path: url.path, filename: url.lastPathComponent, isRAW: doc.isRAW)
                 return doc
             }
 
@@ -371,7 +375,7 @@ class ImageViewModel: ObservableObject {
             loadCurrentImage()
         }
         loadThumbnails()
-        loadMetadataInBackground()
+        loadMetadataInBackground(for: newDocs.map { $0.url })
         scanExifForLibrary()
     }
 

@@ -12,7 +12,7 @@ final class MetadataService {
             let jpegData = rafEmbeddedJPEGData(url: url)
             let mnValues = jpegData.flatMap { fujiMakerNoteValues(from: $0) }
             fujiDynamicRange = mnValues?.dr
-            fujiFilmSim = mnValues?.filmSim.flatMap { MetadataService.filmSimulationName($0) }.flatMap { $0.isEmpty ? nil : $0 }
+            fujiFilmSim = MetadataService.resolveFilmSim(filmSim: mnValues?.filmSim, saturation: mnValues?.saturation)
 
             if #available(macOS 12.0, *) {
                 // macOS 12+: ImageIO unterstützt RAF nativ
@@ -45,7 +45,7 @@ final class MetadataService {
                     if raw.count >= 2, raw[0] == 0xFF, raw[1] == 0xD8 {
                         let mnValues = fujiMakerNoteValues(from: raw)
                         fujiDynamicRange = mnValues.dr
-                        fujiFilmSim = mnValues.filmSim.flatMap { MetadataService.filmSimulationName($0) }.flatMap { $0.isEmpty ? nil : $0 }
+                        fujiFilmSim = MetadataService.resolveFilmSim(filmSim: mnValues.filmSim, saturation: mnValues.saturation)
                     }
                 }
             }
@@ -63,7 +63,7 @@ final class MetadataService {
             if let mnData = exif[kCGImagePropertyExifMakerNote as String] as? Data {
                 let r = parseFujiMakerNoteBytes(mnData)
                 if fujiDynamicRange == nil { fujiDynamicRange = r.dr }
-                fujiFilmSim = r.filmSim.flatMap { MetadataService.filmSimulationName($0) }.flatMap { $0.isEmpty ? nil : $0 }
+                fujiFilmSim = MetadataService.resolveFilmSim(filmSim: r.filmSim, saturation: r.saturation)
             }
         }
 
@@ -308,15 +308,18 @@ final class MetadataService {
 
     // Parst rohe Fujifilm MakerNote-Bytes (Signatur "FUJIFILM" + LE IFD-Offset + IFD).
     // Genutzt als Fallback wenn ImageIO die MakerNote via kCGImagePropertyExifMakerNote liefert.
-    func parseFujiMakerNoteBytes(_ data: Data) -> (dr: Int?, filmSim: Int?) {
+    // saturation: Tag 0x1003 — kodiert B&W/Acros-Modus auf neueren Kameras (X-T4+),
+    // die Tag 0x1401 für diese Simulationen nicht setzen.
+    func parseFujiMakerNoteBytes(_ data: Data) -> (dr: Int?, filmSim: Int?, saturation: Int?) {
         guard data.count >= 12,
-              data.subdata(in: 0..<8) == Data("FUJIFILM".utf8) else { return (nil, nil) }
+              data.subdata(in: 0..<8) == Data("FUJIFILM".utf8) else { return (nil, nil, nil) }
         let ifdOff = Int(data.readUInt32LE(at: 8))
         let ifd = ifdOff
-        guard ifd + 2 <= data.count else { return (nil, nil) }
+        guard ifd + 2 <= data.count else { return (nil, nil, nil) }
         let count = Int(data.readUInt16LE(at: ifd))
-        guard count > 0, count < 500 else { return (nil, nil) }
+        guard count > 0, count < 500 else { return (nil, nil, nil) }
         var filmSim: Int? = nil
+        var saturation: Int? = nil
         var dr1403: Int? = nil
         var dr140B: Int? = nil
         for j in 0..<count {
@@ -324,34 +327,51 @@ final class MetadataService {
             guard fe + 12 <= data.count else { break }
             let ftag = data.readUInt16LE(at: fe)
             // UInt32 lesen und auf 16 Bit maskieren — robuster als reines UInt16 für LONG-Einträge
-            if ftag == 0x1401 { filmSim = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
-            if ftag == 0x1403 { dr1403  = Int(data.readUInt16LE(at: fe + 8)) }
-            if ftag == 0x140B { dr140B  = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x1003 { saturation = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x1401 { filmSim    = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
+            if ftag == 0x1403 { dr1403     = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x140B { dr140B     = Int(data.readUInt16LE(at: fe + 8)) }
         }
-        return (dr1403 ?? dr140B, filmSim)
+        return (dr1403 ?? dr140B, filmSim, saturation)
     }
 
     // Sucht die "FUJIFILM"-MakerNote-Signatur direkt in den Rohdaten (kein TIFF-Traversal nötig).
-    func fujiMakerNoteValues(from data: Data) -> (dr: Int?, filmSim: Int?) {
+    func fujiMakerNoteValues(from data: Data) -> (dr: Int?, filmSim: Int?, saturation: Int?) {
         let sig = Data("FUJIFILM".utf8)
         var lo = data.startIndex
         while let r = data.range(of: sig, options: [], in: lo..<data.endIndex) {
             let result = parseFujiMakerNoteBytes(data.subdata(in: r.lowerBound..<data.endIndex))
-            if result.dr != nil || result.filmSim != nil { return result }
+            if result.dr != nil || result.filmSim != nil || result.saturation != nil { return result }
             lo = r.upperBound
         }
-        return (nil, nil)
+        return (nil, nil, nil)
     }
 
+    // Löst Film-Simulation aus Tag 0x1401 (primär) oder 0x1003 (Fallback für B&W/Acros).
+    static func resolveFilmSim(filmSim: Int?, saturation: Int?) -> String? {
+        if let fs = filmSim {
+            let name = filmSimulationName(fs)
+            if !name.isEmpty { return name }
+        }
+        if let sat = saturation {
+            let name = filmSimulationFromSaturation(sat)
+            if !name.isEmpty { return name }
+        }
+        return nil
+    }
+
+    // Tag 0x1401: standard Film-Simulations-Code (Farb-Simulationen)
     static func filmSimulationName(_ raw: Int) -> String {
         switch raw {
         case 0x0000: return "Provia/Standard"
         case 0x0100: return "Velvia/Vivid"
         case 0x0110: return "Velvia"
+        case 0x0120: return "Astia/Soft"   // X-T4 custom-profile variant
         case 0x0200: return "Astia/Soft"
         case 0x0300: return "Classic Chrome"
         case 0x0400: return "Pro Neg. Hi"
         case 0x0500: return "Pro Neg. Std"
+        case 0x0501: return "Pro Neg. Hi"  // X-T4 variant code
         case 0x0600: return "Classic Neg."
         case 0x0700: return "Eterna/Cinema"
         case 0x0800: return "Eterna Bleach Bypass"
@@ -366,6 +386,22 @@ final class MetadataService {
         case 0x8201: return "Acros+R Filter"
         case 0x8202: return "Acros+Ye Filter"
         case 0x8203: return "Acros+G Filter"
+        default: return ""
+        }
+    }
+
+    // Tag 0x1003 (Saturation): kodiert B&W/Acros auf X-T4+ wenn 0x1401 fehlt
+    static func filmSimulationFromSaturation(_ raw: Int) -> String {
+        switch raw {
+        case 0x0300: return "Monochrome"
+        case 0x0301: return "Monochrome+R Filter"
+        case 0x0302: return "Monochrome+Ye Filter"
+        case 0x0303: return "Monochrome+G Filter"
+        case 0x0310: return "Sepia"
+        case 0x0500: return "Acros"
+        case 0x0501: return "Acros+R Filter"
+        case 0x0502: return "Acros+Ye Filter"
+        case 0x0503: return "Acros+G Filter"
         default: return ""
         }
     }
