@@ -2,6 +2,13 @@
 
 ---
 
+## 0.80.1
+**Bugfix: Crash beim Navigieren durch Thumbnails behoben (macOS 11)**
+
+- Animiertes Scrollen zur Auswahl (Thumbnail-Leiste, Raster, Sidebar) verursachte auf macOS 11 einen SwiftUI-Absturz (EXC_BAD_ACCESS in HostingScrollView), wenn das Ziel-Thumbnail beim Abschluss der Animation nicht mehr existierte — Scrollen erfolgt jetzt ohne Animation
+
+---
+
 ## 0.80.0
 **Feature: Metadaten-Ladefortschritt in der Loading-Bar + Fuji B&W/Acros-Erkennung**
 

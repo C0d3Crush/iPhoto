@@ -49,7 +49,9 @@ struct LibraryFullGridView: View {
                     }
                     .background(Color(NSColor.windowBackgroundColor))
                     .onChange(of: viewModel.collection.currentIndex) { newIndex in
-                        withAnimation { proxy.scrollTo(newIndex, anchor: .center) }
+                        // Kein withAnimation: animiertes scrollTo crasht auf macOS 11 in
+                        // HostingScrollView.checkAnimationCompletion (EXC_BAD_ACCESS)
+                        proxy.scrollTo(newIndex, anchor: .center)
                     }
                 }
             }
