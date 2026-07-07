@@ -238,7 +238,7 @@ struct AdjustmentsPanel: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                AdjustmentValueField(value: value, range: range, format: format)
+                AdjustmentValueField(value: value, format: format)
             }
             Slider(value: value, in: range)
                 .frame(maxWidth: .infinity)

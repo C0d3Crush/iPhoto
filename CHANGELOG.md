@@ -2,6 +2,13 @@
 
 ---
 
+## 0.82.0
+**Feature: Zahleneingabe bei Anpassungen erlaubt Werte außerhalb des Slider-Bereichs**
+
+- Im Textfeld neben den Anpassungs-Reglern (auch lokale Anpassungen) können jetzt Werte über/unter dem Slider-Bereich eingegeben werden — der Slider zeigt dann den Anschlag, der eingegebene Wert wird aber voll angewendet
+
+---
+
 ## 0.81.0
 **Feature: Werte eintippen + Auge-Toggle bei Anpassungen — Export rendert jetzt Anpassungen mit**
 

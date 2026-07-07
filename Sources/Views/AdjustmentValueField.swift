@@ -1,10 +1,10 @@
 import SwiftUI
 
 /// Editierbares Zahlenfeld neben einem Anpassungs-Regler.
-/// Zeigt den formatierten Wert an; Klick + Eingabe + Enter setzt den Wert (auf den Bereich begrenzt).
+/// Zeigt den formatierten Wert an; Klick + Eingabe + Enter setzt den Wert.
+/// Eingaben dürfen den Slider-Bereich überschreiten — der Slider zeigt dann den Anschlag.
 struct AdjustmentValueField: View {
     @Binding var value: Double
-    let range: ClosedRange<Double>
     let format: String
     /// Anzeige-Skalierung (z.B. 100 für Prozent-Darstellung eines 0...1-Werts)
     var displayScale: Double = 1
@@ -42,8 +42,7 @@ struct AdjustmentValueField: View {
             .replacingOccurrences(of: ",", with: ".")
             .filter { "0123456789.-+".contains($0) }
         if let parsed = Double(cleaned) {
-            let newValue = parsed / displayScale
-            value = min(max(newValue, range.lowerBound), range.upperBound)
+            value = parsed / displayScale
         }
         text = formattedValue
     }

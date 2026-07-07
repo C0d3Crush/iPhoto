@@ -270,7 +270,7 @@ private struct LocalAdjEditor: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
                 Spacer()
-                AdjustmentValueField(value: value, range: range, format: format,
+                AdjustmentValueField(value: value, format: format,
                                      displayScale: displayScale,
                                      font: .system(size: 9, design: .monospaced))
             }
