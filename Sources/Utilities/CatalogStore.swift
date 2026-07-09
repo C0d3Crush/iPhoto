@@ -32,14 +32,20 @@ final class CatalogStore {
     private var exifCache: [String: (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool, filmSimulation: String?)] = [:]
     private let exifCacheLock = NSLock()
 
+    // JSON-Legacy-Migration nur für den Standard-Katalog — injizierte Pfade (Tests)
+    // dürfen nicht die echten albums.json des Nutzers importieren.
+    private let isDefaultCatalog: Bool
+
     init(dbPath: String? = nil) {
         if let p = dbPath {
             self.dbPath = p
+            self.isDefaultCatalog = false
         } else {
             let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("iPhoto")
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             self.dbPath = dir.appendingPathComponent("catalog.db").path
+            self.isDefaultCatalog = true
         }
         queue.sync { self.open() }
     }
@@ -53,7 +59,7 @@ final class CatalogStore {
         exec("PRAGMA journal_mode=WAL")
         exec("PRAGMA foreign_keys=ON")
         createSchema()
-        migrateFromJSON()
+        if isDefaultCatalog { migrateFromJSON() }
         loadExifCache()
     }
 

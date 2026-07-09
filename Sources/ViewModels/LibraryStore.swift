@@ -16,9 +16,17 @@ final class LibraryStore: ObservableObject {
 
     // MARK: - Datei-Pfade
 
+    // Injizierbar für Tests — nil = Application Support/iPhoto (App-Standard)
+    private let directoryOverride: URL?
+
+    init(directory: URL? = nil) {
+        self.directoryOverride = directory
+    }
+
     private var supportDirectory: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("iPhoto")
+        let dir = directoryOverride
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("iPhoto")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

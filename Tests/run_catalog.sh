@@ -24,6 +24,9 @@ echo "==> Kompiliere iphoto-catalog-test …"
     -module-name iPhotoCatalogTest \
     -Onone \
     "$ROOT/Sources/Utilities/CatalogStore.swift" \
+    "$ROOT/Sources/Models/AdjustmentState.swift" \
+    "$ROOT/Sources/Models/LocalAdjustment.swift" \
+    "$ROOT/Sources/Models/Preset.swift" \
     "$ROOT/Tests/catalog/main.swift" \
     -o "$BIN"
 echo ""

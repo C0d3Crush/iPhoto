@@ -2,6 +2,16 @@
 
 ---
 
+## 0.82.3
+**Tests: LibraryStore-Testsuite + erweiterte Katalog-Tests**
+
+- Neue Testsuite für die Bibliotheks-Persistenz (`Tests/run_librarystore.sh`, 11 Tests): Speichern/Laden von Alben, intelligenten Ordnern und überwachten Ordnern, Verhalten bei fehlenden/korrupten Dateien sowie Fehler-Callback bei nicht beschreibbarem Verzeichnis
+- Katalog-Tests um Anpassungen, Presets und EXIF erweitert (21 → 32 Tests) und Kompilierung nach den Preset-/Adjustment-Erweiterungen repariert
+- Testkataloge sind jetzt vollständig isoliert: Die JSON-Legacy-Migration läuft nur noch für den echten Standard-Katalog, nicht für injizierte Datenbankpfade — Tests importieren keine echten Nutzerdaten mehr
+- LibraryStore akzeptiert für Tests ein eigenes Speicherverzeichnis (`LibraryStore(directory:)`); Standardverhalten der App unverändert
+
+---
+
 ## 0.82.2
 **Refactoring: Bibliotheks-State in eigenständigen LibraryStore entkoppelt**
 

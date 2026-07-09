@@ -5,8 +5,9 @@
 ```bash
 ./Tests/run_library.sh   # Bibliotheks-Skalierungstest
 ./Tests/run_bench.sh     # Performance-Benchmarks
-./Tests/run_catalog.sh   # SQLite-Katalog-Tests
-./Tests/test_formats.sh  # Export-Format-Regression
+./Tests/run_catalog.sh      # SQLite-Katalog-Tests
+./Tests/run_librarystore.sh # LibraryStore-JSON-Persistenz-Tests
+./Tests/test_formats.sh     # Export-Format-Regression
 ```
 
 Voraussetzung: macOS Command Line Tools (`xcode-select --install`).  
@@ -61,7 +62,7 @@ Laufzeit: ~1–3 Minuten.
 
 **Was wird getestet:** Korrektheit und Robustheit von `CatalogStore`.
 
-**Kompilierte Dateien:** `Sources/Utilities/CatalogStore.swift`, `Tests/catalog/main.swift`
+**Kompilierte Dateien:** `Sources/Utilities/CatalogStore.swift`, `Sources/Models/AdjustmentState.swift`, `Sources/Models/LocalAdjustment.swift`, `Sources/Models/Preset.swift`, `Tests/catalog/main.swift`
 
 | Test | Was geprüft wird |
 |------|-----------------|
@@ -75,9 +76,33 @@ Laufzeit: ~1–3 Minuten.
 | 8 Concurrent | 8 Threads gleichzeitig schreiben/lesen — kein Crash, alle 800 Bilder vorhanden |
 | 9 Migration | Frische DB ohne albums.json → kein Fehler, leere Tabellen |
 | 10 Persistenz | DB schließen und neu öffnen → alle Daten noch vorhanden |
+| 11 Adjustments | Speichern/Laden (Roundtrip), Upsert, Löschen, nil bei unbekanntem Pfad |
+| 12 Presets | Speichern/Laden, Aktualisieren per ID, Löschen |
+| 13 EXIF | upsertExif-Roundtrip, nil-Felder, allFilmSimulations, pathsNeedingExifScan |
 
 **FAIL bedeutet:** Falsches Ergebnis, fehlende Daten, Crash oder Timeout.  
 Laufzeit: < 30 Sekunden.
+
+---
+
+## run_librarystore.sh — LibraryStore-JSON-Persistenz-Tests
+
+**Was wird getestet:** Korrektheit der JSON-Persistenz von `LibraryStore` (Alben, intelligente Ordner, überwachte Ordner) in Application Support.
+
+**Kompilierte Dateien:** `Sources/ViewModels/LibraryStore.swift`, `Sources/Models/Album.swift`, `Sources/Models/WatchedFolder.swift`, `Sources/Models/SmartFolder.swift`, `Sources/Models/ImageDocument.swift`, `Sources/Models/MetadataEntry.swift`, `Sources/Models/DetectedVolume.swift`, `Sources/Utilities/Log.swift`, `Tests/librarystore/main.swift`
+
+| Test | Was geprüft wird |
+|------|-----------------|
+| 1 Alben | Roundtrip; fehlende Datei → leer; korrupte Datei → State unverändert; Überschreiben; leere Liste |
+| 2 Intelligente Ordner | Roundtrip inkl. Kriterien, Gruppe, matchAll; fehlende Datei → leer |
+| 3 Überwachte Ordner | Roundtrip inkl. Bookmark-Daten, autoSync, Import-Ziel; fehlende Datei → leer |
+| 4 Datei-Isolation | saveAlbums() berührt smartFolders.json nicht |
+| 5 Fehlerbehandlung | onError-Callback feuert bei nicht beschreibbarem Verzeichnis |
+
+Die Tests nutzen `LibraryStore(directory:)` mit temporären Verzeichnissen — die echte Bibliothek in Application Support bleibt unberührt.
+
+**FAIL bedeutet:** Datenverlust beim Roundtrip, fehlender Fehler-Callback oder Crash.  
+Laufzeit: < 10 Sekunden.
 
 ---
 

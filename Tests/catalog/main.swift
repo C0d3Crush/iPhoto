@@ -300,6 +300,114 @@ test("Daten überleben DB-Schließen und Neu-Öffnen") {
     try assertEqual(paths.count, 1)
 }
 
+// ── 11. Adjustments ──────────────────────────────────────────
+print("\n[11  Adjustments]")
+test("Adjustments speichern und laden (Roundtrip)") {
+    let s = freshStore(name: "adjustments")
+    var adj = AdjustmentState()
+    adj.exposure = 1.5
+    adj.contrast = 1.2
+    adj.saturation = 0.8
+    adj.rotation = 3.5
+    adj.turns = 2
+    s.saveAdjustments(path: "/tmp/adj.jpg", adjustments: adj)
+    let loaded = s.loadAdjustments(path: "/tmp/adj.jpg")
+    try assert(loaded != nil, "Adjustments nicht gefunden")
+    try assertEqual(loaded!, adj, "Roundtrip verändert Werte")
+}
+test("Adjustments überschreiben (Upsert)") {
+    let s = freshStore(name: "adjustments_upsert")
+    var adj = AdjustmentState()
+    adj.exposure = 1.0
+    s.saveAdjustments(path: "/tmp/adj.jpg", adjustments: adj)
+    adj.exposure = -2.0
+    s.saveAdjustments(path: "/tmp/adj.jpg", adjustments: adj)
+    try assertEqual(s.loadAdjustments(path: "/tmp/adj.jpg")!.exposure, -2.0)
+}
+test("Adjustments löschen") {
+    let s = freshStore(name: "adjustments_delete")
+    s.saveAdjustments(path: "/tmp/adj.jpg", adjustments: AdjustmentState())
+    s.deleteAdjustments(path: "/tmp/adj.jpg")
+    try assert(s.loadAdjustments(path: "/tmp/adj.jpg") == nil, "Adjustments nicht gelöscht")
+}
+test("Unbekannter Pfad liefert nil") {
+    let s = freshStore(name: "adjustments_nil")
+    try assert(s.loadAdjustments(path: "/tmp/gibtsnicht.jpg") == nil)
+}
+
+// ── 12. Presets ──────────────────────────────────────────────
+print("\n[12  Presets]")
+test("Preset speichern und laden") {
+    let s = freshStore(name: "presets")
+    var adj = AdjustmentState()
+    adj.warmth = 0.3
+    let p = Preset(name: "MeinLook", author: "Tester", adjustments: adj)
+    s.savePreset(p)
+    let all = s.allUserPresets()
+    try assertEqual(all.count, 1)
+    try assertEqual(all[0], p, "Preset-Roundtrip verändert Werte")
+}
+test("Preset aktualisieren (gleiche ID)") {
+    let s = freshStore(name: "presets_update")
+    var p = Preset(name: "Alt", adjustments: AdjustmentState())
+    s.savePreset(p)
+    p.name = "Neu"
+    s.savePreset(p)
+    let all = s.allUserPresets()
+    try assertEqual(all.count, 1)
+    try assertEqual(all[0].name, "Neu")
+}
+test("Preset löschen") {
+    let s = freshStore(name: "presets_delete")
+    let p = Preset(name: "Weg", adjustments: AdjustmentState())
+    s.savePreset(p)
+    s.deletePreset(id: p.id)
+    try assertEqual(s.allUserPresets().count, 0)
+}
+
+// ── 13. EXIF ─────────────────────────────────────────────────
+print("\n[13  EXIF]")
+test("upsertExif und exif(forPath) Roundtrip") {
+    let s = freshStore(name: "exif")
+    s.upsertImage(path: "/tmp/exif.raf", filename: "exif.raf", isRAW: true)
+    s.upsertExif(path: "/tmp/exif.raf", focalLength: 35.0, iso: 800, aperture: 2.0,
+                 lensModel: "XF35mmF2", hdr: true, filmSimulation: "Classic Chrome")
+    let e = s.exif(forPath: "/tmp/exif.raf")
+    try assert(e != nil, "EXIF nicht gefunden")
+    try assertEqual(e!.focalLength!, 35.0)
+    try assertEqual(e!.iso!, 800)
+    try assertEqual(e!.aperture!, 2.0)
+    try assertEqual(e!.lensModel!, "XF35mmF2")
+    try assert(e!.hdr, "HDR-Flag verloren")
+    try assertEqual(e!.filmSimulation!, "Classic Chrome")
+}
+test("EXIF mit nil-Feldern") {
+    let s = freshStore(name: "exif_nil")
+    s.upsertImage(path: "/tmp/leer.jpg", filename: "leer.jpg", isRAW: false)
+    s.upsertExif(path: "/tmp/leer.jpg", focalLength: nil, iso: nil, aperture: nil, lensModel: nil)
+    let e = s.exif(forPath: "/tmp/leer.jpg")
+    try assert(e != nil)
+    try assert(e!.focalLength == nil && e!.iso == nil && e!.aperture == nil && e!.lensModel == nil)
+    try assert(!e!.hdr)
+}
+test("allFilmSimulations liefert distinct + sortiert") {
+    let s = freshStore(name: "exif_filmsim")
+    for (i, sim) in ["Velvia", "Acros", "Velvia", "Provia"].enumerated() {
+        let path = "/tmp/sim\(i).raf"
+        s.upsertImage(path: path, filename: "sim\(i).raf", isRAW: true)
+        s.upsertExif(path: path, focalLength: nil, iso: nil, aperture: nil, lensModel: nil, filmSimulation: sim)
+    }
+    try assertEqual(s.allFilmSimulations(), ["Acros", "Provia", "Velvia"])
+}
+test("pathsNeedingExifScan schrumpft nach upsertExif") {
+    let s = freshStore(name: "exif_scan")
+    s.upsertImage(path: "/tmp/a.raf", filename: "a.raf", isRAW: true)
+    s.upsertImage(path: "/tmp/b.raf", filename: "b.raf", isRAW: true)
+    try assertEqual(s.pathsNeedingExifScan().count, 2)
+    s.upsertExif(path: "/tmp/a.raf", focalLength: 23.0, iso: 200, aperture: 4.0, lensModel: nil)
+    try assertEqual(s.pathsNeedingExifScan(), ["/tmp/b.raf"])
+}
+
 // ── Ergebnis ─────────────────────────────────────────────────
 print("")
 print(String(repeating: "=", count: 55))
