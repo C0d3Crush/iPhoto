@@ -14,9 +14,7 @@ final class MetadataService {
             let mnValues = jpegData.flatMap { fujiMakerNoteValues(from: $0) }
             fujiDynamicRange = mnValues?.dr
             fujiFilmSim = MetadataService.resolveFilmSim(filmSim: mnValues?.filmSim, saturation: mnValues?.saturation)
-            if let wb = mnValues?.whiteBalance {
-                fujiWhiteBalance = MetadataService.fujiWhiteBalanceName(wb, colorTemp: mnValues?.colorTemp)
-            }
+            fujiWhiteBalance = mnValues.flatMap { MetadataService.fujiWhiteBalanceDisplay($0) }
 
             if #available(macOS 12.0, *) {
                 // macOS 12+: ImageIO unterstützt RAF nativ
@@ -50,9 +48,7 @@ final class MetadataService {
                         let mnValues = fujiMakerNoteValues(from: raw)
                         fujiDynamicRange = mnValues.dr
                         fujiFilmSim = MetadataService.resolveFilmSim(filmSim: mnValues.filmSim, saturation: mnValues.saturation)
-                        if let wb = mnValues.whiteBalance {
-                            fujiWhiteBalance = MetadataService.fujiWhiteBalanceName(wb, colorTemp: mnValues.colorTemp)
-                        }
+                        fujiWhiteBalance = MetadataService.fujiWhiteBalanceDisplay(mnValues)
                     }
                 }
             }
@@ -73,8 +69,8 @@ final class MetadataService {
                 if fujiFilmSim == nil {
                     fujiFilmSim = MetadataService.resolveFilmSim(filmSim: r.filmSim, saturation: r.saturation)
                 }
-                if fujiWhiteBalance == nil, let wb = r.whiteBalance {
-                    fujiWhiteBalance = MetadataService.fujiWhiteBalanceName(wb, colorTemp: r.colorTemp)
+                if fujiWhiteBalance == nil {
+                    fujiWhiteBalance = MetadataService.fujiWhiteBalanceDisplay(r)
                 }
             }
         }
@@ -328,49 +324,77 @@ final class MetadataService {
         return CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
     }
 
+    struct FujiMakerNoteValues {
+        var dr: Int? = nil
+        var filmSim: Int? = nil
+        var saturation: Int? = nil
+        var whiteBalance: Int? = nil
+        var colorTemp: Int? = nil
+        // WB-Feintuning in Kamera-Schritten (Rot/Blau, jeweils −9…+9)
+        var wbShiftR: Int? = nil
+        var wbShiftB: Int? = nil
+
+        var isEmpty: Bool {
+            dr == nil && filmSim == nil && saturation == nil && whiteBalance == nil
+        }
+    }
+
     // Parst rohe Fujifilm MakerNote-Bytes (Signatur "FUJIFILM" + LE IFD-Offset + IFD).
     // Genutzt als Fallback wenn ImageIO die MakerNote via kCGImagePropertyExifMakerNote liefert.
     // saturation: Tag 0x1003 — kodiert B&W/Acros-Modus auf neueren Kameras (X-T4+),
     // die Tag 0x1401 für diese Simulationen nicht setzen.
-    func parseFujiMakerNoteBytes(_ data: Data) -> (dr: Int?, filmSim: Int?, saturation: Int?, whiteBalance: Int?, colorTemp: Int?) {
+    func parseFujiMakerNoteBytes(_ data: Data) -> FujiMakerNoteValues {
         guard data.count >= 12,
-              data.subdata(in: 0..<8) == Data("FUJIFILM".utf8) else { return (nil, nil, nil, nil, nil) }
+              data.subdata(in: 0..<8) == Data("FUJIFILM".utf8) else { return FujiMakerNoteValues() }
         let ifdOff = Int(data.readUInt32LE(at: 8))
         let ifd = ifdOff
-        guard ifd + 2 <= data.count else { return (nil, nil, nil, nil, nil) }
+        guard ifd + 2 <= data.count else { return FujiMakerNoteValues() }
         let count = Int(data.readUInt16LE(at: ifd))
-        guard count > 0, count < 500 else { return (nil, nil, nil, nil, nil) }
-        var filmSim: Int? = nil
-        var saturation: Int? = nil
+        guard count > 0, count < 500 else { return FujiMakerNoteValues() }
+        var v = FujiMakerNoteValues()
         var dr1403: Int? = nil
         var dr140B: Int? = nil
-        var whiteBalance: Int? = nil
-        var colorTemp: Int? = nil
         for j in 0..<count {
             let fe = ifd + 2 + j * 12
             guard fe + 12 <= data.count else { break }
             let ftag = data.readUInt16LE(at: fe)
             // UInt32 lesen und auf 16 Bit maskieren — robuster als reines UInt16 für LONG-Einträge
-            if ftag == 0x1002 { whiteBalance = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
-            if ftag == 0x1003 { saturation = Int(data.readUInt16LE(at: fe + 8)) }
-            if ftag == 0x1005 { colorTemp  = Int(data.readUInt16LE(at: fe + 8)) }
-            if ftag == 0x1401 { filmSim    = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
-            if ftag == 0x1403 { dr1403     = Int(data.readUInt16LE(at: fe + 8)) }
-            if ftag == 0x140B { dr140B     = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x1002 { v.whiteBalance = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
+            if ftag == 0x1003 { v.saturation = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x1005 { v.colorTemp  = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x1401 { v.filmSim    = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
+            if ftag == 0x1403 { dr1403       = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x140B { dr140B       = Int(data.readUInt16LE(at: fe + 8)) }
+            // Tag 0x100A: WhiteBalanceFineTune — 2× SLONG (8 Bytes passen nicht ins
+            // Wertfeld, dort steht ein Offset relativ zum MakerNote-Anfang).
+            // Rohwerte in Einheiten von 20 pro Kamera-Schritt (Rot, Blau).
+            if ftag == 0x100A {
+                let valOff = Int(data.readUInt32LE(at: fe + 8))
+                if valOff + 8 <= data.count {
+                    let rawR = Int(Int32(bitPattern: data.readUInt32LE(at: valOff)))
+                    let rawB = Int(Int32(bitPattern: data.readUInt32LE(at: valOff + 4)))
+                    // Plausibilität: ±9 Schritte à 20
+                    if abs(rawR) <= 180, abs(rawB) <= 180 {
+                        v.wbShiftR = rawR / 20
+                        v.wbShiftB = rawB / 20
+                    }
+                }
+            }
         }
-        return (dr1403 ?? dr140B, filmSim, saturation, whiteBalance, colorTemp)
+        v.dr = dr1403 ?? dr140B
+        return v
     }
 
     // Sucht die "FUJIFILM"-MakerNote-Signatur direkt in den Rohdaten (kein TIFF-Traversal nötig).
-    func fujiMakerNoteValues(from data: Data) -> (dr: Int?, filmSim: Int?, saturation: Int?, whiteBalance: Int?, colorTemp: Int?) {
+    func fujiMakerNoteValues(from data: Data) -> FujiMakerNoteValues {
         let sig = Data("FUJIFILM".utf8)
         var lo = data.startIndex
         while let r = data.range(of: sig, options: [], in: lo..<data.endIndex) {
             let result = parseFujiMakerNoteBytes(data.subdata(in: r.lowerBound..<data.endIndex))
-            if result.dr != nil || result.filmSim != nil || result.saturation != nil || result.whiteBalance != nil { return result }
+            if !result.isEmpty { return result }
             lo = r.upperBound
         }
-        return (nil, nil, nil, nil, nil)
+        return FujiMakerNoteValues()
     }
 
     // Löst Film-Simulation aus Tag 0x1401 (primär) oder 0x1003 (Fallback für B&W/Acros).
@@ -384,6 +408,18 @@ final class MetadataService {
             if !name.isEmpty { return name }
         }
         return nil
+    }
+
+    // Kombiniert Modus (0x1002), Kelvin-Temperatur (0x1005) und Feintuning-Shift
+    // (0x100A) zu einem Anzeige-String, z. B. „Tageslicht (R+2, B−1)".
+    static func fujiWhiteBalanceDisplay(_ v: FujiMakerNoteValues) -> String? {
+        guard let wb = v.whiteBalance else { return nil }
+        var name = fujiWhiteBalanceName(wb, colorTemp: v.colorTemp)
+        guard !name.isEmpty else { return nil }
+        if let r = v.wbShiftR, let b = v.wbShiftB, r != 0 || b != 0 {
+            name += String(format: " (R%+d, B%+d)", r, b)
+        }
+        return name
     }
 
     // Tag 0x1002: Fuji-Weißabgleich-Modus (deutlich feiner als EXIF-Auto/Manuell).

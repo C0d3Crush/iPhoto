@@ -2,6 +2,15 @@
 
 ---
 
+## 0.84.0
+**Weißabgleich-Feintuning (R/B-Shift) in den Metadaten**
+
+- Der an der Kamera eingestellte Weißabgleich-Shift (Rot/Blau, ±9 Schritte) wird jetzt hinter dem Modus angezeigt, z. B. „Automatisch (R+9, B+2)" — gelesen aus Fuji-MakerNote-Tag 0x100A
+- Bilder ohne Feintuning (R±0, B±0) zeigen weiterhin nur den Modus
+- Werte gegen exiftool verifiziert (Rohwerte in 20er-Einheiten pro Kamera-Schritt)
+
+---
+
 ## 0.83.0
 **Weißabgleich in den Metadaten**
 
