@@ -12,16 +12,16 @@ extension ImageViewModel {
         panel.allowsMultipleSelection = false
         panel.prompt = "Ordner hinzufügen"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        guard !watchedFolders.contains(where: { $0.resolveURL()?.url.standardized == url.standardized }) else { return }
+        guard !library.watchedFolders.contains(where: { $0.resolveURL()?.url.standardized == url.standardized }) else { return }
         guard let folder = try? WatchedFolder(url: url) else { return }
-        watchedFolders.append(folder)
+        library.watchedFolders.append(folder)
         if folder.isRemovableMedia {
             let libraryPath = FileManager.default
                 .urls(for: .picturesDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("iPhoto").path
-            watchedFolders[watchedFolders.count - 1].importDestinationPath = libraryPath
+            library.watchedFolders[library.watchedFolders.count - 1].importDestinationPath = libraryPath
         }
-        saveWatchedFolders()
+        library.saveWatchedFolders()
         syncFolder(folder)
         startWatching(folder)
         navSelection = .folder(folder.id)
@@ -31,35 +31,35 @@ extension ImageViewModel {
         guard !folder.isDefaultLibrary else { return }
         stopWatching(folder)
         syncedFolderIDs.remove(folder.id)
-        watchedFolders.removeAll { $0.id == folder.id }
+        library.watchedFolders.removeAll { $0.id == folder.id }
         if let (folderURL, stop) = folder.resolveURL() {
             let prefix = folderURL.standardized.path
             stop()
             collection.documents.removeAll { $0.url.standardized.path.hasPrefix(prefix) }
         }
         if navSelection == .folder(folder.id) { navSelection = .library }
-        saveWatchedFolders()
+        library.saveWatchedFolders()
     }
 
     func toggleAutoSync(for folder: WatchedFolder) {
-        guard let idx = watchedFolders.firstIndex(where: { $0.id == folder.id }) else { return }
-        watchedFolders[idx].autoSync.toggle()
-        saveWatchedFolders()
+        guard let idx = library.watchedFolders.firstIndex(where: { $0.id == folder.id }) else { return }
+        library.watchedFolders[idx].autoSync.toggle()
+        library.saveWatchedFolders()
     }
 
     func setImportDestination(for folder: WatchedFolder, path: String?) {
-        guard let idx = watchedFolders.firstIndex(where: { $0.id == folder.id }) else { return }
-        watchedFolders[idx].importDestinationPath = path
-        saveWatchedFolders()
+        guard let idx = library.watchedFolders.firstIndex(where: { $0.id == folder.id }) else { return }
+        library.watchedFolders[idx].importDestinationPath = path
+        library.saveWatchedFolders()
 
         guard let path = path else { return }
         let destURL = URL(fileURLWithPath: path)
-        let alreadyWatched = watchedFolders.contains {
+        let alreadyWatched = library.watchedFolders.contains {
             $0.bookmarkPath.map { URL(fileURLWithPath: $0).standardized } == destURL.standardized
         }
         guard !alreadyWatched, let destFolder = try? WatchedFolder(url: destURL) else { return }
-        watchedFolders.append(destFolder)
-        saveWatchedFolders()
+        library.watchedFolders.append(destFolder)
+        library.saveWatchedFolders()
         syncFolder(destFolder)
         startWatching(destFolder)
     }
@@ -208,18 +208,18 @@ extension ImageViewModel {
         let foldersToLoad: [WatchedFolder]
         switch selection {
         case .library, nil:
-            foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
+            foldersToLoad = library.watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
         case .folder(let id):
-            foldersToLoad = watchedFolders.filter { $0.id == id && !syncedFolderIDs.contains($0.id) }
+            foldersToLoad = library.watchedFolders.filter { $0.id == id && !syncedFolderIDs.contains($0.id) }
         case .album:
-            foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
+            foldersToLoad = library.watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
         case .smartFolder(let id):
-            foldersToLoad = watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
-            if let sf = smartFolders.first(where: { $0.id == id }) {
+            foldersToLoad = library.watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
+            if let sf = library.smartFolders.first(where: { $0.id == id }) {
                 syncSmartFolderToFilesystem(sf)
             }
         case .volume(let id):
-            if let vol = detectedVolumes.first(where: { $0.id == id }) {
+            if let vol = library.detectedVolumes.first(where: { $0.id == id }) {
                 syncVolume(vol)
             }
             foldersToLoad = []
@@ -284,7 +284,7 @@ extension ImageViewModel {
         )
         source.setEventHandler { [weak self] in
             guard let self = self,
-                  let f = self.watchedFolders.first(where: { $0.id == folder.id }) else { return }
+                  let f = self.library.watchedFolders.first(where: { $0.id == folder.id }) else { return }
             self.syncFolder(f)
         }
         source.setCancelHandler { close(fd) }
@@ -297,20 +297,9 @@ extension ImageViewModel {
         folderWatchers[folder.id] = nil
     }
 
-    private var watchedFoldersFileURL: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("iPhoto")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("watchedFolders.json")
-    }
-
-    func loadWatchedFolders() {
-        if let data = try? Data(contentsOf: watchedFoldersFileURL),
-           let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) {
-            watchedFolders = decoded
-        }
+    func setupWatchedFolders() {
         ensureDefaultLibraryFolder()
-        for folder in watchedFolders {
+        for folder in library.watchedFolders {
             startWatching(folder)
         }
     }
@@ -323,18 +312,14 @@ extension ImageViewModel {
         try? fm.createDirectory(at: libraryURL, withIntermediateDirectories: true)
 
         let libraryPath = libraryURL.standardized.path
-        let alreadyWatched = watchedFolders.contains { $0.bookmarkPath == libraryPath || $0.isDefaultLibrary }
+        let alreadyWatched = library.watchedFolders.contains { $0.bookmarkPath == libraryPath || $0.isDefaultLibrary }
         guard !alreadyWatched else { return }
 
         guard var folder = try? WatchedFolder(url: libraryURL) else { return }
         folder.isDefaultLibrary = true
         folder.name = "iPhoto-Bibliothek"
-        watchedFolders.insert(folder, at: 0)
-        saveWatchedFolders()
+        library.watchedFolders.insert(folder, at: 0)
+        library.saveWatchedFolders()
     }
 
-    func saveWatchedFolders() {
-        guard let data = try? JSONEncoder().encode(watchedFolders) else { return }
-        persistFileData(data, to: watchedFoldersFileURL, description: "Ordner-Datei")
-    }
 }

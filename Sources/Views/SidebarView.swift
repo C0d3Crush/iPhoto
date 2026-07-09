@@ -35,9 +35,9 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func albumContextMenu(for doc: ImageDocument) -> some View {
-        if !viewModel.albums.isEmpty {
+        if !viewModel.library.albums.isEmpty {
             Menu("Zu Album hinzufügen") {
-                ForEach(viewModel.albums) { album in
+                ForEach(viewModel.library.albums) { album in
                     Button(album.name) { viewModel.addToAlbum(doc, albumID: album.id) }
                 }
             }

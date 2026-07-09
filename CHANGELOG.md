@@ -2,6 +2,15 @@
 
 ---
 
+## 0.82.2
+**Refactoring: Bibliotheks-State in eigenständigen LibraryStore entkoppelt**
+
+- Alben, überwachte Ordner, intelligente Ordner und erkannte Volumes leben jetzt in einem eigenen `LibraryStore` mit gekapselter JSON-Persistenz — das zentrale ViewModel ist dadurch schlanker und die Bibliotheksverwaltung unabhängig testbar
+- Keine Funktionsänderung; alle Ansichten und Abläufe bleiben identisch
+- Hinweis: Eine Migration auf Swift Concurrency (async/await, @MainActor) wurde bewusst zurückgestellt, da die App macOS 11 unterstützt und dort die Concurrency-Runtime beim direkten swiftc-Build nicht verfügbar ist
+
+---
+
 ## 0.82.1
 **Refactoring: Code-Struktur & Absturz-Prävention**
 

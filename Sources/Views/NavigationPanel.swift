@@ -24,7 +24,7 @@ struct NavigationPanel: View {
                 .buttonStyle(PlainButtonStyle())
             ))
 
-            ForEach(viewModel.albums) { album in
+            ForEach(viewModel.library.albums) { album in
                 PanelAlbumRow(album: album,
                               isSelected: viewModel.navSelection == .album(album.id))
                     .environmentObject(viewModel)
@@ -43,7 +43,7 @@ struct NavigationPanel: View {
                     .environmentObject(viewModel)
             }
 
-            ForEach(viewModel.watchedFolders) { folder in
+            ForEach(viewModel.library.watchedFolders) { folder in
                 PanelFolderRow(folder: folder,
                                isSelected: viewModel.navSelection == .folder(folder.id))
                     .environmentObject(viewModel)
@@ -97,9 +97,9 @@ struct NavigationPanel: View {
                     }
             }
 
-            if !viewModel.detectedVolumes.isEmpty {
+            if !viewModel.library.detectedVolumes.isEmpty {
                 panelSectionHeader("Wechseldatenträger")
-                ForEach(viewModel.detectedVolumes) { volume in
+                ForEach(viewModel.library.detectedVolumes) { volume in
                     PanelVolumeRow(volume: volume,
                                    isSelected: viewModel.navSelection == .volume(volume.id))
                         .environmentObject(viewModel)
@@ -113,7 +113,7 @@ struct NavigationPanel: View {
                 .buttonStyle(PlainButtonStyle())
             ))
 
-            ForEach(viewModel.smartFolders) { sf in
+            ForEach(viewModel.library.smartFolders) { sf in
                 panelNavRow(
                     label: sf.name,
                     icon: "folder.badge.gearshape",

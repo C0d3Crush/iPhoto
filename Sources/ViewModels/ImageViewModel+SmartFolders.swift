@@ -6,28 +6,28 @@ import Foundation
 extension ImageViewModel {
 
     func createSmartFolder(_ sf: SmartFolder) {
-        smartFolders.append(sf)
-        saveSmartFolders()
+        library.smartFolders.append(sf)
+        library.saveSmartFolders()
         navSelection = .smartFolder(sf.id)
         syncSmartFolderToFilesystem(sf)
     }
 
     func deleteSmartFolder(_ sf: SmartFolder) {
         removeSmartFolderFromFilesystem(sf)
-        smartFolders.removeAll { $0.id == sf.id }
+        library.smartFolders.removeAll { $0.id == sf.id }
         if navSelection == .smartFolder(sf.id) { navSelection = .library }
-        saveSmartFolders()
+        library.saveSmartFolders()
     }
 
     func updateSmartFolder(_ sf: SmartFolder) {
-        guard let idx = smartFolders.firstIndex(where: { $0.id == sf.id }) else { return }
-        let old = smartFolders[idx]
+        guard let idx = library.smartFolders.firstIndex(where: { $0.id == sf.id }) else { return }
+        let old = library.smartFolders[idx]
         let oldDir: URL? = (old.name != sf.name || old.group != sf.group)
             ? smartFolderSystemPath(for: old)
             : nil
         let oldGroup = old.group
-        smartFolders[idx] = sf
-        saveSmartFolders()
+        library.smartFolders[idx] = sf
+        library.saveSmartFolders()
         syncSmartFolderToFilesystem(sf, removingOldAt: oldDir)
         // Clean up empty old group directory in BG if group changed
         if let grp = oldGroup, grp != sf.group {
@@ -47,13 +47,13 @@ extension ImageViewModel {
     // MARK: - Smart Folder Group Operations
 
     func moveSmartFolder(_ sf: SmartFolder, toGroup group: String?) {
-        guard let idx = smartFolders.firstIndex(where: { $0.id == sf.id }) else { return }
-        let old = smartFolders[idx]
+        guard let idx = library.smartFolders.firstIndex(where: { $0.id == sf.id }) else { return }
+        let old = library.smartFolders[idx]
         let oldDir = smartFolderSystemPath(for: old)
         let oldGroup = old.group
-        smartFolders[idx].group = group
-        saveSmartFolders()
-        syncSmartFolderToFilesystem(smartFolders[idx], removingOldAt: oldDir)
+        library.smartFolders[idx].group = group
+        library.saveSmartFolders()
+        syncSmartFolderToFilesystem(library.smartFolders[idx], removingOldAt: oldDir)
         // Remove empty old group dir
         if let grp = oldGroup {
             let groupDir = smartFoldersSystemRoot.appendingPathComponent(grp)
@@ -71,10 +71,10 @@ extension ImageViewModel {
         guard !trimmed.isEmpty, trimmed != oldName else { return }
         let oldGroupDir = smartFoldersSystemRoot.appendingPathComponent(oldName)
         let newGroupDir = smartFoldersSystemRoot.appendingPathComponent(trimmed)
-        for idx in smartFolders.indices where smartFolders[idx].group == oldName {
-            smartFolders[idx].group = trimmed
+        for idx in library.smartFolders.indices where library.smartFolders[idx].group == oldName {
+            library.smartFolders[idx].group = trimmed
         }
-        saveSmartFolders()
+        library.saveSmartFolders()
         // Move entire group directory on filesystem
         DispatchQueue.global(qos: .utility).async {
             let fm = FileManager.default
@@ -83,19 +83,19 @@ extension ImageViewModel {
             }
         }
         // Re-sync all smart folders in the renamed group
-        for sf in smartFolders where sf.group == trimmed {
+        for sf in library.smartFolders where sf.group == trimmed {
             syncSmartFolderToFilesystem(sf)
         }
     }
 
     func dissolveGroup(_ groupName: String) {
-        for idx in smartFolders.indices where smartFolders[idx].group == groupName {
-            let old = smartFolders[idx]
+        for idx in library.smartFolders.indices where library.smartFolders[idx].group == groupName {
+            let old = library.smartFolders[idx]
             let oldDir = smartFolderSystemPath(for: old)
-            smartFolders[idx].group = nil
-            syncSmartFolderToFilesystem(smartFolders[idx], removingOldAt: oldDir)
+            library.smartFolders[idx].group = nil
+            syncSmartFolderToFilesystem(library.smartFolders[idx], removingOldAt: oldDir)
         }
-        saveSmartFolders()
+        library.saveSmartFolders()
         // Remove the (now-empty) group directory
         let groupDir = smartFoldersSystemRoot.appendingPathComponent(groupName)
         DispatchQueue.global(qos: .utility).async {
@@ -192,35 +192,17 @@ extension ImageViewModel {
         }
     }
 
-    private var smartFoldersFileURL: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("iPhoto")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("smartFolders.json")
-    }
-
-    func loadSmartFolders() {
-        guard let data = try? Data(contentsOf: smartFoldersFileURL),
-              let decoded = try? JSONDecoder().decode([SmartFolder].self, from: data) else { return }
-        smartFolders = decoded
-    }
-
-    func saveSmartFolders() {
-        guard let data = try? JSONEncoder().encode(smartFolders) else { return }
-        persistFileData(data, to: smartFoldersFileURL, description: "SmartFolder-Datei")
-    }
-
     func createFilmSimulationSmartFolders() {
         let known = CatalogStore.shared.allFilmSimulations()
         let group = "Filmsimulationen"
         var changed = 0
         for sim in known {
             guard !sim.isEmpty else { continue }
-            if let idx = smartFolders.firstIndex(where: { $0.name == sim && ($0.group == nil || $0.group != group) }) {
-                smartFolders[idx].group = group
-                syncSmartFolderToFilesystem(smartFolders[idx])
+            if let idx = library.smartFolders.firstIndex(where: { $0.name == sim && ($0.group == nil || $0.group != group) }) {
+                library.smartFolders[idx].group = group
+                syncSmartFolderToFilesystem(library.smartFolders[idx])
                 changed += 1
-            } else if !smartFolders.contains(where: { $0.name == sim && $0.group == group }) {
+            } else if !library.smartFolders.contains(where: { $0.name == sim && $0.group == group }) {
                 var criterion = SmartFolderCriterion()
                 criterion.attribute = .filmSimulation
                 criterion.op = .isExact
@@ -229,11 +211,11 @@ extension ImageViewModel {
                 sf.criteria = [criterion]
                 sf.matchAll = true
                 sf.group = group
-                smartFolders.append(sf)
+                library.smartFolders.append(sf)
                 syncSmartFolderToFilesystem(sf)
                 changed += 1
             }
         }
-        if changed > 0 { saveSmartFolders() }
+        if changed > 0 { library.saveSmartFolders() }
     }
 }

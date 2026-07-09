@@ -25,10 +25,7 @@ class ImageViewModel: ObservableObject {
     @Published var isStartupLoading: Bool = true
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
-    @Published var albums: [Album] = []
-    @Published var watchedFolders: [WatchedFolder] = []
-    @Published var smartFolders: [SmartFolder] = []
-    @Published var detectedVolumes: [DetectedVolume] = []
+    let library = LibraryStore()
 
     struct ImportProgress {
         var folderName: String
@@ -134,9 +131,13 @@ class ImageViewModel: ObservableObject {
     // MARK: - Init
 
     init() {
-        loadAlbums()
-        loadWatchedFolders()
-        loadSmartFolders()
+        library.onError = { [weak self] msg in self?.errorMessage = msg }
+        library.loadAlbums()
+        library.loadSmartFolders()
+        library.loadWatchedFolders()
+        // Backward compat: Filesystem-Verzeichnisse für bestehende Alben anlegen
+        for album in library.albums { syncAlbumToFilesystem(album) }
+        setupWatchedFolders()
 
         // CatalogStore.init() opens SQLite, runs schema migrations, and loads the full EXIF
         // cache — this can take 200–800 ms on large libraries. Warm it up on a background
@@ -150,6 +151,10 @@ class ImageViewModel: ObservableObject {
         }
 
         collection.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        library.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
@@ -204,7 +209,7 @@ class ImageViewModel: ObservableObject {
                       let volumeURL = notification.userInfo?["NSWorkspaceVolumeURLKey"] as? URL
                 else { return }
                 let volumePath = volumeURL.standardized.path
-                for folder in self.watchedFolders where folder.autoSync {
+                for folder in self.library.watchedFolders where folder.autoSync {
                     guard let bookmarkPath = folder.bookmarkPath,
                           bookmarkPath.hasPrefix(volumePath) else { continue }
                     self.syncedFolderIDs.remove(folder.id)
@@ -485,14 +490,4 @@ class ImageViewModel: ObservableObject {
         ImageDocument.supportedExtensions.contains(url.pathExtension.lowercased())
     }
 
-    func persistFileData(_ data: Data, to url: URL, description: String) {
-        do {
-            try data.write(to: url, options: .atomic)
-        } catch {
-            Log.error("\(description) konnte nicht gespeichert werden: \(error)")
-            DispatchQueue.main.async { [weak self] in
-                self?.errorMessage = "\(description): \(error.localizedDescription)"
-            }
-        }
-    }
 }

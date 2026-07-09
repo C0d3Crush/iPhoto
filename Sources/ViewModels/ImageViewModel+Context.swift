@@ -44,19 +44,19 @@ extension ImageViewModel {
         case .library, nil:
             filtered = collection.documents
         case .album(let id):
-            guard let album = albums.first(where: { $0.id == id }) else { return [] }
+            guard let album = library.albums.first(where: { $0.id == id }) else { return [] }
             filtered = collection.documents.filter { album.photoURLs.contains($0.url) }
         case .folder(let id):
-            guard let folder = watchedFolders.first(where: { $0.id == id }),
+            guard let folder = library.watchedFolders.first(where: { $0.id == id }),
                   let (folderURL, stop) = folder.resolveURL() else { return [] }
             defer { stop() }
             let prefix = folderURL.standardized.path
             filtered = collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
         case .smartFolder(let id):
-            guard let sf = smartFolders.first(where: { $0.id == id }) else { return [] }
+            guard let sf = library.smartFolders.first(where: { $0.id == id }) else { return [] }
             filtered = collection.documents.filter { smartFolderMatches($0, sf: sf) }
         case .volume(let id):
-            guard let volume = detectedVolumes.first(where: { $0.id == id }) else { return [] }
+            guard let volume = library.detectedVolumes.first(where: { $0.id == id }) else { return [] }
             let prefix = volume.url.standardized.path
             filtered = collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
         }
@@ -167,7 +167,7 @@ extension ImageViewModel {
                 return applyTextOp(c.op, haystack: doc.filename, needle: c.textValue)
             case .album:
                 guard let albumID = UUID(uuidString: c.textValue),
-                      let album = albums.first(where: { $0.id == albumID }) else { return false }
+                      let album = library.albums.first(where: { $0.id == albumID }) else { return false }
                 let inAlbum = album.photoURLs.contains(doc.url)
                 return applyEnumOp(c.op, lhs: inAlbum, rhs: true)
             }

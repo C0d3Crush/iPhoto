@@ -22,15 +22,15 @@ extension ImageViewModel {
         guard vals?.volumeIsRemovable == true else { return }
         let name = vals?.volumeName ?? url.lastPathComponent
         let standardPath = url.standardized.path
-        guard !detectedVolumes.contains(where: { $0.url.standardized.path == standardPath }) else { return }
-        detectedVolumes.append(DetectedVolume(id: UUID(), name: name, url: url))
+        guard !library.detectedVolumes.contains(where: { $0.url.standardized.path == standardPath }) else { return }
+        library.detectedVolumes.append(DetectedVolume(id: UUID(), name: name, url: url))
     }
 
     func removeDetectedVolume(at url: URL) {
         let path = url.standardized.path
-        guard let idx = detectedVolumes.firstIndex(where: { $0.url.standardized.path == path }) else { return }
-        let volumeID = detectedVolumes[idx].id
-        detectedVolumes.remove(at: idx)
+        guard let idx = library.detectedVolumes.firstIndex(where: { $0.url.standardized.path == path }) else { return }
+        let volumeID = library.detectedVolumes[idx].id
+        library.detectedVolumes.remove(at: idx)
         collection.documents.removeAll { $0.url.standardized.path.hasPrefix(path) }
         if case .volume(let id) = navSelection, id == volumeID {
             navSelection = .library

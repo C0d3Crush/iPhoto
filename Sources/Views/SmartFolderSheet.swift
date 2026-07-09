@@ -38,7 +38,7 @@ struct SmartFolderSheet: View {
                     .foregroundColor(.secondary)
                 TextField("Gruppenname (optional)", text: $group)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                let existingGroups = Array(Set(viewModel.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
+                let existingGroups = Array(Set(viewModel.library.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
                 if !existingGroups.isEmpty {
                     Menu("Gruppe wählen") {
                         ForEach(existingGroups, id: \.self) { g in
@@ -322,14 +322,14 @@ private struct CriterionRow: View {
 
         // --- Album ---
         case .album:
-            if viewModel.albums.isEmpty {
+            if viewModel.library.albums.isEmpty {
                 Text("Keine Alben vorhanden")
                     .foregroundColor(.secondary)
                     .font(.caption)
             } else {
                 Picker("", selection: $criterion.textValue) {
                     Text("Bitte wählen").tag("")
-                    ForEach(viewModel.albums) { album in
+                    ForEach(viewModel.library.albums) { album in
                         Text(album.name).tag(album.id.uuidString)
                     }
                 }
@@ -337,7 +337,7 @@ private struct CriterionRow: View {
                 .pickerStyle(MenuPickerStyle())
                 .frame(width: 160)
                 .onAppear {
-                    if criterion.textValue.isEmpty, let first = viewModel.albums.first {
+                    if criterion.textValue.isEmpty, let first = viewModel.library.albums.first {
                         criterion.textValue = first.id.uuidString
                     }
                 }

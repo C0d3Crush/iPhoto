@@ -133,10 +133,10 @@ struct ThumbnailContextMenu: View {
     }
 
     @ViewBuilder private var albumSection: some View {
-        if !vm.albums.isEmpty {
+        if !vm.library.albums.isEmpty {
             let multi = isInMultiSelection
             Menu(multi ? "Alle (\(vm.collection.selectedIndices.count)) zu Album hinzufügen" : "Zu Album hinzufügen") {
-                ForEach(vm.albums) { album in
+                ForEach(vm.library.albums) { album in
                     let inAlbum = !multi && album.photoURLs.contains(doc.url)
                     Button {
                         if multi {

@@ -41,8 +41,8 @@ extension ImageViewModel {
 
     func createAlbum(name: String) {
         let album = Album(name: name)
-        albums.append(album)
-        saveAlbums()
+        library.albums.append(album)
+        library.saveAlbums()
         CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: album.name)
         navSelection = .album(album.id) as NavSelection?
         syncAlbumToFilesystem(album)
@@ -50,71 +50,51 @@ extension ImageViewModel {
 
     func deleteAlbum(_ album: Album) {
         removeAlbumFromFilesystem(album)
-        albums.removeAll { $0.id == album.id }
+        library.albums.removeAll { $0.id == album.id }
         if navSelection == .album(album.id) { navSelection = .library as NavSelection? }
-        saveAlbums()
+        library.saveAlbums()
         CatalogStore.shared.deleteAlbum(id: album.id.uuidString)
     }
 
     func renameAlbum(_ album: Album, to name: String) {
-        guard let idx = albums.firstIndex(where: { $0.id == album.id }) else { return }
+        guard let idx = library.albums.firstIndex(where: { $0.id == album.id }) else { return }
         let oldDir = albumSystemPath(for: album)
-        albums[idx].name = name
-        saveAlbums()
+        library.albums[idx].name = name
+        library.saveAlbums()
         CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: name)
-        syncAlbumToFilesystem(albums[idx], removingOldAt: oldDir)
+        syncAlbumToFilesystem(library.albums[idx], removingOldAt: oldDir)
     }
 
     func addToAlbum(_ document: ImageDocument, albumID: UUID) {
-        guard let idx = albums.firstIndex(where: { $0.id == albumID }) else { return }
-        guard !albums[idx].photoURLs.contains(document.url) else { return }
-        albums[idx].photoURLs.append(document.url)
-        saveAlbums()
+        guard let idx = library.albums.firstIndex(where: { $0.id == albumID }) else { return }
+        guard !library.albums[idx].photoURLs.contains(document.url) else { return }
+        library.albums[idx].photoURLs.append(document.url)
+        library.saveAlbums()
         CatalogStore.shared.addImage(path: document.url.path, toAlbum: albumID.uuidString,
-                                     order: albums[idx].photoURLs.count - 1)
-        syncAlbumToFilesystem(albums[idx])
+                                     order: library.albums[idx].photoURLs.count - 1)
+        syncAlbumToFilesystem(library.albums[idx])
     }
 
     func addSelectedToAlbum(albumID: UUID) {
-        guard let idx = albums.firstIndex(where: { $0.id == albumID }) else { return }
+        guard let idx = library.albums.firstIndex(where: { $0.id == albumID }) else { return }
         for colIdx in collection.selectedIndices {
             guard colIdx < collection.documents.count else { continue }
             let url = collection.documents[colIdx].url
-            guard !albums[idx].photoURLs.contains(url) else { continue }
-            albums[idx].photoURLs.append(url)
+            guard !library.albums[idx].photoURLs.contains(url) else { continue }
+            library.albums[idx].photoURLs.append(url)
             CatalogStore.shared.addImage(path: url.path, toAlbum: albumID.uuidString,
-                                         order: albums[idx].photoURLs.count - 1)
+                                         order: library.albums[idx].photoURLs.count - 1)
         }
-        saveAlbums()
-        syncAlbumToFilesystem(albums[idx])
+        library.saveAlbums()
+        syncAlbumToFilesystem(library.albums[idx])
     }
 
     func removeFromAlbum(_ document: ImageDocument, albumID: UUID) {
-        guard let idx = albums.firstIndex(where: { $0.id == albumID }) else { return }
-        albums[idx].photoURLs.removeAll { $0 == document.url }
-        saveAlbums()
+        guard let idx = library.albums.firstIndex(where: { $0.id == albumID }) else { return }
+        library.albums[idx].photoURLs.removeAll { $0 == document.url }
+        library.saveAlbums()
         CatalogStore.shared.removeImage(path: document.url.path, fromAlbum: albumID.uuidString)
-        syncAlbumToFilesystem(albums[idx])
-    }
-
-    private var albumsFileURL: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("iPhoto")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("albums.json")
-    }
-
-    func loadAlbums() {
-        guard let data = try? Data(contentsOf: albumsFileURL),
-              let decoded = try? JSONDecoder().decode([Album].self, from: data) else { return }
-        albums = decoded
-        // Backward compat: create filesystem directories for all existing albums
-        for album in albums { syncAlbumToFilesystem(album) }
-    }
-
-    func saveAlbums() {
-        guard let data = try? JSONEncoder().encode(albums) else { return }
-        persistFileData(data, to: albumsFileURL, description: "Album-Datei")
+        syncAlbumToFilesystem(library.albums[idx])
     }
 
     // MARK: - Album Filesystem Sync

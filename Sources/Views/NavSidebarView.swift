@@ -24,7 +24,7 @@ struct NavSidebarView: View {
                   let idStr = String(data: data, encoding: .utf8),
                   let id = UUID(uuidString: idStr) else { completion(nil); return }
             DispatchQueue.main.async {
-                completion(self.viewModel.smartFolders.first(where: { $0.id == id }))
+                completion(self.viewModel.library.smartFolders.first(where: { $0.id == id }))
             }
         }
     }
@@ -168,7 +168,7 @@ struct NavSidebarView: View {
                 .buttonStyle(PlainButtonStyle())
             ))
         if !albumsCollapsed {
-            ForEach(viewModel.albums) { album in
+            ForEach(viewModel.library.albums) { album in
                 AlbumRow(album: album, isSelected: viewModel.navSelection == .album(album.id))
                     .environmentObject(viewModel)
                     .contextMenu {
@@ -215,14 +215,14 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var smartFoldersContent: some View {
-        ForEach(viewModel.smartFolders.filter { $0.group == nil || $0.group?.isEmpty == true }) { sf in
+        ForEach(viewModel.library.smartFolders.filter { $0.group == nil || $0.group?.isEmpty == true }) { sf in
             smartFolderRow(sf)
         }
-        let groups = Array(Set(viewModel.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
+        let groups = Array(Set(viewModel.library.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
         ForEach(groups, id: \.self) { groupName in
             groupHeaderRow(groupName)
             if !collapsedGroups.contains(groupName) {
-                ForEach(viewModel.smartFolders.filter { $0.group == groupName }) { sf in
+                ForEach(viewModel.library.smartFolders.filter { $0.group == groupName }) { sf in
                     smartFolderRow(sf, indented: true)
                 }
             }
@@ -272,9 +272,9 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var volumesSection: some View {
-        if !viewModel.detectedVolumes.isEmpty {
+        if !viewModel.library.detectedVolumes.isEmpty {
             sectionHeader("Wechseldatenträger")
-            ForEach(viewModel.detectedVolumes) { volume in
+            ForEach(viewModel.library.detectedVolumes) { volume in
                 VolumeRow(volume: volume, isSelected: viewModel.navSelection == .volume(volume.id))
                     .environmentObject(viewModel)
             }
@@ -571,7 +571,7 @@ private struct MoveToGroupSheet: View {
     @State private var newGroupName = ""
 
     private var existingGroups: [String] {
-        Array(Set(viewModel.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
+        Array(Set(viewModel.library.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
     }
 
     var body: some View {
