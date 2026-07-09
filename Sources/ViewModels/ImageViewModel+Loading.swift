@@ -63,6 +63,7 @@ extension ImageViewModel {
         }
 
         if doc.previewImage != nil {
+            Log.trace("Dwell geplant (previewImage vorhanden): \(url.lastPathComponent) token=\(token)")
             let item = DispatchWorkItem { [weak self] in
                 guard let self = self, self.loadToken == token else { return }
                 self.fullResWorkItem = nil
@@ -107,8 +108,10 @@ extension ImageViewModel {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self, self.loadToken == token else { return }
                 self.fullResWorkItem?.cancel()
+                Log.trace("Dwell geplant (Phase 3): \(url.lastPathComponent) token=\(token)")
                 let item = DispatchWorkItem { [weak self] in
                     guard let self = self, self.loadToken == token else { return }
+                    Log.trace("Dwell gefeuert: \(url.lastPathComponent) token=\(token)")
                     self.fullResWorkItem = nil
                     self.loadFullRes(url: url, index: index, token: token)
                 }

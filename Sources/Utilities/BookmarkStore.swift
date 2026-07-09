@@ -30,6 +30,23 @@ final class BookmarkStore {
         persist()
     }
 
+    // Batch variant: creates all bookmarks, writes the JSON file only once.
+    func save(urls: [URL]) {
+        var created: [String: Data] = [:]
+        for url in urls {
+            if let data = try? url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            ) { created[url.absoluteString] = data }
+        }
+        guard !created.isEmpty else { return }
+        lock.lock()
+        bookmarks.merge(created) { _, new in new }
+        lock.unlock()
+        persist()
+    }
+
     // Resolves bookmark and starts security-scoped access.
     // Returns the URL to use and a stop closure — caller MUST call stop() when done.
     func access(url: URL) -> (url: URL, stop: () -> Void) {

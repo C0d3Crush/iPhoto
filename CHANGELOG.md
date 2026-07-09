@@ -2,6 +2,16 @@
 
 ---
 
+## 0.84.1
+**Deutlich schnellerer App-Start bei großen Bibliotheken**
+
+- Beim Import blockierte der Hauptthread bis zu ~25 Sekunden: Für jede Datei wurde einzeln ein Security-Scoped-Bookmark erzeugt und die komplette Bookmark-Datei neu geschrieben, außerdem lief pro Datei eine eigene SQLite-Transaktion (Rating-Abfrage + Upsert)
+- Bookmarks werden jetzt gesammelt im Hintergrund angelegt und nur einmal gespeichert
+- Katalog-Einträge werden als ein Batch in einer einzigen Transaktion geschrieben; Ratings werden mit einer Abfrage für alle Bilder vorab geladen
+- Zusätzliche Trace-Logs in der Dekodier-Pipeline zur weiteren Analyse der Ladezeiten
+
+---
+
 ## 0.84.0
 **Weißabgleich-Feintuning (R/B-Shift) in den Metadaten**
 

@@ -396,6 +396,20 @@ final class CatalogStore {
         }
     }
 
+    func allRatings() -> [String: (rating: Int, flag: String, colorLabel: String)] {
+        queue.sync {
+            let stmt = prepare("SELECT image_path,rating,flag,color_label FROM ratings")
+            var out: [String: (rating: Int, flag: String, colorLabel: String)] = [:]
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                out[String(cString: sqlite3_column_text(stmt, 0))] =
+                    (Int(sqlite3_column_int(stmt, 1)),
+                     String(cString: sqlite3_column_text(stmt, 2)),
+                     String(cString: sqlite3_column_text(stmt, 3)))
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
     func removeRating(path: String) {
         queue.sync {
             let stmt = prepare("DELETE FROM ratings WHERE image_path=?")

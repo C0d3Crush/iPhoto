@@ -172,7 +172,10 @@ struct RAWImageDecoder {
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxDim
             ]
-            return CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary)
+            let t0 = Date()
+            let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary)
+            Log.trace("CreateThumbnailAtIndex fertig: \(Int(Date().timeIntervalSince(t0) * 1000)) ms \(name)")
+            return thumb
         }
 
         // Vollbild-Pfad: volle Auflösung + manuelle EXIF-Rotation (für decode())

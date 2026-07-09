@@ -366,12 +366,17 @@ class ImageViewModel: ObservableObject {
         let newURLs = supported.filter { !existingURLs.contains($0) }
         guard !newURLs.isEmpty else { return }
 
-        newURLs.forEach { BookmarkStore.shared.save(url: $0) }
+        // Bookmarks im Hintergrund anlegen — innerhalb der Session greift access()
+        // auch ohne Bookmark direkt auf die URLs zu.
+        DispatchQueue.global(qos: .utility).async {
+            BookmarkStore.shared.save(urls: newURLs)
+        }
+        let catalogRatings = CatalogStore.shared.allRatings()
         let newDocs = newURLs
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map { url -> ImageDocument in
                 var doc = ImageDocument(url: url)
-                if let r = CatalogStore.shared.rating(forPath: url.path) {
+                if let r = catalogRatings[url.path] {
                     doc.rating = r.rating
                     doc.flagStatus = FlagStatus(rawValue: r.flag) ?? .none
                     doc.colorLabel = ColorLabel(rawValue: r.colorLabel) ?? .none
@@ -380,9 +385,16 @@ class ImageViewModel: ObservableObject {
                     doc.flagStatus = entry.flagStatus
                     doc.colorLabel = entry.colorLabel
                 }
-                CatalogStore.shared.upsertImage(path: url.path, filename: url.lastPathComponent, isRAW: doc.isRAW)
                 return doc
             }
+        let batchItems = newDocs.map { doc in
+            (path: doc.url.path, filename: doc.url.lastPathComponent, isRAW: doc.isRAW,
+             width: 0, height: 0, sizeBytes: Int64(0),
+             dateTaken: nil as String?, cameraMake: nil as String?, cameraModel: nil as String?)
+        }
+        DispatchQueue.global(qos: .utility).async {
+            CatalogStore.shared.batchUpsertImages(batchItems)
+        }
 
         let firstNewIndex = collection.documents.count
         collection.appendDocuments(newDocs)
