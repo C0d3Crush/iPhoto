@@ -2,6 +2,16 @@
 
 ---
 
+## 0.82.1
+**Refactoring: Code-Struktur & Absturz-Prävention**
+
+- Die große Bibliotheks-Logik (1.369 Zeilen) wurde in sieben thematische Dateien aufgeteilt (Sortierung/Kontext, Alben, Intelligente Ordner, Überwachte Ordner, Auswahl/Papierkorb, Bewertungen, Volumes) — keine Funktionsänderung
+- Bildersammlung erkennt fehlerhafte Zugriffe von Hintergrund-Threads jetzt sofort und eindeutig, statt still den Speicher zu beschädigen (Schutz gegen die Absturzklasse aus Bugs #7, #8, #13, #28, #29)
+- Ordner-Überwachung, Tastatur-/Maus-Monitore und offene Hintergrund-Aufgaben werden beim Beenden sauber aufgeräumt
+- Zwei potenzielle Abstürze in der Histogramm-/Parade-Darstellung bei leeren Daten entschärft
+
+---
+
 ## 0.82.0
 **Feature: Zahleneingabe bei Anpassungen erlaubt Werte außerhalb des Slider-Bereichs**
 

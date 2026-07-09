@@ -113,7 +113,7 @@ final class AnalysisEngine: ObservableObject {
 
     private static func renderHistogram(r: [Int], g: [Int], b: [Int], luma: [Int]) -> CGImage? {
         let w = 256, h = 128
-        let maxVal = max(1, [r, g, b, luma].flatMap { $0 }.max()!)
+        let maxVal = max(1, [r, g, b, luma].flatMap { $0 }.max() ?? 1)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmapFlags = CGImageAlphaInfo.premultipliedLast.rawValue
 
@@ -162,7 +162,7 @@ final class AnalysisEngine: ObservableObject {
     private static func renderParade(r: [Float], g: [Float], b: [Float], w: Int, h: Int) -> CGImage? {
         let gapH   = 3
         let outH   = h * 3 + gapH * 2
-        let maxVal = max(1.0, [r, g, b].flatMap { $0 }.max()!)
+        let maxVal = max(1.0, [r, g, b].flatMap { $0 }.max() ?? 1.0)
         var pixels = [UInt8](repeating: 0, count: w * outH * 4)
 
         let channels: [(acc: [Float], cr: Float, cg: Float, cb: Float, yOff: Int)] = [

@@ -103,6 +103,7 @@ class ImageViewModel: ObservableObject {
         return CIContext(options: opts)
     }()
     var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
+    private var eventMonitors: [Any] = []
     var syncedFolderIDs: Set<UUID> = []
     var isLoadingFullRes = false
     var activeFullResToken: UUID? = nil
@@ -261,7 +262,7 @@ class ImageViewModel: ObservableObject {
             .sink { [weak self] selection in self?.loadContentForSelection(selection) }
             .store(in: &cancellables)
 
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        let keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
             let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             let onlyCmdDown  = mods == .command
@@ -324,15 +325,23 @@ class ImageViewModel: ObservableObject {
             }
         }
 
-        NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+        let mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             self?.lastClickModifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             return event
         }
+        eventMonitors = [keyMonitor, mouseMonitor].compactMap { $0 }
 
         let memSource = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
         memSource.setEventHandler { [weak self] in self?.evictDistantImages(keepRadius: 0) }
         memSource.resume()
         cancellables.insert(AnyCancellable { memSource.cancel() })
+    }
+
+    deinit {
+        folderWatchers.values.forEach { $0.cancel() }
+        fullResWorkItem?.cancel()
+        thumbHideTask?.cancel()
+        eventMonitors.forEach { NSEvent.removeMonitor($0) }
     }
 
     // MARK: - Core operations

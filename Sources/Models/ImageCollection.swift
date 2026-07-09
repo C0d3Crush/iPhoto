@@ -1,10 +1,21 @@
 import Foundation
 import Combine
 
+/// Invariante: Alle Lese- und Schreibzugriffe erfolgen auf dem Main-Thread.
+/// Background-Tasks müssen Wert-Kopien (URL, Index) capturen und Ergebnisse via
+/// DispatchQueue.main.async zurückschreiben. Verletzungen führten früher zu
+/// CoW-Data-Races mit Speicherkorruption (Bugs #7, #8, #13, #28, #29) — die
+/// didSet-Preconditions lassen solche Fehler jetzt sofort und eindeutig crashen.
 class ImageCollection: ObservableObject {
-    @Published var documents: [ImageDocument] = []
-    @Published var currentIndex: Int = 0
-    @Published var selectedIndices: Set<Int> = []
+    @Published var documents: [ImageDocument] = [] {
+        didSet { dispatchPrecondition(condition: .onQueue(.main)) }
+    }
+    @Published var currentIndex: Int = 0 {
+        didSet { dispatchPrecondition(condition: .onQueue(.main)) }
+    }
+    @Published var selectedIndices: Set<Int> = [] {
+        didSet { dispatchPrecondition(condition: .onQueue(.main)) }
+    }
 
     var currentDocument: ImageDocument? {
         guard !documents.isEmpty, currentIndex < documents.count else { return nil }
