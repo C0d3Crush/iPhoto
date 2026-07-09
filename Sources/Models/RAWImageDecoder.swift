@@ -36,6 +36,14 @@ enum DecoderError: LocalizedError {
 }
 
 struct RAWImageDecoder {
+    // true, wenn decode() ohnehin nur das eingebettete JPEG liefert (RAF auf macOS 11) —
+    // eine separate Preview-Phase mit Dwell bringt dann nichts.
+    static func fullDecodeIsCheap(url: URL) -> Bool {
+        guard url.pathExtension.lowercased() == "raf" else { return false }
+        if #available(macOS 12.0, *) { return false }
+        return true
+    }
+
     static func decode(url: URL) throws -> CGImage {
         // macOS 11: Der System-RAW-Decoder für RAF crasht mit SIGSEGV — ImageIO überspringen.
         if url.pathExtension.lowercased() == "raf" {

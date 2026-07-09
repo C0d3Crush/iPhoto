@@ -119,7 +119,7 @@ struct NavSidebarView: View {
 
     @ViewBuilder
     private func smartFolderRow(_ sf: SmartFolder, indented: Bool = false) -> some View {
-        let count = viewModel.collection.documents.filter { viewModel.smartFolderMatches($0, sf: sf) }.count
+        let count = viewModel.smartFolderCounts[sf.id] ?? 0
         // Button + onDrag conflict: button gesture swallows the drag.
         // Using plain view + onTapGesture allows onDrag to work correctly.
         HStack(spacing: 4) {

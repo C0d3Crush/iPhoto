@@ -2,6 +2,17 @@
 
 ---
 
+## 0.84.2
+**Bildwechsel dramatisch beschleunigt (~3 s → ~35 ms)**
+
+- Die Smart-Folder-Zähler in der Seitenleiste filterten bei jedem UI-Update alle Bilder neu (inkl. Datenbank-Zugriffen pro Bild, ~480 ms pro Durchlauf) — die Zähler werden jetzt entkoppelt im Hintergrund berechnet
+- Nachbarbilder werden nach jedem Bildwechsel im Hintergrund vorgeladen: Beim Weiterschalten kommt das Bild direkt aus dem Speicher statt neu dekodiert zu werden
+- Die sortierte Bilderliste wird als Reihenfolge-Cache gehalten und übersteht jetzt Thumbnail-/Bild-Updates — die teure Neusortierung bei jedem Tastendruck entfällt
+- RAF-Dateien auf macOS 11 laden direkt das Vollbild (eingebettetes JPEG) statt Preview-Phase mit 1,5-s-Wartezeit
+- Versions-Historie und Katalog-Schreibzugriffe beim Bildwechsel laufen nicht mehr auf dem Hauptthread; unveränderte Anpassungen werden nicht mehr erneut gespeichert
+
+---
+
 ## 0.84.1
 **Deutlich schnellerer App-Start bei großen Bibliotheken**
 

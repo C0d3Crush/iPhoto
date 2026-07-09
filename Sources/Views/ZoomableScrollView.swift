@@ -64,6 +64,7 @@ struct ZoomableScrollView: NSViewRepresentable {
 
         let imageChanged = coordinator.lastCGImage !== image
         if imageChanged {
+            Log.trace("ZoomableScrollView: neues Bild angezeigt \(image.width)×\(image.height)")
             let oldWidth = CGFloat(coordinator.lastCGImage?.width ?? 0)
             coordinator.lastCGImage = image
             let newSize = NSSize(width: image.width, height: image.height)

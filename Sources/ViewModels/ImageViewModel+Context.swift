@@ -39,6 +39,25 @@ enum SortCriterion: String, CaseIterable {
 extension ImageViewModel {
 
     var visibleDocuments: [ImageDocument] {
+        let key = VisibleOrderKey(count: collection.documents.count, nav: navSelection,
+                                  sort: sortCriterion, shuffle: shuffledOrder,
+                                  version: visibleOrderVersion)
+        if key == visibleOrderCacheKey, let order = visibleOrderCache {
+            let byID = Dictionary(collection.documents.map { ($0.id, $0) },
+                                  uniquingKeysWith: { a, _ in a })
+            return order.compactMap { byID[$0] }
+        }
+        let result = computeVisibleDocuments()
+        visibleOrderCache = result.map { $0.id }
+        visibleOrderCacheKey = key
+        return result
+    }
+
+    func invalidateVisibleOrder() {
+        visibleOrderVersion &+= 1
+    }
+
+    private func computeVisibleDocuments() -> [ImageDocument] {
         let filtered: [ImageDocument]
         switch navSelection {
         case .library, nil:
@@ -94,6 +113,29 @@ extension ImageViewModel {
 
     func applyRandomShuffle() {
         shuffledOrder = visibleDocuments.map { $0.id }.shuffled()
+    }
+
+    func scheduleSmartFolderCountRefresh() {
+        guard !sfCountRefreshScheduled else { return }
+        sfCountRefreshScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+            self.sfCountRefreshScheduled = false
+            let docs = self.collection.documents
+            let folders = self.library.smartFolders
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                guard let self = self else { return }
+                var counts: [UUID: Int] = [:]
+                for sf in folders {
+                    counts[sf.id] = docs.reduce(0) { $0 + (self.smartFolderMatches($1, sf: sf) ? 1 : 0) }
+                }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, counts != self.smartFolderCounts else { return }
+                    self.objectWillChange.send()
+                    self.smartFolderCounts = counts
+                }
+            }
+        }
     }
 
     func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder) -> Bool {

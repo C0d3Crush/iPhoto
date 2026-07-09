@@ -183,11 +183,14 @@ extension ImageViewModel {
 
     func persistAdjustmentsForCurrent() {
         guard let doc = collection.currentDocument else { return }
+        // Unverändert seit Laden/letztem Speichern → kein synchroner SQLite-Write pro Bildwechsel
+        guard adjustments != lastPersistedAdjustments else { return }
         if adjustments != AdjustmentState() {
             CatalogStore.shared.saveAdjustments(path: doc.url.path, adjustments: adjustments)
         } else {
             CatalogStore.shared.deleteAdjustments(path: doc.url.path)
         }
+        lastPersistedAdjustments = adjustments
     }
 
     func adjustmentLabel() -> String {

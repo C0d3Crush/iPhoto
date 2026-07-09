@@ -7,9 +7,16 @@ extension ImageViewModel {
 
     func loadVersionsForCurrentImage() {
         guard let url = collection.currentDocument?.url else { savedVersions = []; return }
-        let (accessURL, stop) = BookmarkStore.shared.access(url: url)
-        savedVersions = VersionStore.shared.loadVersions(for: accessURL)
-        stop()
+        // Bookmark-Resolve + Verzeichnis-Anlage + JSON-Read gehören nicht auf den Main-Thread
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let (accessURL, stop) = BookmarkStore.shared.access(url: url)
+            let versions = VersionStore.shared.loadVersions(for: accessURL)
+            stop()
+            DispatchQueue.main.async {
+                guard let self = self, self.collection.currentDocument?.url == url else { return }
+                self.savedVersions = versions
+            }
+        }
     }
 
     // MARK: - Save Adjusted Image to File

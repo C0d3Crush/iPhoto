@@ -107,6 +107,7 @@ extension ImageViewModel {
 
     private func persistRating(at idx: Int) {
         guard idx < collection.documents.count else { return }
+        invalidateVisibleOrder()
         let doc = collection.documents[idx]
         let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel)
         RatingStore.shared.save(entry, for: doc.url)

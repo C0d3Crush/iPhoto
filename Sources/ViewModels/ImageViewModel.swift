@@ -73,6 +73,8 @@ class ImageViewModel: ObservableObject {
     @Published var adjRedoStack: [AdjustmentState] = []
     var isUndoRedoing = false
     var lastCommittedAdjustments = AdjustmentState()
+    /// Zuletzt in den Katalog geschriebener (bzw. daraus geladener) Anpassungs-Stand
+    var lastPersistedAdjustments = AdjustmentState()
 
     // MARK: - HDR Merge
     @Published var showHDRMergeSheet: Bool = false
@@ -115,6 +117,28 @@ class ImageViewModel: ObservableObject {
     var metaTotal: Int = 0
     let metaTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
 
+    // Reihenfolge-Cache für visibleDocuments: Filter+Sortierung (800+ teure
+    // localizedStandardCompare) wird als ID-Liste gecacht, die Dokument-Inhalte
+    // kommen immer frisch aus der Collection. So invalidieren Thumbnail-/Bild-
+    // Mutationen den Cache nicht — nur Attribute, die Filter/Sortierung ändern
+    // (Rating, Flag, Metadaten), bumpen visibleOrderVersion.
+    struct VisibleOrderKey: Equatable {
+        let count: Int
+        let nav: NavSelection?
+        let sort: SortCriterion
+        let shuffle: [UUID]
+        let version: Int
+    }
+    var visibleOrderCache: [UUID]? = nil
+    var visibleOrderCacheKey: VisibleOrderKey? = nil
+    var visibleOrderVersion = 0
+    var prefetchInFlight: Set<URL> = []
+
+    // Smart-Folder-Zähler: Live-Filtern aller Dokumente (inkl. SQLite-Fallbacks)
+    // kostete ~480 ms pro Render-Pass — daher debounced im Hintergrund berechnet.
+    var smartFolderCounts: [UUID: Int] = [:]
+    var sfCountRefreshScheduled = false
+
     // MARK: - Computed properties
 
     var currentImage: CGImage? {
@@ -151,11 +175,19 @@ class ImageViewModel: ObservableObject {
         }
 
         collection.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+                self?.scheduleSmartFolderCountRefresh()
+            }
             .store(in: &cancellables)
 
         library.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .sink { [weak self] _ in
+                // Alben/Ordner beeinflussen die Filterung in visibleDocuments
+                self?.invalidateVisibleOrder()
+                self?.objectWillChange.send()
+                self?.scheduleSmartFolderCountRefresh()
+            }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .importRequested)
@@ -418,12 +450,14 @@ class ImageViewModel: ObservableObject {
     }
 
     func selectDocument(at index: Int) {
+        Log.trace("selectDocument(\(index)) — Klick angekommen")
         persistAdjustmentsForCurrent()
         collection.select(index: index)
         loadCurrentImage()
     }
 
     func next() {
+        Log.trace("next() — Taste/Klick angekommen")
         persistAdjustmentsForCurrent()
         let visible = visibleDocuments
         guard let cur = collection.currentDocument,
@@ -436,6 +470,7 @@ class ImageViewModel: ObservableObject {
     }
 
     func previous() {
+        Log.trace("previous() — Taste/Klick angekommen")
         persistAdjustmentsForCurrent()
         let visible = visibleDocuments
         guard let cur = collection.currentDocument,
