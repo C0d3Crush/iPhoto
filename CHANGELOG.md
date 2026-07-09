@@ -2,6 +2,15 @@
 
 ---
 
+## 0.83.0
+**Weißabgleich in den Metadaten**
+
+- Die Metadaten-Ansicht zeigt jetzt den bei der Aufnahme verwendeten Weißabgleich
+- Bei Fujifilm-Kameras (RAF und JPEG) wird der konkrete Modus aus der MakerNote gelesen: Automatisch (inkl. Weiß-/Umgebungs-Priorität), Tageslicht, Bewölkt, Leuchtstoff-Varianten, Glühlampe, Blitz, Unterwasser, Benutzerdefiniert sowie Kelvin mit Farbtemperatur (z. B. „Kelvin (5600 K)")
+- Bei allen anderen Kameras wird das Standard-EXIF-Feld angezeigt (Automatisch/Manuell)
+
+---
+
 ## 0.82.3
 **Tests: LibraryStore-Testsuite + erweiterte Katalog-Tests**
 

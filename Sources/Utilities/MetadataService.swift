@@ -7,12 +7,16 @@ final class MetadataService {
         var props: [String: Any]
         var fujiDynamicRange: Int? = nil
         var fujiFilmSim: String? = nil
+        var fujiWhiteBalance: String? = nil
 
         if url.pathExtension.lowercased() == "raf" {
             let jpegData = rafEmbeddedJPEGData(url: url)
             let mnValues = jpegData.flatMap { fujiMakerNoteValues(from: $0) }
             fujiDynamicRange = mnValues?.dr
             fujiFilmSim = MetadataService.resolveFilmSim(filmSim: mnValues?.filmSim, saturation: mnValues?.saturation)
+            if let wb = mnValues?.whiteBalance {
+                fujiWhiteBalance = MetadataService.fujiWhiteBalanceName(wb, colorTemp: mnValues?.colorTemp)
+            }
 
             if #available(macOS 12.0, *) {
                 // macOS 12+: ImageIO unterstützt RAF nativ
@@ -46,6 +50,9 @@ final class MetadataService {
                         let mnValues = fujiMakerNoteValues(from: raw)
                         fujiDynamicRange = mnValues.dr
                         fujiFilmSim = MetadataService.resolveFilmSim(filmSim: mnValues.filmSim, saturation: mnValues.saturation)
+                        if let wb = mnValues.whiteBalance {
+                            fujiWhiteBalance = MetadataService.fujiWhiteBalanceName(wb, colorTemp: mnValues.colorTemp)
+                        }
                     }
                 }
             }
@@ -59,11 +66,16 @@ final class MetadataService {
         // Fallback: kCGImagePropertyExifMakerNote direkt von ImageIO parsen.
         // ImageIO liefert die rohen MakerNote-Bytes bei Fuji RAFs und JPEGs — zuverlässiger als
         // manuelles JPEG-Segment-Scanning und deckt B&W-Simulationen (Monochrome/Acros) ab.
-        if fujiFilmSim == nil {
+        if fujiFilmSim == nil || fujiWhiteBalance == nil {
             if let mnData = exif[kCGImagePropertyExifMakerNote as String] as? Data {
                 let r = parseFujiMakerNoteBytes(mnData)
                 if fujiDynamicRange == nil { fujiDynamicRange = r.dr }
-                fujiFilmSim = MetadataService.resolveFilmSim(filmSim: r.filmSim, saturation: r.saturation)
+                if fujiFilmSim == nil {
+                    fujiFilmSim = MetadataService.resolveFilmSim(filmSim: r.filmSim, saturation: r.saturation)
+                }
+                if fujiWhiteBalance == nil, let wb = r.whiteBalance {
+                    fujiWhiteBalance = MetadataService.fujiWhiteBalanceName(wb, colorTemp: r.colorTemp)
+                }
             }
         }
 
@@ -105,6 +117,16 @@ final class MetadataService {
             roEntry("ISO",           "exif.ISO",          .camera,
                     ((exif[kCGImagePropertyExifISOSpeedRatings as String] as? [Int])?.first).map { "ISO \($0)" } ?? ""),
         ]
+
+        // Weißabgleich: Fuji-MakerNote liefert den konkreten Modus (Tageslicht, Kelvin …),
+        // Standard-EXIF nur Automatisch/Manuell (0/1).
+        var wbValue = fujiWhiteBalance ?? ""
+        if wbValue.isEmpty, let exifWB = exif[kCGImagePropertyExifWhiteBalance as String] as? Int {
+            wbValue = exifWB == 1 ? "Manuell" : "Automatisch"
+        }
+        if !wbValue.isEmpty {
+            entries.append(roEntry("Weißabgleich", "exif.WhiteBalance", .camera, wbValue))
+        }
 
         let customRendered = exif[kCGImagePropertyExifCustomRendered as String] as? Int ?? 0
         let isHDR = customRendered >= 2 || (fujiDynamicRange ?? 100) > 100
@@ -310,41 +332,45 @@ final class MetadataService {
     // Genutzt als Fallback wenn ImageIO die MakerNote via kCGImagePropertyExifMakerNote liefert.
     // saturation: Tag 0x1003 — kodiert B&W/Acros-Modus auf neueren Kameras (X-T4+),
     // die Tag 0x1401 für diese Simulationen nicht setzen.
-    func parseFujiMakerNoteBytes(_ data: Data) -> (dr: Int?, filmSim: Int?, saturation: Int?) {
+    func parseFujiMakerNoteBytes(_ data: Data) -> (dr: Int?, filmSim: Int?, saturation: Int?, whiteBalance: Int?, colorTemp: Int?) {
         guard data.count >= 12,
-              data.subdata(in: 0..<8) == Data("FUJIFILM".utf8) else { return (nil, nil, nil) }
+              data.subdata(in: 0..<8) == Data("FUJIFILM".utf8) else { return (nil, nil, nil, nil, nil) }
         let ifdOff = Int(data.readUInt32LE(at: 8))
         let ifd = ifdOff
-        guard ifd + 2 <= data.count else { return (nil, nil, nil) }
+        guard ifd + 2 <= data.count else { return (nil, nil, nil, nil, nil) }
         let count = Int(data.readUInt16LE(at: ifd))
-        guard count > 0, count < 500 else { return (nil, nil, nil) }
+        guard count > 0, count < 500 else { return (nil, nil, nil, nil, nil) }
         var filmSim: Int? = nil
         var saturation: Int? = nil
         var dr1403: Int? = nil
         var dr140B: Int? = nil
+        var whiteBalance: Int? = nil
+        var colorTemp: Int? = nil
         for j in 0..<count {
             let fe = ifd + 2 + j * 12
             guard fe + 12 <= data.count else { break }
             let ftag = data.readUInt16LE(at: fe)
             // UInt32 lesen und auf 16 Bit maskieren — robuster als reines UInt16 für LONG-Einträge
+            if ftag == 0x1002 { whiteBalance = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
             if ftag == 0x1003 { saturation = Int(data.readUInt16LE(at: fe + 8)) }
+            if ftag == 0x1005 { colorTemp  = Int(data.readUInt16LE(at: fe + 8)) }
             if ftag == 0x1401 { filmSim    = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
             if ftag == 0x1403 { dr1403     = Int(data.readUInt16LE(at: fe + 8)) }
             if ftag == 0x140B { dr140B     = Int(data.readUInt16LE(at: fe + 8)) }
         }
-        return (dr1403 ?? dr140B, filmSim, saturation)
+        return (dr1403 ?? dr140B, filmSim, saturation, whiteBalance, colorTemp)
     }
 
     // Sucht die "FUJIFILM"-MakerNote-Signatur direkt in den Rohdaten (kein TIFF-Traversal nötig).
-    func fujiMakerNoteValues(from data: Data) -> (dr: Int?, filmSim: Int?, saturation: Int?) {
+    func fujiMakerNoteValues(from data: Data) -> (dr: Int?, filmSim: Int?, saturation: Int?, whiteBalance: Int?, colorTemp: Int?) {
         let sig = Data("FUJIFILM".utf8)
         var lo = data.startIndex
         while let r = data.range(of: sig, options: [], in: lo..<data.endIndex) {
             let result = parseFujiMakerNoteBytes(data.subdata(in: r.lowerBound..<data.endIndex))
-            if result.dr != nil || result.filmSim != nil || result.saturation != nil { return result }
+            if result.dr != nil || result.filmSim != nil || result.saturation != nil || result.whiteBalance != nil { return result }
             lo = r.upperBound
         }
-        return (nil, nil, nil)
+        return (nil, nil, nil, nil, nil)
     }
 
     // Löst Film-Simulation aus Tag 0x1401 (primär) oder 0x1003 (Fallback für B&W/Acros).
@@ -358,6 +384,38 @@ final class MetadataService {
             if !name.isEmpty { return name }
         }
         return nil
+    }
+
+    // Tag 0x1002: Fuji-Weißabgleich-Modus (deutlich feiner als EXIF-Auto/Manuell).
+    // Kelvin-Modus (0xFF0) zeigt zusätzlich die Farbtemperatur aus Tag 0x1005.
+    static func fujiWhiteBalanceName(_ raw: Int, colorTemp: Int?) -> String {
+        let name: String
+        switch raw {
+        case 0x000: name = "Automatisch"
+        case 0x001: name = "Automatisch (Weiß-Priorität)"
+        case 0x002: name = "Automatisch (Umgebungs-Priorität)"
+        case 0x100: name = "Tageslicht"
+        case 0x200: name = "Bewölkt"
+        case 0x300: name = "Leuchtstoff (Tageslicht)"
+        case 0x301: name = "Leuchtstoff (Neutralweiß)"
+        case 0x302: name = "Leuchtstoff (Weiß)"
+        case 0x303: name = "Leuchtstoff (Warmweiß)"
+        case 0x304: name = "Leuchtstoff (Wohnraum-Warmweiß)"
+        case 0x400: name = "Glühlampe"
+        case 0x500: name = "Blitz"
+        case 0x600: name = "Unterwasser"
+        case 0xF00: name = "Benutzerdefiniert"
+        case 0xF01: name = "Benutzerdefiniert 2"
+        case 0xF02: name = "Benutzerdefiniert 3"
+        case 0xF03: name = "Benutzerdefiniert 4"
+        case 0xF04: name = "Benutzerdefiniert 5"
+        case 0xFF0: name = "Kelvin"
+        default: return ""
+        }
+        if raw == 0xFF0, let t = colorTemp, t > 0 {
+            return "Kelvin (\(t) K)"
+        }
+        return name
     }
 
     // Tag 0x1401: standard Film-Simulations-Code (Farb-Simulationen)
