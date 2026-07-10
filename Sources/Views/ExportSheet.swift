@@ -3,11 +3,13 @@ import AppKit
 
 private class ExportState: ObservableObject {
     enum Scope { case current, selection, all }
+    enum Destination { case file, airdrop }
     enum Phase { case idle, exporting, done, failed(String) }
 
     @Published var format: ExportFormat = .jpeg
     @Published var quality: Double = 85
     @Published var scope: Scope = .current
+    @Published var destination: Destination = .file
     @Published var phase: Phase = .idle
     @Published var completedCount: Int = 0
     @Published var totalCount: Int = 0
@@ -82,6 +84,23 @@ struct ExportSheet: View {
                 if selectedDocuments.count > 1 { state.scope = .selection }
             }
 
+            // Ziel
+            row(label: "Ziel") {
+                VStack(alignment: .leading, spacing: 4) {
+                    radioButton(selected: state.destination == .file, label: "Speicherort wählen…") {
+                        state.destination = .file
+                    }
+                    HStack(spacing: 6) {
+                        radioButton(selected: state.destination == .airdrop, label: "AirDrop") {
+                            state.destination = .airdrop
+                        }
+                        Image(systemName: "wifi")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    }
+                }
+            }
+
             Divider()
 
             // Fortschritt / Ergebnis
@@ -93,7 +112,7 @@ struct ExportSheet: View {
 
                 Spacer()
 
-                Button("Exportieren…") { beginExport() }
+                Button(state.destination == .airdrop ? "Per AirDrop senden…" : "Exportieren…") { beginExport() }
                     .buttonStyle(DefaultButtonStyle())
                     .disabled(isExporting)
             }
@@ -198,11 +217,77 @@ struct ExportSheet: View {
     }
 
     private func beginExport() {
+        if state.destination == .airdrop {
+            exportViaAirDrop()
+            return
+        }
         switch state.scope {
         case .current:   exportCurrent()
         case .selection: exportBatch(selectedDocuments)
         case .all:       exportBatch(documents)
         }
+    }
+
+    private func scopedDocuments() -> [ImageDocument] {
+        switch state.scope {
+        case .current:   return currentDocument.map { [$0] } ?? []
+        case .selection: return selectedDocuments
+        case .all:       return documents
+        }
+    }
+
+    /// Exportiert in einen temporären Ordner und öffnet dann das AirDrop-Fenster.
+    private func exportViaAirDrop() {
+        let docs = scopedDocuments()
+        guard !docs.isEmpty else { return }
+        guard let service = NSSharingService(named: .sendViaAirDrop) else {
+            state.phase = .failed("AirDrop ist auf diesem Mac nicht verfügbar")
+            return
+        }
+        let fmt = state.format
+        let q = state.quality / 100.0
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("iPhoto-AirDrop-\(UUID().uuidString)")
+        do {
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        } catch {
+            state.phase = .failed(error.localizedDescription)
+            return
+        }
+
+        state.phase = .exporting
+        state.totalCount = docs.count
+        state.completedCount = 0
+
+        ImageExporter.exportBatch(
+            documents: docs,
+            to: tempDir,
+            format: fmt,
+            quality: q,
+            adjustmentsProvider: { effectiveAdjustments(for: $0) },
+            progressHandler: { completed, _ in
+                DispatchQueue.main.async { state.completedCount = completed }
+            },
+            completion: { result in
+                DispatchQueue.main.async {
+                    let urls = docs.map { doc -> URL in
+                        let stem = (doc.filename as NSString).deletingPathExtension
+                        return tempDir.appendingPathComponent(stem)
+                            .appendingPathExtension(fmt.fileExtension)
+                    }.filter { FileManager.default.fileExists(atPath: $0.path) }
+
+                    guard !urls.isEmpty else {
+                        state.phase = .failed(result.failed.first.map {
+                            "\($0.filename): \($0.reason)"
+                        } ?? "Export fehlgeschlagen")
+                        return
+                    }
+                    state.result = result
+                    state.phase = .done
+                    service.perform(withItems: urls)
+                }
+            }
+        )
     }
 
     private func exportCurrent() {

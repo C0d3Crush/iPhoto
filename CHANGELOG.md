@@ -2,6 +2,15 @@
 
 ---
 
+## 0.87.0
+**Export per AirDrop — Bilder direkt ans iPhone senden**
+
+- Neuer Punkt „Ziel" im Export-Dialog: wahlweise Speicherort wählen (wie bisher) oder AirDrop
+- Bei AirDrop werden die Bilder im gewählten Format/Qualität exportiert und anschließend öffnet sich das AirDrop-Fenster zur Geräteauswahl (z. B. iPhone)
+- Funktioniert für das aktuelle Bild, die Auswahl oder alle Bilder — Anpassungen werden wie beim normalen Export mitgerendert
+
+---
+
 ## 0.86.2
 **Hartnäckigste Crash-Ursache behoben: Absturz beim Scrollen/Rendern der Thumbnail-Leiste und Raster (Bug #31)**
 
