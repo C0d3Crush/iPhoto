@@ -8,6 +8,7 @@ struct LibraryFullGridView: View {
         [GridItem(.adaptive(minimum: viewModel.gridThumbnailSize + 8))]
     }
     private var cellWidth: CGFloat { viewModel.gridThumbnailSize }
+    @StateObject private var scroller = AppKitScroller()
 
     var body: some View {
         ZStack {
@@ -27,7 +28,6 @@ struct LibraryFullGridView: View {
                     }
                 }
             } else {
-                ScrollViewReader { proxy in
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 8) {
                             ForEach(viewModel.visibleDocuments, id: \.id) { doc in
@@ -38,7 +38,6 @@ struct LibraryFullGridView: View {
                                               isStackExpanded: viewModel.isStackExpanded(doc),
                                               isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
                                               onStackToggle: { viewModel.toggleStack(leader: doc) })
-                                    .id(idx)
                                     .frame(width: cellWidth + 8)
                                     .contentShape(Rectangle())
                                     .onAppear { viewModel.requestVisibleThumbnail(at: idx) }
@@ -50,14 +49,12 @@ struct LibraryFullGridView: View {
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity)
+                        .background(ScrollViewGrabber(scroller: scroller))
                     }
                     .background(Color(NSColor.windowBackgroundColor))
-                    .onChange(of: viewModel.collection.currentIndex) { newIndex in
-                        // Kein withAnimation: animiertes scrollTo crasht auf macOS 11 in
-                        // HostingScrollView.checkAnimationCompletion (EXC_BAD_ACCESS)
-                        proxy.scrollTo(newIndex, anchor: .center)
+                    .onChange(of: viewModel.collection.currentIndex) { _ in
+                        scrollToCurrent()
                     }
-                }
             }
           }
           DropTargetView()
@@ -95,6 +92,19 @@ struct LibraryFullGridView: View {
                 .keyboardShortcut("i", modifiers: .command)
             }
         }
+    }
+
+    // Kein ScrollViewProxy.scrollTo: hinterlässt auf macOS 11 ein persistentes
+    // Scroll-Ziel, das nach Layout-Neuaufbau crasht (Bug #31) — AppKit-Scroll.
+    private func scrollToCurrent() {
+        guard let cur = viewModel.collection.currentDocument,
+              let pos = viewModel.visibleDocuments.firstIndex(where: { $0.id == cur.id }) else { return }
+        let count = viewModel.visibleDocuments.count
+        let clipWidth = scroller.scrollView?.contentView.bounds.width ?? 0
+        let itemWidth = cellWidth + 8
+        let colSpacing: CGFloat = 8
+        let cols = max(1, Int((clipWidth - 24 + colSpacing) / (itemWidth + colSpacing)))
+        scroller.centerRow(position: pos, count: count, columns: cols, verticalPadding: 12)
     }
 
     private func openDetail(at index: Int) {

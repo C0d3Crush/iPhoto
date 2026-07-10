@@ -2,6 +2,15 @@
 
 ---
 
+## 0.86.2
+**Hartnäckigste Crash-Ursache behoben: Absturz beim Scrollen/Rendern der Thumbnail-Leiste und Raster (Bug #31)**
+
+- 18 von 23 Absturz-Berichten der letzten Wochen hatten dieselbe Ursache: das programmatische Zentrieren der Auswahl (`scrollTo`) hinterlässt auf macOS 11 ein internes Scroll-Ziel, das nach Änderungen der Bildliste (Bewertung, Thumbnail-Laden) auf freigegebenen Speicher zeigt — der nächste Scroll oder Fenster-Resize stürzte ab
+- Thumbnail-Leiste und beide Raster-Ansichten zentrieren die Auswahl jetzt direkt über AppKit — ohne das fehleranfällige SwiftUI-Scroll-Ziel
+- Verhalten unverändert: Auswahl wird weiterhin beim Bildwechsel zentriert
+
+---
+
 ## 0.86.1
 **Bewertungs-Sprung in intelligenten Ordnern + schnellerer Bildwechsel bei Shuffle**
 

@@ -2,35 +2,40 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @StateObject private var scroller = AppKitScroller()
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: true) {
-                LazyHStack(spacing: 12) {
-                    ForEach(viewModel.visibleDocuments, id: \.id) { doc in
-                        let actualIndex = viewModel.collectionIndex(for: doc) ?? 0
-                        let isSelected = viewModel.collection.documents.indices.contains(viewModel.collection.currentIndex)
-                            && viewModel.collection.documents[viewModel.collection.currentIndex].id == doc.id
-                        ThumbnailCell(document: doc, isSelected: isSelected)
-                            .id(actualIndex)
-                            .frame(width: 156)
-                            .contentShape(Rectangle())
-                            .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }
-                            .onTapGesture { viewModel.selectDocument(at: actualIndex) }
-                            .contextMenu { albumContextMenu(for: doc) }
-                            .onDrag { NSItemProvider(object: doc.url as NSURL) }
-                    }
+        ScrollView(.horizontal, showsIndicators: true) {
+            LazyHStack(spacing: 12) {
+                ForEach(viewModel.visibleDocuments, id: \.id) { doc in
+                    let actualIndex = viewModel.collectionIndex(for: doc) ?? 0
+                    let isSelected = viewModel.collection.documents.indices.contains(viewModel.collection.currentIndex)
+                        && viewModel.collection.documents[viewModel.collection.currentIndex].id == doc.id
+                    ThumbnailCell(document: doc, isSelected: isSelected)
+                        .frame(width: 156)
+                        .contentShape(Rectangle())
+                        .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }
+                        .onTapGesture { viewModel.selectDocument(at: actualIndex) }
+                        .contextMenu { albumContextMenu(for: doc) }
+                        .onDrag { NSItemProvider(object: doc.url as NSURL) }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
             }
-            .background(Color(NSColor.controlBackgroundColor))
-            .onChange(of: viewModel.collection.currentIndex) { newIndex in
-                // Kein withAnimation: animiertes scrollTo crasht auf macOS 11 in
-                // HostingScrollView.checkAnimationCompletion (EXC_BAD_ACCESS)
-                proxy.scrollTo(newIndex, anchor: .center)
-            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(ScrollViewGrabber(scroller: scroller))
         }
+        .background(Color(NSColor.controlBackgroundColor))
+        .onChange(of: viewModel.collection.currentIndex) { _ in
+            scrollToCurrent()
+        }
+    }
+
+    // Kein ScrollViewProxy.scrollTo: hinterlässt auf macOS 11 ein persistentes
+    // Scroll-Ziel, das nach Layout-Neuaufbau crasht (Bug #31) — AppKit-Scroll.
+    private func scrollToCurrent() {
+        guard let cur = viewModel.collection.currentDocument,
+              let pos = viewModel.visibleDocuments.firstIndex(where: { $0.id == cur.id }) else { return }
+        scroller.centerHorizontally(position: pos, cellWidth: 156, spacing: 12, padding: 8)
     }
 
     @ViewBuilder

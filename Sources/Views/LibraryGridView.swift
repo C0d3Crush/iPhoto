@@ -3,9 +3,10 @@ import SwiftUI
 struct LibraryGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
+    @StateObject private var scroller = AppKitScroller()
+
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: true) {
+        ScrollView(.horizontal, showsIndicators: true) {
                 if viewModel.visibleDocuments.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "photo.on.rectangle.angled")
@@ -26,7 +27,6 @@ struct LibraryGridView: View {
                                           isStackExpanded: viewModel.isStackExpanded(doc),
                                           isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
                                           onStackToggle: { viewModel.toggleStack(leader: doc) })
-                                .id(actualIndex)
                                 .frame(width: 156)
                                 .contentShape(Rectangle())
                                 .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }
@@ -37,18 +37,24 @@ struct LibraryGridView: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                }
-            }
-            .background(Color(NSColor.controlBackgroundColor))
-            .onAppear {
-                proxy.scrollTo(viewModel.collection.currentIndex, anchor: .center)
-            }
-            .onChange(of: viewModel.collection.currentIndex) { newIndex in
-                // Kein withAnimation: animiertes scrollTo crasht auf macOS 11 in
-                // HostingScrollView.checkAnimationCompletion (EXC_BAD_ACCESS)
-                proxy.scrollTo(newIndex, anchor: .center)
+                    .background(ScrollViewGrabber(scroller: scroller))
             }
         }
+        .background(Color(NSColor.controlBackgroundColor))
+        .onAppear {
+            DispatchQueue.main.async { scrollToCurrent() }
+        }
+        .onChange(of: viewModel.collection.currentIndex) { _ in
+            scrollToCurrent()
+        }
+    }
+
+    // Kein ScrollViewProxy.scrollTo: hinterlässt auf macOS 11 ein persistentes
+    // Scroll-Ziel, das nach Layout-Neuaufbau crasht (Bug #31) — AppKit-Scroll.
+    private func scrollToCurrent() {
+        guard let cur = viewModel.collection.currentDocument,
+              let pos = viewModel.visibleDocuments.firstIndex(where: { $0.id == cur.id }) else { return }
+        scroller.centerHorizontally(position: pos, cellWidth: 156, spacing: 12, padding: 8)
     }
 
     private func handleTap(at index: Int) {
