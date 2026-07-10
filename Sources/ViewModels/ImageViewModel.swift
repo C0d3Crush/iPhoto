@@ -248,6 +248,7 @@ class ImageViewModel: ObservableObject {
                       let volumeURL = notification.userInfo?["NSWorkspaceVolumeURLKey"] as? URL
                 else { return }
                 let volumePath = volumeURL.standardized.path
+                var handledByFolder = false
                 for folder in self.library.watchedFolders where folder.autoSync {
                     guard let bookmarkPath = folder.bookmarkPath,
                           bookmarkPath.hasPrefix(volumePath) else { continue }
@@ -256,9 +257,12 @@ class ImageViewModel: ObservableObject {
                     self.navSelection = .folder(folder.id)
                     if folder.importDestinationPath != nil {
                         self.importImages(from: folder)
+                        handledByFolder = true
                     }
                 }
-                self.addDetectedVolumeIfRemovable(volumeURL)
+                if let volume = self.addDetectedVolumeIfRemovable(volumeURL), !handledByFolder {
+                    self.offerVolumeSync(volume)
+                }
             }
             .store(in: &cancellables)
 

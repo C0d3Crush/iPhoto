@@ -2,6 +2,16 @@
 
 ---
 
+## 0.86.0
+**SD-Karten-Dialog: Synchronisieren mit optionalem Speicher-Freimachen**
+
+- Beim Einstecken einer Speicherkarte mit Bildern erscheint ein Dialog mit drei Optionen: „Synchronisieren“, „Synchronisieren und Speicher freimachen“ und „Abbrechen“
+- Synchronisieren kopiert alle neuen Bilder in die iPhoto-Bibliothek (~/Bilder/iPhoto); bereits vorhandene Dateien werden übersprungen
+- „Speicher freimachen“ löscht anschließend nur Bilder von der Karte, die verifiziert in der Bibliothek liegen — fehlgeschlagene Kopien bleiben erhalten und werden gemeldet
+- Karten, die bereits über einen überwachten Ordner mit Auto-Sync importiert werden, zeigen den Dialog nicht doppelt
+
+---
+
 ## 0.85.0
 **Serienbild- und Bracketing-Stapel (Fuji BKT & CH/CL)**
 
