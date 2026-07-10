@@ -502,19 +502,32 @@ class ImageViewModel: ObservableObject {
     // MARK: - Memory management
 
     func evictDistantImages(keepRadius: Int = 2) {
-        let current = collection.currentIndex
-        let visibleIDs: Set<UUID>?
-        switch navSelection {
-        case .library, nil: visibleIDs = nil
-        default: visibleIDs = Set(visibleDocuments.map { $0.id })
+        // Distanz in Anzeige-Reihenfolge messen, nicht im Collection-Index:
+        // bei Shuffle/Sortierung liegen die sichtbaren Nachbarn sonst außerhalb
+        // jedes Index-Radius und frisch geprefetchte Bilder würden sofort verworfen.
+        let visible = visibleDocuments
+        let curID = collection.currentDocument?.id
+        let farRadius = max(keepRadius * 3, 5)
+        var keepNear: Set<UUID> = []
+        var keepFar: Set<UUID> = []
+        if let curID = curID {
+            keepNear.insert(curID)
+            keepFar.insert(curID)
+            if let pos = visible.firstIndex(where: { $0.id == curID }) {
+                for off in -farRadius...farRadius {
+                    let i = pos + off
+                    guard i >= 0, i < visible.count else { continue }
+                    keepFar.insert(visible[i].id)
+                    if abs(off) <= keepRadius { keepNear.insert(visible[i].id) }
+                }
+            }
         }
         for i in 0..<collection.documents.count {
-            let dist = abs(i - current)
-            let outsideContext = visibleIDs.map { !$0.contains(collection.documents[i].id) } ?? false
-            if dist > keepRadius || outsideContext {
+            let id = collection.documents[i].id
+            if !keepNear.contains(id) {
                 collection.documents[i].cgImage = nil
             }
-            if dist > max(keepRadius * 3, 5) || outsideContext {
+            if !keepFar.contains(id) {
                 collection.documents[i].previewImage = nil
             }
         }

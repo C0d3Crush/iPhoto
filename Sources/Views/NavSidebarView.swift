@@ -509,6 +509,15 @@ private struct VolumeRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if isHovered {
                     Button {
+                        viewModel.offerVolumeSync(volume)
+                    } label: {
+                        Image(systemName: "arrow.down.circle")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Synchronisieren…")
+                    Button {
                         viewModel.ejectVolume(volume)
                     } label: {
                         Image(systemName: "eject")
@@ -527,6 +536,10 @@ private struct VolumeRow: View {
         .buttonStyle(PlainButtonStyle())
         .padding(.horizontal, 4)
         .onHover { isHovered = $0 }
+        .contextMenu {
+            Button("Synchronisieren…") { viewModel.offerVolumeSync(volume) }
+            Button("Auswerfen") { viewModel.ejectVolume(volume) }
+        }
     }
 }
 

@@ -64,14 +64,17 @@ extension ImageViewModel {
     }
 
     func setRating(_ r: Int, for doc: ImageDocument) {
+        let prev = visibleDocuments
         let indices = affectedIndices(for: doc)
         for idx in indices {
             collection.documents[idx].rating = r
             persistRating(at: idx)
         }
+        advanceIfCurrentExcluded(previousVisible: prev)
     }
 
     func setFlagStatus(_ flag: FlagStatus, for doc: ImageDocument) {
+        let prev = visibleDocuments
         let indices = affectedIndices(for: doc)
         guard !indices.isEmpty else { return }
         let allSet = indices.allSatisfy { collection.documents[$0].flagStatus == flag }
@@ -80,9 +83,11 @@ extension ImageViewModel {
             collection.documents[idx].flagStatus = newStatus
             persistRating(at: idx)
         }
+        advanceIfCurrentExcluded(previousVisible: prev)
     }
 
     func setColorLabel(_ label: ColorLabel, for doc: ImageDocument) {
+        let prev = visibleDocuments
         let indices = affectedIndices(for: doc)
         guard !indices.isEmpty else { return }
         let allSet = indices.allSatisfy { collection.documents[$0].colorLabel == label }
@@ -92,6 +97,7 @@ extension ImageViewModel {
             persistRating(at: idx)
             applyFinderColorLabel(newLabel, to: collection.documents[idx].url)
         }
+        advanceIfCurrentExcluded(previousVisible: prev)
     }
 
     private func applyFinderColorLabel(_ label: ColorLabel, to url: URL) {
@@ -113,10 +119,5 @@ extension ImageViewModel {
         RatingStore.shared.save(entry, for: doc.url)
         CatalogStore.shared.saveRating(path: doc.url.path, rating: doc.rating,
                                        flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
-        // In einem intelligenten Ordner kann eine Metadatenänderung das Bild aus den
-        // Kriterien herausfallen lassen — Fokus sofort auf das nächste Bild verschieben.
-        if case .smartFolder = navSelection {
-            revalidateSelectionForCurrentContext()
-        }
     }
 }

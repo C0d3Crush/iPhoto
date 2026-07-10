@@ -2,6 +2,15 @@
 
 ---
 
+## 0.86.1
+**Bewertungs-Sprung in intelligenten Ordnern + schnellerer Bildwechsel bei Shuffle**
+
+- Fällt ein Bild nach dem Bewerten aus einem intelligenten Ordner heraus, springt die Auswahl jetzt zum nächsten Bild in der Anzeige-Reihenfolge — nicht mehr zum nächsten in Aufnahmereihenfolge
+- Bild-Cache und Prefetch orientieren sich jetzt an der Anzeige-Reihenfolge: bei Zufalls-Sortierung wurden vorgeladene Nachbarbilder bisher sofort wieder verworfen, was jeden Bildwechsel deutlich verlangsamte
+- Speicherkarten lassen sich jetzt auch nachträglich synchronisieren: Sync-Button beim Überfahren der Karte in der Seitenleiste sowie im Kontextmenü (für Karten, die schon vor dem App-Start eingesteckt waren)
+
+---
+
 ## 0.86.0
 **SD-Karten-Dialog: Synchronisieren mit optionalem Speicher-Freimachen**
 
