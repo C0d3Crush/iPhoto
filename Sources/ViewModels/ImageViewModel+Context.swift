@@ -41,7 +41,7 @@ extension ImageViewModel {
     var visibleDocuments: [ImageDocument] {
         let key = VisibleOrderKey(count: collection.documents.count, nav: navSelection,
                                   sort: sortCriterion, shuffle: shuffledOrder,
-                                  version: visibleOrderVersion)
+                                  version: visibleOrderVersion, expanded: expandedStacks)
         if key == visibleOrderCacheKey, let order = visibleOrderCache {
             let byID = Dictionary(collection.documents.map { ($0.id, $0) },
                                   uniquingKeysWith: { a, _ in a })
@@ -79,7 +79,87 @@ extension ImageViewModel {
             let prefix = volume.url.standardized.path
             filtered = collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
         }
-        return applySortCriterion(to: filtered)
+        return applyStacking(to: applySortCriterion(to: filtered))
+    }
+
+    // MARK: - Serienbild-/Bracketing-Stapel
+
+    // Fuji MakerNote 0x1101: 0 = Einzelbild, 1…n = Position in BKT-/CH-/CL-Serie.
+    func sequenceNumber(for doc: ImageDocument) -> Int {
+        if let v = doc.metadata.first(where: { $0.key == "exif.SequenceNumber" })?.value,
+           let n = Int(v) { return n }
+        return CatalogStore.shared.exif(forPath: doc.url.path)?.sequenceNumber ?? 0
+    }
+
+    // Erkennt Stapel über die Dateinamens-Reihenfolge (= Aufnahmereihenfolge):
+    // aufeinanderfolgende Bilder mit seq ≥ 1 und nicht-fallender Sequenz bilden einen Lauf
+    // (nicht-fallend statt strikt steigend deckt RAF+JPEG-Paare 1,1,2,2,… ab);
+    // seq == 0 oder Sequenz-Reset (…7 → 1) beendet den Lauf. Läufe ≥ 2 werden Stapel.
+    private func applyStacking(to sorted: [ImageDocument]) -> [ImageDocument] {
+        let byName = sorted.sorted {
+            $0.filename.localizedStandardCompare($1.filename) == .orderedAscending
+        }
+        var counts: [UUID: Int] = [:]
+        var leaderByMember: [UUID: UUID] = [:]
+        var membersByLeader: [UUID: [UUID]] = [:]
+        var run: [(id: UUID, seq: Int)] = []
+        func closeRun() {
+            if run.count >= 2 {
+                let leaderID = run[0].id
+                counts[leaderID] = run.count
+                for m in run { leaderByMember[m.id] = leaderID }
+                membersByLeader[leaderID] = run.map { $0.id }
+            }
+            run.removeAll()
+        }
+        for doc in byName {
+            let seq = sequenceNumber(for: doc)
+            if seq >= 1 {
+                if let last = run.last, seq < last.seq { closeRun() }
+                run.append((doc.id, seq))
+            } else {
+                closeRun()
+            }
+        }
+        closeRun()
+
+        stackCounts = counts
+        stackLeaderByMember = leaderByMember
+        guard !counts.isEmpty else { return sorted }
+
+        let byID = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var out: [ImageDocument] = []
+        for doc in sorted {
+            if let leaderID = leaderByMember[doc.id], leaderID != doc.id { continue }
+            out.append(doc)
+            if counts[doc.id] != nil, expandedStacks.contains(doc.url.path),
+               let members = membersByLeader[doc.id] {
+                out += members.dropFirst().compactMap { byID[$0] }
+            }
+        }
+        return out
+    }
+
+    func isStackExpanded(_ doc: ImageDocument) -> Bool {
+        expandedStacks.contains(doc.url.path)
+    }
+
+    func toggleStack(leader: ImageDocument) {
+        let key = leader.url.path
+        if expandedStacks.contains(key) {
+            // Beim Zuklappen: Ist das aktuelle Bild ein Mitglied, den Anführer selektieren,
+            // sonst laufen next()/previous() ins Leere.
+            if let cur = collection.currentDocument,
+               stackLeaderByMember[cur.id] == leader.id, cur.id != leader.id,
+               let idx = collectionIndex(for: leader) {
+                collection.select(index: idx)
+                loadCurrentImage()
+            }
+            expandedStacks.remove(key)
+        } else {
+            expandedStacks.insert(key)
+        }
+        objectWillChange.send()
     }
 
     func applySortCriterion(to docs: [ImageDocument]) -> [ImageDocument] {

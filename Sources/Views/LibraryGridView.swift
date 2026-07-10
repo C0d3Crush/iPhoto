@@ -21,7 +21,11 @@ struct LibraryGridView: View {
                         ForEach(viewModel.visibleDocuments, id: \.id) { doc in
                             let actualIndex = viewModel.collectionIndex(for: doc) ?? 0
                             let isSelected = viewModel.collection.selectedIndices.contains(actualIndex)
-                            ThumbnailCell(document: doc, isSelected: isSelected)
+                            ThumbnailCell(document: doc, isSelected: isSelected,
+                                          stackCount: viewModel.stackCounts[doc.id] ?? 0,
+                                          isStackExpanded: viewModel.isStackExpanded(doc),
+                                          isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
+                                          onStackToggle: { viewModel.toggleStack(leader: doc) })
                                 .id(actualIndex)
                                 .frame(width: 156)
                                 .contentShape(Rectangle())

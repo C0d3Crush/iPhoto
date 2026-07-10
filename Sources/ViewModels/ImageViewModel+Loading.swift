@@ -463,7 +463,9 @@ extension ImageViewModel {
                     let lens = metadata.first(where: { $0.key == "exif.LensModel" })?.value
                     let hdr = metadata.first(where: { $0.key == "exif.HDR" })?.value == "Ja"
                     let filmSim = metadata.first(where: { $0.key == "exif.FilmSimulation" })?.value
-                    CatalogStore.shared.upsertExif(path: path, focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr, filmSimulation: filmSim)
+                    let seq = (metadata.first(where: { $0.key == "exif.SequenceNumber" })?.value).flatMap { Int($0) }
+                    let bkt = metadata.first(where: { $0.key == "exif.AutoBracketing" })?.value == "Ja"
+                    CatalogStore.shared.upsertExif(path: path, focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr, filmSimulation: filmSim, sequenceNumber: seq, autoBracketing: bkt)
                     done += 1
                     let d = done, t = total
                     DispatchQueue.main.async { [weak self] in
@@ -473,7 +475,11 @@ extension ImageViewModel {
                 }
             }
             DispatchQueue.main.async { [weak self] in
-                self?.dequeueLoading(id: taskID)
+                guard let self = self else { return }
+                self.dequeueLoading(id: taskID)
+                // Frisch gescannte Sequenz-Nummern können neue Stapel ergeben
+                self.invalidateVisibleOrder()
+                self.objectWillChange.send()
                 Log.info("EXIF-Scan abgeschlossen: \(total) Bilder")
             }
         }

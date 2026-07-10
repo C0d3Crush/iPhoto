@@ -8,6 +8,8 @@ final class MetadataService {
         var fujiDynamicRange: Int? = nil
         var fujiFilmSim: String? = nil
         var fujiWhiteBalance: String? = nil
+        var fujiSequenceNumber: Int? = nil
+        var fujiAutoBracketing: Int? = nil
 
         if url.pathExtension.lowercased() == "raf" {
             let jpegData = rafEmbeddedJPEGData(url: url)
@@ -15,6 +17,8 @@ final class MetadataService {
             fujiDynamicRange = mnValues?.dr
             fujiFilmSim = MetadataService.resolveFilmSim(filmSim: mnValues?.filmSim, saturation: mnValues?.saturation)
             fujiWhiteBalance = mnValues.flatMap { MetadataService.fujiWhiteBalanceDisplay($0) }
+            fujiSequenceNumber = mnValues?.sequenceNumber
+            fujiAutoBracketing = mnValues?.autoBracketing
 
             if #available(macOS 12.0, *) {
                 // macOS 12+: ImageIO unterstützt RAF nativ
@@ -49,6 +53,8 @@ final class MetadataService {
                         fujiDynamicRange = mnValues.dr
                         fujiFilmSim = MetadataService.resolveFilmSim(filmSim: mnValues.filmSim, saturation: mnValues.saturation)
                         fujiWhiteBalance = MetadataService.fujiWhiteBalanceDisplay(mnValues)
+                        fujiSequenceNumber = mnValues.sequenceNumber
+                        fujiAutoBracketing = mnValues.autoBracketing
                     }
                 }
             }
@@ -62,7 +68,7 @@ final class MetadataService {
         // Fallback: kCGImagePropertyExifMakerNote direkt von ImageIO parsen.
         // ImageIO liefert die rohen MakerNote-Bytes bei Fuji RAFs und JPEGs — zuverlässiger als
         // manuelles JPEG-Segment-Scanning und deckt B&W-Simulationen (Monochrome/Acros) ab.
-        if fujiFilmSim == nil || fujiWhiteBalance == nil {
+        if fujiFilmSim == nil || fujiWhiteBalance == nil || fujiSequenceNumber == nil {
             if let mnData = exif[kCGImagePropertyExifMakerNote as String] as? Data {
                 let r = parseFujiMakerNoteBytes(mnData)
                 if fujiDynamicRange == nil { fujiDynamicRange = r.dr }
@@ -72,6 +78,8 @@ final class MetadataService {
                 if fujiWhiteBalance == nil {
                     fujiWhiteBalance = MetadataService.fujiWhiteBalanceDisplay(r)
                 }
+                if fujiSequenceNumber == nil { fujiSequenceNumber = r.sequenceNumber }
+                if fujiAutoBracketing == nil { fujiAutoBracketing = r.autoBracketing }
             }
         }
 
@@ -129,6 +137,12 @@ final class MetadataService {
         entries.append(roEntry("HDR", "exif.HDR", .camera, isHDR ? "Ja" : "Nein"))
         if let sim = fujiFilmSim {
             entries.append(roEntry("Filmsimulation", "exif.FilmSimulation", .camera, sim))
+        }
+        if let seq = fujiSequenceNumber, seq > 0 {
+            entries.append(roEntry("Serienbild-Nr.", "exif.SequenceNumber", .camera, "\(seq)"))
+        }
+        if let bkt = fujiAutoBracketing {
+            entries.append(roEntry("Auto-Bracketing", "exif.AutoBracketing", .camera, bkt != 0 ? "Ja" : "Nein"))
         }
 
         if !gps.isEmpty {
@@ -333,6 +347,9 @@ final class MetadataService {
         // WB-Feintuning in Kamera-Schritten (Rot/Blau, jeweils −9…+9)
         var wbShiftR: Int? = nil
         var wbShiftB: Int? = nil
+        // Serienbild/Bracketing: 0x1100 (AutoBracketing), 0x1101 (SequenceNumber, 0 = Einzelbild)
+        var autoBracketing: Int? = nil
+        var sequenceNumber: Int? = nil
 
         var isEmpty: Bool {
             dr == nil && filmSim == nil && saturation == nil && whiteBalance == nil
@@ -360,6 +377,8 @@ final class MetadataService {
             let ftag = data.readUInt16LE(at: fe)
             // UInt32 lesen und auf 16 Bit maskieren — robuster als reines UInt16 für LONG-Einträge
             if ftag == 0x1002 { v.whiteBalance = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
+            if ftag == 0x1100 { v.autoBracketing = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
+            if ftag == 0x1101 { v.sequenceNumber = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }
             if ftag == 0x1003 { v.saturation = Int(data.readUInt16LE(at: fe + 8)) }
             if ftag == 0x1005 { v.colorTemp  = Int(data.readUInt16LE(at: fe + 8)) }
             if ftag == 0x1401 { v.filmSim    = Int(data.readUInt32LE(at: fe + 8)) & 0xFFFF }

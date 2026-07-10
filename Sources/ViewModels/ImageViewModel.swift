@@ -128,11 +128,18 @@ class ImageViewModel: ObservableObject {
         let sort: SortCriterion
         let shuffle: [UUID]
         let version: Int
+        let expanded: Set<String>
     }
     var visibleOrderCache: [UUID]? = nil
     var visibleOrderCacheKey: VisibleOrderKey? = nil
     var visibleOrderVersion = 0
     var prefetchInFlight: Set<URL> = []
+
+    // Serienbild-/Bracketing-Stapel (Fuji 0x1101 SequenceNumber):
+    // Anführer-Pfad → aufgeklappt; Zähler/Zuordnung als Nebenprodukt der Order-Berechnung.
+    var expandedStacks: Set<String> = []
+    var stackCounts: [UUID: Int] = [:]
+    var stackLeaderByMember: [UUID: UUID] = [:]
 
     // Smart-Folder-Zähler: Live-Filtern aller Dokumente (inkl. SQLite-Fallbacks)
     // kostete ~480 ms pro Render-Pass — daher debounced im Hintergrund berechnet.

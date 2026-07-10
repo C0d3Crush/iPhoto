@@ -4,6 +4,10 @@ struct ThumbnailCell: View {
     let document: ImageDocument
     let isSelected: Bool
     var thumbnailWidth: CGFloat = 148
+    var stackCount: Int = 0
+    var isStackExpanded: Bool = false
+    var isStackMember: Bool = false
+    var onStackToggle: (() -> Void)? = nil
 
     private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
 
@@ -60,7 +64,32 @@ struct ThumbnailCell: View {
                     .frame(width: thumbnailWidth, height: thumbH)
                 }
 
-                // Flag badge — top trailing
+                // Stack badge — top leading
+            if stackCount > 1 {
+                VStack {
+                    HStack {
+                        HStack(spacing: 2) {
+                            Image(systemName: isStackExpanded ? "chevron.down" : "photo.on.rectangle")
+                                .font(.system(size: 8, weight: .bold))
+                            Text("\(stackCount)")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.black.opacity(0.65))
+                        .cornerRadius(4)
+                        .padding([.top, .leading], 4)
+                        .contentShape(Rectangle())
+                        .onTapGesture { onStackToggle?() }
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .frame(width: thumbnailWidth, height: thumbH)
+            }
+
+            // Flag badge — top trailing
                 if document.flagStatus != .none {
                     VStack {
                         HStack {
@@ -101,7 +130,9 @@ struct ThumbnailCell: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                .strokeBorder(isSelected ? Color.accentColor
+                              : (isStackMember ? Color.accentColor.opacity(0.35) : Color.clear),
+                              lineWidth: isSelected ? 1.5 : 1)
         )
     }
 }

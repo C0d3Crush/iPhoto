@@ -2,6 +2,17 @@
 
 ---
 
+## 0.85.0
+**Serienbild- und Bracketing-Stapel (Fuji BKT & CH/CL)**
+
+- Bilder aus Serienaufnahmen (CH/CL) und Belichtungsreihen (BKT) werden in Thumbnail-Leiste und Raster als ein Stapel angezeigt — das erste Bild trägt ein Zähler-Badge (z. B. „▣ 7")
+- Klick auf das Badge klappt den Stapel inline auf und wieder zu; aufgeklappte Mitglieder sind dezent markiert
+- Pfeiltasten überspringen eingeklappte Stapel-Mitglieder automatisch
+- Erkennung über die Fuji-MakerNote (AutoBracketing/SequenceNumber); neue Metadaten-Einträge „Serienbild-Nr." und „Auto-Bracketing" im Inspector
+- Bestehende Bibliotheken werden beim ersten Start automatisch nachgescannt
+
+---
+
 ## 0.84.2
 **Bildwechsel dramatisch beschleunigt (~3 s → ~35 ms)**
 
