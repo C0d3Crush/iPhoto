@@ -96,6 +96,12 @@ extension ImageViewModel {
     // (nicht-fallend statt strikt steigend deckt RAF+JPEG-Paare 1,1,2,2,… ab);
     // seq == 0 oder Sequenz-Reset (…7 → 1) beendet den Lauf. Läufe ≥ 2 werden Stapel.
     private func applyStacking(to sorted: [ImageDocument]) -> [ImageDocument] {
+        // Ohne Serienbilder den teuren localizedStandardCompare-Sort komplett überspringen.
+        guard sorted.contains(where: { sequenceNumber(for: $0) >= 1 }) else {
+            stackCounts = [:]
+            stackLeaderByMember = [:]
+            return sorted
+        }
         let byName = sorted.sorted {
             $0.filename.localizedStandardCompare($1.filename) == .orderedAscending
         }

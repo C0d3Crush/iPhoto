@@ -2,6 +2,14 @@
 
 ---
 
+## 0.87.1
+**Bildwechsel wieder schnell (~800 ms Verzögerung behoben)**
+
+- Beim Bildwechsel wurden pro Tastendruck für jedes Bild der Bibliothek synchrone Datenbank-Abfragen ausgelöst, wenn Bilder (noch) nicht im Katalog waren — Fehlschläge werden jetzt gemerkt und nicht erneut abgefragt
+- Die Serienbild-Stapelerkennung überspringt ihre aufwendige Dateinamens-Sortierung, wenn gar keine Serienbilder vorhanden sind
+
+---
+
 ## 0.87.0
 **Export per AirDrop — Bilder direkt ans iPhone senden**
 

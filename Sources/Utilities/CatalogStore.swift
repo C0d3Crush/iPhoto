@@ -30,6 +30,9 @@ final class CatalogStore {
     // In-memory EXIF cache — avoids queue.sync SQLite reads from the main thread during
     // smartFolderMatches, which was causing 300+ serialised DB queries per SwiftUI re-render.
     private var exifCache: [String: (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool, filmSimulation: String?, sequenceNumber: Int?, autoBracketing: Bool)] = [:]
+    // Auch Fehlschläge cachen: Bilder, die (noch) nicht im Katalog sind, lösten sonst
+    // bei jeder visibleDocuments-Neuberechnung einen queue.sync-SQLite-SELECT pro Bild aus.
+    private var exifCacheMisses = Set<String>()
     private let exifCacheLock = NSLock()
 
     // JSON-Legacy-Migration nur für den Standard-Katalog — injizierte Pfade (Tests)
@@ -298,18 +301,27 @@ final class CatalogStore {
         }
         exifCacheLock.lock()
         exifCache[path] = (focalLength: focalLength, iso: iso, aperture: aperture, lensModel: lensModel, hdr: hdr, filmSimulation: filmSimulation, sequenceNumber: sequenceNumber, autoBracketing: autoBracketing)
+        exifCacheMisses.remove(path)
         exifCacheLock.unlock()
     }
 
     func exif(forPath path: String) -> (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool, filmSimulation: String?, sequenceNumber: Int?, autoBracketing: Bool)? {
         exifCacheLock.lock()
         let cached = exifCache[path]
+        let knownMiss = exifCacheMisses.contains(path)
         exifCacheLock.unlock()
         if let hit = cached { return hit }
+        if knownMiss { return nil }
         return queue.sync {
             let stmt = prepare("SELECT focal_length, iso, aperture, lens_model, hdr, film_simulation, sequence_number, auto_bracket FROM images WHERE path=?")
             bind(stmt, 1, path)
-            guard sqlite3_step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
+            guard sqlite3_step(stmt) == SQLITE_ROW else {
+                sqlite3_finalize(stmt)
+                exifCacheLock.lock()
+                exifCacheMisses.insert(path)
+                exifCacheLock.unlock()
+                return nil
+            }
             let fl: Double? = sqlite3_column_type(stmt, 0) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 0)
             let iso: Int?  = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil : Int(sqlite3_column_int(stmt, 1))
             let ap: Double? = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 2)
@@ -319,7 +331,11 @@ final class CatalogStore {
             let seq: Int? = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil : Int(sqlite3_column_int(stmt, 6))
             let bkt: Bool = sqlite3_column_int(stmt, 7) != 0
             sqlite3_finalize(stmt)
-            return (fl, iso, ap, lens, hdr, filmSim, seq, bkt)
+            let row = (focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr, filmSimulation: filmSim, sequenceNumber: seq, autoBracketing: bkt)
+            exifCacheLock.lock()
+            exifCache[path] = row
+            exifCacheLock.unlock()
+            return row
         }
     }
 
