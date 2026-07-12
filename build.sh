@@ -7,6 +7,10 @@ BUILD_DIR="$ROOT/build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
+OBJ_DIR="$BUILD_DIR/obj"
+
+CLEAN=0
+if [ "${1:-}" = "--clean" ]; then CLEAN=1; fi
 
 # swiftc suchen: CLT (lokal) → xcrun (Xcode / CI)
 CLT="/Library/Developer/CommandLineTools"
@@ -56,19 +60,59 @@ echo "    SDK         : $SDK"
 echo "    Architektur : $ARCH ($TARGET)"
 echo ""
 
-# Clean
-rm -rf "$BUILD_DIR"
-mkdir -p "$MACOS_DIR" "$CONTENTS/Resources"
+# Clean (nur mit --clean; sonst inkrementell)
+if [ $CLEAN -eq 1 ]; then
+    echo "==> Clean-Build (--clean)"
+    rm -rf "$BUILD_DIR"
+fi
+rm -rf "$APP_BUNDLE"
+mkdir -p "$OBJ_DIR" "$MACOS_DIR" "$CONTENTS/Resources"
 
 # Swift-Dateien einsammeln (sortiert für konsistente Kompilierung)
 SOURCES=$(find "$ROOT/Sources" -name "*.swift" -not -path "*/CLI/*" | sort)
 COUNT=$(echo "$SOURCES" | wc -l | tr -d ' ')
 echo "==> $COUNT Swift-Dateien gefunden"
-echo "$SOURCES" | while read f; do echo "    $f"; done
 echo ""
 
-# Kompilieren
+# Output-File-Map für inkrementelle Kompilierung erzeugen
+OFM="$OBJ_DIR/output-file-map.json"
+{
+    printf '{\n'
+    printf '  "": {"swift-dependencies": "%s/master.swiftdeps"}' "$OBJ_DIR"
+    while IFS= read -r f; do
+        rel="${f#$ROOT/}"
+        key="${rel//\//_}"
+        key="${key%.swift}"
+        printf ',\n  "%s": {"object": "%s/%s.o", "swift-dependencies": "%s/%s.swiftdeps"}' \
+            "$f" "$OBJ_DIR" "$key" "$OBJ_DIR" "$key"
+    done <<< "$SOURCES"
+    printf '\n}\n'
+} > "$OFM"
+
+# Verwaiste Objektdateien entfernen (Quelle gelöscht/umbenannt)
+for o in "$OBJ_DIR"/*.o; do
+    [ -e "$o" ] || continue
+    base=$(basename "$o" .o)
+    if ! grep -qF "$OBJ_DIR/$base.o" "$OFM"; then
+        rm -f "$o" "$OBJ_DIR/$base.swiftdeps"
+    fi
+done
+
+# Kompilieren (inkrementell: nur geänderte Dateien)
 echo "==> Kompiliere…"
+"$SWIFTC" \
+    -target "$TARGET" \
+    -sdk "$SDK" \
+    -module-name iPhoto \
+    -parse-as-library \
+    -O \
+    -incremental \
+    -c \
+    -output-file-map "$OFM" \
+    -j "$(sysctl -n hw.ncpu)" \
+    $SOURCES
+
+echo "==> Linke…"
 "$SWIFTC" \
     -target "$TARGET" \
     -sdk "$SDK" \
@@ -77,10 +121,8 @@ echo "==> Kompiliere…"
     -framework CoreImage \
     -framework ImageIO \
     -framework PDFKit \
-    -module-name iPhoto \
-    -parse-as-library \
-    -O \
-    $SOURCES \
+    -emit-executable \
+    "$OBJ_DIR"/*.o \
     -o "$MACOS_DIR/$APP_NAME"
 
 echo "==> Kopiere Ressourcen…"
@@ -115,6 +157,19 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/HotPixelAnalyzer.swift \
     $ROOT/Sources/Utilities/MetadataService.swift \
     $ROOT/Sources/CLI/main.swift"
+
+# Überspringen, wenn Binary aktueller als alle CLI-Quellen ist
+CLI_BIN="$BUILD_DIR/iphoto-cli"
+if [ -x "$CLI_BIN" ]; then
+    CLI_DIRTY=0
+    for f in $CLI_SOURCES; do
+        if [ "$f" -nt "$CLI_BIN" ]; then CLI_DIRTY=1; break; fi
+    done
+    if [ $CLI_DIRTY -eq 0 ]; then
+        echo "Unverändert: $CLI_BIN"
+        exit 0
+    fi
+fi
 
 "$SWIFTC" \
     -target "$TARGET" \

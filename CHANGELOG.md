@@ -2,6 +2,16 @@
 
 ---
 
+## 0.92.7
+**Build & Qualität — Inkrementeller Build, vollständigere CI, Bildgröße in Metadaten**
+
+- `build.sh` kompiliert jetzt inkrementell: nur geänderte Dateien werden neu übersetzt (unveränderter Rebuild ~1 s, einzelne Datei ~3 s statt ~70 s Vollbuild); `./build.sh --clean` erzwingt weiterhin einen Vollbuild
+- CLI-Tool wird übersprungen, wenn sich keine seiner Quelldateien geändert hat
+- CI führt jetzt zusätzlich die LibraryStore- und Dateiformat-Tests aus (5 statt 3 Test-Suites)
+- Metadaten zeigen jetzt die Bildgröße in Pixeln („Größe" unter Allgemein) — behebt zugleich den fehlschlagenden `info`-Formattest
+
+---
+
 ## 0.92.6
 **Architektur — ImageViewModel-Zerlegung Stufe 2: Anpassungen & intelligente Ordner**
 

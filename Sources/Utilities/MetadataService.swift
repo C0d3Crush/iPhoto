@@ -100,6 +100,11 @@ final class MetadataService {
                   ?? tiff[kCGImagePropertyTIFFArtist as String] as? String ?? ""),
         ]
 
+        if let pw = props[kCGImagePropertyPixelWidth as String] as? Int,
+           let ph = props[kCGImagePropertyPixelHeight as String] as? Int {
+            entries.append(roEntry("Größe", "image.PixelSize", .general, "\(pw) × \(ph) px"))
+        }
+
         let dateStr = exif[kCGImagePropertyExifDateTimeOriginal  as String] as? String
                    ?? exif[kCGImagePropertyExifDateTimeDigitized as String] as? String
                    ?? tiff[kCGImagePropertyTIFFDateTime          as String] as? String ?? ""
