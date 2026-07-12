@@ -27,7 +27,6 @@ extension ImageViewModel {
         guard let doc = collection.currentDocument else { return }
         guard doc.url != currentlyLoadingURL || doc.cgImage == nil else { return }
         currentlyLoadingURL = doc.url
-        let index = collection.currentIndex
         evictDistantImages(keepRadius: 3)
         resetAdjustments()
         adjUndoStack.removeAll()
@@ -69,7 +68,7 @@ extension ImageViewModel {
         // Preview-Phase und 1,5-s-Dwell entfallen, direkt Vollbild laden.
         if RAWImageDecoder.fullDecodeIsCheap(url: url) {
             Log.info("Lade Bild (direkt voll): \(url.lastPathComponent)")
-            loadFullRes(url: url, index: index, token: token)
+            loadFullRes(url: url, token: token)
             return
         }
 
@@ -78,7 +77,7 @@ extension ImageViewModel {
             let item = DispatchWorkItem { [weak self] in
                 guard let self = self, self.loadToken == token else { return }
                 self.fullResWorkItem = nil
-                self.loadFullRes(url: url, index: index, token: token)
+                self.loadFullRes(url: url, token: token)
             }
             fullResWorkItem = item
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: item)
@@ -105,9 +104,9 @@ extension ImageViewModel {
             if let preview = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 1500) {
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.loadToken == token else { return }
-                    guard index < self.collection.documents.count,
-                          self.collection.documents[index].url == url else { return }
-                    self.collection.documents[index].previewImage = preview
+                    // Index per URL auflösen — Positionsindex kann durch Löschen/Sync verschoben sein
+                    guard let idx = self.collection.documents.firstIndex(where: { $0.url == url }) else { return }
+                    self.collection.documents[idx].previewImage = preview
                     self.isLoading = false
                     self.fitToWindowRequested = true
                     self.displayImageVersion = UUID()
@@ -124,7 +123,7 @@ extension ImageViewModel {
                     guard let self = self, self.loadToken == token else { return }
                     Log.trace("Dwell gefeuert: \(url.lastPathComponent) token=\(token)")
                     self.fullResWorkItem = nil
-                    self.loadFullRes(url: url, index: index, token: token)
+                    self.loadFullRes(url: url, token: token)
                 }
                 self.fullResWorkItem = item
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: item)
@@ -132,16 +131,15 @@ extension ImageViewModel {
         }
     }
 
-    func loadFullRes(url: URL, index: Int, token: UUID) {
+    func loadFullRes(url: URL, token: UUID) {
         guard !isLoadingFullRes,
               activeFullResToken == nil,
               token == loadToken,
-              index < collection.documents.count,
-              collection.documents[index].url == url,
-              collection.documents[index].cgImage == nil else { return }
+              let idx = collection.documents.firstIndex(where: { $0.url == url }),
+              collection.documents[idx].cgImage == nil else { return }
         isLoadingFullRes = true
         activeFullResToken = token
-        let preloadedMetadata = index < collection.documents.count ? collection.documents[index].metadata : []
+        let preloadedMetadata = collection.documents[idx].metadata
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             fullResDecodeSemaphore.wait()
@@ -177,12 +175,13 @@ extension ImageViewModel {
                         self?.activeFullResToken = nil
                         return
                     }
-                    guard index < self.collection.documents.count,
-                          self.collection.documents[index].url == url else {
+                    // Index nach dem Decode neu per URL auflösen — Collection kann sich geändert haben
+                    guard let idx = self.collection.documents.firstIndex(where: { $0.url == url }) else {
                         self.isLoadingFullRes = false
+                        self.activeFullResToken = nil
                         return
                     }
-                    let old = self.collection.documents[index]
+                    let old = self.collection.documents[idx]
                     var updated = old
                     updated.cgImage = image
                     updated.imageSize = size
@@ -196,7 +195,7 @@ extension ImageViewModel {
                         updated.flagStatus = entry.flagStatus
                         updated.colorLabel = entry.colorLabel
                     }
-                    self.collection.update(document: updated, at: index)
+                    self.collection.update(document: updated, at: idx)
                     if old.metadata.count != updated.metadata.count
                         || old.rating != updated.rating
                         || old.flagStatus != updated.flagStatus
@@ -245,7 +244,7 @@ extension ImageViewModel {
 
     func upgradeToFullResIfNeeded() {
         guard let doc = collection.currentDocument, doc.cgImage == nil else { return }
-        loadFullRes(url: doc.url, index: collection.currentIndex, token: loadToken)
+        loadFullRes(url: doc.url, token: loadToken)
     }
 
     // MARK: - Thumbnails
@@ -268,7 +267,7 @@ extension ImageViewModel {
         enqueueLoading(id: thumbnailTaskID, label: "Lade Thumbnails",
                        icon: "photo", done: thumbDone, total: thumbQueued)
 
-        for (index, doc) in pending {
+        for (_, doc) in pending {
             let url = doc.url
             DispatchQueue.global(qos: .background).async { [weak self] in
                 thumbnailDecodeSemaphore.wait()
@@ -282,10 +281,9 @@ extension ImageViewModel {
                         guard let self = self else { return }
                         self.thumbInFlight.remove(url)
                         if let img = nsImage,
-                           index < self.collection.documents.count,
-                           self.collection.documents[index].url == url,
-                           self.collection.documents[index].thumbnailImage == nil {
-                            self.collection.documents[index].placeholderThumbnailImage = img
+                           let idx = self.collection.documents.firstIndex(where: { $0.url == url }),
+                           self.collection.documents[idx].thumbnailImage == nil {
+                            self.collection.documents[idx].placeholderThumbnailImage = img
                         }
                         self.thumbDone += 1
                         self.updateLoading(id: self.thumbnailTaskID,
@@ -328,11 +326,10 @@ extension ImageViewModel {
                 DispatchQueue.main.async {
                     guard let self = self else { return }
                     self.hiResInFlight.remove(url)
-                    guard index < self.collection.documents.count,
-                          self.collection.documents[index].url == url else { return }
-                    self.collection.documents[index].thumbnail = thumb
-                    self.collection.documents[index].thumbnailImage = nsImage
-                    self.collection.documents[index].placeholderThumbnailImage = nil
+                    guard let idx = self.collection.documents.firstIndex(where: { $0.url == url }) else { return }
+                    self.collection.documents[idx].thumbnail = thumb
+                    self.collection.documents[idx].thumbnailImage = nsImage
+                    self.collection.documents[idx].placeholderThumbnailImage = nil
                 }
             }
         }

@@ -2,6 +2,15 @@
 
 ---
 
+## 0.92.1
+**Stabilität — Bildlade-Pipeline robuster gegen gleichzeitiges Löschen**
+
+- Bild-, Preview- und Thumbnail-Ergebnisse werden jetzt per Datei-URL statt Positionsindex zugeordnet — verhindert verworfene oder falsch zugeordnete Ladeergebnisse, wenn sich die Sammlung währenddessen ändert (z. B. durch Löschen oder Ordner-Sync)
+- Hängenbleibender Vollbild-Lademodus nach Sammlungsänderung behoben (Folge-Ladevorgänge wurden blockiert)
+- Fehler beim Speichern von Tether-Aufnahmen werden jetzt protokolliert statt still verschluckt
+
+---
+
 ## 0.92.0
 **Interner Papierkorb — Löschen ist jetzt zweistufig**
 
