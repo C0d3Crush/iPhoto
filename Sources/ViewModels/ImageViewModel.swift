@@ -38,6 +38,7 @@ class ImageViewModel: ObservableObject {
         var icon: String
         var done: Int
         var total: Int
+        var summaryVerb: String = "geladen"
         var startedAt: Date = Date()
         var progress: Double { total > 0 ? Double(done) / Double(total) : 0 }
     }
@@ -539,14 +540,14 @@ class ImageViewModel: ObservableObject {
 
     // MARK: - Loading queue (shared across extensions)
 
-    func enqueueLoading(id: UUID, label: String, icon: String, done: Int = 0, total: Int = 0) {
+    func enqueueLoading(id: UUID, label: String, icon: String, done: Int = 0, total: Int = 0, summaryVerb: String = "geladen") {
         loadingSummary = nil
         if let idx = loadingQueue.firstIndex(where: { $0.id == id }) {
             loadingQueue[idx].label = label
             loadingQueue[idx].done  = done
             loadingQueue[idx].total = total
         } else {
-            loadingQueue.append(LoadingTask(id: id, label: label, icon: icon, done: done, total: total))
+            loadingQueue.append(LoadingTask(id: id, label: label, icon: icon, done: done, total: total, summaryVerb: summaryVerb))
         }
     }
 
@@ -566,7 +567,7 @@ class ImageViewModel: ObservableObject {
         let secText = secs < 10
             ? String(format: "%.1f", secs).replacingOccurrences(of: ".", with: ",")
             : "\(Int(secs.rounded()))"
-        loadingSummary = "\(t.total) \(t.total == 1 ? "Bild" : "Bilder") in \(secText) Sekunden geladen"
+        loadingSummary = "\(t.total) \(t.total == 1 ? "Bild" : "Bilder") in \(secText) Sekunden \(t.summaryVerb)"
         let token = UUID()
         loadingSummaryToken = token
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in

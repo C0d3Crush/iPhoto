@@ -2,6 +2,14 @@
 
 ---
 
+## 0.90.0
+**Ladebalken beim Löschen**
+
+- Das Verschieben in den Papierkorb läuft jetzt im Hintergrund mit Fortschrittsbalken in der Seitenleiste — die App blockiert nicht mehr bei vielen Dateien
+- Nach Abschluss erscheint „x Bilder in y Sekunden gelöscht"
+
+---
+
 ## 0.89.0
 **Lade-Zusammenfassung nach Abschluss**
 

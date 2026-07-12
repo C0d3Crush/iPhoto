@@ -46,21 +46,35 @@ extension ImageViewModel {
         alert.alertStyle = .warning
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
-        let indices = collection.selectedIndices.sorted().reversed()
-        for idx in indices {
-            guard idx < collection.documents.count else { continue }
-            let url = collection.documents[idx].url
-            let (accessURL, stop) = BookmarkStore.shared.access(url: url)
-            try? FileManager.default.trashItem(at: accessURL, resultingItemURL: nil)
-            stop()
-            collection.documents.remove(at: idx)
+        let docs = collection.selectedIndices.sorted().compactMap {
+            $0 < collection.documents.count ? collection.documents[$0] : nil
         }
-        collection.selectedIndices = []
-        if !collection.documents.isEmpty {
-            let newIdx = min(collection.currentIndex, collection.documents.count - 1)
-            collection.currentIndex = newIdx
-            collection.selectedIndices = [newIdx]
-            loadCurrentImage()
+        guard !docs.isEmpty else { return }
+        let taskID = UUID()
+        enqueueLoading(id: taskID, label: "In Papierkorb verschieben…", icon: "trash",
+                       done: 0, total: docs.count, summaryVerb: "gelöscht")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            var trashedIDs: Set<UUID> = []
+            for (i, doc) in docs.enumerated() {
+                let (accessURL, stop) = BookmarkStore.shared.access(url: doc.url)
+                try? FileManager.default.trashItem(at: accessURL, resultingItemURL: nil)
+                stop()
+                trashedIDs.insert(doc.id)
+                let done = i + 1
+                DispatchQueue.main.async { self?.updateLoading(id: taskID, done: done, total: docs.count) }
+            }
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.collection.documents.removeAll { trashedIDs.contains($0.id) }
+                self.collection.selectedIndices = []
+                if !self.collection.documents.isEmpty {
+                    let newIdx = min(self.collection.currentIndex, self.collection.documents.count - 1)
+                    self.collection.currentIndex = newIdx
+                    self.collection.selectedIndices = [newIdx]
+                    self.loadCurrentImage()
+                }
+                self.dequeueLoading(id: taskID)
+            }
         }
     }
 
@@ -136,24 +150,8 @@ extension ImageViewModel {
         case .album(let id):
             removeFromAlbum(doc, albumID: id)
         default:
-            let alert = NSAlert()
-            alert.messageText = "Datei in den Papierkorb?"
-            alert.informativeText = "Die Originaldatei wird vom Datenträger in den Papierkorb verschoben."
-            alert.addButton(withTitle: "In Papierkorb")
-            alert.addButton(withTitle: "Abbrechen")
-            alert.alertStyle = .warning
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-            let (accessURL, stop) = BookmarkStore.shared.access(url: doc.url)
-            try? FileManager.default.trashItem(at: accessURL, resultingItemURL: nil)
-            stop()
-            collection.documents.remove(at: idx)
-            collection.selectedIndices = []
-            if !collection.documents.isEmpty {
-                let newIdx = min(collection.currentIndex, collection.documents.count - 1)
-                collection.currentIndex = newIdx
-                collection.selectedIndices = [newIdx]
-                loadCurrentImage()
-            }
+            collection.select(index: idx)
+            confirmTrashFiles()
         }
     }
 
