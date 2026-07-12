@@ -155,7 +155,7 @@ struct ThumbnailContextMenu: View {
     @ViewBuilder private var actionSection: some View {
         if isInMultiSelection && vm.collection.selectedIndices.count >= 2 {
             Button("HDR zusammenführen…") {
-                vm.showHDRMergeSheet = true
+                vm.hdr.showSheet = true
             }
             Divider()
         }

@@ -27,26 +27,9 @@ class ImageViewModel: ObservableObject {
     @Published var shuffledOrder: [UUID] = []
     let library = LibraryStore()
 
-    struct ImportProgress {
-        var folderName: String
-        var completed: Int
-        var total: Int
-    }
-    struct LoadingTask: Identifiable {
-        let id: UUID
-        var label: String
-        var icon: String
-        var done: Int
-        var total: Int
-        var summaryVerb: String = "geladen"
-        var startedAt: Date = Date()
-        var progress: Double { total > 0 ? Double(done) / Double(total) : 0 }
-    }
-    @Published var importProgress: [UUID: ImportProgress] = [:]
-    @Published var completedImports: Set<UUID> = []
-    @Published var loadingQueue: [LoadingTask] = []
-    @Published var loadingSummary: String? = nil
-    var loadingSummaryToken = UUID()
+    /// Lade-Queue + Import-Fortschritt (Sidebar). Änderungen werden via objectWillChange
+    /// weitergeleitet, Views können weiterhin nur ImageViewModel beobachten.
+    let activity = BackgroundActivityState()
     var folderSyncDebounce: [UUID: DispatchWorkItem] = [:]
 
     // MARK: - Adjustments
@@ -63,14 +46,9 @@ class ImageViewModel: ObservableObject {
 
     // MARK: - Version history
 
-    @Published var savedVersions: [ImageVersionMeta] = []
-    @Published var showVersionHistory: Bool = false
-    @Published var isSavingToFile: Bool = false
-    @Published var undoStack: [ImageVersionMeta] = []
-    @Published var redoStack: [ImageVersionMeta] = []
-    @Published var pendingMetadataEntries: [MetadataEntry]? = nil
+    var versions = VersionHistoryState()
 
-    var hasMetadataChanges: Bool { pendingMetadataEntries != nil }
+    var hasMetadataChanges: Bool { versions.pendingMetadataEntries != nil }
     var hasActiveAdjustments: Bool { adjustments != AdjustmentState() }
     var currentDocIsRAW: Bool { collection.currentDocument?.isRAW ?? false }
 
@@ -80,10 +58,7 @@ class ImageViewModel: ObservableObject {
     var lastPersistedAdjustments = AdjustmentState()
 
     // MARK: - HDR Merge
-    @Published var showHDRMergeSheet: Bool = false
-    @Published var isHDRMerging: Bool = false
-    @Published var hdrMergeError: String? = nil
-    @Published var hdrMergeResultURL: URL? = nil
+    var hdr = HDRMergeState()
 
     // MARK: - Internal state (accessible from extension files via internal access)
 
@@ -195,6 +170,13 @@ class ImageViewModel: ObservableObject {
                 self?.scheduleSmartFolderCountRefresh()
             }
             .store(in: &cancellables)
+
+        // Kind-ViewModels: Änderungen an Views weiterleiten, die nur ImageViewModel beobachten
+        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange] {
+            child
+                .sink { [weak self] _ in self?.objectWillChange.send() }
+                .store(in: &cancellables)
+        }
 
         library.objectWillChange
             .sink { [weak self] _ in
@@ -536,44 +518,6 @@ class ImageViewModel: ObservableObject {
             if !keepFar.contains(id) {
                 collection.documents[i].previewImage = nil
             }
-        }
-    }
-
-    // MARK: - Loading queue (shared across extensions)
-
-    func enqueueLoading(id: UUID, label: String, icon: String, done: Int = 0, total: Int = 0, summaryVerb: String = "geladen") {
-        loadingSummary = nil
-        if let idx = loadingQueue.firstIndex(where: { $0.id == id }) {
-            loadingQueue[idx].label = label
-            loadingQueue[idx].done  = done
-            loadingQueue[idx].total = total
-        } else {
-            loadingQueue.append(LoadingTask(id: id, label: label, icon: icon, done: done, total: total, summaryVerb: summaryVerb))
-        }
-    }
-
-    func updateLoading(id: UUID, done: Int, total: Int) {
-        guard let idx = loadingQueue.firstIndex(where: { $0.id == id }) else { return }
-        loadingQueue[idx].done  = done
-        loadingQueue[idx].total = total
-    }
-
-    func dequeueLoading(id: UUID) {
-        let finished = loadingQueue.first { $0.id == id }
-        loadingQueue.removeAll { $0.id == id }
-        // Nur bei vollständig abgeschlossenen Aufgaben mit bekanntem Umfang und leerer
-        // Warteschlange die Zusammenfassung zeigen (nicht bei Abbruch/Fehler).
-        guard loadingQueue.isEmpty, let t = finished, t.total > 0, t.done >= t.total else { return }
-        let secs = Date().timeIntervalSince(t.startedAt)
-        let secText = secs < 10
-            ? String(format: "%.1f", secs).replacingOccurrences(of: ".", with: ",")
-            : "\(Int(secs.rounded()))"
-        loadingSummary = "\(t.total) \(t.total == 1 ? "Bild" : "Bilder") in \(secText) Sekunden \(t.summaryVerb)"
-        let token = UUID()
-        loadingSummaryToken = token
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
-            guard let self = self, self.loadingSummaryToken == token else { return }
-            self.loadingSummary = nil
         }
     }
 

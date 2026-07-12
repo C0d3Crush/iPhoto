@@ -65,12 +65,12 @@ struct ContentView: View {
         .onAppear {
             NSApp.mainWindow?.title = viewModel.windowTitle
         }
-        .sheet(isPresented: $viewModel.showHDRMergeSheet, onDismiss: {
-            viewModel.hdrMergeError = nil
-            viewModel.hdrMergeResultURL = nil
+        .sheet(isPresented: $viewModel.hdr.showSheet, onDismiss: {
+            viewModel.hdr.error = nil
+            viewModel.hdr.resultURL = nil
         }) {
             HDRMergeSheet(
-                isPresented: $viewModel.showHDRMergeSheet,
+                isPresented: $viewModel.hdr.showSheet,
                 docs: viewModel.selectedDocsForHDR
             )
             .environmentObject(viewModel)
@@ -255,10 +255,10 @@ struct DetailView: View {
 }
 
 struct LoadingBar: View {
-    let queue: [ImageViewModel.LoadingTask]
+    let queue: [BackgroundActivityState.LoadingTask]
     @State private var showPopover = false
 
-    private var task: ImageViewModel.LoadingTask { queue[0] }
+    private var task: BackgroundActivityState.LoadingTask { queue[0] }
     private var pending: Int { queue.count - 1 }
 
     var body: some View {
@@ -317,7 +317,7 @@ struct LoadingBar: View {
 }
 
 struct QueuePopover: View {
-    let queue: [ImageViewModel.LoadingTask]
+    let queue: [BackgroundActivityState.LoadingTask]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

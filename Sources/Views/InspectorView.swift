@@ -79,11 +79,11 @@ struct InspectorView: View {
             if viewModel.currentImage != nil {
                 Divider()
                 HStack(spacing: 8) {
-                    if !viewModel.savedVersions.isEmpty {
-                        Button(action: { viewModel.showVersionHistory = true }) {
+                    if !viewModel.versions.savedVersions.isEmpty {
+                        Button(action: { viewModel.versions.showHistory = true }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "clock.arrow.circlepath")
-                                Text("\(viewModel.savedVersions.count) Version\(viewModel.savedVersions.count == 1 ? "" : "en")")
+                                Text("\(viewModel.versions.savedVersions.count) Version\(viewModel.versions.savedVersions.count == 1 ? "" : "en")")
                             }
                             .font(.caption)
                         }
@@ -93,13 +93,13 @@ struct InspectorView: View {
                     Spacer()
                     if viewModel.hasMetadataChanges {
                         Button(action: { viewModel.saveMetadata() }) {
-                            if viewModel.isSavingToFile {
+                            if viewModel.versions.isSavingToFile {
                                 ProgressView().scaleEffect(0.7)
                             } else {
                                 Text("Metadaten")
                             }
                         }
-                        .disabled(viewModel.isSavingToFile)
+                        .disabled(viewModel.versions.isSavingToFile)
                         .help("Metadaten ins Bild schreiben")
                     }
                     if viewModel.hasActiveAdjustments {
@@ -117,8 +117,8 @@ struct InspectorView: View {
         .frame(width: 280)
         .clipped()
         .background(Color(NSColor.windowBackgroundColor))
-        .sheet(isPresented: $viewModel.showVersionHistory) {
-            VersionHistorySheet(isPresented: $viewModel.showVersionHistory)
+        .sheet(isPresented: $viewModel.versions.showHistory) {
+            VersionHistorySheet(isPresented: $viewModel.versions.showHistory)
                 .environmentObject(viewModel)
         }
         .onChange(of: panelOrder) { InspectorView.saveOrder($0) }

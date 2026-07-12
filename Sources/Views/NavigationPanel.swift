@@ -38,7 +38,7 @@ struct NavigationPanel: View {
             ))
 
             // Import progress banner
-            if !viewModel.importProgress.isEmpty {
+            if !viewModel.activity.importProgress.isEmpty {
                 ImportProgressBanner()
                     .environmentObject(viewModel)
             }
@@ -81,7 +81,7 @@ struct NavigationPanel: View {
                             } label: {
                                 Label("Jetzt importieren", systemImage: "arrow.down.circle")
                             }
-                            .disabled(!folder.isAvailable || viewModel.importProgress[folder.id] != nil)
+                            .disabled(!folder.isAvailable || viewModel.activity.importProgress[folder.id] != nil)
 
                             if !folder.isRemovableMedia {
                                 Button {
@@ -230,7 +230,7 @@ private struct ImportProgressBanner: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(Array(viewModel.importProgress.values.enumerated()), id: \.offset) { _, prog in
+            ForEach(Array(viewModel.activity.importProgress.values.enumerated()), id: \.offset) { _, prog in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Image(systemName: "arrow.down.circle.fill")
@@ -323,7 +323,7 @@ private struct PanelFolderRow: View {
                                 .font(.caption2)
                                 .foregroundColor(.orange)
                         }
-                        if let prog = viewModel.importProgress[folder.id] {
+                        if let prog = viewModel.activity.importProgress[folder.id] {
                             HStack(spacing: 4) {
                                 ProgressView(value: prog.total > 0 ? Double(prog.completed) / Double(prog.total) : 0)
                                     .progressViewStyle(LinearProgressViewStyle())
@@ -332,7 +332,7 @@ private struct PanelFolderRow: View {
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
-                        } else if isRemovable && viewModel.completedImports.contains(folder.id) {
+                        } else if isRemovable && viewModel.activity.completedImports.contains(folder.id) {
                             Button {
                                 viewModel.wipeFolder(folder)
                             } label: {

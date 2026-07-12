@@ -78,7 +78,7 @@ extension ImageViewModel {
     func resetAdjustments() {
         adjustments = AdjustmentState()
         adjustedImage = nil
-        pendingMetadataEntries = nil
+        versions.pendingMetadataEntries = nil
     }
 
     func undoAdjustments() {

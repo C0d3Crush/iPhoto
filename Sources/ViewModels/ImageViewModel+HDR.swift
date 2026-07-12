@@ -17,12 +17,12 @@ extension ImageViewModel {
         guard docs.count >= 2 else { return }
 
         let taskID = UUID()
-        let task = LoadingTask(id: taskID, label: "HDR zusammenführen…",
+        let task = BackgroundActivityState.LoadingTask(id: taskID, label: "HDR zusammenführen…",
                                icon: "sparkles", done: 0, total: docs.count + 1)
-        loadingQueue.append(task)
-        hdrMergeError = nil
-        hdrMergeResultURL = nil
-        isHDRMerging = true
+        activity.loadingQueue.append(task)
+        hdr.error = nil
+        hdr.resultURL = nil
+        hdr.isMerging = true
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -33,17 +33,17 @@ extension ImageViewModel {
                     images.append(img)
                 }
                 DispatchQueue.main.async {
-                    if let idx = self.loadingQueue.firstIndex(where: { $0.id == taskID }) {
-                        self.loadingQueue[idx].done = i + 1
+                    if let idx = self.activity.loadingQueue.firstIndex(where: { $0.id == taskID }) {
+                        self.activity.loadingQueue[idx].done = i + 1
                     }
                 }
             }
 
             guard let merged = HDRMerger.merge(cgImages: images, options: options) else {
                 DispatchQueue.main.async {
-                    self.loadingQueue.removeAll { $0.id == taskID }
-                    self.hdrMergeError = "Zusammenführung fehlgeschlagen."
-                    self.isHDRMerging = false
+                    self.activity.loadingQueue.removeAll { $0.id == taskID }
+                    self.hdr.error = "Zusammenführung fehlgeschlagen."
+                    self.hdr.isMerging = false
                 }
                 return
             }
@@ -56,16 +56,16 @@ extension ImageViewModel {
             do {
                 try ImageExporter.exportSingle(image: merged, to: outputURL, format: .tiff, quality: 100)
                 DispatchQueue.main.async {
-                    self.loadingQueue.removeAll { $0.id == taskID }
-                    self.isHDRMerging = false
-                    self.hdrMergeResultURL = outputURL
+                    self.activity.loadingQueue.removeAll { $0.id == taskID }
+                    self.hdr.isMerging = false
+                    self.hdr.resultURL = outputURL
                     self.importFiles([outputURL])
                 }
             } catch {
                 DispatchQueue.main.async {
-                    self.loadingQueue.removeAll { $0.id == taskID }
-                    self.hdrMergeError = error.localizedDescription
-                    self.isHDRMerging = false
+                    self.activity.loadingQueue.removeAll { $0.id == taskID }
+                    self.hdr.error = error.localizedDescription
+                    self.hdr.isMerging = false
                 }
             }
         }

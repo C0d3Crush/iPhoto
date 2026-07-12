@@ -6,7 +6,7 @@ import Foundation
 extension ImageViewModel {
 
     func loadVersionsForCurrentImage() {
-        guard let url = collection.currentDocument?.url else { savedVersions = []; return }
+        guard let url = collection.currentDocument?.url else { versions.savedVersions = []; return }
         // Bookmark-Resolve + Verzeichnis-Anlage + JSON-Read gehören nicht auf den Main-Thread
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let (accessURL, stop) = BookmarkStore.shared.access(url: url)
@@ -14,7 +14,7 @@ extension ImageViewModel {
             stop()
             DispatchQueue.main.async {
                 guard let self = self, self.collection.currentDocument?.url == url else { return }
-                self.savedVersions = versions
+                self.versions.savedVersions = versions
             }
         }
     }
@@ -26,7 +26,7 @@ extension ImageViewModel {
         let image = adjustedImage ?? currentImage
         guard let image = image else { return }
 
-        isSavingToFile = true
+        versions.isSavingToFile = true
         let url = doc.url
         let idx = collection.currentIndex
 
@@ -44,10 +44,10 @@ extension ImageViewModel {
                 let updatedMeta = self.metadataService.readPhotoMetadata(from: accessURL)
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
-                    self.isSavingToFile = false
-                    self.undoStack.append(meta)
-                    self.redoStack.removeAll()
-                    self.pendingMetadataEntries = nil
+                    self.versions.isSavingToFile = false
+                    self.versions.undoStack.append(meta)
+                    self.versions.redoStack.removeAll()
+                    self.versions.pendingMetadataEntries = nil
                     if idx < self.collection.documents.count {
                         self.collection.documents[idx].cgImage = image
                         self.collection.documents[idx].thumbnail = nil
@@ -61,7 +61,7 @@ extension ImageViewModel {
             } catch {
                 Log.error("Speichern fehlgeschlagen: \(error.localizedDescription)")
                 DispatchQueue.main.async { [weak self] in
-                    self?.isSavingToFile = false
+                    self?.versions.isSavingToFile = false
                     self?.errorMessage = "Speichern fehlgeschlagen: \(error.localizedDescription)"
                 }
             }
@@ -72,7 +72,7 @@ extension ImageViewModel {
 
     func revertToVersion(_ meta: ImageVersionMeta) {
         guard let doc = collection.currentDocument else { return }
-        isSavingToFile = true
+        versions.isSavingToFile = true
         let url = doc.url
         let idx = collection.currentIndex
 
@@ -86,7 +86,7 @@ extension ImageViewModel {
                 Log.info("Version wiederhergestellt: \(meta.date)")
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
-                    self.isSavingToFile = false
+                    self.versions.isSavingToFile = false
                     self.resetAdjustments()
                     if idx < self.collection.documents.count {
                         self.collection.documents[idx].cgImage = nil
@@ -99,7 +99,7 @@ extension ImageViewModel {
             } catch {
                 Log.error("Revert fehlgeschlagen: \(error.localizedDescription)")
                 DispatchQueue.main.async { [weak self] in
-                    self?.isSavingToFile = false
+                    self?.versions.isSavingToFile = false
                     self?.errorMessage = "Version wiederherstellen fehlgeschlagen: \(error.localizedDescription)"
                 }
             }
@@ -109,11 +109,11 @@ extension ImageViewModel {
     // MARK: - Undo / Redo Save
 
     func undoSave() {
-        guard !undoStack.isEmpty, let doc = collection.currentDocument else { return }
-        let undoMeta = undoStack.removeLast()
+        guard !versions.undoStack.isEmpty, let doc = collection.currentDocument else { return }
+        let undoMeta = versions.undoStack.removeLast()
         let url = doc.url
         let idx = collection.currentIndex
-        isSavingToFile = true
+        versions.isSavingToFile = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let (accessURL, stop) = BookmarkStore.shared.access(url: url)
@@ -123,8 +123,8 @@ extension ImageViewModel {
                 try VersionStore.shared.restoreVersion(undoMeta, to: accessURL)
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
-                    self.isSavingToFile = false
-                    self.redoStack.append(redoMeta)
+                    self.versions.isSavingToFile = false
+                    self.versions.redoStack.append(redoMeta)
                     self.resetAdjustments()
                     if idx < self.collection.documents.count {
                         self.collection.documents[idx].cgImage = nil
@@ -137,7 +137,7 @@ extension ImageViewModel {
             } catch {
                 Log.error("Undo fehlgeschlagen: \(error)")
                 DispatchQueue.main.async { [weak self] in
-                    self?.isSavingToFile = false
+                    self?.versions.isSavingToFile = false
                     self?.errorMessage = "Undo fehlgeschlagen: \(error.localizedDescription)"
                 }
             }
@@ -145,11 +145,11 @@ extension ImageViewModel {
     }
 
     func redoSave() {
-        guard !redoStack.isEmpty, let doc = collection.currentDocument else { return }
-        let redoMeta = redoStack.removeLast()
+        guard !versions.redoStack.isEmpty, let doc = collection.currentDocument else { return }
+        let redoMeta = versions.redoStack.removeLast()
         let url = doc.url
         let idx = collection.currentIndex
-        isSavingToFile = true
+        versions.isSavingToFile = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let (accessURL, stop) = BookmarkStore.shared.access(url: url)
@@ -159,8 +159,8 @@ extension ImageViewModel {
                 try VersionStore.shared.restoreVersion(redoMeta, to: accessURL)
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
-                    self.isSavingToFile = false
-                    self.undoStack.append(undoMeta)
+                    self.versions.isSavingToFile = false
+                    self.versions.undoStack.append(undoMeta)
                     self.resetAdjustments()
                     if idx < self.collection.documents.count {
                         self.collection.documents[idx].cgImage = nil
@@ -173,7 +173,7 @@ extension ImageViewModel {
             } catch {
                 Log.error("Redo fehlgeschlagen: \(error)")
                 DispatchQueue.main.async { [weak self] in
-                    self?.isSavingToFile = false
+                    self?.versions.isSavingToFile = false
                     self?.errorMessage = "Redo fehlgeschlagen: \(error.localizedDescription)"
                 }
             }
@@ -204,7 +204,7 @@ extension ImageViewModel {
     }
 
     func saveMetadata() {
-        guard hasMetadataChanges, let entries = pendingMetadataEntries else { return }
+        guard hasMetadataChanges, let entries = versions.pendingMetadataEntries else { return }
         saveOnlyMeta(entries: entries, label: "Metadaten")
     }
 
@@ -212,7 +212,7 @@ extension ImageViewModel {
         guard let doc = collection.currentDocument else { return }
         let url = doc.url
         let idx = collection.currentIndex
-        isSavingToFile = true
+        versions.isSavingToFile = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let (accessURL, stop) = BookmarkStore.shared.access(url: url)
@@ -224,10 +224,10 @@ extension ImageViewModel {
                 Log.info("Metadaten gespeichert: \(url.lastPathComponent)")
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
-                    self.isSavingToFile = false
-                    self.undoStack.append(meta)
-                    self.redoStack.removeAll()
-                    self.pendingMetadataEntries = nil
+                    self.versions.isSavingToFile = false
+                    self.versions.undoStack.append(meta)
+                    self.versions.redoStack.removeAll()
+                    self.versions.pendingMetadataEntries = nil
                     if idx < self.collection.documents.count {
                         self.collection.documents[idx].metadata = updatedMeta
                     }
@@ -236,7 +236,7 @@ extension ImageViewModel {
             } catch {
                 Log.error("Metadaten speichern fehlgeschlagen: \(error)")
                 DispatchQueue.main.async { [weak self] in
-                    self?.isSavingToFile = false
+                    self?.versions.isSavingToFile = false
                     self?.errorMessage = "Metadaten speichern fehlgeschlagen: \(error.localizedDescription)"
                 }
             }

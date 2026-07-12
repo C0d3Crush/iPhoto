@@ -81,8 +81,8 @@ extension ImageViewModel {
 
         let folderID   = folder.id
         let folderName = folder.name
-        importProgress[folderID] = ImportProgress(folderName: folderName, completed: 0, total: 0)
-        enqueueLoading(id: folderID, label: "Synchronisiere \"\(folderName)\"",
+        activity.importProgress[folderID] = BackgroundActivityState.ImportProgress(folderName: folderName, completed: 0, total: 0)
+        activity.enqueue(id: folderID, label: "Synchronisiere \"\(folderName)\"",
                        icon: "arrow.down.circle", done: 0, total: 0)
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -95,8 +95,8 @@ extension ImageViewModel {
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
             ) else {
                 DispatchQueue.main.async {
-                    self.importProgress.removeValue(forKey: folderID)
-                    self.dequeueLoading(id: folderID)
+                    self.activity.importProgress.removeValue(forKey: folderID)
+                    self.activity.dequeue(id: folderID)
                 }
                 return
             }
@@ -114,8 +114,8 @@ extension ImageViewModel {
             let newFiles = sourceFiles.filter { !existingNames.contains($0.lastPathComponent.lowercased()) }
 
             DispatchQueue.main.async {
-                self.importProgress[folderID] = ImportProgress(folderName: folderName, completed: 0, total: newFiles.count)
-                self.updateLoading(id: folderID, done: 0, total: newFiles.count)
+                self.activity.importProgress[folderID] = BackgroundActivityState.ImportProgress(folderName: folderName, completed: 0, total: newFiles.count)
+                self.activity.update(id: folderID, done: 0, total: newFiles.count)
             }
 
             var completed = 0
@@ -131,21 +131,21 @@ extension ImageViewModel {
                 completed += 1
                 let c = completed
                 DispatchQueue.main.async {
-                    self.importProgress[folderID] = ImportProgress(folderName: folderName, completed: c, total: newFiles.count)
-                    self.updateLoading(id: folderID, done: c, total: newFiles.count)
+                    self.activity.importProgress[folderID] = BackgroundActivityState.ImportProgress(folderName: folderName, completed: c, total: newFiles.count)
+                    self.activity.update(id: folderID, done: c, total: newFiles.count)
                 }
             }
 
             DispatchQueue.main.async {
-                self.importProgress.removeValue(forKey: folderID)
-                self.dequeueLoading(id: folderID)
+                self.activity.importProgress.removeValue(forKey: folderID)
+                self.activity.dequeue(id: folderID)
                 if !newURLs.isEmpty {
                     self.importFiles(newURLs, selectFirst: false)
                     if failedCount == 0 {
-                        self.completedImports.insert(folderID)
+                        self.activity.completedImports.insert(folderID)
                     }
                 }
-                if self.importProgress.isEmpty {
+                if self.activity.importProgress.isEmpty {
                     self.loadThumbnails()
                 }
             }
@@ -172,7 +172,7 @@ extension ImageViewModel {
             }
         }
         guard !imageFiles.isEmpty else {
-            completedImports.remove(folder.id)
+            activity.completedImports.remove(folder.id)
             return
         }
 
@@ -201,7 +201,7 @@ extension ImageViewModel {
         for file in imageFiles {
             try? fm.removeItem(at: file)
         }
-        completedImports.remove(folder.id)
+        activity.completedImports.remove(folder.id)
     }
 
     func loadContentForSelection(_ selection: NavSelection?) {
@@ -236,7 +236,7 @@ extension ImageViewModel {
         guard let (folderURL, stop) = folder.resolveURL() else { return }
         let folderID   = folder.id
         let folderName = folder.name
-        DispatchQueue.main.async { self.enqueueLoading(id: folderID, label: "Lade \"\(folderName)\"", icon: "folder", done: 0, total: 0) }
+        DispatchQueue.main.async { self.activity.enqueue(id: folderID, label: "Lade \"\(folderName)\"", icon: "folder", done: 0, total: 0) }
         DispatchQueue.global(qos: .utility).async {
             defer { stop() }
             let fm = FileManager.default
@@ -273,7 +273,7 @@ extension ImageViewModel {
                 })
                 self.collection.documents.removeAll { removeIDs.contains($0.id) }
                 self.importFiles(found, selectFirst: false)
-                self.dequeueLoading(id: folderID)
+                self.activity.dequeue(id: folderID)
             }
         }
     }

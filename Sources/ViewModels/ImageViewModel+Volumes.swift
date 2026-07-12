@@ -46,14 +46,14 @@ extension ImageViewModel {
         let volumeID = volume.id
         let volumeName = volume.name
         let volumeURL = volume.url
-        enqueueLoading(id: volumeID, label: "Lade \"\(volumeName)\"", icon: "sdcard", done: 0, total: 0)
+        activity.enqueue(id: volumeID, label: "Lade \"\(volumeName)\"", icon: "sdcard", done: 0, total: 0)
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
             let found = self.imageFiles(on: volumeURL)
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.importFiles(found, selectFirst: false)
-                self.dequeueLoading(id: volumeID)
+                self.activity.dequeue(id: volumeID)
             }
         }
     }
@@ -94,7 +94,7 @@ extension ImageViewModel {
         let destURL = FileManager.default
             .urls(for: .picturesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("iPhoto")
-        enqueueLoading(id: volumeID, label: "Synchronisiere \"\(volumeName)\"",
+        activity.enqueue(id: volumeID, label: "Synchronisiere \"\(volumeName)\"",
                        icon: "arrow.down.circle", done: 0, total: 0)
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -104,7 +104,7 @@ extension ImageViewModel {
             try? fm.createDirectory(at: destURL, withIntermediateDirectories: true)
             let existingNames = Set((try? fm.contentsOfDirectory(atPath: destURL.path).map { $0.lowercased() }) ?? [])
             let newFiles = sourceFiles.filter { !existingNames.contains($0.lastPathComponent.lowercased()) }
-            DispatchQueue.main.async { self.updateLoading(id: volumeID, done: 0, total: newFiles.count) }
+            DispatchQueue.main.async { self.activity.update(id: volumeID, done: 0, total: newFiles.count) }
 
             var newURLs: [URL] = []
             var failedCount = 0
@@ -118,7 +118,7 @@ extension ImageViewModel {
                 }
                 done += 1
                 let d = done
-                DispatchQueue.main.async { self.updateLoading(id: volumeID, done: d, total: newFiles.count) }
+                DispatchQueue.main.async { self.activity.update(id: volumeID, done: d, total: newFiles.count) }
             }
 
             var freedCount = 0
@@ -137,7 +137,7 @@ extension ImageViewModel {
 
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                self.dequeueLoading(id: volumeID)
+                self.activity.dequeue(id: volumeID)
                 if freeUpSpace {
                     let prefix = volumeURL.standardized.path
                     self.collection.documents.removeAll { $0.url.standardized.path.hasPrefix(prefix) }

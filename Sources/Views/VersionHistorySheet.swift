@@ -7,7 +7,7 @@ struct VersionHistorySheet: View {
     @State private var thumbnails: [UUID: NSImage] = [:]
     @State private var confirmRevert: ImageVersionMeta? = nil
 
-    private var versions: [ImageVersionMeta] { viewModel.savedVersions }
+    private var versions: [ImageVersionMeta] { viewModel.versions.savedVersions }
 
     var body: some View {
         VStack(spacing: 0) {

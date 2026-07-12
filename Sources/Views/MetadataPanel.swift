@@ -60,13 +60,13 @@ private struct MetadataPanelContent: View {
         }
         .onChange(of: sourceEntries.count) { _ in
             editedEntries = sourceEntries
-            viewModel.pendingMetadataEntries = nil
+            viewModel.versions.pendingMetadataEntries = nil
         }
         .onChange(of: editedSignature) { sig in
-            viewModel.pendingMetadataEntries = sig != sourceSignature ? editedEntries : nil
+            viewModel.versions.pendingMetadataEntries = sig != sourceSignature ? editedEntries : nil
         }
         .onAppear {
-            if let pending = viewModel.pendingMetadataEntries {
+            if let pending = viewModel.versions.pendingMetadataEntries {
                 editedEntries = pending
             } else {
                 editedEntries = sourceEntries

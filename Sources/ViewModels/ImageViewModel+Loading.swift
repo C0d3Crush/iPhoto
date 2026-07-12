@@ -248,7 +248,7 @@ extension ImageViewModel {
     // MARK: - Thumbnails
 
     func loadThumbnails() {
-        guard importProgress.isEmpty else { return }
+        guard activity.importProgress.isEmpty else { return }
         let visibleURLs = Set(visibleDocuments.map { $0.url })
         let pending = collection.documents.enumerated().filter {
             visibleURLs.contains($0.element.url) &&
@@ -262,7 +262,7 @@ extension ImageViewModel {
         thumbHideTask = nil
         for (_, doc) in pending { thumbInFlight.insert(doc.url) }
         thumbQueued += pending.count
-        enqueueLoading(id: thumbnailTaskID, label: "Lade Thumbnails",
+        activity.enqueue(id: thumbnailTaskID, label: "Lade Thumbnails",
                        icon: "photo", done: thumbDone, total: thumbQueued)
 
         for (_, doc) in pending {
@@ -295,7 +295,7 @@ extension ImageViewModel {
                             }
                         }
                         self.thumbDone += 1
-                        self.updateLoading(id: self.thumbnailTaskID,
+                        self.activity.update(id: self.thumbnailTaskID,
                                            done: self.thumbDone, total: self.thumbQueued)
                         if self.thumbDone >= self.thumbQueued {
                             self.thumbDone   = 0
@@ -303,7 +303,7 @@ extension ImageViewModel {
                             self.thumbInFlight.removeAll()
                             let taskID = self.thumbnailTaskID
                             let task = DispatchWorkItem { [weak self] in
-                                self?.dequeueLoading(id: taskID)
+                                self?.activity.dequeue(id: taskID)
                             }
                             self.thumbHideTask = task
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: task)
@@ -410,7 +410,7 @@ extension ImageViewModel {
         guard !pending.isEmpty else { return }
 
         metaTotal += pending.count
-        enqueueLoading(id: metaTaskID, label: "Metadaten laden",
+        activity.enqueue(id: metaTaskID, label: "Metadaten laden",
                        icon: "doc.text.magnifyingglass", done: metaDone, total: metaTotal)
 
         for doc in pending {
@@ -432,12 +432,12 @@ extension ImageViewModel {
                         self.invalidateVisibleOrder()
                     }
                     self.metaDone += 1
-                    self.updateLoading(id: self.metaTaskID,
+                    self.activity.update(id: self.metaTaskID,
                                        done: self.metaDone, total: self.metaTotal)
                     if self.metaDone >= self.metaTotal {
                         self.metaDone  = 0
                         self.metaTotal = 0
-                        self.dequeueLoading(id: self.metaTaskID)
+                        self.activity.dequeue(id: self.metaTaskID)
                     }
                 }
             }
@@ -451,7 +451,7 @@ extension ImageViewModel {
         guard !paths.isEmpty else { return }
 
         let taskID = UUID()
-        enqueueLoading(id: taskID, label: "Metadaten lesen", icon: "info.circle",
+        activity.enqueue(id: taskID, label: "Metadaten lesen", icon: "info.circle",
                        done: 0, total: paths.count)
 
         DispatchQueue.global(qos: .background).async { [weak self] in
@@ -494,13 +494,13 @@ extension ImageViewModel {
                     let d = done, t = total
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
-                        self.updateLoading(id: taskID, done: d, total: t)
+                        self.activity.update(id: taskID, done: d, total: t)
                     }
                 }
             }
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                self.dequeueLoading(id: taskID)
+                self.activity.dequeue(id: taskID)
                 // Frisch gescannte Sequenz-Nummern können neue Stapel ergeben
                 self.invalidateVisibleOrder()
                 self.objectWillChange.send()

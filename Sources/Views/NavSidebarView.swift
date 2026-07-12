@@ -66,10 +66,10 @@ struct NavSidebarView: View {
                 .padding(.vertical, 8)
             }
 
-            if !viewModel.loadingQueue.isEmpty {
+            if !viewModel.activity.loadingQueue.isEmpty {
                 Divider()
-                LoadingBar(queue: viewModel.loadingQueue)
-            } else if let summary = viewModel.loadingSummary {
+                LoadingBar(queue: viewModel.activity.loadingQueue)
+            } else if let summary = viewModel.activity.loadingSummary {
                 Divider()
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle")

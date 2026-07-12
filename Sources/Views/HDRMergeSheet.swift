@@ -77,13 +77,13 @@ struct HDRMergeSheet: View {
 
     @ViewBuilder
     private var statusArea: some View {
-        if let err = vm.hdrMergeError {
+        if let err = vm.hdr.error {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.red)
                 Text(err).font(.caption).foregroundColor(.red)
             }
             .padding(.horizontal)
-        } else if let url = vm.hdrMergeResultURL {
+        } else if let url = vm.hdr.resultURL {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
                 Text("Gespeichert: \(url.lastPathComponent)")
@@ -98,12 +98,12 @@ struct HDRMergeSheet: View {
             Button("Abbrechen") { isPresented = false }
                 .keyboardShortcut(.escape, modifiers: [])
             Spacer()
-            if vm.isHDRMerging {
+            if vm.hdr.isMerging {
                 HStack(spacing: 8) {
                     ProgressView().scaleEffect(0.7)
                     Text("Wird berechnet…").font(.caption).foregroundColor(.secondary)
                 }
-            } else if vm.hdrMergeResultURL != nil {
+            } else if vm.hdr.resultURL != nil {
                 Button("Fertig") { isPresented = false }
                     .keyboardShortcut(.return, modifiers: [])
                     .buttonStyle(DefaultButtonStyle())

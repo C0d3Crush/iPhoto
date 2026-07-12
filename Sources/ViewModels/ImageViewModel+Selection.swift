@@ -126,7 +126,7 @@ extension ImageViewModel {
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
         let taskID = UUID()
-        enqueueLoading(id: taskID, label: "Endgültig löschen…", icon: "trash",
+        activity.enqueue(id: taskID, label: "Endgültig löschen…", icon: "trash",
                        done: 0, total: docs.count, summaryVerb: "gelöscht")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             var trashedIDs: Set<UUID> = []
@@ -136,7 +136,7 @@ extension ImageViewModel {
                 stop()
                 trashedIDs.insert(doc.id)
                 let done = i + 1
-                DispatchQueue.main.async { self?.updateLoading(id: taskID, done: done, total: docs.count) }
+                DispatchQueue.main.async { self?.activity.update(id: taskID, done: done, total: docs.count) }
             }
             CatalogStore.shared.setTrashed(paths: docs.map { $0.url.path }, false)
             DispatchQueue.main.async {
@@ -149,7 +149,7 @@ extension ImageViewModel {
                     self.collection.selectedIndices = [newIdx]
                     self.loadCurrentImage()
                 }
-                self.dequeueLoading(id: taskID)
+                self.activity.dequeue(id: taskID)
             }
         }
     }

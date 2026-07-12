@@ -2,6 +2,14 @@
 
 ---
 
+## 0.92.5
+**Architektur — ImageViewModel in Teilbereiche zerlegt (Stufe 1)**
+
+- Lade-Queue/Import-Fortschritt (`BackgroundActivityState`), HDR-Merge-State (`HDRMergeState`) und Datei-Versionshistorie (`VersionHistoryState`) sind jetzt eigenständige, vom ImageViewModel besessene ViewModels — 14 der 42 @Published-Properties ausgelagert, Verhalten unverändert
+- Änderungen der Kind-ViewModels werden per objectWillChange weitergeleitet, bestehende Views funktionieren ohne Beobachtungs-Änderungen
+
+---
+
 ## 0.92.4
 **Undo/Redo-Historie der Anpassungen isoliert testbar**
 
