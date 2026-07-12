@@ -2,6 +2,15 @@
 
 ---
 
+## 0.88.0
+**Aktionen auf ganze Serienbild-Stapel (CH/CL/BKT)**
+
+- Rechtsklick auf einen eingeklappten Stapel: Papierkorb, Aus Sammlung entfernen, Bewertung, Pick/Abgelehnt, Farblabel, Album hinzufügen/entfernen und Export wirken jetzt auf alle Bilder des Stapels
+- Menüeinträge zeigen die Stapelgröße an (z. B. „Stapel (7) in Papierkorb")
+- Aufgeklappte Stapel und Mehrfachauswahl verhalten sich wie bisher
+
+---
+
 ## 0.87.1
 **Bildwechsel wieder schnell (~800 ms Verzögerung behoben)**
 

@@ -9,6 +9,10 @@ struct ThumbnailContextMenu: View {
         guard let idx = docIndex else { return false }
         return vm.collection.selectedIndices.contains(idx) && vm.collection.selectedIndices.count > 1
     }
+    // Eingeklappter Stapel: Aktionen wirken auf alle Mitglieder (Mehrfachauswahl hat Vorrang)
+    private var stackMembers: [ImageDocument]? {
+        isInMultiSelection ? nil : vm.collapsedStackMembers(for: doc)
+    }
 
     var body: some View {
         Group {
@@ -24,15 +28,19 @@ struct ThumbnailContextMenu: View {
             Divider()
             albumSection
             Divider()
-            Button("Aus Sammlung entfernen") {
+            Button(stackMembers.map { "Stapel (\($0.count)) aus Sammlung entfernen" } ?? "Aus Sammlung entfernen") {
                 vm.removeDocument(doc)
             }
             Button {
                 vm.trashDocument(doc)
             } label: {
-                let multi = isInMultiSelection
-                Label(multi ? "\(vm.collection.selectedIndices.count) Dateien in Papierkorb" : "In Papierkorb",
-                      systemImage: "trash")
+                if isInMultiSelection {
+                    Label("\(vm.collection.selectedIndices.count) Dateien in Papierkorb", systemImage: "trash")
+                } else if let members = stackMembers {
+                    Label("Stapel (\(members.count)) in Papierkorb", systemImage: "trash")
+                } else {
+                    Label("In Papierkorb", systemImage: "trash")
+                }
             }
         }
     }
@@ -122,9 +130,16 @@ struct ThumbnailContextMenu: View {
         }
         Button(isInMultiSelection
                ? "\(vm.collection.selectedIndices.count) Bilder exportieren..."
-               : "Exportieren...") {
-            // Mehrafachauswahl beibehalten — nur umschalten wenn das Bild noch nicht ausgewählt ist
-            if !isInMultiSelection, let idx = docIndex { vm.selectDocument(at: idx) }
+               : (stackMembers.map { "Stapel (\($0.count) Bilder) exportieren..." } ?? "Exportieren...")) {
+            // Mehrfachauswahl beibehalten — nur umschalten wenn das Bild noch nicht ausgewählt ist
+            if !isInMultiSelection {
+                if let members = stackMembers {
+                    vm.collection.selectedIndices = Set(members.compactMap { vm.collectionIndex(for: $0) })
+                    if let idx = docIndex { vm.collection.currentIndex = idx }
+                } else if let idx = docIndex {
+                    vm.selectDocument(at: idx)
+                }
+            }
             vm.showExportSheet = true
         }
         Button("Im Finder zeigen") {
@@ -135,12 +150,16 @@ struct ThumbnailContextMenu: View {
     @ViewBuilder private var albumSection: some View {
         if !vm.library.albums.isEmpty {
             let multi = isInMultiSelection
-            Menu(multi ? "Alle (\(vm.collection.selectedIndices.count)) zu Album hinzufügen" : "Zu Album hinzufügen") {
+            let stack = stackMembers
+            Menu(multi ? "Alle (\(vm.collection.selectedIndices.count)) zu Album hinzufügen"
+                 : (stack.map { "Stapel (\($0.count)) zu Album hinzufügen" } ?? "Zu Album hinzufügen")) {
                 ForEach(vm.library.albums) { album in
-                    let inAlbum = !multi && album.photoURLs.contains(doc.url)
+                    let inAlbum = !multi && stack == nil && album.photoURLs.contains(doc.url)
                     Button {
                         if multi {
                             vm.addSelectedToAlbum(albumID: album.id)
+                        } else if let members = stack {
+                            for m in members { vm.addToAlbum(m, albumID: album.id) }
                         } else if inAlbum {
                             vm.removeFromAlbum(doc, albumID: album.id)
                         } else {
@@ -156,7 +175,9 @@ struct ThumbnailContextMenu: View {
                 }
             }
             if case .album(let id) = vm.navSelection {
-                Button("Aus Album entfernen") { vm.removeFromAlbum(doc, albumID: id) }
+                Button("Aus Album entfernen") {
+                    for m in stack ?? [doc] { vm.removeFromAlbum(m, albumID: id) }
+                }
             }
         }
     }

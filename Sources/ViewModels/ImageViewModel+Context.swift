@@ -100,6 +100,7 @@ extension ImageViewModel {
         guard sorted.contains(where: { sequenceNumber(for: $0) >= 1 }) else {
             stackCounts = [:]
             stackLeaderByMember = [:]
+            stackMembersByLeader = [:]
             return sorted
         }
         let byName = sorted.sorted {
@@ -131,6 +132,7 @@ extension ImageViewModel {
 
         stackCounts = counts
         stackLeaderByMember = leaderByMember
+        stackMembersByLeader = membersByLeader
         guard !counts.isEmpty else { return sorted }
 
         let byID = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -148,6 +150,16 @@ extension ImageViewModel {
 
     func isStackExpanded(_ doc: ImageDocument) -> Bool {
         expandedStacks.contains(doc.url.path)
+    }
+
+    /// Alle Mitglieder (inkl. Anführer), wenn doc der Anführer eines eingeklappten
+    /// Stapels ist — Aktionen (Löschen, Bewerten, …) wirken dann auf den ganzen Stapel.
+    func collapsedStackMembers(for doc: ImageDocument) -> [ImageDocument]? {
+        guard stackCounts[doc.id] != nil, !isStackExpanded(doc),
+              let ids = stackMembersByLeader[doc.id], ids.count >= 2 else { return nil }
+        let byID = Dictionary(collection.documents.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let members = ids.compactMap { byID[$0] }
+        return members.count >= 2 ? members : nil
     }
 
     func toggleStack(leader: ImageDocument) {

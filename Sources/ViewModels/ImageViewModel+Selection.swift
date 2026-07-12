@@ -22,7 +22,14 @@ extension ImageViewModel {
     func trashDocument(_ doc: ImageDocument) {
         if let idx = collectionIndex(for: doc) {
             let multi = collection.selectedIndices.count > 1 && collection.selectedIndices.contains(idx)
-            if !multi { collection.select(index: idx) }
+            if !multi {
+                if let members = collapsedStackMembers(for: doc) {
+                    collection.selectedIndices = Set(members.compactMap { collectionIndex(for: $0) })
+                    collection.currentIndex = idx
+                } else {
+                    collection.select(index: idx)
+                }
+            }
         }
         confirmTrashFiles()
     }
@@ -112,6 +119,17 @@ extension ImageViewModel {
         guard let idx = collection.documents.firstIndex(where: { $0.id == doc.id }) else { return }
         if collection.selectedIndices.contains(idx) && collection.selectedIndices.count > 1 {
             removeSelected()
+            return
+        }
+        if let members = collapsedStackMembers(for: doc) {
+            switch navSelection {
+            case .album(let id):
+                for m in members { removeFromAlbum(m, albumID: id) }
+            default:
+                collection.selectedIndices = Set(members.compactMap { collectionIndex(for: $0) })
+                collection.currentIndex = idx
+                confirmTrashFiles()
+            }
             return
         }
         switch navSelection {

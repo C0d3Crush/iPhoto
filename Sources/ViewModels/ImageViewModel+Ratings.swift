@@ -60,6 +60,9 @@ extension ImageViewModel {
         if collection.selectedIndices.contains(idx) && collection.selectedIndices.count > 1 {
             return Array(collection.selectedIndices).filter { $0 < collection.documents.count }
         }
+        if let members = collapsedStackMembers(for: doc) {
+            return members.compactMap { collectionIndex(for: $0) }
+        }
         return [idx]
     }
 
