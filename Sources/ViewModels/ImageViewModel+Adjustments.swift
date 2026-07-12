@@ -62,18 +62,14 @@ extension ImageViewModel {
     // MARK: - Rotation
 
     func rotateLeft() {
-        adjUndoStack.append(lastCommittedAdjustments)
-        adjRedoStack.removeAll()
         adjustments.turns = ((adjustments.turns - 1) % 4 + 4) % 4
-        lastCommittedAdjustments = adjustments
+        adjHistory.commit(adjustments)
         applyAdjustments()
     }
 
     func rotateRight() {
-        adjUndoStack.append(lastCommittedAdjustments)
-        adjRedoStack.removeAll()
         adjustments.turns = (adjustments.turns + 1) % 4
-        lastCommittedAdjustments = adjustments
+        adjHistory.commit(adjustments)
         applyAdjustments()
     }
 
@@ -86,24 +82,18 @@ extension ImageViewModel {
     }
 
     func undoAdjustments() {
-        guard !adjUndoStack.isEmpty else { return }
+        guard let prev = adjHistory.undo() else { return }
         isUndoRedoing = true
-        adjRedoStack.append(lastCommittedAdjustments)
-        let prev = adjUndoStack.removeLast()
         adjustments = prev
-        lastCommittedAdjustments = prev
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             self?.isUndoRedoing = false
         }
     }
 
     func redoAdjustments() {
-        guard !adjRedoStack.isEmpty else { return }
+        guard let next = adjHistory.redo() else { return }
         isUndoRedoing = true
-        adjUndoStack.append(lastCommittedAdjustments)
-        let next = adjRedoStack.removeLast()
         adjustments = next
-        lastCommittedAdjustments = next
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
             self?.isUndoRedoing = false
         }

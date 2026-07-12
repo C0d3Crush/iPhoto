@@ -74,10 +74,8 @@ class ImageViewModel: ObservableObject {
     var hasActiveAdjustments: Bool { adjustments != AdjustmentState() }
     var currentDocIsRAW: Bool { collection.currentDocument?.isRAW ?? false }
 
-    @Published var adjUndoStack: [AdjustmentState] = []
-    @Published var adjRedoStack: [AdjustmentState] = []
+    var adjHistory = AdjustmentHistory()
     var isUndoRedoing = false
-    var lastCommittedAdjustments = AdjustmentState()
     /// Zuletzt in den Katalog geschriebener (bzw. daraus geladener) Anpassungs-Stand
     var lastPersistedAdjustments = AdjustmentState()
 
@@ -299,12 +297,8 @@ class ImageViewModel: ObservableObject {
             .dropFirst()
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] newState in
-                guard let self = self, !self.isUndoRedoing,
-                      newState != self.lastCommittedAdjustments else { return }
-                self.adjUndoStack.append(self.lastCommittedAdjustments)
-                self.adjRedoStack.removeAll()
-                self.lastCommittedAdjustments = newState
-                if self.adjUndoStack.count > 50 { self.adjUndoStack.removeFirst() }
+                guard let self = self, !self.isUndoRedoing else { return }
+                self.adjHistory.commit(newState)
             }
             .store(in: &cancellables)
 
@@ -345,12 +339,12 @@ class ImageViewModel: ObservableObject {
             case 51 where onlyCmdDown: DispatchQueue.main.async { self.removeSelected() }; return nil
             case 6 where onlyCmdDown && !textFieldFocused:
                 DispatchQueue.main.async {
-                    if !self.adjUndoStack.isEmpty { self.undoAdjustments() }
+                    if self.adjHistory.canUndo { self.undoAdjustments() }
                     else { self.undoSave() }
                 }; return nil
             case 6 where cmdShiftDown && !textFieldFocused:
                 DispatchQueue.main.async {
-                    if !self.adjRedoStack.isEmpty { self.redoAdjustments() }
+                    if self.adjHistory.canRedo { self.redoAdjustments() }
                     else { self.redoSave() }
                 }; return nil
             default:

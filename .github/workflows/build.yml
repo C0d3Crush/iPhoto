@@ -21,9 +21,10 @@ jobs:
 
       - name: Unit tests
         run: |
-          chmod +x Tests/run_stacking.sh Tests/run_catalog.sh
+          chmod +x Tests/run_stacking.sh Tests/run_catalog.sh Tests/run_adjustments.sh
           Tests/run_stacking.sh
           Tests/run_catalog.sh
+          Tests/run_adjustments.sh
 
       - name: Zip app
         run: |

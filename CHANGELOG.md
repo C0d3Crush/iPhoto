@@ -2,6 +2,15 @@
 
 ---
 
+## 0.92.4
+**Undo/Redo-Historie der Anpassungen isoliert testbar**
+
+- Undo/Redo-Logik der Bildanpassungen als eigenständige `AdjustmentHistory` extrahiert — identisches Verhalten, jetzt ohne UI-Abhängigkeiten testbar
+- 11 neue Tests (`Tests/run_adjustments.sh`): Commit-Deduplizierung, Undo/Redo-Roundtrips, Redo-Verwurf nach Commit, 50er-Tiefenbegrenzung, Reset beim Bildwechsel
+- CI führt die neue Test-Suite bei jedem Push mit aus
+
+---
+
 ## 0.92.3
 **Stabilität — stille Fehler werden gemeldet, schnelleres Grid-Rendering**
 

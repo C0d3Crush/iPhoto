@@ -29,13 +29,11 @@ extension ImageViewModel {
         currentlyLoadingURL = doc.url
         evictDistantImages(keepRadius: 3)
         resetAdjustments()
-        adjUndoStack.removeAll()
-        adjRedoStack.removeAll()
         isUndoRedoing = false
         if let saved = CatalogStore.shared.loadAdjustments(path: doc.url.path) {
             adjustments = saved
         }
-        lastCommittedAdjustments = adjustments
+        adjHistory.reset(to: adjustments)
         lastPersistedAdjustments = adjustments
         activeFullResToken = nil
         isLoadingFullRes = false
