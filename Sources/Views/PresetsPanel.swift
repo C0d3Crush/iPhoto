@@ -9,7 +9,7 @@ struct PresetsPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             presetSection(title: "Film-Looks", presets: Preset.builtIn, deletable: false)
             Divider()
-            presetSection(title: "Eigene Rezepte", presets: viewModel.userPresets, deletable: true)
+            presetSection(title: "Eigene Rezepte", presets: viewModel.adj.userPresets, deletable: true)
             Divider()
             bottomBar
         }
@@ -90,7 +90,7 @@ private struct PresetRow: View {
             if justApplied {
                 Button {
                     if let snap = snapshotBeforeApply {
-                        viewModel.adjustments = snap
+                        viewModel.adj.adjustments = snap
                     }
                     justApplied = false
                     snapshotBeforeApply = nil
@@ -118,7 +118,7 @@ private struct PresetRow: View {
                     .buttonStyle(PlainButtonStyle())
                 }
                 Button("Anwenden") {
-                    snapshotBeforeApply = viewModel.adjustments
+                    snapshotBeforeApply = viewModel.adj.adjustments
                     viewModel.applyPreset(preset)
                     justApplied = true
                 }

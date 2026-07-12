@@ -38,11 +38,11 @@ struct ContentView: View {
                         }
                     }
 
-                    if viewModel.cropToolActive, let img = viewModel.currentImage {
+                    if viewModel.adj.cropToolActive, let img = viewModel.currentImage {
                         CropEditorView(
                             image: img,
-                            initialCrop: viewModel.adjustments.cropRect,
-                            initialRotation: viewModel.adjustments.rotation
+                            initialCrop: viewModel.adj.adjustments.cropRect,
+                            initialRotation: viewModel.adj.adjustments.rotation
                         )
                         .environmentObject(viewModel)
                     }
@@ -86,7 +86,7 @@ struct ContentView: View {
                 documents: viewModel.collection.documents,
                 selectedDocuments: selectedDocs,
                 currentDocument: viewModel.collection.currentDocument,
-                currentAdjustments: viewModel.hasActiveAdjustments ? viewModel.adjustments : nil,
+                currentAdjustments: viewModel.hasActiveAdjustments ? viewModel.adj.adjustments : nil,
                 isPresented: $viewModel.showExportSheet
             )
         }
@@ -112,7 +112,7 @@ struct DetailView: View {
                     Text("Bild wird geladen…")
                         .foregroundColor(.secondary)
                 }
-            } else if let image = viewModel.showOriginal ? viewModel.currentImage : (viewModel.adjustedImage ?? viewModel.currentImage) {
+            } else if let image = viewModel.adj.showOriginal ? viewModel.currentImage : (viewModel.adj.adjustedImage ?? viewModel.currentImage) {
                 ZoomableScrollView(
                     image: image,
                     zoomFactor: $viewModel.zoomFactor,
@@ -187,8 +187,8 @@ struct DetailView: View {
                 SortMenuButton()
                     .environmentObject(viewModel)
 
-                Button(action: { viewModel.showOriginal.toggle() }) {
-                    Image(systemName: viewModel.showOriginal ? "eye.slash" : "eye")
+                Button(action: { viewModel.adj.showOriginal.toggle() }) {
+                    Image(systemName: viewModel.adj.showOriginal ? "eye.slash" : "eye")
                 }
                 .help("Original / Anpassungen")
                 .disabled(viewModel.currentImage == nil)

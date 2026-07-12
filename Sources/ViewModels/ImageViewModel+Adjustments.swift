@@ -7,22 +7,22 @@ extension ImageViewModel {
 
     func applyAdjustments() {
         guard hasActiveAdjustments, let source = currentImage else {
-            adjustedImage = nil
-            displayImageVersion = UUID()
+            adj.adjustedImage = nil
+            adj.displayImageVersion = UUID()
             return
         }
 
-        var snap = adjustments
-        if !bypassedAdjustments.isEmpty {
+        var snap = adj.adjustments
+        if !adj.bypassedAdjustments.isEmpty {
             let neutral = AdjustmentState()
-            for kp in bypassedAdjustments {
+            for kp in adj.bypassedAdjustments {
                 if let dkp = kp as? WritableKeyPath<AdjustmentState, Double> {
                     snap[keyPath: dkp] = neutral[keyPath: dkp]
                 }
             }
         }
         let token       = UUID()
-        adjToken        = token
+        adj.renderToken = token
         let useRAW      = collection.currentDocument?.isRAW ?? false
         let rawURL      = collection.currentDocument?.url
         let nativeSize  = imageSize
@@ -50,11 +50,11 @@ extension ImageViewModel {
             ci = AdjustmentRenderer.pipeline(ci, snap: snap,
                                              exposureApplied: exposureApplied, wbApplied: wbApplied)
 
-            let result = self.adjCIContext.createCGImage(ci, from: ci.extent)
+            let result = self.adj.ciContext.createCGImage(ci, from: ci.extent)
             DispatchQueue.main.async { [weak self] in
-                guard let self = self, self.adjToken == token else { return }
-                self.adjustedImage = result
-                self.displayImageVersion = UUID()
+                guard let self = self, self.adj.renderToken == token else { return }
+                self.adj.adjustedImage = result
+                self.adj.displayImageVersion = UUID()
             }
         }
     }
@@ -62,58 +62,58 @@ extension ImageViewModel {
     // MARK: - Rotation
 
     func rotateLeft() {
-        adjustments.turns = ((adjustments.turns - 1) % 4 + 4) % 4
-        adjHistory.commit(adjustments)
+        adj.adjustments.turns = ((adj.adjustments.turns - 1) % 4 + 4) % 4
+        adj.history.commit(adj.adjustments)
         applyAdjustments()
     }
 
     func rotateRight() {
-        adjustments.turns = (adjustments.turns + 1) % 4
-        adjHistory.commit(adjustments)
+        adj.adjustments.turns = (adj.adjustments.turns + 1) % 4
+        adj.history.commit(adj.adjustments)
         applyAdjustments()
     }
 
     // MARK: - Undo / Redo
 
     func resetAdjustments() {
-        adjustments = AdjustmentState()
-        adjustedImage = nil
+        adj.adjustments = AdjustmentState()
+        adj.adjustedImage = nil
         versions.pendingMetadataEntries = nil
     }
 
     func undoAdjustments() {
-        guard let prev = adjHistory.undo() else { return }
-        isUndoRedoing = true
-        adjustments = prev
+        guard let prev = adj.history.undo() else { return }
+        adj.isUndoRedoing = true
+        adj.adjustments = prev
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            self?.isUndoRedoing = false
+            self?.adj.isUndoRedoing = false
         }
     }
 
     func redoAdjustments() {
-        guard let next = adjHistory.redo() else { return }
-        isUndoRedoing = true
-        adjustments = next
+        guard let next = adj.history.redo() else { return }
+        adj.isUndoRedoing = true
+        adj.adjustments = next
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            self?.isUndoRedoing = false
+            self?.adj.isUndoRedoing = false
         }
     }
 
     // MARK: - Presets
 
     func applyPreset(_ preset: Preset) {
-        adjustments = preset.adjustments
+        adj.adjustments = preset.adjustments
     }
 
     func saveCurrentAsPreset(name: String, author: String? = nil) {
-        let p = Preset(name: name, author: author, adjustments: adjustments)
+        let p = Preset(name: name, author: author, adjustments: adj.adjustments)
         CatalogStore.shared.savePreset(p)
-        userPresets = CatalogStore.shared.allUserPresets()
+        adj.userPresets = CatalogStore.shared.allUserPresets()
     }
 
     func deletePreset(_ preset: Preset) {
         CatalogStore.shared.deletePreset(id: preset.id)
-        userPresets = CatalogStore.shared.allUserPresets()
+        adj.userPresets = CatalogStore.shared.allUserPresets()
     }
 
     func exportRecipe(_ preset: Preset) {
@@ -144,24 +144,24 @@ extension ImageViewModel {
                   var preset = try? JSONDecoder().decode(Preset.self, from: data) else { return }
             preset.id = UUID()
             CatalogStore.shared.savePreset(preset)
-            DispatchQueue.main.async { self?.userPresets = CatalogStore.shared.allUserPresets() }
+            DispatchQueue.main.async { self?.adj.userPresets = CatalogStore.shared.allUserPresets() }
         }
     }
 
     // MARK: - Copy / Paste
 
     func copyAdjustments() {
-        copiedAdjustments = adjustments
+        adj.copiedAdjustments = adj.adjustments
     }
 
     func pasteAdjustments() {
-        guard let src = copiedAdjustments else { return }
+        guard let src = adj.copiedAdjustments else { return }
         let targets: [Int] = collection.selectedIndices.isEmpty
             ? [collection.currentIndex]
             : Array(collection.selectedIndices)
         for idx in targets where idx < collection.documents.count {
             if idx == collection.currentIndex {
-                adjustments = src
+                adj.adjustments = src
             } else {
                 CatalogStore.shared.saveAdjustments(
                     path: collection.documents[idx].url.path,
@@ -174,26 +174,27 @@ extension ImageViewModel {
     func persistAdjustmentsForCurrent() {
         guard let doc = collection.currentDocument else { return }
         // Unverändert seit Laden/letztem Speichern → kein synchroner SQLite-Write pro Bildwechsel
-        guard adjustments != lastPersistedAdjustments else { return }
-        if adjustments != AdjustmentState() {
-            CatalogStore.shared.saveAdjustments(path: doc.url.path, adjustments: adjustments)
+        guard adj.adjustments != adj.lastPersisted else { return }
+        if adj.adjustments != AdjustmentState() {
+            CatalogStore.shared.saveAdjustments(path: doc.url.path, adjustments: adj.adjustments)
         } else {
             CatalogStore.shared.deleteAdjustments(path: doc.url.path)
         }
-        lastPersistedAdjustments = adjustments
+        adj.lastPersisted = adj.adjustments
     }
 
     func adjustmentLabel() -> String {
+        let a = adj.adjustments
         var parts: [String] = []
-        if adjustments.exposure   != 0 { parts.append(String(format: "Belichtung %+.1f EV", adjustments.exposure)) }
-        if adjustments.brightness != 0 { parts.append(String(format: "Helligkeit %+.2f",    adjustments.brightness)) }
-        if adjustments.contrast   != 1 { parts.append(String(format: "Kontrast %.2f",       adjustments.contrast)) }
-        if adjustments.saturation != 1 { parts.append(String(format: "Sättigung %.2f",      adjustments.saturation)) }
-        if adjustments.warmth     != 0 { parts.append(String(format: "Wärme %+.2f",         adjustments.warmth)) }
-        if adjustments.turns      != 0 { parts.append("\(adjustments.turns * 90)° gedreht") }
-        if adjustments.rotation   != 0 { parts.append(String(format: "Rotation %.1f°",      adjustments.rotation)) }
-        if adjustments.cropRect != CGRect(x: 0, y: 0, width: 1, height: 1) { parts.append("Zugeschnitten") }
-        let curveDefault = zip(adjustments.curvePoints, CurvesView.defaultPoints).allSatisfy {
+        if a.exposure   != 0 { parts.append(String(format: "Belichtung %+.1f EV", a.exposure)) }
+        if a.brightness != 0 { parts.append(String(format: "Helligkeit %+.2f",    a.brightness)) }
+        if a.contrast   != 1 { parts.append(String(format: "Kontrast %.2f",       a.contrast)) }
+        if a.saturation != 1 { parts.append(String(format: "Sättigung %.2f",      a.saturation)) }
+        if a.warmth     != 0 { parts.append(String(format: "Wärme %+.2f",         a.warmth)) }
+        if a.turns      != 0 { parts.append("\(a.turns * 90)° gedreht") }
+        if a.rotation   != 0 { parts.append(String(format: "Rotation %.1f°",      a.rotation)) }
+        if a.cropRect != CGRect(x: 0, y: 0, width: 1, height: 1) { parts.append("Zugeschnitten") }
+        let curveDefault = zip(a.curvePoints, CurvesView.defaultPoints).allSatisfy {
             abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001
         }
         if !curveDefault { parts.append("Kurve") }

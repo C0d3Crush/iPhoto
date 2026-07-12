@@ -23,7 +23,7 @@ extension ImageViewModel {
 
     func saveAdjustedToFile(label: String, metaEntries: [MetadataEntry]? = nil) {
         guard let doc = collection.currentDocument, !doc.isRAW else { return }
-        let image = adjustedImage ?? currentImage
+        let image = adj.adjustedImage ?? currentImage
         guard let image = image else { return }
 
         versions.isSavingToFile = true
@@ -53,8 +53,8 @@ extension ImageViewModel {
                         self.collection.documents[idx].thumbnail = nil
                         self.collection.documents[idx].metadata = updatedMeta
                     }
-                    self.adjustedImage = nil
-                    self.displayImageVersion = UUID()
+                    self.adj.adjustedImage = nil
+                    self.adj.displayImageVersion = UUID()
                     self.loadVersionsForCurrentImage()
                     self.loadThumbnails()
                 }

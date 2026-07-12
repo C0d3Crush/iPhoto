@@ -37,7 +37,7 @@ struct AdjustmentsPanel: View {
                             .background(Color(NSColor.controlBackgroundColor).cornerRadius(6))
                             .help("90° rechts drehen (⌘])")
 
-                            Button(action: { viewModel.cropToolActive = true }) {
+                            Button(action: { viewModel.adj.cropToolActive = true }) {
                                 HStack(spacing: 8) {
                                     Image(systemName: "crop")
                                         .font(.caption)
@@ -182,7 +182,7 @@ struct AdjustmentsPanel: View {
                                 .help("Anpassungen in Zwischenablage")
                                 .buttonStyle(PlainButtonStyle())
                             Button("Einfügen") { viewModel.pasteAdjustments() }
-                                .disabled(viewModel.copiedAdjustments == nil)
+                                .disabled(viewModel.adj.copiedAdjustments == nil)
                                 .help("Auf aktuelles Bild oder Auswahl anwenden")
                                 .buttonStyle(PlainButtonStyle())
                         }
@@ -201,9 +201,9 @@ struct AdjustmentsPanel: View {
     private var isNeutral: Bool { !viewModel.hasActiveAdjustments }
 
     private var hasCropOrRotation: Bool {
-        viewModel.adjustments.rotation != 0 ||
-        viewModel.adjustments.turns    != 0 ||
-        viewModel.adjustments.cropRect != CGRect(x: 0, y: 0, width: 1, height: 1)
+        viewModel.adj.adjustments.rotation != 0 ||
+        viewModel.adj.adjustments.turns    != 0 ||
+        viewModel.adj.adjustments.cropRect != CGRect(x: 0, y: 0, width: 1, height: 1)
     }
 
     private var isRAW: Bool {
@@ -212,17 +212,17 @@ struct AdjustmentsPanel: View {
 
     private func adjRow(label: String, key: WritableKeyPath<AdjustmentState, Double>, range: ClosedRange<Double>, format: String) -> some View {
         let value = Binding<Double>(
-            get: { viewModel.adjustments[keyPath: key] },
-            set: { viewModel.adjustments[keyPath: key] = $0 }
+            get: { viewModel.adj.adjustments[keyPath: key] },
+            set: { viewModel.adj.adjustments[keyPath: key] = $0 }
         )
-        let bypassed = viewModel.bypassedAdjustments.contains(key)
+        let bypassed = viewModel.adj.bypassedAdjustments.contains(key)
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Button(action: {
                     if bypassed {
-                        viewModel.bypassedAdjustments.remove(key)
+                        viewModel.adj.bypassedAdjustments.remove(key)
                     } else {
-                        viewModel.bypassedAdjustments.insert(key)
+                        viewModel.adj.bypassedAdjustments.insert(key)
                     }
                     viewModel.applyAdjustments()
                 }) {

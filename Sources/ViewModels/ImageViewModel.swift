@@ -34,28 +34,16 @@ class ImageViewModel: ObservableObject {
 
     // MARK: - Adjustments
 
-    @Published var adjustments: AdjustmentState = AdjustmentState()
-    @Published var adjustedImage: CGImage? = nil
-    @Published var displayImageVersion: UUID = UUID()
-    @Published var cropToolActive: Bool = false
-    @Published var showOriginal: Bool = false
-    /// Temporär ausgeblendete Einzel-Effekte (Auge-Toggle) — wird nicht persistiert
-    @Published var bypassedAdjustments: Set<PartialKeyPath<AdjustmentState>> = []
-    @Published var copiedAdjustments: AdjustmentState? = nil
-    @Published var userPresets: [Preset] = []
+    /// Anpassungs-Session des aktuellen Bildes (Regler, Historie, Presets, Renderer)
+    let adj = AdjustmentSessionState()
 
     // MARK: - Version history
 
     var versions = VersionHistoryState()
 
     var hasMetadataChanges: Bool { versions.pendingMetadataEntries != nil }
-    var hasActiveAdjustments: Bool { adjustments != AdjustmentState() }
+    var hasActiveAdjustments: Bool { adj.hasActiveAdjustments }
     var currentDocIsRAW: Bool { collection.currentDocument?.isRAW ?? false }
-
-    var adjHistory = AdjustmentHistory()
-    var isUndoRedoing = false
-    /// Zuletzt in den Katalog geschriebener (bzw. daraus geladener) Anpassungs-Stand
-    var lastPersistedAdjustments = AdjustmentState()
 
     // MARK: - HDR Merge
     var hdr = HDRMergeState()
@@ -70,15 +58,6 @@ class ImageViewModel: ObservableObject {
     // Tracks URLs that have an active 1500px-preview background task.
     // Prevents 7+ duplicate decode tasks when albums are switched rapidly.
     var previewLoadInFlight: Set<URL> = []
-    var adjToken: UUID = UUID()
-    let adjCIContext: CIContext = {
-        var opts: [CIContextOption: Any] = [.useSoftwareRenderer: false]
-        if let linearSRGB = CGColorSpace(name: CGColorSpace.linearSRGB) {
-            opts[.workingColorSpace] = linearSRGB
-        }
-        opts[.workingFormat] = CIFormat.RGBAh
-        return CIContext(options: opts)
-    }()
     var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
     private var eventMonitors: [Any] = []
     var syncedFolderIDs: Set<UUID> = []
@@ -159,7 +138,7 @@ class ImageViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let presets = CatalogStore.shared.allUserPresets()
             DispatchQueue.main.async {
-                self?.userPresets = presets
+                self?.adj.userPresets = presets
                 self?.isStartupLoading = false
             }
         }
@@ -172,7 +151,7 @@ class ImageViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // Kind-ViewModels: Änderungen an Views weiterleiten, die nur ImageViewModel beobachten
-        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange] {
+        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange] {
             child
                 .sink { [weak self] _ in self?.objectWillChange.send() }
                 .store(in: &cancellables)
@@ -269,18 +248,18 @@ class ImageViewModel: ObservableObject {
 
         scanForRemovableVolumes()
 
-        $adjustments
+        adj.$adjustments
             .dropFirst()
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.applyAdjustments() }
             .store(in: &cancellables)
 
-        $adjustments
+        adj.$adjustments
             .dropFirst()
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] newState in
-                guard let self = self, !self.isUndoRedoing else { return }
-                self.adjHistory.commit(newState)
+                guard let self = self, !self.adj.isUndoRedoing else { return }
+                self.adj.history.commit(newState)
             }
             .store(in: &cancellables)
 
@@ -321,19 +300,19 @@ class ImageViewModel: ObservableObject {
             case 51 where onlyCmdDown: DispatchQueue.main.async { self.removeSelected() }; return nil
             case 6 where onlyCmdDown && !textFieldFocused:
                 DispatchQueue.main.async {
-                    if self.adjHistory.canUndo { self.undoAdjustments() }
+                    if self.adj.history.canUndo { self.undoAdjustments() }
                     else { self.undoSave() }
                 }; return nil
             case 6 where cmdShiftDown && !textFieldFocused:
                 DispatchQueue.main.async {
-                    if self.adjHistory.canRedo { self.redoAdjustments() }
+                    if self.adj.history.canRedo { self.redoAdjustments() }
                     else { self.redoSave() }
                 }; return nil
             default:
                 guard mods.isEmpty, !textFieldFocused else { return event }
                 let char = event.characters ?? ""
                 if char == "\\" {
-                    DispatchQueue.main.async { self.showOriginal.toggle() }
+                    DispatchQueue.main.async { self.adj.showOriginal.toggle() }
                     return nil
                 }
                 switch char {

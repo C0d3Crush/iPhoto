@@ -249,7 +249,7 @@ extension ImageViewModel {
             for case let fileURL as URL in enumerator {
                 // Symlink-Verzeichnisse der virtuellen Ordner überspringen
                 let lastName = fileURL.lastPathComponent
-                if lastName == ImageViewModel.smartFoldersSystemFolderName ||
+                if lastName == SmartFolderFileSync.systemFolderName ||
                    lastName == ImageViewModel.albumsSystemFolderName {
                     enumerator.skipDescendants()
                     continue

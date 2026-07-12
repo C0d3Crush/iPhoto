@@ -46,7 +46,7 @@ struct AnalysePanel: View {
             .frame(maxWidth: .infinity)
             .onAppear { triggerAnalysis() }
             .onChange(of: viewModel.collection.currentIndex) { _ in engine.clear() }
-            .onChange(of: viewModel.displayImageVersion) { _ in triggerAnalysis() }
+            .onChange(of: viewModel.adj.displayImageVersion) { _ in triggerAnalysis() }
         }
     }
 
@@ -56,7 +56,7 @@ struct AnalysePanel: View {
     }
 
     private func triggerAnalysis() {
-        if let img = viewModel.adjustedImage ?? viewModel.currentImage {
+        if let img = viewModel.adj.adjustedImage ?? viewModel.currentImage {
             engine.analyze(img)
         }
     }

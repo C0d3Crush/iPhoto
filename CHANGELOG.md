@@ -2,6 +2,14 @@
 
 ---
 
+## 0.92.6
+**Architektur — ImageViewModel-Zerlegung Stufe 2: Anpassungen & intelligente Ordner**
+
+- Kompletter Anpassungs-State (Regler, gerendertes Bild, Undo/Redo-Historie, Presets, Kopieren/Einfügen, Render-Kontext) in eigenes Kind-ViewModel `AdjustmentSessionState` ausgelagert — 8 weitere @Published-Properties verlassen das ImageViewModel, Verhalten unverändert
+- Symlink-Spiegelung der intelligenten Ordner (Anlegen, Aufräumen, Gruppen-Verzeichnisse) als eigenständiger, testbarer Helper `SmartFolderFileSync` extrahiert — reine Dateisystem-Logik ohne ViewModel-Bezug
+
+---
+
 ## 0.92.5
 **Architektur — ImageViewModel in Teilbereiche zerlegt (Stufe 1)**
 

@@ -12,7 +12,7 @@ struct LocalAdjustmentsPanel: View {
                     .foregroundColor(.secondary)
                     .padding(10)
             } else {
-                let locals = viewModel.adjustments.localAdjustments
+                let locals = viewModel.adj.adjustments.localAdjustments
                 if locals.isEmpty {
                     Text("Noch keine lokalen Anpassungen")
                         .font(.caption2)
@@ -53,13 +53,13 @@ struct LocalAdjustmentsPanel: View {
     }
 
     private func deleteAdj(_ id: UUID) {
-        viewModel.adjustments.localAdjustments.removeAll { $0.id == id }
+        viewModel.adj.adjustments.localAdjustments.removeAll { $0.id == id }
         expandedIDs.remove(id)
     }
 
     private func updateAdj(_ updated: LocalAdjustment) {
-        guard let i = viewModel.adjustments.localAdjustments.firstIndex(where: { $0.id == updated.id }) else { return }
-        viewModel.adjustments.localAdjustments[i] = updated
+        guard let i = viewModel.adj.adjustments.localAdjustments.firstIndex(where: { $0.id == updated.id }) else { return }
+        viewModel.adj.adjustments.localAdjustments[i] = updated
     }
 
     private func addLinear() {
@@ -67,7 +67,7 @@ struct LocalAdjustmentsPanel: View {
             label: "Linearer Verlauf",
             mask: .linearGradient(startX: 0.5, startY: 0.0, endX: 0.5, endY: 0.5)
         )
-        viewModel.adjustments.localAdjustments.append(adj)
+        viewModel.adj.adjustments.localAdjustments.append(adj)
         expandedIDs.insert(adj.id)
     }
 
@@ -76,7 +76,7 @@ struct LocalAdjustmentsPanel: View {
             label: "Radialer Verlauf",
             mask: .radialGradient(centerX: 0.5, centerY: 0.5, radius: 0.25, feather: 0.5)
         )
-        viewModel.adjustments.localAdjustments.append(adj)
+        viewModel.adj.adjustments.localAdjustments.append(adj)
         expandedIDs.insert(adj.id)
     }
 }

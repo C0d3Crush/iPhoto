@@ -25,19 +25,19 @@ struct CurvesView: View {
 
     private var currentPoints: [CGPoint] {
         switch channel {
-        case .rgb: return viewModel.adjustments.curvePoints
-        case .r:   return viewModel.adjustments.curveR
-        case .g:   return viewModel.adjustments.curveG
-        case .b:   return viewModel.adjustments.curveB
+        case .rgb: return viewModel.adj.adjustments.curvePoints
+        case .r:   return viewModel.adj.adjustments.curveR
+        case .g:   return viewModel.adj.adjustments.curveG
+        case .b:   return viewModel.adj.adjustments.curveB
         }
     }
 
     private func setPoints(_ pts: [CGPoint]) {
         switch channel {
-        case .rgb: viewModel.adjustments.curvePoints = pts
-        case .r:   viewModel.adjustments.curveR = pts
-        case .g:   viewModel.adjustments.curveG = pts
-        case .b:   viewModel.adjustments.curveB = pts
+        case .rgb: viewModel.adj.adjustments.curvePoints = pts
+        case .r:   viewModel.adj.adjustments.curveR = pts
+        case .g:   viewModel.adj.adjustments.curveG = pts
+        case .b:   viewModel.adj.adjustments.curveB = pts
         }
     }
 

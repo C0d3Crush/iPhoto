@@ -332,7 +332,7 @@ struct CropEditorView: View {
             .padding(.bottom, 4)
 
             HStack(spacing: 12) {
-                Button("Abbrechen") { viewModel.cropToolActive = false }
+                Button("Abbrechen") { viewModel.adj.cropToolActive = false }
 
                 Spacer()
 
@@ -373,8 +373,8 @@ struct CropEditorView: View {
     // MARK: - Apply
 
     private func apply() {
-        viewModel.adjustments.cropRect = cropRect
-        viewModel.adjustments.rotation = rotation
-        viewModel.cropToolActive = false
+        viewModel.adj.adjustments.cropRect = cropRect
+        viewModel.adj.adjustments.rotation = rotation
+        viewModel.adj.cropToolActive = false
     }
 }

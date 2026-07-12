@@ -29,12 +29,12 @@ extension ImageViewModel {
         currentlyLoadingURL = doc.url
         evictDistantImages(keepRadius: 3)
         resetAdjustments()
-        isUndoRedoing = false
+        adj.isUndoRedoing = false
         if let saved = CatalogStore.shared.loadAdjustments(path: doc.url.path) {
-            adjustments = saved
+            adj.adjustments = saved
         }
-        adjHistory.reset(to: adjustments)
-        lastPersistedAdjustments = adjustments
+        adj.history.reset(to: adj.adjustments)
+        adj.lastPersisted = adj.adjustments
         activeFullResToken = nil
         isLoadingFullRes = false
         fullResWorkItem?.cancel()
@@ -43,7 +43,7 @@ extension ImageViewModel {
         if doc.cgImage != nil {
             Log.trace("Bild bereits im Cache: \(doc.url.lastPathComponent)")
             fitToWindowRequested = true
-            displayImageVersion = UUID()
+            adj.displayImageVersion = UUID()
             prefetchAdjacent()
             return
         }
@@ -55,7 +55,7 @@ extension ImageViewModel {
 
         let hasQuickPreview = doc.thumbnail != nil || doc.previewImage != nil
         if hasQuickPreview {
-            displayImageVersion = UUID()
+            adj.displayImageVersion = UUID()
             fitToWindowRequested = true
             isLoading = false
         } else {
@@ -107,7 +107,7 @@ extension ImageViewModel {
                     self.collection.documents[idx].previewImage = preview
                     self.isLoading = false
                     self.fitToWindowRequested = true
-                    self.displayImageVersion = UUID()
+                    self.adj.displayImageVersion = UUID()
                     if self.hasActiveAdjustments { self.applyAdjustments() }
                 }
             }
@@ -218,7 +218,7 @@ extension ImageViewModel {
                     if updated.previewImage == nil && updated.thumbnail == nil {
                         self.fitToWindowRequested = true
                     }
-                    self.displayImageVersion = UUID()
+                    self.adj.displayImageVersion = UUID()
                     if self.hasActiveAdjustments { self.applyAdjustments() }
                     self.loadVersionsForCurrentImage()
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)
