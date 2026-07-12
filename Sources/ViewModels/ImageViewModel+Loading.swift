@@ -275,15 +275,26 @@ extension ImageViewModel {
                 autoreleasepool {
                     let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                     defer { stopAccess() }
-                    let nsImage = (try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 80))
-                        .map { NSImage(cgImage: $0, size: .zero) }
+                    let nsImage: NSImage?
+                    var decodeError: String? = nil
+                    do {
+                        let cg = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 80)
+                        nsImage = NSImage(cgImage: cg, size: .zero)
+                    } catch {
+                        Log.error("Thumbnail-Decode fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
+                        nsImage = nil
+                        decodeError = error.localizedDescription
+                    }
                     DispatchQueue.main.async {
                         guard let self = self else { return }
                         self.thumbInFlight.remove(url)
-                        if let img = nsImage,
-                           let idx = self.collection.documents.firstIndex(where: { $0.url == url }),
-                           self.collection.documents[idx].thumbnailImage == nil {
-                            self.collection.documents[idx].placeholderThumbnailImage = img
+                        if let idx = self.collection.documents.firstIndex(where: { $0.url == url }) {
+                            if let img = nsImage, self.collection.documents[idx].thumbnailImage == nil {
+                                self.collection.documents[idx].placeholderThumbnailImage = img
+                            } else if let msg = decodeError,
+                                      self.collection.documents[idx].errorMessage == nil {
+                                self.collection.documents[idx].errorMessage = msg
+                            }
                         }
                         self.thumbDone += 1
                         self.updateLoading(id: self.thumbnailTaskID,
@@ -318,8 +329,19 @@ extension ImageViewModel {
             autoreleasepool {
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
-                guard let thumb = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 160) else {
-                    DispatchQueue.main.async { self?.hiResInFlight.remove(url) }
+                let thumb: CGImage
+                do {
+                    thumb = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 160)
+                } catch {
+                    Log.error("Thumbnail-Decode (160px) fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        guard let self = self else { return }
+                        self.hiResInFlight.remove(url)
+                        if let idx = self.collection.documents.firstIndex(where: { $0.url == url }),
+                           self.collection.documents[idx].errorMessage == nil {
+                            self.collection.documents[idx].errorMessage = error.localizedDescription
+                        }
+                    }
                     return
                 }
                 let nsImage = NSImage(cgImage: thumb, size: .zero)
@@ -356,7 +378,14 @@ extension ImageViewModel {
                 autoreleasepool {
                     let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                     defer { stopAccess() }
-                    let image = try? RAWImageDecoder.decode(url: accessURL)
+                    let image: CGImage?
+                    do {
+                        image = try RAWImageDecoder.decode(url: accessURL)
+                    } catch {
+                        // Nur loggen — beim aktiven Navigieren meldet loadFullRes den Fehler sichtbar.
+                        Log.error("Prefetch-Decode fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
+                        image = nil
+                    }
                     DispatchQueue.main.async {
                         guard let self = self else { return }
                         self.prefetchInFlight.remove(url)

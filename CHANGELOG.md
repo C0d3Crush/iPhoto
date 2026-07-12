@@ -2,6 +2,15 @@
 
 ---
 
+## 0.92.3
+**Stabilität — stille Fehler werden gemeldet, schnelleres Grid-Rendering**
+
+- Thumbnail-Decode-Fehler (defekte/abgeschnittene Dateien) werden jetzt protokolliert und am Bild vermerkt statt still verschluckt — betroffene Bilder blieben bisher kommentarlos ohne Vorschau
+- Bibliothek: unlesbare Album-/Ordner-/SmartFolder-Dateien und ein nicht erstellbares Application-Support-Verzeichnis lösen jetzt eine Fehlermeldung aus, statt Daten beim nächsten Speichern kommentarlos zu überschreiben
+- Sichtbare Bildliste wird pro Render-Zugriff aus dem Cache bedient statt jedes Mal neu aufgelöst — spürbar flüssigeres Grid bei großen Alben
+
+---
+
 ## 0.92.2
 **Unit-Tests für kritische Pfade + Tests laufen jetzt in der CI**
 

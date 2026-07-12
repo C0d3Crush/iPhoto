@@ -23,13 +23,20 @@ final class LibraryStore: ObservableObject {
         self.directoryOverride = directory
     }
 
-    private var supportDirectory: URL {
+    // lazy: Verzeichnis nur einmal anlegen; Fehler wird gemeldet statt still verschluckt
+    // (sonst evaporieren Alben/Ordner beim nächsten Speichern kommentarlos).
+    private lazy var supportDirectory: URL = {
         let dir = directoryOverride
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                 .appendingPathComponent("iPhoto")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            Log.error("Bibliotheks-Verzeichnis konnte nicht erstellt werden: \(error)")
+            reportError("Bibliotheks-Verzeichnis: \(error.localizedDescription)")
+        }
         return dir
-    }
+    }()
 
     private var albumsFileURL: URL         { supportDirectory.appendingPathComponent("albums.json") }
     private var watchedFoldersFileURL: URL { supportDirectory.appendingPathComponent("watchedFolders.json") }
@@ -38,21 +45,35 @@ final class LibraryStore: ObservableObject {
     // MARK: - Laden
 
     func loadAlbums() {
-        guard let data = try? Data(contentsOf: albumsFileURL),
-              let decoded = try? JSONDecoder().decode([Album].self, from: data) else { return }
-        albums = decoded
+        if let decoded = load([Album].self, from: albumsFileURL, description: "Album-Datei") {
+            albums = decoded
+        }
     }
 
     func loadWatchedFolders() {
-        guard let data = try? Data(contentsOf: watchedFoldersFileURL),
-              let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) else { return }
-        watchedFolders = decoded
+        if let decoded = load([WatchedFolder].self, from: watchedFoldersFileURL, description: "Ordner-Datei") {
+            watchedFolders = decoded
+        }
     }
 
     func loadSmartFolders() {
-        guard let data = try? Data(contentsOf: smartFoldersFileURL),
-              let decoded = try? JSONDecoder().decode([SmartFolder].self, from: data) else { return }
-        smartFolders = decoded
+        if let decoded = load([SmartFolder].self, from: smartFoldersFileURL, description: "SmartFolder-Datei") {
+            smartFolders = decoded
+        }
+    }
+
+    // Fehlende Datei = Erststart (kein Fehler). Vorhandene, aber unlesbare Datei
+    // wird gemeldet — der nächste save() würde sie sonst kommentarlos überschreiben.
+    private func load<T: Decodable>(_ type: T.Type, from url: URL, description: String) -> T? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        do {
+            let data = try Data(contentsOf: url)
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            Log.error("\(description) konnte nicht geladen werden: \(error)")
+            reportError("\(description) konnte nicht geladen werden: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     // MARK: - Speichern
@@ -77,9 +98,13 @@ final class LibraryStore: ObservableObject {
             try data.write(to: url, options: .atomic)
         } catch {
             Log.error("\(description) konnte nicht gespeichert werden: \(error)")
-            DispatchQueue.main.async { [weak self] in
-                self?.onError?("\(description): \(error.localizedDescription)")
-            }
+            reportError("\(description): \(error.localizedDescription)")
+        }
+    }
+
+    private func reportError(_ message: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.onError?(message)
         }
     }
 }

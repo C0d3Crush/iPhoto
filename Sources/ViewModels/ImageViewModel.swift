@@ -138,6 +138,10 @@ class ImageViewModel: ObservableObject {
     var visibleOrderCache: [UUID]? = nil
     var visibleOrderCacheKey: VisibleOrderKey? = nil
     var visibleOrderVersion = 0
+    // Aufgelöste Dokument-Kopien zum Order-Cache — gültig solange documentsRevision
+    // unverändert ist. Spart das Dictionary-Rebuild pro SwiftUI-Render-Zugriff.
+    var visibleResolvedCache: [ImageDocument]? = nil
+    var visibleResolvedRevision: UInt64 = 0
     var prefetchInFlight: Set<URL> = []
 
     // Serienbild-/Bracketing-Stapel (Fuji 0x1101 SequenceNumber):

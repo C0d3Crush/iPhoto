@@ -43,13 +43,22 @@ extension ImageViewModel {
                                   sort: sortCriterion, shuffle: shuffledOrder,
                                   version: visibleOrderVersion, expanded: expandedStacks)
         if key == visibleOrderCacheKey, let order = visibleOrderCache {
+            if let resolved = visibleResolvedCache,
+               visibleResolvedRevision == collection.documentsRevision {
+                return resolved
+            }
             let byID = Dictionary(collection.documents.map { ($0.id, $0) },
                                   uniquingKeysWith: { a, _ in a })
-            return order.compactMap { byID[$0] }
+            let resolved = order.compactMap { byID[$0] }
+            visibleResolvedCache = resolved
+            visibleResolvedRevision = collection.documentsRevision
+            return resolved
         }
         let result = computeVisibleDocuments()
         visibleOrderCache = result.map { $0.id }
         visibleOrderCacheKey = key
+        visibleResolvedCache = result
+        visibleResolvedRevision = collection.documentsRevision
         return result
     }
 

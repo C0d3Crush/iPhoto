@@ -8,8 +8,14 @@ import Combine
 /// didSet-Preconditions lassen solche Fehler jetzt sofort und eindeutig crashen.
 class ImageCollection: ObservableObject {
     @Published var documents: [ImageDocument] = [] {
-        didSet { dispatchPrecondition(condition: .onQueue(.main)) }
+        didSet {
+            dispatchPrecondition(condition: .onQueue(.main))
+            documentsRevision &+= 1
+        }
     }
+    /// Zählt jede Mutation von documents — erlaubt Cache-Konsumenten (visibleDocuments)
+    /// zu erkennen, ob aufgelöste Dokument-Kopien noch aktuell sind.
+    private(set) var documentsRevision: UInt64 = 0
     @Published var currentIndex: Int = 0 {
         didSet { dispatchPrecondition(condition: .onQueue(.main)) }
     }
