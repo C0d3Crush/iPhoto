@@ -47,6 +47,7 @@ class ImageViewModel: ObservableObject {
     @Published var loadingQueue: [LoadingTask] = []
     @Published var loadingSummary: String? = nil
     var loadingSummaryToken = UUID()
+    var folderSyncDebounce: [UUID: DispatchWorkItem] = [:]
 
     // MARK: - Adjustments
 

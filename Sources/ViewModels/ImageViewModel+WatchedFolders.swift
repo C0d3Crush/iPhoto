@@ -260,12 +260,16 @@ extension ImageViewModel {
                 }
             }
             let folderPrefix = folderURL.standardized.path
+            // Set-Abgleich außerhalb des Filters — found.map im Closure war O(N×M)
+            // und blockierte den Main-Thread bei großen Bibliotheken sekundenlang.
+            let foundPaths = Set(found.map { $0.standardized.path })
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                let toRemove = self.collection.documents.filter {
-                    $0.url.standardized.path.hasPrefix(folderPrefix) && !found.map { $0.standardized }.contains($0.url.standardized)
-                }
-                self.collection.documents.removeAll { doc in toRemove.contains(where: { $0.id == doc.id }) }
+                let removeIDs = Set(self.collection.documents.compactMap { doc -> UUID? in
+                    let p = doc.url.standardized.path
+                    return p.hasPrefix(folderPrefix) && !foundPaths.contains(p) ? doc.id : nil
+                })
+                self.collection.documents.removeAll { removeIDs.contains($0.id) }
                 self.importFiles(found, selectFirst: false)
                 self.dequeueLoading(id: folderID)
             }
@@ -282,10 +286,21 @@ extension ImageViewModel {
             eventMask: [.write, .rename, .delete],
             queue: .global(qos: .utility)
         )
+        // Debounce: Batch-Löschen/-Kopieren feuert pro Datei ein Event — ohne
+        // Entprellung lief syncFolder dutzendfach parallel und fror die UI ein.
         source.setEventHandler { [weak self] in
-            guard let self = self,
-                  let f = self.library.watchedFolders.first(where: { $0.id == folder.id }) else { return }
-            self.syncFolder(f)
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.folderSyncDebounce[folder.id]?.cancel()
+                let work = DispatchWorkItem { [weak self] in
+                    guard let self = self,
+                          let f = self.library.watchedFolders.first(where: { $0.id == folder.id }) else { return }
+                    self.folderSyncDebounce[folder.id] = nil
+                    self.syncFolder(f)
+                }
+                self.folderSyncDebounce[folder.id] = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+            }
         }
         source.setCancelHandler { close(fd) }
         source.resume()

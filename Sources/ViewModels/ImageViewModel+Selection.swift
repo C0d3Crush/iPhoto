@@ -35,21 +35,35 @@ extension ImageViewModel {
     }
 
     private func confirmTrashFiles() {
-        let count = collection.selectedIndices.count
-        let alert = NSAlert()
-        alert.messageText = count == 1 ? "Datei in den Papierkorb?" : "\(count) Dateien in den Papierkorb?"
-        alert.informativeText = count == 1
-            ? "Die Originaldatei wird vom Datenträger in den Papierkorb verschoben."
-            : "Die \(count) Originaldateien werden vom Datenträger in den Papierkorb verschoben."
-        alert.addButton(withTitle: "In Papierkorb")
-        alert.addButton(withTitle: "Abbrechen")
-        alert.alertStyle = .warning
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-
         let docs = collection.selectedIndices.sorted().compactMap {
             $0 < collection.documents.count ? collection.documents[$0] : nil
         }
         guard !docs.isEmpty else { return }
+        let count = docs.count
+
+        let picks = docs.filter { $0.flagStatus == .pick }
+        let alert = NSAlert()
+        if picks.isEmpty {
+            alert.messageText = count == 1 ? "Datei in den Papierkorb?" : "\(count) Dateien in den Papierkorb?"
+            alert.informativeText = count == 1
+                ? "Die Originaldatei wird vom Datenträger in den Papierkorb verschoben."
+                : "Die \(count) Originaldateien werden vom Datenträger in den Papierkorb verschoben."
+            alert.addButton(withTitle: "In Papierkorb")
+            alert.alertStyle = .warning
+        } else {
+            alert.messageText = picks.count == 1
+                ? "Ein Bild ist als Pick markiert!"
+                : "\(picks.count) Bilder sind als Pick markiert!"
+            let names = picks.prefix(3).map { $0.filename }.joined(separator: ", ")
+                + (picks.count > 3 ? ", …" : "")
+            alert.informativeText = count == 1
+                ? "„\(names)“ ist als Pick markiert. Trotzdem in den Papierkorb verschieben?"
+                : "Von den \(count) Dateien sind als Pick markiert: \(names). Trotzdem alle \(count) in den Papierkorb verschieben?"
+            alert.addButton(withTitle: "Trotzdem in Papierkorb")
+            alert.alertStyle = .critical
+        }
+        alert.addButton(withTitle: "Abbrechen")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
         let taskID = UUID()
         enqueueLoading(id: taskID, label: "In Papierkorb verschieben…", icon: "trash",
                        done: 0, total: docs.count, summaryVerb: "gelöscht")

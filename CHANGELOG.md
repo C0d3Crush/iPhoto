@@ -2,6 +2,14 @@
 
 ---
 
+## 0.91.0
+**Pick-Warnung beim Löschen + UI-Freeze beim Batch-Löschen behoben**
+
+- Sind als Pick markierte Bilder beim Löschen dabei, warnt ein Dialog (mit Dateinamen) — „Trotzdem in Papierkorb" oder „Abbrechen" (dann wird nichts gelöscht)
+- App fror beim Löschen vieler Bilder ein: Die Ordnerüberwachung feuerte pro gelöschter Datei einen teuren Abgleich auf dem Main-Thread — jetzt entprellt (1 s) und mit schnellem Set-Abgleich
+
+---
+
 ## 0.90.0
 **Ladebalken beim Löschen**
 
