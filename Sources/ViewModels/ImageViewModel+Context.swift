@@ -95,61 +95,33 @@ extension ImageViewModel {
         return CatalogStore.shared.exif(forPath: doc.url.path)?.sequenceNumber ?? 0
     }
 
-    // Erkennt Stapel über die Dateinamens-Reihenfolge (= Aufnahmereihenfolge):
-    // aufeinanderfolgende Bilder mit seq ≥ 1 und nicht-fallender Sequenz bilden einen Lauf
-    // (nicht-fallend statt strikt steigend deckt RAF+JPEG-Paare 1,1,2,2,… ab);
-    // seq == 0 oder Sequenz-Reset (…7 → 1) beendet den Lauf. Läufe ≥ 2 werden Stapel.
+    // Stapel-Erkennung: pure Logik in StackDetector (siehe dort), hier nur Anbindung an
+    // ViewModel-State (stackCounts, expandedStacks) und Rückabbildung IDs → Dokumente.
     private func applyStacking(to sorted: [ImageDocument]) -> [ImageDocument] {
+        let seqs = sorted.map { sequenceNumber(for: $0) }
         // Ohne Serienbilder den teuren localizedStandardCompare-Sort komplett überspringen.
-        guard sorted.contains(where: { sequenceNumber(for: $0) >= 1 }) else {
+        guard seqs.contains(where: { $0 >= 1 }) else {
             stackCounts = [:]
             stackLeaderByMember = [:]
             stackMembersByLeader = [:]
             return sorted
         }
-        let byName = sorted.sorted {
-            $0.filename.localizedStandardCompare($1.filename) == .orderedAscending
+        let items = zip(sorted, seqs).map {
+            StackDetector.Item(id: $0.id, filename: $0.filename, seq: $1)
         }
-        var counts: [UUID: Int] = [:]
-        var leaderByMember: [UUID: UUID] = [:]
-        var membersByLeader: [UUID: [UUID]] = [:]
-        var run: [(id: UUID, seq: Int)] = []
-        func closeRun() {
-            if run.count >= 2 {
-                let leaderID = run[0].id
-                counts[leaderID] = run.count
-                for m in run { leaderByMember[m.id] = leaderID }
-                membersByLeader[leaderID] = run.map { $0.id }
-            }
-            run.removeAll()
-        }
-        for doc in byName {
-            let seq = sequenceNumber(for: doc)
-            if seq >= 1 {
-                if let last = run.last, seq < last.seq { closeRun() }
-                run.append((doc.id, seq))
-            } else {
-                closeRun()
-            }
-        }
-        closeRun()
-
-        stackCounts = counts
-        stackLeaderByMember = leaderByMember
-        stackMembersByLeader = membersByLeader
-        guard !counts.isEmpty else { return sorted }
+        let r = StackDetector.detect(items)
+        stackCounts = r.counts
+        stackLeaderByMember = r.leaderByMember
+        stackMembersByLeader = r.membersByLeader
+        guard !r.counts.isEmpty else { return sorted }
 
         let byID = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        var out: [ImageDocument] = []
-        for doc in sorted {
-            if let leaderID = leaderByMember[doc.id], leaderID != doc.id { continue }
-            out.append(doc)
-            if counts[doc.id] != nil, expandedStacks.contains(doc.url.path),
-               let members = membersByLeader[doc.id] {
-                out += members.dropFirst().compactMap { byID[$0] }
-            }
-        }
-        return out
+        let expandedLeaders = Set(r.counts.keys.filter { id in
+            byID[id].map { expandedStacks.contains($0.url.path) } ?? false
+        })
+        let orderedIDs = StackDetector.displayIDs(sortedIDs: sorted.map { $0.id },
+                                                  result: r, expandedLeaders: expandedLeaders)
+        return orderedIDs.compactMap { byID[$0] }
     }
 
     func isStackExpanded(_ doc: ImageDocument) -> Bool {

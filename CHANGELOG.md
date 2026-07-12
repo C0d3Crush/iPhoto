@@ -2,6 +2,16 @@
 
 ---
 
+## 0.92.2
+**Unit-Tests für kritische Pfade + Tests laufen jetzt in der CI**
+
+- Stapel-Erkennung (BKT/CH/CL-Serien) als eigenständiger `StackDetector` extrahiert — identisches Verhalten, jetzt isoliert testbar
+- 15 neue Tests für Stapel-Erkennung und Anzeige-Reihenfolge (`Tests/run_stacking.sh`): Läufe, Sequenz-Resets, RAF+JPEG-Paare, Auf-/Zuklappen
+- Catalog-Tests erweitert (39 gesamt): Papierkorb-Tabelle (Markieren, Wiederherstellen, Persistenz) und Serienbild-EXIF (SequenceNumber/AutoBracketing)
+- GitHub-Actions-Workflow führt beide Test-Suiten bei jedem Push aus
+
+---
+
 ## 0.92.1
 **Stabilität — Bildlade-Pipeline robuster gegen gleichzeitiges Löschen**
 

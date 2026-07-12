@@ -19,6 +19,12 @@ jobs:
           chmod +x build.sh
           ./build.sh
 
+      - name: Unit tests
+        run: |
+          chmod +x Tests/run_stacking.sh Tests/run_catalog.sh
+          Tests/run_stacking.sh
+          Tests/run_catalog.sh
+
       - name: Zip app
         run: |
           VERSION=$(defaults read "$PWD/Resources/Info.plist" CFBundleShortVersionString)

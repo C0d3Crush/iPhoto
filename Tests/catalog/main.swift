@@ -58,7 +58,7 @@ test("Alle 4 Tabellen vorhanden") {
     var db: OpaquePointer?
     sqlite3_open(tmp.path, &db)
     defer { sqlite3_close(db) }
-    let tables = ["images", "ratings", "albums", "album_images"]
+    let tables = ["images", "ratings", "albums", "album_images", "trash"]
     for t in tables {
         var s: OpaquePointer?
         let sql = "SELECT name FROM sqlite_master WHERE type='table' AND name='\(t)'"
@@ -406,6 +406,58 @@ test("pathsNeedingExifScan schrumpft nach upsertExif") {
     try assertEqual(s.pathsNeedingExifScan().count, 2)
     s.upsertExif(path: "/tmp/a.raf", focalLength: 23.0, iso: 200, aperture: 4.0, lensModel: nil)
     try assertEqual(s.pathsNeedingExifScan(), ["/tmp/b.raf"])
+}
+
+// ── Papierkorb ───────────────────────────────────────────────
+print("\n[Papierkorb]")
+test("setTrashed markiert Pfade, trashedPaths liefert sie") {
+    let s = freshStore(name: "trash_mark")
+    s.setTrashed(paths: ["/tmp/t1.raf", "/tmp/t2.raf"], true)
+    try assertEqual(s.trashedPaths(), Set(["/tmp/t1.raf", "/tmp/t2.raf"]))
+}
+test("setTrashed(false) entfernt aus dem Papierkorb") {
+    let s = freshStore(name: "trash_restore")
+    s.setTrashed(paths: ["/tmp/t1.raf", "/tmp/t2.raf"], true)
+    s.setTrashed(paths: ["/tmp/t1.raf"], false)
+    try assertEqual(s.trashedPaths(), Set(["/tmp/t2.raf"]))
+}
+test("setTrashed ist idempotent (doppeltes Markieren)") {
+    let s = freshStore(name: "trash_idem")
+    s.setTrashed(paths: ["/tmp/t1.raf"], true)
+    s.setTrashed(paths: ["/tmp/t1.raf"], true)
+    try assertEqual(s.trashedPaths(), Set(["/tmp/t1.raf"]))
+}
+test("setTrashed mit leerer Liste ist ein No-op") {
+    let s = freshStore(name: "trash_empty")
+    s.setTrashed(paths: [], true)
+    try assert(s.trashedPaths().isEmpty)
+}
+test("Papierkorb-Markierung überlebt Neu-Öffnen der DB") {
+    let tmp = FileManager.default.temporaryDirectory
+        .appendingPathComponent("catalog_trash_persist_\(Int(Date().timeIntervalSince1970)).db")
+    CatalogStore(dbPath: tmp.path).setTrashed(paths: ["/tmp/p.raf"], true)
+    try assertEqual(CatalogStore(dbPath: tmp.path).trashedPaths(), Set(["/tmp/p.raf"]))
+}
+
+// ── Serienbild-EXIF (SequenceNumber / AutoBracketing) ────────
+print("\n[Serienbild-EXIF]")
+test("sequenceNumber und autoBracketing werden persistiert") {
+    let s = freshStore(name: "exif_seq")
+    s.upsertImage(path: "/tmp/seq.raf", filename: "seq.raf", isRAW: true)
+    s.upsertExif(path: "/tmp/seq.raf", focalLength: nil, iso: nil, aperture: nil,
+                 lensModel: nil, sequenceNumber: 3, autoBracketing: true)
+    let e = s.exif(forPath: "/tmp/seq.raf")
+    try assert(e != nil)
+    try assertEqual(e!.sequenceNumber!, 3)
+    try assert(e!.autoBracketing, "autoBracketing verloren")
+}
+test("sequenceNumber nil bleibt nil (Einzelbild)") {
+    let s = freshStore(name: "exif_seq_nil")
+    s.upsertImage(path: "/tmp/solo.raf", filename: "solo.raf", isRAW: true)
+    s.upsertExif(path: "/tmp/solo.raf", focalLength: nil, iso: nil, aperture: nil, lensModel: nil)
+    let e = s.exif(forPath: "/tmp/solo.raf")
+    try assert(e != nil)
+    try assert(e!.sequenceNumber == nil && !e!.autoBracketing)
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────
