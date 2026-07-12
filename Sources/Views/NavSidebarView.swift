@@ -68,6 +68,22 @@ struct NavSidebarView: View {
             if !viewModel.loadingQueue.isEmpty {
                 Divider()
                 LoadingBar(queue: viewModel.loadingQueue)
+            } else if let summary = viewModel.loadingSummary {
+                Divider()
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 10))
+                        .foregroundColor(.green)
+                    Text(summary)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color(NSColor.windowBackgroundColor))
+                .transition(.opacity)
             }
         }
         .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)

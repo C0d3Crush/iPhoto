@@ -2,6 +2,14 @@
 
 ---
 
+## 0.89.0
+**Lade-Zusammenfassung nach Abschluss**
+
+- Nach Abschluss des Ladebalkens in der Seitenleiste erscheint kurz „x Bilder in y Sekunden geladen" (mit grünem Häkchen, blendet nach 6 Sekunden aus)
+- Wird nur bei erfolgreich abgeschlossenen Ladevorgängen angezeigt, nicht bei Abbruch oder Fehler
+
+---
+
 ## 0.88.0
 **Aktionen auf ganze Serienbild-Stapel (CH/CL/BKT)**
 
