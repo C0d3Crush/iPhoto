@@ -2,6 +2,16 @@
 
 ---
 
+## 0.92.0
+**Interner Papierkorb — Löschen ist jetzt zweistufig**
+
+- Neuer Tab „Papierkorb" in der Seitenleiste (mit Zähler): Gelöschte Bilder landen zuerst dort, die Dateien bleiben unangetastet auf dem Datenträger
+- Im Papierkorb per Rechtsklick: Wiederherstellen, Endgültig löschen oder Papierkorb leeren (auch per Rechtsklick auf den Tab)
+- Endgültiges Löschen verschiebt die Originaldateien in den macOS-Papierkorb (mit Fortschrittsbalken)
+- Pick-Warnung und Stapel-/Mehrfachauswahl-Löschen funktionieren wie bisher
+
+---
+
 ## 0.91.0
 **Pick-Warnung beim Löschen + UI-Freeze beim Batch-Löschen behoben**
 

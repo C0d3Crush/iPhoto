@@ -61,6 +61,7 @@ struct NavSidebarView: View {
                     albumsSection
                     smartFoldersSection
                     volumesSection
+                    trashSection
                 }
                 .padding(.vertical, 8)
             }
@@ -335,6 +336,32 @@ struct NavSidebarView: View {
         .padding(.horizontal, 10)
         .padding(.top, 12)
         .padding(.bottom, 2)
+    }
+
+    @ViewBuilder private var trashSection: some View {
+        sectionHeader("Papierkorb")
+        Button(action: { viewModel.navSelection = .trash }) {
+            HStack(spacing: 4) {
+                Label("Papierkorb", systemImage: viewModel.trashedCount > 0 ? "trash.fill" : "trash")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if viewModel.trashedCount > 0 {
+                    Text("\(viewModel.trashedCount)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(viewModel.navSelection == .trash ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .contextMenu {
+            Button("Papierkorb leeren…") { viewModel.emptyTrash() }
+                .disabled(viewModel.trashedCount == 0)
+        }
     }
 
     private func navRow(label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

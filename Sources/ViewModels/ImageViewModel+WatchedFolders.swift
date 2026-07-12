@@ -223,6 +223,8 @@ extension ImageViewModel {
                 syncVolume(vol)
             }
             foldersToLoad = []
+        case .trash:
+            foldersToLoad = []
         }
         for folder in foldersToLoad {
             syncedFolderIDs.insert(folder.id)

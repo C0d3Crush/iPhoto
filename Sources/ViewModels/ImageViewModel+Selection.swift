@@ -39,6 +39,12 @@ extension ImageViewModel {
             $0 < collection.documents.count ? collection.documents[$0] : nil
         }
         guard !docs.isEmpty else { return }
+
+        // Im Trash-Tab: endgültig löschen, sonst in den internen Papierkorb
+        if navSelection == .trash {
+            deletePermanently(docs)
+            return
+        }
         let count = docs.count
 
         let picks = docs.filter { $0.flagStatus == .pick }
@@ -46,8 +52,8 @@ extension ImageViewModel {
         if picks.isEmpty {
             alert.messageText = count == 1 ? "Datei in den Papierkorb?" : "\(count) Dateien in den Papierkorb?"
             alert.informativeText = count == 1
-                ? "Die Originaldatei wird vom Datenträger in den Papierkorb verschoben."
-                : "Die \(count) Originaldateien werden vom Datenträger in den Papierkorb verschoben."
+                ? "Das Bild wird in den iPhoto-Papierkorb verschoben und kann dort wiederhergestellt werden."
+                : "Die \(count) Bilder werden in den iPhoto-Papierkorb verschoben und können dort wiederhergestellt werden."
             alert.addButton(withTitle: "In Papierkorb")
             alert.alertStyle = .warning
         } else {
@@ -64,8 +70,63 @@ extension ImageViewModel {
         }
         alert.addButton(withTitle: "Abbrechen")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
+        moveToAppTrash(docs)
+    }
+
+    // MARK: - Interner Papierkorb
+
+    var trashedCount: Int {
+        collection.documents.reduce(0) { $0 + ($1.isTrashed ? 1 : 0) }
+    }
+
+    /// Markiert Bilder als getrasht — Dateien bleiben auf dem Datenträger, sind
+    /// aber nur noch im Trash-Tab sichtbar und dort wiederherstellbar.
+    func moveToAppTrash(_ docs: [ImageDocument]) {
+        guard !docs.isEmpty else { return }
+        let prev = visibleDocuments
+        let ids = Set(docs.map { $0.id })
+        for i in collection.documents.indices where ids.contains(collection.documents[i].id) {
+            collection.documents[i].isTrashed = true
+        }
+        CatalogStore.shared.setTrashed(paths: docs.map { $0.url.path }, true)
+        collection.selectedIndices = []
+        invalidateVisibleOrder()
+        selectNeighborAfterExclusion(previousVisible: prev, excludedIDs: ids)
+    }
+
+    func restoreFromTrash(_ docs: [ImageDocument]) {
+        guard !docs.isEmpty else { return }
+        let prev = visibleDocuments
+        let ids = Set(docs.map { $0.id })
+        for i in collection.documents.indices where ids.contains(collection.documents[i].id) {
+            collection.documents[i].isTrashed = false
+        }
+        CatalogStore.shared.setTrashed(paths: docs.map { $0.url.path }, false)
+        collection.selectedIndices = []
+        invalidateVisibleOrder()
+        selectNeighborAfterExclusion(previousVisible: prev, excludedIDs: ids)
+    }
+
+    func emptyTrash() {
+        deletePermanently(collection.documents.filter { $0.isTrashed })
+    }
+
+    /// Verschiebt die Originaldateien in den macOS-Papierkorb und entfernt sie aus iPhoto.
+    func deletePermanently(_ docs: [ImageDocument]) {
+        guard !docs.isEmpty else { return }
+        let count = docs.count
+        let alert = NSAlert()
+        alert.messageText = count == 1 ? "Datei endgültig löschen?" : "\(count) Dateien endgültig löschen?"
+        alert.informativeText = count == 1
+            ? "Die Originaldatei wird aus iPhoto entfernt und in den macOS-Papierkorb verschoben."
+            : "Die \(count) Originaldateien werden aus iPhoto entfernt und in den macOS-Papierkorb verschoben."
+        alert.addButton(withTitle: "Endgültig löschen")
+        alert.addButton(withTitle: "Abbrechen")
+        alert.alertStyle = .critical
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
         let taskID = UUID()
-        enqueueLoading(id: taskID, label: "In Papierkorb verschieben…", icon: "trash",
+        enqueueLoading(id: taskID, label: "Endgültig löschen…", icon: "trash",
                        done: 0, total: docs.count, summaryVerb: "gelöscht")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             var trashedIDs: Set<UUID> = []
@@ -77,6 +138,7 @@ extension ImageViewModel {
                 let done = i + 1
                 DispatchQueue.main.async { self?.updateLoading(id: taskID, done: done, total: docs.count) }
             }
+            CatalogStore.shared.setTrashed(paths: docs.map { $0.url.path }, false)
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.collection.documents.removeAll { trashedIDs.contains($0.id) }
@@ -89,6 +151,23 @@ extension ImageViewModel {
                 }
                 self.dequeueLoading(id: taskID)
             }
+        }
+    }
+
+    /// Selektiert nach dem Ausblenden von Bildern den nächsten sichtbaren Nachbarn.
+    private func selectNeighborAfterExclusion(previousVisible: [ImageDocument], excludedIDs: Set<UUID>) {
+        let newVisible = visibleDocuments
+        guard let cur = collection.currentDocument else { return }
+        guard excludedIDs.contains(cur.id) else {
+            if let idx = collectionIndex(for: cur) { collection.selectedIndices = [idx] }
+            return
+        }
+        guard !newVisible.isEmpty else { return }
+        let pos = previousVisible.firstIndex(where: { $0.id == cur.id }) ?? 0
+        let nextDoc = newVisible[min(pos, newVisible.count - 1)]
+        if let nextIdx = collectionIndex(for: nextDoc) {
+            collection.select(index: nextIdx)
+            loadCurrentImage()
         }
     }
 

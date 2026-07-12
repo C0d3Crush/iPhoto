@@ -14,7 +14,38 @@ struct ThumbnailContextMenu: View {
         isInMultiSelection ? nil : vm.collapsedStackMembers(for: doc)
     }
 
+    private var trashTargets: [ImageDocument] {
+        if isInMultiSelection {
+            return vm.collection.selectedIndices.sorted().compactMap {
+                $0 < vm.collection.documents.count ? vm.collection.documents[$0] : nil
+            }
+        }
+        return stackMembers ?? [doc]
+    }
+
     var body: some View {
+        if vm.navSelection == .trash {
+            trashMenu
+        } else {
+            normalMenu
+        }
+    }
+
+    @ViewBuilder private var trashMenu: some View {
+        let targets = trashTargets
+        Button(targets.count > 1 ? "\(targets.count) Bilder wiederherstellen" : "Wiederherstellen") {
+            vm.restoreFromTrash(targets)
+        }
+        Button(targets.count > 1 ? "\(targets.count) Bilder endgültig löschen…" : "Endgültig löschen…") {
+            vm.deletePermanently(targets)
+        }
+        Divider()
+        Button("Papierkorb leeren…") { vm.emptyTrash() }
+        Divider()
+        Button("Im Finder zeigen") { vm.showInFinder(doc) }
+    }
+
+    @ViewBuilder private var normalMenu: some View {
         Group {
             flagSection
             Divider()

@@ -41,6 +41,7 @@ struct ImageDocument: Identifiable, Equatable {
     var rating: Int = 0
     var flagStatus: FlagStatus = .none
     var colorLabel: ColorLabel = .none
+    var isTrashed: Bool = false
 
     var filename: String { url.lastPathComponent }
 

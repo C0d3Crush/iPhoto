@@ -120,6 +120,13 @@ final class CatalogStore {
         """)
 
         exec("""
+        CREATE TABLE IF NOT EXISTS trash (
+            image_path TEXT PRIMARY KEY,
+            trashed_at TEXT NOT NULL
+        )
+        """)
+
+        exec("""
         CREATE TABLE IF NOT EXISTS albums (
             id         TEXT PRIMARY KEY,
             name       TEXT NOT NULL,
@@ -435,6 +442,34 @@ final class CatalogStore {
                     (Int(sqlite3_column_int(stmt, 1)),
                      String(cString: sqlite3_column_text(stmt, 2)),
                      String(cString: sqlite3_column_text(stmt, 3)))
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
+    // MARK: - Trash (interner Papierkorb)
+
+    func setTrashed(paths: [String], _ trashed: Bool) {
+        guard !paths.isEmpty else { return }
+        queue.sync {
+            exec("BEGIN")
+            for path in paths {
+                let stmt = trashed
+                    ? prepare("INSERT OR REPLACE INTO trash (image_path, trashed_at) VALUES (?, datetime('now'))")
+                    : prepare("DELETE FROM trash WHERE image_path=?")
+                bind(stmt, 1, path)
+                sqlite3_step(stmt); sqlite3_finalize(stmt)
+            }
+            exec("COMMIT")
+        }
+    }
+
+    func trashedPaths() -> Set<String> {
+        queue.sync {
+            let stmt = prepare("SELECT image_path FROM trash")
+            var out = Set<String>()
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                out.insert(String(cString: sqlite3_column_text(stmt, 0)))
             }
             sqlite3_finalize(stmt); return out
         }

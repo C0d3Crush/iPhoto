@@ -59,25 +59,29 @@ extension ImageViewModel {
 
     private func computeVisibleDocuments() -> [ImageDocument] {
         let filtered: [ImageDocument]
+        // Interner Papierkorb: getrashte Bilder erscheinen nur im Trash-Tab
+        let docs = collection.documents.filter { !$0.isTrashed }
         switch navSelection {
         case .library, nil:
-            filtered = collection.documents
+            filtered = docs
         case .album(let id):
             guard let album = library.albums.first(where: { $0.id == id }) else { return [] }
-            filtered = collection.documents.filter { album.photoURLs.contains($0.url) }
+            filtered = docs.filter { album.photoURLs.contains($0.url) }
         case .folder(let id):
             guard let folder = library.watchedFolders.first(where: { $0.id == id }),
                   let (folderURL, stop) = folder.resolveURL() else { return [] }
             defer { stop() }
             let prefix = folderURL.standardized.path
-            filtered = collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
+            filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
         case .smartFolder(let id):
             guard let sf = library.smartFolders.first(where: { $0.id == id }) else { return [] }
-            filtered = collection.documents.filter { smartFolderMatches($0, sf: sf) }
+            filtered = docs.filter { smartFolderMatches($0, sf: sf) }
         case .volume(let id):
             guard let volume = library.detectedVolumes.first(where: { $0.id == id }) else { return [] }
             let prefix = volume.url.standardized.path
-            filtered = collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
+            filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
+        case .trash:
+            filtered = collection.documents.filter { $0.isTrashed }
         }
         return applyStacking(to: applySortCriterion(to: filtered))
     }

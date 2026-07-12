@@ -421,10 +421,12 @@ class ImageViewModel: ObservableObject {
             BookmarkStore.shared.save(urls: newURLs)
         }
         let catalogRatings = CatalogStore.shared.allRatings()
+        let trashedPaths = CatalogStore.shared.trashedPaths()
         let newDocs = newURLs
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map { url -> ImageDocument in
                 var doc = ImageDocument(url: url)
+                doc.isTrashed = trashedPaths.contains(url.path)
                 if let r = catalogRatings[url.path] {
                     doc.rating = r.rating
                     doc.flagStatus = FlagStatus(rawValue: r.flag) ?? .none
