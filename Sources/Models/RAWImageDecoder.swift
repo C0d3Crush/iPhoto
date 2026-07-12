@@ -5,8 +5,16 @@ import Foundation
 
 // Breadcrumb: last RAF decode operation. BG threads update via strlcpy before each risky call.
 // Signal handler (CrashReporter.swift) reads this to show which step crashed.
-// Data race between concurrent BG threads is acceptable for diagnostics.
+// Writes are lock-serialised so parallel decodes can't interleave bytes; the signal
+// handler reads lock-free (async-signal-safe), a torn read there is acceptable.
 var iphotoLastOpBuf = [CChar](repeating: 0, count: 512)
+private let breadcrumbLock = NSLock()
+
+func iphotoBreadcrumb(_ message: String) {
+    breadcrumbLock.lock()
+    message.withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+    breadcrumbLock.unlock()
+}
 
 // Geteilter CIContext — laut Apple-Dokumentation thread-safe für Rendering.
 // Einen Context pro App statt einen pro Thread: Metal/GPU erschöpft sich nicht mehr
@@ -133,43 +141,62 @@ struct RAWImageDecoder {
               ext == "raf" else { return nil }
 
         let name = url.lastPathComponent
-        "decodeEmbeddedJPEG: FileHandle öffnen (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        iphotoBreadcrumb("decodeEmbeddedJPEG: FileHandle öffnen (\(name))")
         Log.trace("FileHandle öffnen: \(name)")
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        let handle: FileHandle
+        do { handle = try FileHandle(forReadingFrom: url) } catch {
+            Log.error("RAF: FileHandle konnte nicht geöffnet werden (\(name)): \(error.localizedDescription)")
+            return nil
+        }
         defer { try? handle.close() }
 
         // Header lesen (mindestens 96 Bytes) — werfende API verhindert ObjC-Exception → SIGABRT
-        "decodeEmbeddedJPEG: Header lesen (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
-        guard let header = try? handle.read(upToCount: 96), header.count >= 96 else { return nil }
+        iphotoBreadcrumb("decodeEmbeddedJPEG: Header lesen (\(name))")
+        guard let header = try? handle.read(upToCount: 96), header.count >= 96 else {
+            Log.error("RAF: Header unvollständig oder nicht lesbar (\(name))")
+            return nil
+        }
 
         // RAF-Signatur prüfen
         let sig = String(bytes: header.prefix(16), encoding: .ascii) ?? ""
-        guard sig.hasPrefix("FUJIFILMCCD-RAW") else { return nil }
+        guard sig.hasPrefix("FUJIFILMCCD-RAW") else {
+            Log.error("RAF: Signatur ungültig (\(name)): '\(sig)'")
+            return nil
+        }
 
         // JPEG-Offset und -Länge aus dem Verzeichnis lesen (Big-Endian)
         let jpegOffset = header.readUInt32BE(at: 0x54)
         let jpegLength = header.readUInt32BE(at: 0x58)
-        guard jpegOffset > 0, jpegLength > 0 else { return nil }
+        guard jpegOffset > 0, jpegLength > 0 else {
+            Log.error("RAF: kein eingebettetes JPEG referenziert (\(name)): offset=\(jpegOffset) length=\(jpegLength)")
+            return nil
+        }
 
         // JPEG-Bytes extrahieren
-        "decodeEmbeddedJPEG: JPEG-Bytes lesen @\(jpegOffset)+\(jpegLength) (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        iphotoBreadcrumb("decodeEmbeddedJPEG: JPEG-Bytes lesen @\(jpegOffset)+\(jpegLength) (\(name))")
         Log.trace("JPEG-Bytes lesen: offset=\(jpegOffset) length=\(jpegLength) \(name)")
-        guard (try? handle.seek(toOffset: UInt64(jpegOffset))) != nil else { return nil }
+        guard (try? handle.seek(toOffset: UInt64(jpegOffset))) != nil else {
+            Log.error("RAF: Seek auf JPEG-Offset \(jpegOffset) fehlgeschlagen (\(name))")
+            return nil
+        }
         guard let jpegData = try? handle.read(upToCount: Int(jpegLength)),
               jpegData.count >= 4,
-              jpegData[0] == 0xFF, jpegData[1] == 0xD8 else { return nil }
+              jpegData[0] == 0xFF, jpegData[1] == 0xD8 else {
+            Log.error("RAF: eingebettetes JPEG unlesbar oder ohne JPEG-Magic (\(name))")
+            return nil
+        }
 
         imageIOSemaphore.wait()
         defer { imageIOSemaphore.signal() }
 
-        "decodeEmbeddedJPEG: CGImageSourceCreateWithData (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        iphotoBreadcrumb("decodeEmbeddedJPEG: CGImageSourceCreateWithData (\(name))")
         Log.trace("CGImageSourceCreateWithData: \(jpegData.count)B \(name)")
         guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil) else { return nil }
 
         if let maxDim = maxDimension {
             // Thumbnail-Pfad: direkt auf Zielgröße dekodieren — kein volles 37-MB-Bild im Speicher.
             // kCGImageSourceCreateThumbnailWithTransform wendet EXIF-Rotation an, kein CIImage nötig.
-            "decodeEmbeddedJPEG: CGImageSourceCreateThumbnailAtIndex (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+            iphotoBreadcrumb("decodeEmbeddedJPEG: CGImageSourceCreateThumbnailAtIndex (\(name))")
             Log.trace("CGImageSourceCreateThumbnailAtIndex: \(maxDim)px \(name)")
             // FromImageAlways: erzwingt JPEG-DCT-Sub-Sampling (1/8 Zwischenstufe) statt des
             // vollen Bildes. FromImageIfAbsent crashte bei großen embedded JPEGs ohne IFD1-Thumbnail
@@ -187,11 +214,11 @@ struct RAWImageDecoder {
         }
 
         // Vollbild-Pfad: volle Auflösung + manuelle EXIF-Rotation (für decode())
-        "decodeEmbeddedJPEG: CGImageSourceCreateImageAtIndex (\(name))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        iphotoBreadcrumb("decodeEmbeddedJPEG: CGImageSourceCreateImageAtIndex (\(name))")
         Log.trace("CGImageSourceCreateImageAtIndex: \(name)")
         guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
 
-        "decodeEmbeddedJPEG: applyExifOrientation (\(name)) \(image.width)x\(image.height)".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        iphotoBreadcrumb("decodeEmbeddedJPEG: applyExifOrientation (\(name)) \(image.width)x\(image.height)")
         Log.trace("applyExifOrientation: \(image.width)×\(image.height) \(name)")
         return applyExifOrientation(image, source: source)
     }
@@ -203,13 +230,13 @@ struct RAWImageDecoder {
               orientation != .up else { return image }
         ciSemaphore.wait()
         defer { ciSemaphore.signal() }
-        "applyExifOrientation: CIImage.oriented (raw=\(raw))".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        iphotoBreadcrumb("applyExifOrientation: CIImage.oriented (raw=\(raw))")
         Log.trace("CIImage.oriented: raw=\(raw) \(image.width)×\(image.height)")
         let ci = CIImage(cgImage: image).oriented(orientation)
-        "applyExifOrientation: CIContext.createCGImage".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        iphotoBreadcrumb("applyExifOrientation: CIContext.createCGImage")
         Log.trace("CIContext.createCGImage: \(Int(ci.extent.width))×\(Int(ci.extent.height))")
         let result = sharedCIContext.createCGImage(ci, from: ci.extent)
-        "applyExifOrientation: done".withCString { strlcpy(&iphotoLastOpBuf, $0, iphotoLastOpBuf.count) }
+        iphotoBreadcrumb("applyExifOrientation: done")
         return result ?? image
     }
 

@@ -2,6 +2,14 @@
 
 ---
 
+## 0.92.8
+**Robustheit — SQLite-Fehler sichtbar, Crash-Diagnose thread-sicher, RAF-Fehler mit Kontext**
+
+- Katalog-Datenbank: Fehlgeschlagene SQLite-Operationen (z. B. bei beschädigter Datenbank) werden jetzt geloggt statt still ignoriert — auch fehlgeschlagene `prepare`-Aufrufe melden die Ursache
+- Crash-Diagnose: Der Breadcrumb-Puffer der Decode-Pipeline wird jetzt lock-serialisiert beschrieben — parallele Decodes können den Puffer nicht mehr gegenseitig korrumpieren, Crash-Reports bleiben lesbar
+- RAF-Decoder: Fehlgeschlagene Schritte (Datei öffnen, Header lesen, ungültige Signatur, fehlendes/unlesbares eingebettetes JPEG) loggen jetzt die konkrete Ursache statt nur „Bild konnte nicht dekodiert werden"
+- Test-Suites repariert: `run_bench` und `run_library` kompilierten nicht mehr (fehlende `Data+Extensions.swift`); `run_catalog` um `Log.swift` ergänzt
+
 ## 0.92.7
 **Build & Qualität — Inkrementeller Build, vollständigere CI, Bildgröße in Metadaten**
 

@@ -69,7 +69,7 @@ final class CatalogStore {
     private func loadExifCache() {
         let stmt = prepare("SELECT path, focal_length, iso, aperture, lens_model, hdr, film_simulation, sequence_number, auto_bracket FROM images WHERE exif_scanned=1")
         var rows: [(String, Double?, Int?, Double?, String?, Bool, String?, Int?, Bool)] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
+        while step(stmt) == SQLITE_ROW {
             let path = String(cString: sqlite3_column_text(stmt, 0))
             let fl: Double? = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 1)
             let iso: Int?   = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil : Int(sqlite3_column_int(stmt, 2))
@@ -206,7 +206,7 @@ final class CatalogStore {
         // Only runs once — albums table empty means fresh DB
         let stmt = prepare("SELECT COUNT(*) FROM albums")
         var count: Int32 = 0
-        if sqlite3_step(stmt) == SQLITE_ROW { count = sqlite3_column_int(stmt, 0) }
+        if step(stmt) == SQLITE_ROW { count = sqlite3_column_int(stmt, 0) }
         sqlite3_finalize(stmt)
         guard count == 0 else { return }
 
@@ -222,13 +222,13 @@ final class CatalogStore {
             let aid = album.id.uuidString
             let ins = prepare("INSERT OR IGNORE INTO albums (id,name,created_at) VALUES (?,?,?)")
             bind(ins, 1, aid); bind(ins, 2, album.name); bind(ins, 3, iso8601())
-            sqlite3_step(ins); sqlite3_finalize(ins)
+            step(ins); sqlite3_finalize(ins)
 
             for (i, url) in album.photoURLs.enumerated() {
                 let ins2 = prepare("INSERT OR IGNORE INTO album_images (album_id,image_path,sort_order) VALUES (?,?,?)")
                 bind(ins2, 1, aid); bind(ins2, 2, url.path)
                 sqlite3_bind_int(ins2, 3, Int32(i))
-                sqlite3_step(ins2); sqlite3_finalize(ins2)
+                step(ins2); sqlite3_finalize(ins2)
             }
         }
         exec("COMMIT")
@@ -260,7 +260,7 @@ final class CatalogStore {
             bindOpt(stmt, 9, cameraModel)
             sqlite3_bind_int(stmt, 10, isRAW ? 1 : 0)
             bind(stmt, 11, iso8601())
-            sqlite3_step(stmt); sqlite3_finalize(stmt)
+            step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -268,7 +268,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at FROM images WHERE path=?")
             bind(stmt, 1, path)
-            guard sqlite3_step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
+            guard step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
             let img = rowToImage(stmt); sqlite3_finalize(stmt); return img
         }
     }
@@ -277,7 +277,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at FROM images ORDER BY filename")
             var out: [CatalogImage] = []
-            while sqlite3_step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
             sqlite3_finalize(stmt); return out
         }
     }
@@ -285,7 +285,7 @@ final class CatalogStore {
     func removeImage(path: String) {
         queue.sync {
             let stmt = prepare("DELETE FROM images WHERE path=?")
-            bind(stmt, 1, path); sqlite3_step(stmt); sqlite3_finalize(stmt)
+            bind(stmt, 1, path); step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -304,7 +304,7 @@ final class CatalogStore {
             if let v = sequenceNumber { sqlite3_bind_int(stmt, 7, Int32(v)) } else { sqlite3_bind_null(stmt, 7) }
             sqlite3_bind_int(stmt, 8, autoBracketing ? 1 : 0)
             bind(stmt, 9, path)
-            sqlite3_step(stmt); sqlite3_finalize(stmt)
+            step(stmt); sqlite3_finalize(stmt)
         }
         exifCacheLock.lock()
         exifCache[path] = (focalLength: focalLength, iso: iso, aperture: aperture, lensModel: lensModel, hdr: hdr, filmSimulation: filmSimulation, sequenceNumber: sequenceNumber, autoBracketing: autoBracketing)
@@ -322,7 +322,7 @@ final class CatalogStore {
         return queue.sync {
             let stmt = prepare("SELECT focal_length, iso, aperture, lens_model, hdr, film_simulation, sequence_number, auto_bracket FROM images WHERE path=?")
             bind(stmt, 1, path)
-            guard sqlite3_step(stmt) == SQLITE_ROW else {
+            guard step(stmt) == SQLITE_ROW else {
                 sqlite3_finalize(stmt)
                 exifCacheLock.lock()
                 exifCacheMisses.insert(path)
@@ -350,7 +350,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT DISTINCT film_simulation FROM images WHERE film_simulation IS NOT NULL AND film_simulation != '' ORDER BY film_simulation")
             var out: [String] = []
-            while sqlite3_step(stmt) == SQLITE_ROW {
+            while step(stmt) == SQLITE_ROW {
                 out.append(String(cString: sqlite3_column_text(stmt, 0)))
             }
             sqlite3_finalize(stmt); return out
@@ -361,7 +361,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT path FROM images WHERE exif_scanned=0 ORDER BY filename")
             var out: [String] = []
-            while sqlite3_step(stmt) == SQLITE_ROW {
+            while step(stmt) == SQLITE_ROW {
                 out.append(String(cString: sqlite3_column_text(stmt, 0)))
             }
             sqlite3_finalize(stmt); return out
@@ -397,7 +397,7 @@ final class CatalogStore {
                 bindOpt(stmt, 9, item.cameraModel)
                 sqlite3_bind_int(stmt, 10, item.isRAW ? 1 : 0)
                 bind(stmt, 11, now)
-                sqlite3_step(stmt)
+                step(stmt)
             }
             sqlite3_finalize(stmt)
             exec("COMMIT")
@@ -417,7 +417,7 @@ final class CatalogStore {
             bind(stmt, 1, path)
             sqlite3_bind_int(stmt, 2, Int32(rating))
             bind(stmt, 3, flag); bind(stmt, 4, colorLabel); bind(stmt, 5, iso8601())
-            sqlite3_step(stmt); sqlite3_finalize(stmt)
+            step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -425,7 +425,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT rating,flag,color_label FROM ratings WHERE image_path=?")
             bind(stmt, 1, path)
-            guard sqlite3_step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
+            guard step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
             let r = (Int(sqlite3_column_int(stmt, 0)),
                      String(cString: sqlite3_column_text(stmt, 1)),
                      String(cString: sqlite3_column_text(stmt, 2)))
@@ -437,7 +437,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT image_path,rating,flag,color_label FROM ratings")
             var out: [String: (rating: Int, flag: String, colorLabel: String)] = [:]
-            while sqlite3_step(stmt) == SQLITE_ROW {
+            while step(stmt) == SQLITE_ROW {
                 out[String(cString: sqlite3_column_text(stmt, 0))] =
                     (Int(sqlite3_column_int(stmt, 1)),
                      String(cString: sqlite3_column_text(stmt, 2)),
@@ -458,7 +458,7 @@ final class CatalogStore {
                     ? prepare("INSERT OR REPLACE INTO trash (image_path, trashed_at) VALUES (?, datetime('now'))")
                     : prepare("DELETE FROM trash WHERE image_path=?")
                 bind(stmt, 1, path)
-                sqlite3_step(stmt); sqlite3_finalize(stmt)
+                step(stmt); sqlite3_finalize(stmt)
             }
             exec("COMMIT")
         }
@@ -468,7 +468,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT image_path FROM trash")
             var out = Set<String>()
-            while sqlite3_step(stmt) == SQLITE_ROW {
+            while step(stmt) == SQLITE_ROW {
                 out.insert(String(cString: sqlite3_column_text(stmt, 0)))
             }
             sqlite3_finalize(stmt); return out
@@ -478,7 +478,7 @@ final class CatalogStore {
     func removeRating(path: String) {
         queue.sync {
             let stmt = prepare("DELETE FROM ratings WHERE image_path=?")
-            bind(stmt, 1, path); sqlite3_step(stmt); sqlite3_finalize(stmt)
+            bind(stmt, 1, path); step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -495,7 +495,7 @@ final class CatalogStore {
             self.bind(stmt, 1, path)
             self.bind(stmt, 2, json)
             self.bind(stmt, 3, self.iso8601())
-            sqlite3_step(stmt); sqlite3_finalize(stmt)
+            step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -503,7 +503,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT data FROM adjustments WHERE image_path=?")
             bind(stmt, 1, path)
-            guard sqlite3_step(stmt) == SQLITE_ROW,
+            guard step(stmt) == SQLITE_ROW,
                   let ptr = sqlite3_column_text(stmt, 0) else {
                 sqlite3_finalize(stmt); return nil
             }
@@ -516,7 +516,7 @@ final class CatalogStore {
     func deleteAdjustments(path: String) {
         queue.sync {
             let stmt = prepare("DELETE FROM adjustments WHERE image_path=?")
-            bind(stmt, 1, path); sqlite3_step(stmt); sqlite3_finalize(stmt)
+            bind(stmt, 1, path); step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -535,7 +535,7 @@ final class CatalogStore {
             bindOpt(stmt, 3, preset.author)
             bind(stmt, 4, json)
             bind(stmt, 5, iso8601())
-            sqlite3_step(stmt); sqlite3_finalize(stmt)
+            step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -543,7 +543,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT data FROM presets ORDER BY created_at ASC")
             var out: [Preset] = []
-            while sqlite3_step(stmt) == SQLITE_ROW {
+            while step(stmt) == SQLITE_ROW {
                 if let ptr = sqlite3_column_text(stmt, 0) {
                     let json = String(cString: ptr)
                     if let p = try? JSONDecoder().decode(Preset.self, from: Data(json.utf8)) {
@@ -559,7 +559,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("DELETE FROM presets WHERE id=?")
             bind(stmt, 1, id.uuidString)
-            sqlite3_step(stmt); sqlite3_finalize(stmt)
+            step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -572,14 +572,14 @@ final class CatalogStore {
                 ON CONFLICT(id) DO UPDATE SET name=excluded.name
             """)
             bind(stmt, 1, id); bind(stmt, 2, name); bind(stmt, 3, iso8601())
-            sqlite3_step(stmt); sqlite3_finalize(stmt)
+            step(stmt); sqlite3_finalize(stmt)
         }
     }
 
     func deleteAlbum(id: String) {
         queue.sync {
             let stmt = prepare("DELETE FROM albums WHERE id=?")
-            bind(stmt, 1, id); sqlite3_step(stmt); sqlite3_finalize(stmt)
+            bind(stmt, 1, id); step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -587,7 +587,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("SELECT id,name FROM albums ORDER BY name")
             var out: [(String, String)] = []
-            while sqlite3_step(stmt) == SQLITE_ROW {
+            while step(stmt) == SQLITE_ROW {
                 out.append((String(cString: sqlite3_column_text(stmt, 0)),
                              String(cString: sqlite3_column_text(stmt, 1))))
             }
@@ -600,7 +600,7 @@ final class CatalogStore {
             let stmt = prepare("INSERT OR IGNORE INTO album_images (album_id,image_path,sort_order) VALUES (?,?,?)")
             bind(stmt, 1, albumID); bind(stmt, 2, path)
             sqlite3_bind_int(stmt, 3, Int32(order))
-            sqlite3_step(stmt); sqlite3_finalize(stmt)
+            step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -608,7 +608,7 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("DELETE FROM album_images WHERE album_id=? AND image_path=?")
             bind(stmt, 1, albumID); bind(stmt, 2, path)
-            sqlite3_step(stmt); sqlite3_finalize(stmt)
+            step(stmt); sqlite3_finalize(stmt)
         }
     }
 
@@ -617,7 +617,7 @@ final class CatalogStore {
             let stmt = prepare("SELECT image_path FROM album_images WHERE album_id=? ORDER BY sort_order")
             bind(stmt, 1, albumID)
             var paths: [String] = []
-            while sqlite3_step(stmt) == SQLITE_ROW {
+            while step(stmt) == SQLITE_ROW {
                 paths.append(String(cString: sqlite3_column_text(stmt, 0)))
             }
             sqlite3_finalize(stmt); return paths
@@ -636,7 +636,7 @@ final class CatalogStore {
             """)
             bind(stmt, 1, like); bind(stmt, 2, like); bind(stmt, 3, like); bind(stmt, 4, like)
             var out: [CatalogImage] = []
-            while sqlite3_step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
             sqlite3_finalize(stmt); return out
         }
     }
@@ -651,7 +651,7 @@ final class CatalogStore {
             """)
             bind(stmt, 1, flag)
             var out: [CatalogImage] = []
-            while sqlite3_step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
             sqlite3_finalize(stmt); return out
         }
     }
@@ -666,7 +666,7 @@ final class CatalogStore {
             """)
             sqlite3_bind_int(stmt, 1, Int32(minRating))
             var out: [CatalogImage] = []
-            while sqlite3_step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
             sqlite3_finalize(stmt); return out
         }
     }
@@ -684,8 +684,20 @@ final class CatalogStore {
 
     private func prepare(_ sql: String) -> OpaquePointer? {
         var s: OpaquePointer?
-        sqlite3_prepare_v2(db, sql, -1, &s, nil)
+        if sqlite3_prepare_v2(db, sql, -1, &s, nil) != SQLITE_OK {
+            Log.error("SQLite prepare fehlgeschlagen: \(String(cString: sqlite3_errmsg(db))) — SQL: \(sql.prefix(80))")
+        }
         return s
+    }
+
+    // Ersetzt rohes sqlite3_step: SQLITE_ERROR/SQLITE_CORRUPT etc. werden geloggt statt still ignoriert.
+    @discardableResult
+    private func step(_ s: OpaquePointer?) -> Int32 {
+        let rc = sqlite3_step(s)
+        if rc != SQLITE_ROW && rc != SQLITE_DONE {
+            Log.error("SQLite step fehlgeschlagen (rc=\(rc)): \(String(cString: sqlite3_errmsg(db)))")
+        }
+        return rc
     }
 
     private func bind(_ s: OpaquePointer?, _ i: Int32, _ v: String) {
