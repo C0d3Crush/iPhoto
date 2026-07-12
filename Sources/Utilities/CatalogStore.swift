@@ -24,7 +24,7 @@ final class CatalogStore {
 
     private var db: OpaquePointer?
     // Serial queue serialises all DB access; WAL lets concurrent readers not block writers.
-    private let queue = DispatchQueue(label: "com.c0d3cru5h.iphoto.catalog", qos: .utility)
+    let queue = DispatchQueue(label: "com.c0d3cru5h.iphoto.catalog", qos: .utility)
     private let dbPath: String
 
     // In-memory EXIF cache — avoids queue.sync SQLite reads from the main thread during
@@ -404,285 +404,19 @@ final class CatalogStore {
         }
     }
 
-    // MARK: - Ratings
-
-    func saveRating(path: String, rating: Int, flag: String, colorLabel: String) {
-        queue.sync {
-            let stmt = prepare("""
-                INSERT INTO ratings (image_path,rating,flag,color_label,updated_at) VALUES (?,?,?,?,?)
-                ON CONFLICT(image_path) DO UPDATE SET
-                    rating=excluded.rating, flag=excluded.flag,
-                    color_label=excluded.color_label, updated_at=excluded.updated_at
-            """)
-            bind(stmt, 1, path)
-            sqlite3_bind_int(stmt, 2, Int32(rating))
-            bind(stmt, 3, flag); bind(stmt, 4, colorLabel); bind(stmt, 5, iso8601())
-            step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    func rating(forPath path: String) -> (rating: Int, flag: String, colorLabel: String)? {
-        queue.sync {
-            let stmt = prepare("SELECT rating,flag,color_label FROM ratings WHERE image_path=?")
-            bind(stmt, 1, path)
-            guard step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
-            let r = (Int(sqlite3_column_int(stmt, 0)),
-                     String(cString: sqlite3_column_text(stmt, 1)),
-                     String(cString: sqlite3_column_text(stmt, 2)))
-            sqlite3_finalize(stmt); return r
-        }
-    }
-
-    func allRatings() -> [String: (rating: Int, flag: String, colorLabel: String)] {
-        queue.sync {
-            let stmt = prepare("SELECT image_path,rating,flag,color_label FROM ratings")
-            var out: [String: (rating: Int, flag: String, colorLabel: String)] = [:]
-            while step(stmt) == SQLITE_ROW {
-                out[String(cString: sqlite3_column_text(stmt, 0))] =
-                    (Int(sqlite3_column_int(stmt, 1)),
-                     String(cString: sqlite3_column_text(stmt, 2)),
-                     String(cString: sqlite3_column_text(stmt, 3)))
-            }
-            sqlite3_finalize(stmt); return out
-        }
-    }
-
-    // MARK: - Trash (interner Papierkorb)
-
-    func setTrashed(paths: [String], _ trashed: Bool) {
-        guard !paths.isEmpty else { return }
-        queue.sync {
-            exec("BEGIN")
-            for path in paths {
-                let stmt = trashed
-                    ? prepare("INSERT OR REPLACE INTO trash (image_path, trashed_at) VALUES (?, datetime('now'))")
-                    : prepare("DELETE FROM trash WHERE image_path=?")
-                bind(stmt, 1, path)
-                step(stmt); sqlite3_finalize(stmt)
-            }
-            exec("COMMIT")
-        }
-    }
-
-    func trashedPaths() -> Set<String> {
-        queue.sync {
-            let stmt = prepare("SELECT image_path FROM trash")
-            var out = Set<String>()
-            while step(stmt) == SQLITE_ROW {
-                out.insert(String(cString: sqlite3_column_text(stmt, 0)))
-            }
-            sqlite3_finalize(stmt); return out
-        }
-    }
-
-    func removeRating(path: String) {
-        queue.sync {
-            let stmt = prepare("DELETE FROM ratings WHERE image_path=?")
-            bind(stmt, 1, path); step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    // MARK: - Adjustments
-
-    func saveAdjustments(path: String, adjustments: AdjustmentState) {
-        guard let data = try? JSONEncoder().encode(adjustments),
-              let json = String(data: data, encoding: .utf8) else { return }
-        queue.sync {
-            let stmt = self.prepare("""
-                INSERT INTO adjustments (image_path, data, updated_at) VALUES (?,?,?)
-                ON CONFLICT(image_path) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at
-            """)
-            self.bind(stmt, 1, path)
-            self.bind(stmt, 2, json)
-            self.bind(stmt, 3, self.iso8601())
-            step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    func loadAdjustments(path: String) -> AdjustmentState? {
-        queue.sync {
-            let stmt = prepare("SELECT data FROM adjustments WHERE image_path=?")
-            bind(stmt, 1, path)
-            guard step(stmt) == SQLITE_ROW,
-                  let ptr = sqlite3_column_text(stmt, 0) else {
-                sqlite3_finalize(stmt); return nil
-            }
-            let json = String(cString: ptr)
-            sqlite3_finalize(stmt)
-            return (try? JSONDecoder().decode(AdjustmentState.self, from: Data(json.utf8)))
-        }
-    }
-
-    func deleteAdjustments(path: String) {
-        queue.sync {
-            let stmt = prepare("DELETE FROM adjustments WHERE image_path=?")
-            bind(stmt, 1, path); step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    // MARK: - Presets
-
-    func savePreset(_ preset: Preset) {
-        guard let data = try? JSONEncoder().encode(preset),
-              let json = String(data: data, encoding: .utf8) else { return }
-        queue.sync {
-            let stmt = prepare("""
-                INSERT INTO presets (id, name, author, data, created_at) VALUES (?,?,?,?,?)
-                ON CONFLICT(id) DO UPDATE SET name=excluded.name, author=excluded.author, data=excluded.data
-            """)
-            bind(stmt, 1, preset.id.uuidString)
-            bind(stmt, 2, preset.name)
-            bindOpt(stmt, 3, preset.author)
-            bind(stmt, 4, json)
-            bind(stmt, 5, iso8601())
-            step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    func allUserPresets() -> [Preset] {
-        queue.sync {
-            let stmt = prepare("SELECT data FROM presets ORDER BY created_at ASC")
-            var out: [Preset] = []
-            while step(stmt) == SQLITE_ROW {
-                if let ptr = sqlite3_column_text(stmt, 0) {
-                    let json = String(cString: ptr)
-                    if let p = try? JSONDecoder().decode(Preset.self, from: Data(json.utf8)) {
-                        out.append(p)
-                    }
-                }
-            }
-            sqlite3_finalize(stmt); return out
-        }
-    }
-
-    func deletePreset(id: UUID) {
-        queue.sync {
-            let stmt = prepare("DELETE FROM presets WHERE id=?")
-            bind(stmt, 1, id.uuidString)
-            step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    // MARK: - Albums
-
-    func saveAlbum(id: String, name: String) {
-        queue.sync {
-            let stmt = prepare("""
-                INSERT INTO albums (id,name,created_at) VALUES (?,?,?)
-                ON CONFLICT(id) DO UPDATE SET name=excluded.name
-            """)
-            bind(stmt, 1, id); bind(stmt, 2, name); bind(stmt, 3, iso8601())
-            step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    func deleteAlbum(id: String) {
-        queue.sync {
-            let stmt = prepare("DELETE FROM albums WHERE id=?")
-            bind(stmt, 1, id); step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    func allAlbums() -> [(id: String, name: String)] {
-        queue.sync {
-            let stmt = prepare("SELECT id,name FROM albums ORDER BY name")
-            var out: [(String, String)] = []
-            while step(stmt) == SQLITE_ROW {
-                out.append((String(cString: sqlite3_column_text(stmt, 0)),
-                             String(cString: sqlite3_column_text(stmt, 1))))
-            }
-            sqlite3_finalize(stmt); return out
-        }
-    }
-
-    func addImage(path: String, toAlbum albumID: String, order: Int = 0) {
-        queue.sync {
-            let stmt = prepare("INSERT OR IGNORE INTO album_images (album_id,image_path,sort_order) VALUES (?,?,?)")
-            bind(stmt, 1, albumID); bind(stmt, 2, path)
-            sqlite3_bind_int(stmt, 3, Int32(order))
-            step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    func removeImage(path: String, fromAlbum albumID: String) {
-        queue.sync {
-            let stmt = prepare("DELETE FROM album_images WHERE album_id=? AND image_path=?")
-            bind(stmt, 1, albumID); bind(stmt, 2, path)
-            step(stmt); sqlite3_finalize(stmt)
-        }
-    }
-
-    func images(inAlbum albumID: String) -> [String] {
-        queue.sync {
-            let stmt = prepare("SELECT image_path FROM album_images WHERE album_id=? ORDER BY sort_order")
-            bind(stmt, 1, albumID)
-            var paths: [String] = []
-            while step(stmt) == SQLITE_ROW {
-                paths.append(String(cString: sqlite3_column_text(stmt, 0)))
-            }
-            sqlite3_finalize(stmt); return paths
-        }
-    }
-
-    // MARK: - Search
-
-    func search(query: String) -> [CatalogImage] {
-        queue.sync {
-            let like = "%\(query)%"
-            let stmt = prepare("""
-                SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at
-                FROM images WHERE filename LIKE ? OR camera_make LIKE ? OR camera_model LIKE ? OR date_taken LIKE ?
-                ORDER BY filename
-            """)
-            bind(stmt, 1, like); bind(stmt, 2, like); bind(stmt, 3, like); bind(stmt, 4, like)
-            var out: [CatalogImage] = []
-            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
-            sqlite3_finalize(stmt); return out
-        }
-    }
-
-    func images(flaggedAs flag: String) -> [CatalogImage] {
-        queue.sync {
-            let stmt = prepare("""
-                SELECT i.id,i.path,i.filename,i.size_bytes,i.width,i.height,
-                       i.date_taken,i.camera_make,i.camera_model,i.is_raw,i.imported_at
-                FROM images i JOIN ratings r ON i.path=r.image_path
-                WHERE r.flag=? ORDER BY i.filename
-            """)
-            bind(stmt, 1, flag)
-            var out: [CatalogImage] = []
-            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
-            sqlite3_finalize(stmt); return out
-        }
-    }
-
-    func images(ratedAtLeast minRating: Int) -> [CatalogImage] {
-        queue.sync {
-            let stmt = prepare("""
-                SELECT i.id,i.path,i.filename,i.size_bytes,i.width,i.height,
-                       i.date_taken,i.camera_make,i.camera_model,i.is_raw,i.imported_at
-                FROM images i JOIN ratings r ON i.path=r.image_path
-                WHERE r.rating>=? ORDER BY r.rating DESC, i.filename
-            """)
-            sqlite3_bind_int(stmt, 1, Int32(minRating))
-            var out: [CatalogImage] = []
-            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
-            sqlite3_finalize(stmt); return out
-        }
-    }
 
     // MARK: - Helpers
 
     // SQLITE_TRANSIENT (-1) tells SQLite to copy the string immediately during bind,
     // so the Swift string can be released by ARC before sqlite3_step is called.
-    private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
     @discardableResult
-    private func exec(_ sql: String) -> Bool {
+    func exec(_ sql: String) -> Bool {
         sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK
     }
 
-    private func prepare(_ sql: String) -> OpaquePointer? {
+    func prepare(_ sql: String) -> OpaquePointer? {
         var s: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &s, nil) != SQLITE_OK {
             Log.error("SQLite prepare fehlgeschlagen: \(String(cString: sqlite3_errmsg(db))) — SQL: \(sql.prefix(80))")
@@ -692,7 +426,7 @@ final class CatalogStore {
 
     // Ersetzt rohes sqlite3_step: SQLITE_ERROR/SQLITE_CORRUPT etc. werden geloggt statt still ignoriert.
     @discardableResult
-    private func step(_ s: OpaquePointer?) -> Int32 {
+    func step(_ s: OpaquePointer?) -> Int32 {
         let rc = sqlite3_step(s)
         if rc != SQLITE_ROW && rc != SQLITE_DONE {
             Log.error("SQLite step fehlgeschlagen (rc=\(rc)): \(String(cString: sqlite3_errmsg(db)))")
@@ -700,21 +434,21 @@ final class CatalogStore {
         return rc
     }
 
-    private func bind(_ s: OpaquePointer?, _ i: Int32, _ v: String) {
+    func bind(_ s: OpaquePointer?, _ i: Int32, _ v: String) {
         sqlite3_bind_text(s, i, v, -1, sqliteTransient)
     }
 
-    private func bindOpt(_ s: OpaquePointer?, _ i: Int32, _ v: String?) {
+    func bindOpt(_ s: OpaquePointer?, _ i: Int32, _ v: String?) {
         if let v = v { bind(s, i, v) } else { sqlite3_bind_null(s, i) }
     }
 
-    private func iso8601() -> String {
+    func iso8601() -> String {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f.string(from: Date())
     }
 
-    private func rowToImage(_ s: OpaquePointer?) -> CatalogImage {
+    func rowToImage(_ s: OpaquePointer?) -> CatalogImage {
         func str(_ i: Int32) -> String { String(cString: sqlite3_column_text(s, i)) }
         func opt(_ i: Int32) -> String? {
             sqlite3_column_type(s, i) == SQLITE_NULL ? nil : String(cString: sqlite3_column_text(s, i))

@@ -39,6 +39,9 @@ enum SortCriterion: String, CaseIterable {
 extension ImageViewModel {
 
     var visibleDocuments: [ImageDocument] {
+        // Cache-Properties sind nicht lock-geschützt — Zugriff nur vom Main-Thread
+        // (gleiche Invariante wie ImageCollection, crasht sofort statt still zu korrumpieren).
+        dispatchPrecondition(condition: .onQueue(.main))
         let key = VisibleOrderKey(count: collection.documents.count, nav: navSelection,
                                   sort: sortCriterion, shuffle: shuffledOrder,
                                   version: visibleOrderVersion, expanded: expandedStacks)

@@ -2,6 +2,13 @@
 
 ---
 
+## 0.92.9
+**Code-Qualität — CatalogStore aufgeteilt, Save-Pfad entdoppelt, Cache-Invariante abgesichert**
+
+- `CatalogStore` (726 Zeilen) in thematische Dateien aufgeteilt: Ratings/Papierkorb, Alben/Suche und Anpassungen/Presets liegen jetzt in eigenen Extensions — Kern-Datei enthält nur noch Schema, Migration und Bilder-CRUD
+- Speicher-/Undo-/Redo-/Revert-Pfad: fünffach dupliziertes Hintergrund-Task-Gerüst (Security-Scoped-Access, Fehlerbehandlung, UI-Status) in einen gemeinsamen Helper extrahiert — Undo und Redo teilen sich jetzt eine Implementierung
+- `visibleDocuments`-Cache erzwingt jetzt per Precondition Main-Thread-Zugriff (crasht sofort statt still zu korrumpieren, gleiche Invariante wie `ImageCollection`)
+
 ## 0.92.8
 **Robustheit — SQLite-Fehler sichtbar, Crash-Diagnose thread-sicher, RAF-Fehler mit Kontext**
 
