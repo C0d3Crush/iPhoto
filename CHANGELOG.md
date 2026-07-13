@@ -2,6 +2,16 @@
 
 ---
 
+## 0.92.11
+**Bugfix — Minutenlanger UI-Freeze bei schneller Navigation behoben**
+
+- Bei gehaltener Pfeiltaste (Key-Repeat) fror die App minutenlang ein, der Speicher wuchs dabei Richtung 1 GB — vermutlich die wahre Ursache der stillen App-Enden aus Bug #32
+- Ursache: Die Speicher-Aufräumroutine (`evictDistantImages`) schrieb pro Bild einzeln ins beobachtete Dokument-Array — jede Zuweisung löste eine komplette Array-Kopie samt Freigabe aus (quadratischer Aufwand pro Tastendruck)
+- Fix: Aufräumen läuft jetzt auf einer lokalen Kopie und schreibt genau einmal zurück (und gar nicht, wenn nichts freizugeben ist)
+- Diagnose erstmals live per Heartbeat (0.92.10) belegt: „main blockiert seit 113s" + Sample-Backtrace
+
+---
+
 ## 0.92.10
 **Diagnose — Heartbeat-Logging schließt SIGKILL-Blindstelle**
 

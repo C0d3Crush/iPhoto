@@ -489,15 +489,24 @@ class ImageViewModel: ObservableObject {
                 }
             }
         }
-        for i in 0..<collection.documents.count {
-            let id = collection.documents[i].id
-            if !keepNear.contains(id) {
-                collection.documents[i].cgImage = nil
+        // Auf lokaler Kopie mutieren und einmalig zurückschreiben: jede einzelne
+        // Subscript-Zuweisung an das @Published-Array feuert sonst einen kompletten
+        // Combine-Send mit Array-Kopie + -Freigabe → O(N²) pro Aufruf. Bei Key-Repeat
+        // staute das den Main-Thread minutenlang (Bug #33).
+        var docs = collection.documents
+        var changed = false
+        for i in 0..<docs.count {
+            let id = docs[i].id
+            if !keepNear.contains(id), docs[i].cgImage != nil {
+                docs[i].cgImage = nil
+                changed = true
             }
-            if !keepFar.contains(id) {
-                collection.documents[i].previewImage = nil
+            if !keepFar.contains(id), docs[i].previewImage != nil {
+                docs[i].previewImage = nil
+                changed = true
             }
         }
+        if changed { collection.documents = docs }
     }
 
     // MARK: - Helpers
