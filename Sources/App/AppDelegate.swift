@@ -10,6 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             CrashReporter.saveReport(report)
         }
         CrashReporter.installCrashHandlers()
+        Heartbeat.shared.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

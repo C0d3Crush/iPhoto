@@ -2,6 +2,14 @@
 
 ---
 
+## 0.92.10
+**Diagnose — Heartbeat-Logging schließt SIGKILL-Blindstelle**
+
+- Neuer Heartbeat: alle 10 Sekunden wird Speicherverbrauch und Main-Thread-Responsivität geloggt — stille App-Enden (OOM-Kill, Force-Quit nach Freeze) sind damit künftig im Crash-Report unterscheidbar
+- Bug #32 analysiert und dokumentiert: die zwei Reports vom 11./12.07. (v0.87.0/0.89.0) endeten per SIGKILL ohne Signal-Eintrag — wahrscheinlichste Ursache sind die in 0.87.1 und 0.91.0 bereits behobenen UI-Freezes mit anschließendem Force-Quit
+
+---
+
 ## 0.92.9
 **Code-Qualität — CatalogStore aufgeteilt, Save-Pfad entdoppelt, Cache-Invariante abgesichert**
 
