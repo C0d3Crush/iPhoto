@@ -53,6 +53,13 @@ final class BackgroundActivityState: ObservableObject {
         pauseCondition.unlock()
     }
 
+    /// Thread-sicherer Schnell-Check ohne Blockieren (für Worker-Threads).
+    func isPaused(id: UUID) -> Bool {
+        pauseCondition.lock()
+        defer { pauseCondition.unlock() }
+        return pausedTasksSync.contains(id)
+    }
+
     private func clearPause(id: UUID) {
         pauseCondition.lock()
         pausedTasksSync.remove(id)

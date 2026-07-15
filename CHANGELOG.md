@@ -2,6 +2,14 @@
 
 ---
 
+## 0.93.1
+**Bugfix — Pause stoppte das Laden nicht zuverlässig**
+
+- Ladeblöcke, die beim Drücken von Pause bereits auf einen Decode-Slot warteten, liefen trotzdem weiter durch
+- Fix: Nach dem Erhalt eines Decode-Slots wird der Pausen-Status erneut geprüft; pausierte Aufgaben geben den Slot sofort wieder frei und warten
+
+---
+
 ## 0.93.0
 **Feature — Ladeaufgaben pausieren**
 

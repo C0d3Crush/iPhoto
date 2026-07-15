@@ -272,6 +272,13 @@ extension ImageViewModel {
                 // Vor der Semaphore warten — pausierte Aufgaben blockieren keine Decode-Slots.
                 self?.activity.waitWhilePaused(id: thumbTaskID)
                 thumbnailDecodeSemaphore.wait()
+                // Erneut prüfen: Blöcke, die beim Pausieren schon an der Semaphore
+                // warteten, würden sonst durchrutschen. Slot solange freigeben.
+                while let activity = self?.activity, activity.isPaused(id: thumbTaskID) {
+                    thumbnailDecodeSemaphore.signal()
+                    activity.waitWhilePaused(id: thumbTaskID)
+                    thumbnailDecodeSemaphore.wait()
+                }
                 defer { thumbnailDecodeSemaphore.signal() }
                 autoreleasepool {
                     let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
@@ -422,6 +429,11 @@ extension ImageViewModel {
             DispatchQueue.global(qos: .background).async { [weak self] in
                 self?.activity.waitWhilePaused(id: metaID)
                 metadataReadSemaphore.wait()
+                while let activity = self?.activity, activity.isPaused(id: metaID) {
+                    metadataReadSemaphore.signal()
+                    activity.waitWhilePaused(id: metaID)
+                    metadataReadSemaphore.wait()
+                }
                 defer { metadataReadSemaphore.signal() }
                 guard let self = self else { return }
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
