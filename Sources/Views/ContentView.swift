@@ -255,11 +255,13 @@ struct DetailView: View {
 }
 
 struct LoadingBar: View {
-    let queue: [BackgroundActivityState.LoadingTask]
+    @ObservedObject var activity: BackgroundActivityState
     @State private var showPopover = false
 
+    private var queue: [BackgroundActivityState.LoadingTask] { activity.loadingQueue }
     private var task: BackgroundActivityState.LoadingTask { queue[0] }
     private var pending: Int { queue.count - 1 }
+    private var taskPaused: Bool { activity.pausedTasks.contains(task.id) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -279,6 +281,18 @@ struct LoadingBar: View {
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
+                    Button {
+                        activity.togglePause(id: task.id)
+                    } label: {
+                        Image(systemName: taskPaused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary)
+                            .padding(3)
+                            .background(Color.secondary.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(taskPaused ? "Fortsetzen" : "Pausieren")
                     if pending > 0 {
                         Button {
                             showPopover.toggle()
@@ -293,11 +307,16 @@ struct LoadingBar: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
-                            QueuePopover(queue: queue)
+                            QueuePopover(activity: activity)
                         }
                     }
                 }
-                if task.total > 0 {
+                if taskPaused {
+                    ProgressView(value: task.progress)
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .frame(maxWidth: .infinity)
+                        .opacity(0.4)
+                } else if task.total > 0 {
                     ProgressView(value: task.progress)
                         .progressViewStyle(LinearProgressViewStyle())
                         .frame(maxWidth: .infinity)
@@ -317,7 +336,9 @@ struct LoadingBar: View {
 }
 
 struct QueuePopover: View {
-    let queue: [BackgroundActivityState.LoadingTask]
+    @ObservedObject var activity: BackgroundActivityState
+
+    private var queue: [BackgroundActivityState.LoadingTask] { activity.loadingQueue }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -331,10 +352,11 @@ struct QueuePopover: View {
             Divider()
 
             ForEach(Array(queue.enumerated()), id: \.element.id) { i, t in
+                let paused = activity.pausedTasks.contains(t.id)
                 HStack(spacing: 10) {
                     Image(systemName: t.icon)
                         .font(.system(size: 12))
-                        .foregroundColor(i == 0 ? .accentColor : .secondary)
+                        .foregroundColor(paused ? .secondary : (i == 0 ? .accentColor : .secondary))
                         .frame(width: 16)
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
@@ -342,7 +364,11 @@ struct QueuePopover: View {
                                 .font(.system(size: 12))
                                 .lineLimit(1)
                             Spacer()
-                            if i == 0 {
+                            if paused {
+                                Text("Pausiert")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                            } else if i == 0 {
                                 Text("Aktiv")
                                     .font(.system(size: 10))
                                     .foregroundColor(.accentColor)
@@ -352,6 +378,7 @@ struct QueuePopover: View {
                             HStack(spacing: 6) {
                                 ProgressView(value: t.progress)
                                     .progressViewStyle(LinearProgressViewStyle())
+                                    .opacity(paused ? 0.4 : 1)
                                 Text("\(t.done)/\(t.total)")
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundColor(.secondary)
@@ -359,8 +386,21 @@ struct QueuePopover: View {
                         } else {
                             ProgressView()
                                 .progressViewStyle(LinearProgressViewStyle())
+                                .opacity(paused ? 0.4 : 1)
                         }
                     }
+                    Button {
+                        activity.togglePause(id: t.id)
+                    } label: {
+                        Image(systemName: paused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                            .padding(4)
+                            .background(Color.secondary.opacity(0.15))
+                            .cornerRadius(4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(paused ? "Fortsetzen" : "Pausieren")
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)

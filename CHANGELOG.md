@@ -2,6 +2,16 @@
 
 ---
 
+## 0.93.0
+**Feature — Ladeaufgaben pausieren**
+
+- Hintergrund-Ladeaufgaben (Thumbnails, Metadaten, EXIF-Scan) lassen sich jetzt pausieren und fortsetzen
+- Neuer Pause/Play-Button direkt in der Lade-Leiste der Seitenleiste für die aktive Aufgabe
+- Im „+N"-Popover hat jede Aufgabe in der Warteschlange einen eigenen Pause-Button; pausierte Aufgaben zeigen den Status „Pausiert" mit abgedunkeltem Fortschrittsbalken
+- Pausierte Aufgaben geben ihre Decode-Slots frei — andere Aufgaben laufen ungebremst weiter
+
+---
+
 ## 0.92.11
 **Bugfix — Minutenlanger UI-Freeze bei schneller Navigation behoben**
 

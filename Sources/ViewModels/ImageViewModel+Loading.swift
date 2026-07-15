@@ -265,9 +265,12 @@ extension ImageViewModel {
         activity.enqueue(id: thumbnailTaskID, label: "Lade Thumbnails",
                        icon: "photo", done: thumbDone, total: thumbQueued)
 
+        let thumbTaskID = thumbnailTaskID
         for (_, doc) in pending {
             let url = doc.url
             DispatchQueue.global(qos: .background).async { [weak self] in
+                // Vor der Semaphore warten — pausierte Aufgaben blockieren keine Decode-Slots.
+                self?.activity.waitWhilePaused(id: thumbTaskID)
                 thumbnailDecodeSemaphore.wait()
                 defer { thumbnailDecodeSemaphore.signal() }
                 autoreleasepool {
@@ -413,9 +416,11 @@ extension ImageViewModel {
         activity.enqueue(id: metaTaskID, label: "Metadaten laden",
                        icon: "doc.text.magnifyingglass", done: metaDone, total: metaTotal)
 
+        let metaID = metaTaskID
         for doc in pending {
             let url = doc.url
             DispatchQueue.global(qos: .background).async { [weak self] in
+                self?.activity.waitWhilePaused(id: metaID)
                 metadataReadSemaphore.wait()
                 defer { metadataReadSemaphore.signal() }
                 guard let self = self else { return }
@@ -459,6 +464,7 @@ extension ImageViewModel {
             let total = paths.count
             var done = 0
             for path in paths {
+                self.activity.waitWhilePaused(id: taskID)
                 metadataReadSemaphore.wait()
                 defer { metadataReadSemaphore.signal() }
                 autoreleasepool {

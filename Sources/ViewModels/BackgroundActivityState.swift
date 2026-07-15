@@ -26,7 +26,40 @@ final class BackgroundActivityState: ObservableObject {
     @Published var completedImports: Set<UUID> = []
     @Published var loadingQueue: [LoadingTask] = []
     @Published var loadingSummary: String? = nil
+    @Published var pausedTasks: Set<UUID> = []
     private var loadingSummaryToken = UUID()
+
+    // Pausen-Status lock-geschützt gespiegelt: Worker-Threads dürfen @Published
+    // nicht abseits des Main-Threads lesen, blockieren aber auf dieser Condition.
+    private let pauseCondition = NSCondition()
+    private var pausedTasksSync: Set<UUID> = []
+
+    func togglePause(id: UUID) {
+        pauseCondition.lock()
+        if pausedTasksSync.contains(id) {
+            pausedTasksSync.remove(id)
+        } else {
+            pausedTasksSync.insert(id)
+        }
+        pausedTasks = pausedTasksSync
+        pauseCondition.broadcast()
+        pauseCondition.unlock()
+    }
+
+    /// Blockiert den aufrufenden Hintergrund-Thread, solange die Aufgabe pausiert ist.
+    func waitWhilePaused(id: UUID) {
+        pauseCondition.lock()
+        while pausedTasksSync.contains(id) { pauseCondition.wait() }
+        pauseCondition.unlock()
+    }
+
+    private func clearPause(id: UUID) {
+        pauseCondition.lock()
+        pausedTasksSync.remove(id)
+        pausedTasks = pausedTasksSync
+        pauseCondition.broadcast()
+        pauseCondition.unlock()
+    }
 
     func enqueue(id: UUID, label: String, icon: String, done: Int = 0, total: Int = 0, summaryVerb: String = "geladen") {
         loadingSummary = nil
@@ -46,6 +79,7 @@ final class BackgroundActivityState: ObservableObject {
     }
 
     func dequeue(id: UUID) {
+        clearPause(id: id)
         let finished = loadingQueue.first { $0.id == id }
         loadingQueue.removeAll { $0.id == id }
         // Nur bei vollständig abgeschlossenen Aufgaben mit bekanntem Umfang und leerer

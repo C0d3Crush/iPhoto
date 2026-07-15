@@ -68,7 +68,7 @@ struct NavSidebarView: View {
 
             if !viewModel.activity.loadingQueue.isEmpty {
                 Divider()
-                LoadingBar(queue: viewModel.activity.loadingQueue)
+                LoadingBar(activity: viewModel.activity)
             } else if let summary = viewModel.activity.loadingSummary {
                 Divider()
                 HStack(spacing: 6) {
