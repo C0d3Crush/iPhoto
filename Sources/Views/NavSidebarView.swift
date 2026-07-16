@@ -58,6 +58,13 @@ struct NavSidebarView: View {
                     ) {
                         viewModel.navSelection = .library
                     }
+                    navRow(
+                        label: "Bildvergleich",
+                        icon: "arrow.left.arrow.right",
+                        isSelected: viewModel.compareModeActive
+                    ) {
+                        viewModel.toggleCompareMode()
+                    }
                     albumsSection
                     smartFoldersSection
                     volumesSection

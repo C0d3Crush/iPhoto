@@ -25,6 +25,11 @@ class ImageViewModel: ObservableObject {
     @Published var isStartupLoading: Bool = true
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
+    @Published var compareModeActive: Bool = false
+    @Published var compareLeftID: UUID? = nil
+    @Published var compareRightID: UUID? = nil
+    var compareLoadInFlight: Set<URL> = []
+    var lastComparePair: Set<UUID> = []
     let library = LibraryStore()
 
     /// Lade-Queue + Import-Fortschritt (Sidebar). Änderungen werden via objectWillChange

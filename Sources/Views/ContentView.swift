@@ -17,7 +17,11 @@ struct ContentView: View {
                 let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
                 let showGrid = (isLibrary && !viewModel.showingLibraryDetail) || (!isLibrary && viewModel.showFullGrid)
 
-                if showGrid {
+                if viewModel.compareModeActive {
+                    CompareView()
+                        .environmentObject(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if showGrid {
                     // Vollbild-Raster
                     LibraryFullGridView()
                         .environmentObject(viewModel)
@@ -58,6 +62,7 @@ struct ContentView: View {
         }
         .onChange(of: viewModel.navSelection) { _ in
             viewModel.showingLibraryDetail = false
+            if viewModel.compareModeActive { viewModel.stopCompareMode() }
         }
         .onChange(of: viewModel.windowTitle) { title in
             NSApp.mainWindow?.title = title

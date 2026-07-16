@@ -2,6 +2,17 @@
 
 ---
 
+## 0.94.0
+**Feature — Bildvergleich (Duell-Modus)**
+
+- Neuer Knopf „Bildvergleich" in der linken Seitenleiste: zwei Bilder werden nebeneinander im Hauptbereich angezeigt
+- Klick auf das bessere Bild (oder Buttons „Links/Rechts ist besser", „Gleich gut", „Überspringen") entscheidet das Duell
+- Der Gewinner steigt eine Sternstufe auf (max. 5); steht er bereits bei 5 Sternen, wird stattdessen der Verlierer eine Stufe gesenkt
+- Verglichen werden bevorzugt Bilder mit gleicher Sternezahl aus dem aktuellen Kontext (Bibliothek, Album, Smart-Ordner)
+- Beenden per X-Knopf, erneutem Klick auf „Bildvergleich" oder Wechsel der Navigation
+
+---
+
 ## 0.93.1
 **Bugfix — Pause stoppte das Laden nicht zuverlässig**
 
