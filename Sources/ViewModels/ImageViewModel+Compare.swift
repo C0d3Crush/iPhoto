@@ -62,24 +62,14 @@ extension ImageViewModel {
             }.filter { $0.value.count >= 2 }
         }
 
-        // Übervolle Stufen gewichtet nach ihrem Überschuss auslosen
+        // Immer die Stufe mit dem größten Überschuss gegenüber der Gauß-Zielkurve wählen
         let total = Double(candidates.count)
-        let overfull = groups.compactMap { rating, docs -> (docs: [ImageDocument], weight: Double)? in
-            let excess = Double(docs.count) / total - (Self.compareRatingTargets[rating] ?? 0)
-            return excess > 0 ? (docs, excess) : nil
-        }
-        let pool: [ImageDocument]
-        if !overfull.isEmpty {
-            var r = Double.random(in: 0..<overfull.reduce(0) { $0 + $1.weight })
-            var chosen = overfull[0].docs
-            for entry in overfull {
-                r -= entry.weight
-                if r < 0 { chosen = entry.docs; break }
-            }
-            pool = chosen
-        } else {
-            pool = groups.values.randomElement() ?? candidates
-        }
+        let worst = groups.max(by: { a, b in
+            let excessA = Double(a.value.count) / total - (Self.compareRatingTargets[a.key] ?? 0)
+            let excessB = Double(b.value.count) / total - (Self.compareRatingTargets[b.key] ?? 0)
+            return excessA < excessB
+        })
+        let pool = worst?.value ?? candidates
 
         var pair = Array(pool.shuffled().prefix(2))
         if candidates.count > 2 && Set(pair.map { $0.id }) == lastComparePair {
@@ -94,8 +84,8 @@ extension ImageViewModel {
         ensureComparePreview(forID: pair[1].id)
     }
 
-    /// Gewinner steigt eine Sternstufe (max. 5); steht er schon bei 5,
-    /// wird stattdessen der Verlierer eine Stufe gesenkt (min. 0).
+    /// Zufällig steigt der Gewinner eine Stufe ODER der Verlierer sinkt eine Stufe.
+    /// Bei Gewinner auf 5 wird immer gesenkt, bei Verlierer auf 0 immer erhöht.
     func resolveCompare(_ verdict: CompareVerdict) {
         defer { nextComparePair() }
         guard verdict != .equal,
@@ -103,10 +93,22 @@ extension ImageViewModel {
               let right = compareRightDocument else { return }
         let winner = verdict == .left ? left : right
         let loser = verdict == .left ? right : left
-        if winner.rating < 5 {
+
+        let canPromote = winner.rating < 5
+        let canDemote = loser.rating > 0
+        switch (canPromote, canDemote) {
+        case (true, true):
+            if Bool.random() {
+                applyCompareRating(winner.rating + 1, to: winner.id)
+            } else {
+                applyCompareRating(loser.rating - 1, to: loser.id)
+            }
+        case (true, false):
             applyCompareRating(winner.rating + 1, to: winner.id)
-        } else if loser.rating > 0 {
+        case (false, true):
             applyCompareRating(loser.rating - 1, to: loser.id)
+        case (false, false):
+            break
         }
     }
 

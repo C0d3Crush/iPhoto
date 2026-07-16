@@ -2,6 +2,15 @@
 
 ---
 
+## 0.96.0
+**Feature — Bildvergleich: Pfeiltasten-Fix, zufälliges Auf/Ab, gezielte Klassen-Auswahl**
+
+- Pfeiltasten funktionieren jetzt im Vergleichsmodus: Sie trugen unsichtbare System-Modifier (Funktions-/Ziffernblock-Flag), wodurch die Duell-Steuerung übersprungen und stattdessen das Bild gewechselt wurde
+- Nach einer Entscheidung wird jetzt zufällig entweder der Gewinner eine Sternstufe erhöht oder der Verlierer eine gesenkt; steht der Gewinner bereits auf 5★, wird immer gesenkt, steht der Verlierer auf 0★, immer erhöht
+- Paarauswahl nimmt jetzt immer die Sternstufe mit dem größten Überschuss gegenüber der Gauß-Zielkurve statt gewichteter Auslosung
+
+---
+
 ## 0.95.0
 **Feature — Bildvergleich: Gauß-Zielverteilung, Pfeiltasten-Steuerung, Lade-Fix**
 

@@ -286,7 +286,9 @@ class ImageViewModel: ObservableObject {
             let onlyCmdDown  = mods == .command
             let cmdShiftDown = mods == [.command, .shift]
             let textFieldFocused = NSApp.keyWindow?.firstResponder is NSTextView
-            if self.compareModeActive, mods.isEmpty, !textFieldFocused {
+            // Pfeiltasten tragen .function/.numericPad — für den Vergleich ausblenden
+            let realMods = mods.subtracting([.function, .numericPad])
+            if self.compareModeActive, realMods.isEmpty, !textFieldFocused {
                 switch event.keyCode {
                 case 123: DispatchQueue.main.async { self.resolveCompare(.left) };  return nil // ←
                 case 124: DispatchQueue.main.async { self.resolveCompare(.right) }; return nil // →
