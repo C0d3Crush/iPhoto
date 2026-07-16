@@ -1,17 +1,37 @@
 import AppKit
 import Foundation
 
-// Caps concurrent thumbnail decode pipelines to prevent memory exhaustion.
-// RAF thumbnails use CGImageSourceCreateThumbnailAtIndex (direct downsample),
-// peak ~5 MB JPEG data + internal decode buffer per slot.
-// 2 concurrent decodes keep RAM well below 100 MB total for thumbnails.
-private let thumbnailDecodeSemaphore = DispatchSemaphore(value: 2)
+// OperationQueues statt "ein GCD-Block pro Bild + Semaphore": Hunderte an einer
+// Semaphore wartende Blöcke erschöpften GCDs Thread-Pool (Soft-Limit 64,
+// "too many dispatch threads blocked in synchronous operations") — serielle
+// Queues (z. B. CatalogStore) bekamen keinen Thread mehr, queue.sync auf dem
+// Main-Thread blockierte minutenlang (Bug #35). OperationQueues halten Arbeit
+// als Datenstruktur, nicht als blockierten Thread; maxConcurrentOperationCount
+// ersetzt die Semaphore (Speicher-Deckel bleibt identisch).
+private let thumbnailBatchQueue: OperationQueue = {
+    let q = OperationQueue()
+    q.name = "iphoto.thumbnails.batch"
+    q.maxConcurrentOperationCount = 2
+    q.qualityOfService = .background
+    return q
+}()
 
-// Caps concurrent metadata reads. On macOS 11, each RAF metadata read calls
-// rafEmbeddedJPEGProperties which reads 128 KB JPEG header per file.
-// Without this limit, loadMetadataInBackground spawns one task per document —
-// for 200 files that's 200 parallel reads filling GCD's thread pool.
-private let metadataReadSemaphore = DispatchSemaphore(value: 4)
+private let visibleThumbnailQueue: OperationQueue = {
+    let q = OperationQueue()
+    q.name = "iphoto.thumbnails.visible"
+    q.maxConcurrentOperationCount = 2
+    q.qualityOfService = .userInitiated
+    return q
+}()
+
+// Deckelt parallele Metadaten-Reads (RAF: 128 KB JPEG-Header pro Datei).
+private let metadataQueue: OperationQueue = {
+    let q = OperationQueue()
+    q.name = "iphoto.metadata"
+    q.maxConcurrentOperationCount = 4
+    q.qualityOfService = .background
+    return q
+}()
 
 // Serializes full-res decodes — only one RAF/JPEG full-decode in flight at a time.
 // loadCurrentImage resets isLoadingFullRes=false eagerly (for UX), but the BG task
@@ -268,18 +288,10 @@ extension ImageViewModel {
         let thumbTaskID = thumbnailTaskID
         for (_, doc) in pending {
             let url = doc.url
-            DispatchQueue.global(qos: .background).async { [weak self] in
-                // Vor der Semaphore warten — pausierte Aufgaben blockieren keine Decode-Slots.
+            thumbnailBatchQueue.addOperation { [weak self] in
+                // Pausierte Aufgaben blockieren höchstens die 2 Queue-Slots — der
+                // GCD-Thread-Pool bleibt frei (kein Block-pro-Bild mehr).
                 self?.activity.waitWhilePaused(id: thumbTaskID)
-                thumbnailDecodeSemaphore.wait()
-                // Erneut prüfen: Blöcke, die beim Pausieren schon an der Semaphore
-                // warteten, würden sonst durchrutschen. Slot solange freigeben.
-                while let activity = self?.activity, activity.isPaused(id: thumbTaskID) {
-                    thumbnailDecodeSemaphore.signal()
-                    activity.waitWhilePaused(id: thumbTaskID)
-                    thumbnailDecodeSemaphore.wait()
-                }
-                defer { thumbnailDecodeSemaphore.signal() }
                 autoreleasepool {
                     let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                     defer { stopAccess() }
@@ -331,9 +343,7 @@ extension ImageViewModel {
         let url = doc.url
         guard !hiResInFlight.contains(url) else { return }
         hiResInFlight.insert(url)
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            thumbnailDecodeSemaphore.wait()
-            defer { thumbnailDecodeSemaphore.signal() }
+        visibleThumbnailQueue.addOperation { [weak self] in
             autoreleasepool {
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
@@ -426,15 +436,8 @@ extension ImageViewModel {
         let metaID = metaTaskID
         for doc in pending {
             let url = doc.url
-            DispatchQueue.global(qos: .background).async { [weak self] in
+            metadataQueue.addOperation { [weak self] in
                 self?.activity.waitWhilePaused(id: metaID)
-                metadataReadSemaphore.wait()
-                while let activity = self?.activity, activity.isPaused(id: metaID) {
-                    metadataReadSemaphore.signal()
-                    activity.waitWhilePaused(id: metaID)
-                    metadataReadSemaphore.wait()
-                }
-                defer { metadataReadSemaphore.signal() }
                 guard let self = self else { return }
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
@@ -477,8 +480,6 @@ extension ImageViewModel {
             var done = 0
             for path in paths {
                 self.activity.waitWhilePaused(id: taskID)
-                metadataReadSemaphore.wait()
-                defer { metadataReadSemaphore.signal() }
                 autoreleasepool {
                     let url = URL(fileURLWithPath: path)
                     let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)

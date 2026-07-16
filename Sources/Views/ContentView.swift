@@ -264,11 +264,19 @@ struct LoadingBar: View {
     @State private var showPopover = false
 
     private var queue: [BackgroundActivityState.LoadingTask] { activity.loadingQueue }
-    private var task: BackgroundActivityState.LoadingTask { queue[0] }
-    private var pending: Int { queue.count - 1 }
-    private var taskPaused: Bool { activity.pausedTasks.contains(task.id) }
 
-    var body: some View {
+    // Die Sidebar prüft loadingQueue.isEmpty, aber LoadingBar beobachtet activity selbst:
+    // leert dequeue() die Queue, rendert SwiftUI diesen Body noch einmal, bevor die
+    // Sidebar die View entfernt — queue[0] würde dann trappen (SIGILL, Bug #34).
+    @ViewBuilder var body: some View {
+        if let task = queue.first {
+            bar(task: task, pending: queue.count - 1,
+                taskPaused: activity.pausedTasks.contains(task.id))
+        }
+    }
+
+    private func bar(task: BackgroundActivityState.LoadingTask,
+                     pending: Int, taskPaused: Bool) -> some View {
         VStack(spacing: 0) {
             Divider()
             VStack(alignment: .leading, spacing: 4) {

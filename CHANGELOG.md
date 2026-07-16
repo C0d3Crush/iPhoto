@@ -2,6 +2,15 @@
 
 ---
 
+## 0.94.1
+**Bugfix — SIGILL-Crash der Lade-Leiste + UI-Freeze durch Thread-Pool-Erschöpfung**
+
+- Crash (SIGILL) beim Ausblenden der Lade-Leiste behoben: Die Leiste griff auf den ersten Queue-Eintrag zu, während die Queue gerade geleert wurde (Bug #34, 3 Abstürze am 15./16.07.)
+- Minutenlanger UI-Freeze beim Thumbnail-Laden großer Alben behoben: Pro Bild wartete ein eigener GCD-Thread an einer Semaphore — bei hunderten Bildern war der Thread-Pool (Limit 64) erschöpft und der Main-Thread hing an Datenbank-Zugriffen (Bug #35)
+- Lade-Pipelines (Thumbnails, sichtbare Vorschauen, Metadaten) laufen jetzt über OperationQueues mit fester Parallelität statt Block-pro-Bild — gleiches Speicherverhalten, keine blockierten Threads
+
+---
+
 ## 0.94.0
 **Feature — Bildvergleich (Duell-Modus)**
 
