@@ -39,8 +39,12 @@ extension ImageViewModel {
         return collection.documents.first(where: { $0.id == id })
     }
 
-    /// Wählt das nächste Paar: bevorzugt zwei Bilder mit gleicher Sternezahl,
-    /// damit das Duell die Rangfolge innerhalb einer Stufe verfeinert.
+    /// Ziel-Verteilung der Sterne (Gauß-artig): 1★ 10 %, 2★ 20 %, 3★ 40 %, 4★ 20 %, 5★ 10 %.
+    /// Unbewertete (0★) haben Ziel 0 % — sie werden bevorzugt verglichen und einsortiert.
+    static let compareRatingTargets: [Int: Double] = [0: 0.0, 1: 0.10, 2: 0.20, 3: 0.40, 4: 0.20, 5: 0.10]
+
+    /// Wählt das nächste Paar aus einer Sternstufe, die über ihrem Ziel-Anteil liegt —
+    /// Duelle dort verschieben Bilder in Nachbarstufen und nähern die Verteilung dem Ziel an.
     func nextComparePair() {
         let candidates = visibleDocuments
         guard candidates.count >= 2 else {
@@ -50,15 +54,33 @@ extension ImageViewModel {
         }
 
         var groups = Dictionary(grouping: candidates, by: { $0.rating })
-            .values.filter { $0.count >= 2 }
+            .filter { $0.value.count >= 2 }
         // Zuletzt gezeigtes Paar nicht sofort wiederholen, wenn Alternativen existieren
         if candidates.count > 2 {
-            groups = groups.map { group -> [ImageDocument] in
+            groups = groups.mapValues { group -> [ImageDocument] in
                 group.count == 2 && Set(group.map { $0.id }) == lastComparePair ? [] : group
-            }.filter { $0.count >= 2 }
+            }.filter { $0.value.count >= 2 }
         }
 
-        let pool = groups.randomElement() ?? candidates
+        // Übervolle Stufen gewichtet nach ihrem Überschuss auslosen
+        let total = Double(candidates.count)
+        let overfull = groups.compactMap { rating, docs -> (docs: [ImageDocument], weight: Double)? in
+            let excess = Double(docs.count) / total - (Self.compareRatingTargets[rating] ?? 0)
+            return excess > 0 ? (docs, excess) : nil
+        }
+        let pool: [ImageDocument]
+        if !overfull.isEmpty {
+            var r = Double.random(in: 0..<overfull.reduce(0) { $0 + $1.weight })
+            var chosen = overfull[0].docs
+            for entry in overfull {
+                r -= entry.weight
+                if r < 0 { chosen = entry.docs; break }
+            }
+            pool = chosen
+        } else {
+            pool = groups.values.randomElement() ?? candidates
+        }
+
         var pair = Array(pool.shuffled().prefix(2))
         if candidates.count > 2 && Set(pair.map { $0.id }) == lastComparePair {
             pair = Array(candidates.shuffled().prefix(2))
@@ -68,8 +90,8 @@ extension ImageViewModel {
         compareLeftID = pair[0].id
         compareRightID = pair[1].id
         lastComparePair = Set(pair.map { $0.id })
-        ensureComparePreview(for: pair[0])
-        ensureComparePreview(for: pair[1])
+        ensureComparePreview(forID: pair[0].id)
+        ensureComparePreview(forID: pair[1].id)
     }
 
     /// Gewinner steigt eine Sternstufe (max. 5); steht er schon bei 5,
@@ -99,8 +121,10 @@ extension ImageViewModel {
                                        flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
     }
 
-    private func ensureComparePreview(for doc: ImageDocument) {
-        guard doc.cgImage == nil, doc.previewImage == nil else { return }
+    private func ensureComparePreview(forID id: UUID) {
+        // Frisch aus der Collection auflösen — Kopien aus visibleDocuments können veraltet sein
+        guard let doc = collection.documents.first(where: { $0.id == id }),
+              doc.cgImage == nil, doc.previewImage == nil else { return }
         let url = doc.url
         guard !compareLoadInFlight.contains(url) else { return }
         compareLoadInFlight.insert(url)
@@ -108,7 +132,13 @@ extension ImageViewModel {
             autoreleasepool {
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
-                let preview = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 1500)
+                let preview: CGImage?
+                do {
+                    preview = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 1500)
+                } catch {
+                    Log.error("Vergleichs-Preview fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
+                    preview = nil
+                }
                 DispatchQueue.main.async {
                     guard let self = self else { return }
                     self.compareLoadInFlight.remove(url)

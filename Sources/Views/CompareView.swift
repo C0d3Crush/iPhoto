@@ -60,6 +60,12 @@ struct CompareView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .padding(8)
+                } else if let ns = doc.thumbnailImage ?? doc.placeholderThumbnailImage {
+                    // Grobes Grid-Thumbnail als Sofort-Anzeige, bis das 1500px-Preview da ist
+                    Image(nsImage: ns)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(8)
                 } else {
                     ProgressView()
                 }
@@ -101,16 +107,20 @@ struct CompareView: View {
             Button(action: { viewModel.resolveCompare(.left) }) {
                 Label("Links ist besser", systemImage: "arrow.left")
             }
+            .help("Pfeiltaste ←")
             Button(action: { viewModel.resolveCompare(.equal) }) {
                 Label("Gleich gut", systemImage: "equal")
             }
+            .help("Pfeiltaste ↑")
             Button(action: { viewModel.resolveCompare(.right) }) {
                 Label("Rechts ist besser", systemImage: "arrow.right")
             }
+            .help("Pfeiltaste →")
             Divider().frame(height: 18)
             Button(action: { viewModel.nextComparePair() }) {
                 Label("Überspringen", systemImage: "arrow.uturn.forward")
             }
+            .help("Pfeiltaste ↓")
         }
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)

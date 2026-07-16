@@ -2,6 +2,16 @@
 
 ---
 
+## 0.95.0
+**Feature — Bildvergleich: Gauß-Zielverteilung, Pfeiltasten-Steuerung, Lade-Fix**
+
+- Paarauswahl steuert jetzt auf eine Gauß-artige Sterneverteilung zu (1★ 10 %, 2★ 20 %, 3★ 40 %, 4★ 20 %, 5★ 10 %): Verglichen werden bevorzugt Bilder aus Stufen, die über ihrem Ziel-Anteil liegen; unbewertete Bilder werden zuerst einsortiert
+- Pfeiltasten im Vergleichsmodus: ← links besser, → rechts besser, ↑ gleich gut, ↓ überspringen
+- Fix: Nach einer Entscheidung blieben die nächsten Bilder dauerhaft im Lade-Zustand — die Speicher-Aufräumroutine verwarf frisch geladene Vergleichs-Previews sofort wieder (Duell-Bilder liegen meist weit vom aktuellen Bild entfernt); Duell-Bilder sind jetzt vor der Räumung geschützt
+- Bis das große Preview geladen ist, wird sofort das Raster-Thumbnail angezeigt statt eines Spinners
+
+---
+
 ## 0.94.1
 **Bugfix — SIGILL-Crash der Lade-Leiste + UI-Freeze durch Thread-Pool-Erschöpfung**
 

@@ -286,6 +286,15 @@ class ImageViewModel: ObservableObject {
             let onlyCmdDown  = mods == .command
             let cmdShiftDown = mods == [.command, .shift]
             let textFieldFocused = NSApp.keyWindow?.firstResponder is NSTextView
+            if self.compareModeActive, mods.isEmpty, !textFieldFocused {
+                switch event.keyCode {
+                case 123: DispatchQueue.main.async { self.resolveCompare(.left) };  return nil // ←
+                case 124: DispatchQueue.main.async { self.resolveCompare(.right) }; return nil // →
+                case 126: DispatchQueue.main.async { self.resolveCompare(.equal) }; return nil // ↑
+                case 125: DispatchQueue.main.async { self.nextComparePair() };      return nil // ↓
+                default: break
+                }
+            }
             switch event.keyCode {
             case 123:
                 if mods.contains(.shift) {
@@ -482,6 +491,12 @@ class ImageViewModel: ObservableObject {
         let farRadius = max(keepRadius * 3, 5)
         var keepNear: Set<UUID> = []
         var keepFar: Set<UUID> = []
+        // Vergleichsmodus: die beiden Duell-Bilder liegen meist weit vom currentIndex —
+        // ohne Schutz würden ihre frisch geladenen Previews sofort wieder verworfen.
+        for id in [compareLeftID, compareRightID].compactMap({ $0 }) {
+            keepNear.insert(id)
+            keepFar.insert(id)
+        }
         if let curID = curID {
             keepNear.insert(curID)
             keepFar.insert(curID)
