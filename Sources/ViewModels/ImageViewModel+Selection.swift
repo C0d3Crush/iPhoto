@@ -91,6 +91,10 @@ extension ImageViewModel {
         CatalogStore.shared.setTrashed(paths: docs.map { $0.url.path }, true)
         collection.selectedIndices = []
         invalidateVisibleOrder()
+        if compareModeActive, let l = compareLeftID, let r = compareRightID,
+           ids.contains(l) || ids.contains(r) {
+            nextComparePair()
+        }
         selectNeighborAfterExclusion(previousVisible: prev, excludedIDs: ids)
     }
 

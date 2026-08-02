@@ -2,6 +2,16 @@
 
 ---
 
+## 0.97.0
+**Feature — Sequenzielle Ladeaufgaben, Vergleichs-Verteilungsanzeige, Trash-Fix im Duell**
+
+- Ladeaufgaben (Thumbnails, Metadaten, EXIF-Scan) laufen jetzt nacheinander statt gleichzeitig — unten links wird immer nur eine Sache auf einmal angezeigt
+- Duell-Modus zeigt jetzt eine Sterne-Verteilungsleiste: aktueller Ist-Anteil vs. Gauß-Zielkurve pro Sternstufe
+- Fix: Bilder im Papierkorb konnten weiterhin als Duell-Kandidaten ausgewählt werden; `compareLeftDocument`/`compareRightDocument` filtern jetzt getrashte Bilder aus
+- Fix: Wird ein aktuell verglichenes Bild in den Papierkorb verschoben, wird sofort zum nächsten Paar weitergesprungen
+
+---
+
 ## 0.96.0
 **Feature — Bildvergleich: Pfeiltasten-Fix, zufälliges Auf/Ab, gezielte Klassen-Auswahl**
 

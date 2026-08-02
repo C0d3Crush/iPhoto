@@ -31,12 +31,12 @@ extension ImageViewModel {
 
     var compareLeftDocument: ImageDocument? {
         guard let id = compareLeftID else { return nil }
-        return collection.documents.first(where: { $0.id == id })
+        return collection.documents.first(where: { $0.id == id && !$0.isTrashed })
     }
 
     var compareRightDocument: ImageDocument? {
         guard let id = compareRightID else { return nil }
-        return collection.documents.first(where: { $0.id == id })
+        return collection.documents.first(where: { $0.id == id && !$0.isTrashed })
     }
 
     /// Ziel-Verteilung der Sterne (Gauß-artig): 1★ 10 %, 2★ 20 %, 3★ 40 %, 4★ 20 %, 5★ 10 %.
@@ -46,7 +46,7 @@ extension ImageViewModel {
     /// Wählt das nächste Paar aus einer Sternstufe, die über ihrem Ziel-Anteil liegt —
     /// Duelle dort verschieben Bilder in Nachbarstufen und nähern die Verteilung dem Ziel an.
     func nextComparePair() {
-        let candidates = visibleDocuments
+        let candidates = visibleDocuments.filter { !$0.isTrashed }
         guard candidates.count >= 2 else {
             compareLeftID = nil
             compareRightID = nil

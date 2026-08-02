@@ -28,6 +28,7 @@ final class BackgroundActivityState: ObservableObject {
     @Published var loadingSummary: String? = nil
     @Published var pausedTasks: Set<UUID> = []
     private var loadingSummaryToken = UUID()
+    private var pendingWork: [() -> Void] = []
 
     // Pausen-Status lock-geschützt gespiegelt: Worker-Threads dürfen @Published
     // nicht abseits des Main-Threads lesen, blockieren aber auf dieser Condition.
@@ -85,13 +86,32 @@ final class BackgroundActivityState: ObservableObject {
         loadingQueue[idx].total = total
     }
 
+    /// Startet `work` sofort, wenn keine Aufgabe läuft — sonst wird es in die
+    /// Warteschlange gestellt und nach Abschluss der aktuellen Aufgabe gestartet.
+    func enqueueWork(_ work: @escaping () -> Void) {
+        if loadingQueue.isEmpty && pendingWork.isEmpty {
+            work()
+        } else {
+            pendingWork.append(work)
+        }
+    }
+
     func dequeue(id: UUID) {
         clearPause(id: id)
         let finished = loadingQueue.first { $0.id == id }
         loadingQueue.removeAll { $0.id == id }
+
+        // Nächste ausstehende Aufgabe starten, Zusammenfassung noch nicht zeigen.
+        if loadingQueue.isEmpty, !pendingWork.isEmpty {
+            let next = pendingWork.removeFirst()
+            next()
+            return
+        }
+
         // Nur bei vollständig abgeschlossenen Aufgaben mit bekanntem Umfang und leerer
         // Warteschlange die Zusammenfassung zeigen (nicht bei Abbruch/Fehler).
-        guard loadingQueue.isEmpty, let t = finished, t.total > 0, t.done >= t.total else { return }
+        guard loadingQueue.isEmpty && pendingWork.isEmpty,
+              let t = finished, t.total > 0, t.done >= t.total else { return }
         let secs = Date().timeIntervalSince(t.startedAt)
         let secText = secs < 10
             ? String(format: "%.1f", secs).replacingOccurrences(of: ".", with: ",")

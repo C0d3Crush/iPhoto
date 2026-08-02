@@ -20,6 +20,8 @@ struct CompareView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 Divider()
+                distributionPanel
+                Divider()
                 verdictBar
             } else {
                 VStack(spacing: 10) {
@@ -102,6 +104,23 @@ struct CompareView: View {
         }
     }
 
+    private var distributionPanel: some View {
+        let docs = viewModel.visibleDocuments
+        let total = max(1, docs.count)
+        return HStack(alignment: .center, spacing: 14) {
+            ForEach([1, 2, 3, 4, 5], id: \.self) { stars in
+                RatingDistributionColumn(
+                    stars: stars,
+                    current: Double(docs.filter { $0.rating == stars }.count) / Double(total),
+                    target: ImageViewModel.compareRatingTargets[stars] ?? 0.0
+                )
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity)
+    }
+
     private var verdictBar: some View {
         HStack(spacing: 16) {
             Button(action: { viewModel.resolveCompare(.left) }) {
@@ -124,5 +143,60 @@ struct CompareView: View {
         }
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
+    }
+}
+
+private struct RatingDistributionColumn: View {
+    let stars: Int
+    let current: Double
+    let target: Double
+
+    var body: some View {
+        VStack(spacing: 4) {
+            starIcons
+            barChart
+            Text("\(Int((current * 100).rounded())) %")
+                .font(.system(size: 9).monospacedDigit())
+                .foregroundColor(.secondary)
+            Text("Soll: \(Int(target * 100)) %")
+                .font(.system(size: 8))
+                .foregroundColor(.secondary.opacity(0.7))
+        }
+    }
+
+    private var starIcons: some View {
+        HStack(spacing: 1) {
+            ForEach(1...5, id: \.self) { i in
+                Image(systemName: "star.fill")
+                    .font(.system(size: 7))
+                    .foregroundColor(i <= stars ? .yellow : Color.yellow.opacity(0.15))
+            }
+        }
+    }
+
+    private var barChart: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.secondary.opacity(0.12))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(barColor)
+                    .frame(height: geo.size.height * CGFloat(current))
+                    .frame(maxWidth: .infinity)
+                Rectangle()
+                    .fill(Color.primary.opacity(0.45))
+                    .frame(height: 1.5)
+                    .offset(y: -geo.size.height * CGFloat(target))
+            }
+        }
+        .frame(width: 36, height: 48)
+    }
+
+    private var barColor: Color {
+        let diff = current - target
+        if diff > 0.07 { return .orange }
+        if diff < -0.07 { return Color.accentColor.opacity(0.55) }
+        return .green.opacity(0.75)
     }
 }

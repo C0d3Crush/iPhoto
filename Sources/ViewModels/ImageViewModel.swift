@@ -428,9 +428,10 @@ class ImageViewModel: ObservableObject {
             collection.select(index: firstNewIndex)
             loadCurrentImage()
         }
-        loadThumbnails()
-        loadMetadataInBackground(for: newDocs.map { $0.url })
-        scanExifForLibrary()
+        let metaURLs = newDocs.map { $0.url }
+        activity.enqueueWork { [weak self] in self?.loadThumbnails() }
+        activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
+        activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
     }
 
     func clearAll() {
