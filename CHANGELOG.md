@@ -2,6 +2,15 @@
 
 ---
 
+## 0.99.0
+**Feature — Duplikate-Tab als Sidebar-Eintrag mit Qualitätsempfehlung**
+
+- Duplikate haben jetzt einen eigenen Tab in der Sidebar (wie Papierkorb), mit orangem Badge wenn Gruppen gefunden wurden
+- Die Duplikat-Ansicht zeigt jede Gruppe mit Thumbnails, grünem Haken für die empfohlene Behalte-Datei und rotem Papierkorb für die vorgeschlagene Löschdatei
+- Qualitätsempfehlung: RAW-Dateien werden gegenüber JPEG/anderen Formaten bevorzugt; bei gleichem Format bleibt das Original (kürzester Pfad, keine Kopie/Backup-Indikatoren im Namen)
+- Per Klick auf eine Datei kann die Empfehlung umgekehrt werden ("Stattdessen behalten")
+- "Ausführen" pro Gruppe oder "Alle ausführen" verschiebt die markierten Duplikate in den App-Papierkorb
+
 ## 0.98.0
 **Feature — Duplikatserkennung**
 

@@ -94,6 +94,8 @@ extension ImageViewModel {
             filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
         case .trash:
             filtered = collection.documents.filter { $0.isTrashed }
+        case .duplicates:
+            filtered = docs
         }
         return applyStacking(to: applySortCriterion(to: filtered))
     }

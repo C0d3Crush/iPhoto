@@ -17,8 +17,6 @@ struct NavSidebarView: View {
     @State private var renameGroupText = ""
     @State private var dropTargetGroups: Set<String> = []
     @State private var dropOnUngrouped: Bool = false
-    @State private var showDuplicatesSheet = false
-
     private func loadSmartFolderID(from providers: [NSItemProvider], completion: @escaping (SmartFolder?) -> Void) {
         providers.first?.loadDataRepresentation(forTypeIdentifier: kSmartFolderIDType) { data, _ in
             guard let data = data,
@@ -70,6 +68,7 @@ struct NavSidebarView: View {
                     smartFoldersSection
                     volumesSection
                     trashSection
+                    duplicatesSection
                 }
                 .padding(.vertical, 8)
             }
@@ -93,10 +92,6 @@ struct NavSidebarView: View {
                 .padding(.vertical, 6)
                 .background(Color(NSColor.windowBackgroundColor))
                 .transition(.opacity)
-            }
-            if !viewModel.duplicateGroups.isEmpty {
-                Divider()
-                duplicateBanner
             }
         }
         .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
@@ -376,34 +371,32 @@ struct NavSidebarView: View {
         }
     }
 
-    @ViewBuilder private var duplicateBanner: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "doc.on.doc")
-                .font(.system(size: 10))
-                .foregroundColor(.orange)
-            let count = viewModel.duplicateGroups.count
-            Text("\(count) mögliche \(count == 1 ? "Duplikat-Gruppe" : "Duplikat-Gruppen")")
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .lineLimit(1)
-            Spacer()
-            Button("Prüfen") { showDuplicatesSheet = true }
-                .font(.system(size: 10))
-                .buttonStyle(PlainButtonStyle())
-                .foregroundColor(.accentColor)
-            Button(action: { viewModel.duplicateGroups = [] }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary)
+    @ViewBuilder private var duplicatesSection: some View {
+        sectionHeader("Duplikate")
+        Button(action: { viewModel.navSelection = .duplicates }) {
+            HStack(spacing: 4) {
+                Label("Duplikate", systemImage: "doc.on.doc")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !viewModel.duplicateGroups.isEmpty {
+                    Text("\(viewModel.duplicateGroups.count)")
+                        .font(.caption2)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.orange)
+                        .cornerRadius(4)
+                        .padding(.trailing, 2)
+                }
             }
-            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(viewModel.navSelection == .duplicates ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.orange.opacity(0.07))
-        .sheet(isPresented: $showDuplicatesSheet) {
-            DuplicatesSheet(groups: viewModel.duplicateGroups)
-                .environmentObject(viewModel)
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .contextMenu {
+            Button("Neu scannen") { viewModel.detectDuplicates() }
         }
     }
 

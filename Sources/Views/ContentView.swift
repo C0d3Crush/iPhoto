@@ -21,6 +21,10 @@ struct ContentView: View {
                     CompareView()
                         .environmentObject(viewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.navSelection == .duplicates {
+                    DuplicatesView()
+                        .environmentObject(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if showGrid {
                     // Vollbild-Raster
                     LibraryFullGridView()

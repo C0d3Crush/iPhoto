@@ -225,6 +225,8 @@ extension ImageViewModel {
             foldersToLoad = []
         case .trash:
             foldersToLoad = []
+        case .duplicates:
+            foldersToLoad = []
         }
         for folder in foldersToLoad {
             syncedFolderIDs.insert(folder.id)

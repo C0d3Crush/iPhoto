@@ -1,116 +1,162 @@
 import SwiftUI
 import AppKit
 
-struct DuplicatesSheet: View {
+struct DuplicatesView: View {
     @EnvironmentObject var viewModel: ImageViewModel
-    @Environment(\.presentationMode) private var presentationMode
-    let groups: [[ImageDocument]]
+    @State private var keepOverrides: [Int: Int] = [:]
 
-    @State private var markedForDeletion: Set<UUID> = []
+    private var groups: [[ImageDocument]] { viewModel.duplicateGroups }
 
     var body: some View {
         VStack(spacing: 0) {
-            headerRow
+            toolbar
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
-                        GroupRow(group: group, markedForDeletion: $markedForDeletion)
-                        Divider().padding(.horizontal, 16)
+            if groups.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(Array(groups.enumerated()), id: \.offset) { idx, group in
+                            DuplicateGroupCard(
+                                group: group,
+                                keepIndex: resolvedKeepIndex(groupIdx: idx, group: group),
+                                onKeepChange: { newIdx in keepOverrides[idx] = newIdx },
+                                onExecute: { executeGroup(idx: idx, group: group) }
+                            )
+                        }
                     }
-                }
-                .padding(.vertical, 8)
-            }
-            Divider()
-            footerRow
-        }
-        .frame(width: 600, height: 460)
-        .onAppear {
-            var marked = Set<UUID>()
-            for group in groups {
-                for doc in group.dropFirst() {
-                    marked.insert(doc.id)
+                    .padding(16)
                 }
             }
-            markedForDeletion = marked
         }
     }
 
-    private var headerRow: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Mögliche Duplikate")
-                    .font(.headline)
-                let total = groups.reduce(0) { $0 + $1.count } - groups.count
-                Text("\(groups.count) \(groups.count == 1 ? "Gruppe" : "Gruppen"), \(total + groups.count) Dateien — gleicher Aufnahmezeitpunkt und gleiche Dateigröße")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+    private var toolbar: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Duplikate")
+                    .font(.title2).fontWeight(.semibold)
+                if groups.isEmpty {
+                    Text("Keine Duplikate gefunden")
+                        .font(.caption).foregroundColor(.secondary)
+                } else {
+                    let del = groups.enumerated().reduce(0) { $0 + $1.element.count - 1 }
+                    Text("\(groups.count) \(groups.count == 1 ? "Gruppe" : "Gruppen") · \(del) \(del == 1 ? "Datei" : "Dateien") zum Löschen vorgeschlagen")
+                        .font(.caption).foregroundColor(.secondary)
+                }
             }
             Spacer()
-            Button("Schließen") { presentationMode.wrappedValue.dismiss() }
-                .keyboardShortcut(.cancelAction)
+            Button("Neu scannen") { viewModel.detectDuplicates() }
+                .buttonStyle(PlainButtonStyle())
+                .foregroundColor(.accentColor)
+            if !groups.isEmpty {
+                Button("Alle ausführen") { executeAll() }
+                    .foregroundColor(.red)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
     }
 
-    private var footerRow: some View {
-        HStack {
-            let count = markedForDeletion.count
-            if count == 0 {
-                Text("Keine Dateien ausgewählt")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } else {
-                Text("\(count) \(count == 1 ? "Datei" : "Dateien") in den Papierkorb verschieben")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            Spacer()
-            Button("In Papierkorb") {
-                let toTrash = groups.flatMap { $0 }.filter { markedForDeletion.contains($0.id) }
-                viewModel.moveToAppTrash(toTrash)
-                viewModel.duplicateGroups = []
-                presentationMode.wrappedValue.dismiss()
-            }
-            .disabled(markedForDeletion.isEmpty)
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 52))
+                .foregroundColor(.green)
+            Text("Keine Duplikate")
+                .font(.title3).fontWeight(.medium)
+            Text("Alle Bilder haben einen eindeutigen Aufnahmezeitpunkt und eine eindeutige Dateigröße.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 320)
+            Button("Neu scannen") { viewModel.detectDuplicates() }
+                .padding(.top, 4)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func resolvedKeepIndex(groupIdx: Int, group: [ImageDocument]) -> Int {
+        keepOverrides[groupIdx] ?? Self.recommendedKeepIndex(in: group)
+    }
+
+    static func recommendedKeepIndex(in group: [ImageDocument]) -> Int {
+        if let idx = group.firstIndex(where: { $0.isRAW }) { return idx }
+        let copyWords = ["kopie", " copy", "backup", "duplicate", " 2.", "(2)", "(1)"]
+        for (idx, doc) in group.enumerated() {
+            let lower = doc.url.path.lowercased()
+            if !copyWords.contains(where: { lower.contains($0) }) { return idx }
+        }
+        if let idx = group.indices.min(by: { group[$0].url.path.count < group[$1].url.path.count }) {
+            return idx
+        }
+        return 0
+    }
+
+    private func executeGroup(idx: Int, group: [ImageDocument]) {
+        let keep = resolvedKeepIndex(groupIdx: idx, group: group)
+        let toTrash = group.enumerated().filter { $0.offset != keep }.map { $0.element }
+        viewModel.moveToAppTrash(toTrash)
+        keepOverrides.removeValue(forKey: idx)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            viewModel.detectDuplicates()
+        }
+    }
+
+    private func executeAll() {
+        var toTrash: [ImageDocument] = []
+        for (idx, group) in groups.enumerated() {
+            let keep = resolvedKeepIndex(groupIdx: idx, group: group)
+            toTrash.append(contentsOf: group.enumerated().filter { $0.offset != keep }.map { $0.element })
+        }
+        viewModel.moveToAppTrash(toTrash)
+        keepOverrides = [:]
+        viewModel.duplicateGroups = []
     }
 }
 
-private struct GroupRow: View {
+private struct DuplicateGroupCard: View {
     let group: [ImageDocument]
-    @Binding var markedForDeletion: Set<UUID>
+    let keepIndex: Int
+    let onKeepChange: (Int) -> Void
+    let onExecute: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let date = group.first?.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value {
-                Text(date)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                if let date = group.first?.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value {
+                    Text(date)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button("Ausführen") { onExecute() }
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .buttonStyle(PlainButtonStyle())
             }
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 10) {
-                    ForEach(group) { doc in
-                        DocCard(doc: doc, markedForDeletion: $markedForDeletion)
+                    ForEach(Array(group.enumerated()), id: \.element.id) { docIdx, doc in
+                        DocTile(doc: doc, isKeep: docIdx == keepIndex) {
+                            onKeepChange(docIdx)
+                        }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
             }
         }
+        .padding(14)
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.18), lineWidth: 1))
     }
 }
 
-private struct DocCard: View {
+private struct DocTile: View {
     let doc: ImageDocument
-    @Binding var markedForDeletion: Set<UUID>
-
-    private var isMarked: Bool { markedForDeletion.contains(doc.id) }
+    let isKeep: Bool
+    let onFlip: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -120,59 +166,56 @@ private struct DocCard: View {
                         Image(nsImage: img)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 110, height: 82)
+                            .frame(width: 130, height: 96)
                             .clipped()
                     } else {
                         Color.secondary.opacity(0.15)
-                            .frame(width: 110, height: 82)
-                            .overlay(
-                                Image(systemName: "photo")
-                                    .foregroundColor(.secondary)
-                            )
+                            .frame(width: 130, height: 96)
+                            .overlay(Image(systemName: "photo").foregroundColor(.secondary))
                     }
                 }
-                .cornerRadius(5)
+                .cornerRadius(6)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5)
-                        .stroke(isMarked ? Color.red.opacity(0.7) : Color.secondary.opacity(0.25), lineWidth: isMarked ? 2 : 0.5)
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isKeep ? Color.green : Color.red.opacity(0.65), lineWidth: 2)
                 )
 
-                if isMarked {
-                    Image(systemName: "trash.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.red)
-                        .background(Circle().fill(Color.white).padding(2))
-                        .padding(4)
-                }
+                Image(systemName: isKeep ? "checkmark.circle.fill" : "trash.circle.fill")
+                    .font(.system(size: 17))
+                    .foregroundColor(isKeep ? .green : .red)
+                    .background(Circle().fill(Color.white).padding(2))
+                    .padding(5)
             }
 
             Text(doc.filename)
                 .font(.system(size: 10, weight: .medium))
                 .lineLimit(1)
-                .frame(width: 110, alignment: .leading)
+                .frame(width: 130, alignment: .leading)
 
             Text(doc.url.deletingLastPathComponent().path
                     .replacingOccurrences(of: NSHomeDirectory(), with: "~"))
                 .font(.system(size: 9))
                 .foregroundColor(.secondary)
                 .lineLimit(2)
-                .frame(width: 110, alignment: .leading)
+                .frame(width: 130, alignment: .leading)
 
-            Toggle(isMarked ? "Löschen" : "Behalten", isOn: Binding(
-                get: { isMarked },
-                set: { v in
-                    if v { markedForDeletion.insert(doc.id) }
-                    else { markedForDeletion.remove(doc.id) }
-                }
-            ))
-            .toggleStyle(CheckboxToggleStyle())
-            .font(.system(size: 10))
-            .foregroundColor(isMarked ? .red : .primary)
+            if doc.isRAW {
+                Text("RAW")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(Color.orange.opacity(0.12))
+                    .cornerRadius(3)
+            }
+
+            Button(isKeep ? "✓ Behalten" : "Stattdessen behalten") {
+                if !isKeep { onFlip() }
+            }
+            .font(.system(size: 9))
+            .foregroundColor(isKeep ? .green : .accentColor)
+            .buttonStyle(PlainButtonStyle())
+            .disabled(isKeep)
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if isMarked { markedForDeletion.remove(doc.id) }
-            else { markedForDeletion.insert(doc.id) }
-        }
+        .frame(width: 130)
     }
 }

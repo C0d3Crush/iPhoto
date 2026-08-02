@@ -19,4 +19,5 @@ enum NavSelection: Hashable {
     case smartFolder(UUID)
     case volume(UUID)
     case trash
+    case duplicates
 }
