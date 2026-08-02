@@ -135,6 +135,10 @@ extension ImageViewModel {
                 }
             }
 
+            for url in newURLs {
+                CatalogStore.shared.saveRating(path: url.path, rating: 3, flag: "none", colorLabel: "none")
+            }
+
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.activity.dequeue(id: volumeID)

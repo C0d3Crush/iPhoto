@@ -2,6 +2,13 @@
 
 ---
 
+## 0.99.1
+**Feature — SD-Karten-Sync vergibt automatisch 3 Sterne**
+
+- Bilder, die über „Synchronisieren" von einer Speicherkarte in die Bibliothek kopiert werden, erhalten automatisch eine 3-Sterne-Bewertung
+
+---
+
 ## 0.99.0
 **Feature — Duplikate-Tab als Sidebar-Eintrag mit Qualitätsempfehlung**
 
