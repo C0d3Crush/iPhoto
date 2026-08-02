@@ -17,6 +17,7 @@ struct NavSidebarView: View {
     @State private var renameGroupText = ""
     @State private var dropTargetGroups: Set<String> = []
     @State private var dropOnUngrouped: Bool = false
+    @State private var showDuplicatesSheet = false
 
     private func loadSmartFolderID(from providers: [NSItemProvider], completion: @escaping (SmartFolder?) -> Void) {
         providers.first?.loadDataRepresentation(forTypeIdentifier: kSmartFolderIDType) { data, _ in
@@ -92,6 +93,10 @@ struct NavSidebarView: View {
                 .padding(.vertical, 6)
                 .background(Color(NSColor.windowBackgroundColor))
                 .transition(.opacity)
+            }
+            if !viewModel.duplicateGroups.isEmpty {
+                Divider()
+                duplicateBanner
             }
         }
         .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
@@ -368,6 +373,37 @@ struct NavSidebarView: View {
         .contextMenu {
             Button("Papierkorb leeren…") { viewModel.emptyTrash() }
                 .disabled(viewModel.trashedCount == 0)
+        }
+    }
+
+    @ViewBuilder private var duplicateBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 10))
+                .foregroundColor(.orange)
+            let count = viewModel.duplicateGroups.count
+            Text("\(count) mögliche \(count == 1 ? "Duplikat-Gruppe" : "Duplikat-Gruppen")")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+            Spacer()
+            Button("Prüfen") { showDuplicatesSheet = true }
+                .font(.system(size: 10))
+                .buttonStyle(PlainButtonStyle())
+                .foregroundColor(.accentColor)
+            Button(action: { viewModel.duplicateGroups = [] }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.orange.opacity(0.07))
+        .sheet(isPresented: $showDuplicatesSheet) {
+            DuplicatesSheet(groups: viewModel.duplicateGroups)
+                .environmentObject(viewModel)
         }
     }
 

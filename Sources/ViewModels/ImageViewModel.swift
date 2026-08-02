@@ -26,6 +26,7 @@ class ImageViewModel: ObservableObject {
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
     @Published var compareModeActive: Bool = false
+    @Published var duplicateGroups: [[ImageDocument]] = []
     @Published var compareLeftID: UUID? = nil
     @Published var compareRightID: UUID? = nil
     var compareLoadInFlight: Set<URL> = []

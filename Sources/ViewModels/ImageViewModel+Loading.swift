@@ -458,8 +458,35 @@ extension ImageViewModel {
                         self.metaDone  = 0
                         self.metaTotal = 0
                         self.activity.dequeue(id: self.metaTaskID)
+                        self.detectDuplicates()
                     }
                 }
+            }
+        }
+    }
+
+    func detectDuplicates() {
+        let docs = collection.documents.filter { !$0.isTrashed && !$0.metadata.isEmpty }
+        guard docs.count > 1 else {
+            duplicateGroups = []
+            return
+        }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            var byKey: [String: [ImageDocument]] = [:]
+            for doc in docs {
+                guard let dateTaken = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value,
+                      !dateTaken.isEmpty else { continue }
+                guard let size = (try? doc.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap({ $0 }),
+                      size > 0 else { continue }
+                let key = "\(dateTaken)|\(size)"
+                byKey[key, default: []].append(doc)
+            }
+            let groups = byKey.values
+                .filter { $0.count > 1 }
+                .map { $0.sorted { $0.url.path < $1.url.path } }
+                .sorted { $0[0].filename < $1[0].filename }
+            DispatchQueue.main.async { [weak self] in
+                self?.duplicateGroups = groups
             }
         }
     }

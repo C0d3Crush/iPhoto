@@ -2,6 +2,18 @@
 
 ---
 
+## 0.98.0
+**Feature — Duplikatserkennung**
+
+- Neue Funktion: Duplikate erkennen — nach dem Laden der Metadaten werden Bilder mit identischem Aufnahmezeitpunkt und gleicher Dateigröße automatisch gruppiert
+- In der Sidebar erscheint ein oranges Banner mit der Anzahl der gefundenen Duplikat-Gruppen
+- „Prüfen"-Button öffnet einen Sheet mit einer Übersicht aller Gruppen inkl. Thumbnails, Dateiname und Pfad
+- Standardmäßig werden alle Duplikate außer dem ersten in jeder Gruppe zum Löschen vorgeschlagen
+- Per Klick oder Checkbox lässt sich die Auswahl pro Datei anpassen
+- „In Papierkorb"-Button verschiebt alle markierten Dateien in den App-internen Papierkorb
+
+---
+
 ## 0.97.0
 **Feature — Sequenzielle Ladeaufgaben, Vergleichs-Verteilungsanzeige, Trash-Fix im Duell**
 
