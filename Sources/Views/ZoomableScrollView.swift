@@ -5,6 +5,7 @@ struct ZoomableScrollView: NSViewRepresentable {
     let image: CGImage
     @Binding var zoomFactor: CGFloat
     @Binding var fitToWindow: Bool
+    var alwaysFitOnImageChange: Bool = false
 
     func makeNSView(context: Context) -> PanScrollView {
         let scrollView = PanScrollView()
@@ -72,12 +73,12 @@ struct ZoomableScrollView: NSViewRepresentable {
             coordinator.imageView?.image = nsImage
             coordinator.imageView?.frame = NSRect(origin: .zero, size: newSize)
 
-            if fitToWindow {
+            if fitToWindow || alwaysFitOnImageChange {
                 // Neues Bild geöffnet → Zoom sofort synchron korrigieren
                 coordinator.fitToWindow()
                 DispatchQueue.main.async { self.fitToWindow = false }
             } else if oldWidth > 0, let sv = coordinator.scrollView {
-                // Qualitäts-Upgrade: Zoom synchron skalieren bevor der Frame gerendert wird
+                // Qualitäts-Upgrade: Zoom proportional skalieren damit der sichtbare Bereich gleich bleibt
                 let ratio = oldWidth / CGFloat(image.width)
                 let adjusted = min(max(sv.magnification * ratio, sv.minMagnification), sv.maxMagnification)
                 sv.magnification = adjusted

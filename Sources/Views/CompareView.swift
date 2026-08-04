@@ -6,8 +6,8 @@ struct CompareView: View {
     @State private var hoveredSide: CompareVerdict? = nil
     @State private var leftZoom: CGFloat = 1.0
     @State private var rightZoom: CGFloat = 1.0
-    @State private var leftFit: Bool = true
-    @State private var rightFit: Bool = true
+    @State private var leftFit: Bool = false
+    @State private var rightFit: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,8 +41,6 @@ struct CompareView: View {
             }
         }
         .background(Color(NSColor.windowBackgroundColor))
-        .onChange(of: viewModel.compareLeftDocument?.id) { _ in leftFit = true }
-        .onChange(of: viewModel.compareRightDocument?.id) { _ in rightFit = true }
     }
 
     private var header: some View {
@@ -67,12 +65,12 @@ struct CompareView: View {
             ZStack {
                 Color(NSColor.underPageBackgroundColor)
                 if let cg = doc.cgImage ?? doc.previewImage ?? doc.thumbnail {
-                    ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit)
-                        .id(doc.id)
+                    ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit,
+                                       alwaysFitOnImageChange: true)
                 } else if let ns = doc.thumbnailImage ?? doc.placeholderThumbnailImage,
                           let cg = ns.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit)
-                        .id(doc.id)
+                    ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit,
+                                       alwaysFitOnImageChange: true)
                 } else {
                     ProgressView()
                 }
