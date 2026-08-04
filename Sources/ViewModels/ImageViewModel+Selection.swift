@@ -204,7 +204,16 @@ extension ImageViewModel {
     }
 
     func selectAll() {
-        let indices = Set(visibleDocuments.compactMap { collectionIndex(for: $0) })
+        var indices = Set<Int>()
+        for doc in visibleDocuments {
+            if let members = collapsedStackMembers(for: doc) {
+                for m in members {
+                    if let idx = collectionIndex(for: m) { indices.insert(idx) }
+                }
+            } else if let idx = collectionIndex(for: doc) {
+                indices.insert(idx)
+            }
+        }
         collection.selectedIndices = indices
     }
 
