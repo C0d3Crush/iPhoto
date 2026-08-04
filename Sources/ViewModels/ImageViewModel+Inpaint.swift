@@ -24,7 +24,7 @@ final class InpaintState: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "inpaint.checkpointPath") }
     }
     var python3Path: String {
-        get { UserDefaults.standard.string(forKey: "inpaint.python3Path") ?? "/usr/bin/python3" }
+        get { UserDefaults.standard.string(forKey: "inpaint.python3Path") ?? "/usr/local/bin/python3.10" }
         set { UserDefaults.standard.set(newValue, forKey: "inpaint.python3Path") }
     }
 }
