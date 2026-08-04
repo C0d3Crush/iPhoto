@@ -2,6 +2,14 @@
 
 ---
 
+## 1.0.3
+**Bugfix — Zoom-Explosion im Vergleich (echter Fix)**
+
+- `ZoomableScrollView` bekommt neuen Parameter `alwaysFitOnImageChange`: bei jedem Bildwechsel wird immer an die Pane angepasst, kein Ratio-Scaling
+- Damit werden alle Fälle abgedeckt: neues Paar, Thumbnail→Preview→Vollauflösung
+
+---
+
 ## 1.0.2
 **Bugfix — Zoom-Explosion beim Bildwechsel im Vergleich**
 
