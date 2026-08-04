@@ -2,6 +2,17 @@
 
 ---
 
+## 1.2.0
+**Feature — Unscharfe Bilder erkennen**
+
+- Neue Sidebar-Sektion „Qualität" mit Eintrag „Unscharf"
+- Erkennung basiert auf Laplacian-Varianz (Accelerate/vImage) auf Thumbnails — niedriger Score = unscharf
+- Schwellenwert per Slider einstellbar (Standard: 120)
+- Ergebnis als Grid: jedes Bild einzeln oder alle auf einmal in den Papierkorb verschieben
+- Kontextmenü in der Sidebar: „Neu scannen"
+
+---
+
 ## 1.1.3
 **Bugfix — Cmd+A wählt alle Bilder aus, auch in Stapeln**
 
