@@ -4,6 +4,10 @@ import AppKit
 struct CompareView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var hoveredSide: CompareVerdict? = nil
+    @State private var leftZoom: CGFloat = 1.0
+    @State private var rightZoom: CGFloat = 1.0
+    @State private var leftFit: Bool = true
+    @State private var rightFit: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -13,9 +17,11 @@ struct CompareView: View {
             if let left = viewModel.compareLeftDocument,
                let right = viewModel.compareRightDocument {
                 HStack(spacing: 1) {
-                    comparePane(doc: left, side: .left)
+                    comparePane(doc: left, side: .left,
+                                zoom: $leftZoom, fit: $leftFit)
                     Divider()
-                    comparePane(doc: right, side: .right)
+                    comparePane(doc: right, side: .right,
+                                zoom: $rightZoom, fit: $rightFit)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -35,6 +41,8 @@ struct CompareView: View {
             }
         }
         .background(Color(NSColor.windowBackgroundColor))
+        .onChange(of: viewModel.compareLeftDocument?.id) { _ in leftFit = true }
+        .onChange(of: viewModel.compareRightDocument?.id) { _ in rightFit = true }
     }
 
     private var header: some View {
@@ -53,21 +61,16 @@ struct CompareView: View {
         .padding(.vertical, 8)
     }
 
-    private func comparePane(doc: ImageDocument, side: CompareVerdict) -> some View {
+    private func comparePane(doc: ImageDocument, side: CompareVerdict,
+                             zoom: Binding<CGFloat>, fit: Binding<Bool>) -> some View {
         VStack(spacing: 6) {
             ZStack {
                 Color(NSColor.underPageBackgroundColor)
                 if let cg = doc.cgImage ?? doc.previewImage ?? doc.thumbnail {
-                    Image(nsImage: NSImage(cgImage: cg, size: .zero))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding(8)
-                } else if let ns = doc.thumbnailImage ?? doc.placeholderThumbnailImage {
-                    // Grobes Grid-Thumbnail als Sofort-Anzeige, bis das 1500px-Preview da ist
-                    Image(nsImage: ns)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding(8)
+                    ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit)
+                } else if let ns = doc.thumbnailImage ?? doc.placeholderThumbnailImage,
+                          let cg = ns.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit)
                 } else {
                     ProgressView()
                 }
@@ -77,18 +80,40 @@ struct CompareView: View {
                 RoundedRectangle(cornerRadius: 6)
                     .stroke(hoveredSide == side ? Color.accentColor : Color.clear, lineWidth: 3)
                     .padding(2)
+                    .allowsHitTesting(false)
             )
-            .contentShape(Rectangle())
-            .onTapGesture { viewModel.resolveCompare(side) }
             .onHover { inside in
                 hoveredSide = inside ? side : (hoveredSide == side ? nil : hoveredSide)
             }
-            .help("Klicken: dieses Bild ist besser")
 
-            Text(doc.filename)
-                .font(.caption)
-                .lineLimit(1)
-                .foregroundColor(.secondary)
+            HStack(spacing: 8) {
+                Button(action: { viewModel.resolveCompare(side) }) {
+                    Image(systemName: "hand.thumbsup")
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .foregroundColor(.accentColor)
+                .help("Dieses Bild ist besser")
+
+                Text(doc.filename)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button(action: { fit.wrappedValue = true }) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("An Pane anpassen")
+                Text("\(Int(zoom.wrappedValue * 100))%")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 38, alignment: .trailing)
+            }
+            .padding(.horizontal, 8)
+
             starRow(rating: doc.rating)
                 .padding(.bottom, 8)
         }
