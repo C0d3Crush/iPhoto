@@ -9,6 +9,7 @@ struct PluginCommands: Commands {
     @AppStorage("plugin.analyse")     var analyseActive:          Bool = false
     @AppStorage("plugin.navigation")  var navigationActive:       Bool = false
     @AppStorage("plugin.hotpixel")    var hotpixelActive:         Bool = false
+    @AppStorage("plugin.inpaint")     var inpaintActive:          Bool = false
 
     var body: some Commands {
         CommandMenu("Plugins") {
@@ -21,6 +22,7 @@ struct PluginCommands: Commands {
             Toggle(isOn: $analyseActive)          { Text(InspectorPanel.analyse.rawValue) }
             Toggle(isOn: $navigationActive)       { Text(InspectorPanel.navigation.rawValue) }
             Toggle(isOn: $hotpixelActive)         { Text(InspectorPanel.hotpixel.rawValue) }
+            Toggle(isOn: $inpaintActive)          { Text(InspectorPanel.inpaint.rawValue) }
         }
     }
 }
