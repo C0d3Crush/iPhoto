@@ -2,6 +2,15 @@
 
 ---
 
+## 1.0.1
+**Feature — Zoom im Bildvergleich**
+
+- Beide Vergleichspanes unterstützen jetzt Zoom: Pinch, Mausrad und Hand-Drag
+- Jede Seite zoomt unabhängig; Zoomlevel wird in der Infozeile angezeigt
+- Fit-Button setzt den Zoom zurück, Daumen-hoch-Button ersetzt den alten Tap-Gesture zum Auswählen
+
+---
+
 ## 1.0.0
 **Feature — iOrdner-Limit & Toolbar im Bildvergleich**
 
