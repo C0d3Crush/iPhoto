@@ -87,7 +87,8 @@ extension ImageViewModel {
             filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
         case .smartFolder(let id):
             guard let sf = library.smartFolders.first(where: { $0.id == id }) else { return [] }
-            filtered = docs.filter { smartFolderMatches($0, sf: sf) }
+            let matched = docs.filter { smartFolderMatches($0, sf: sf) }
+            filtered = applySmartFolderLimit(matched, sf: sf)
         case .volume(let id):
             guard let volume = library.detectedVolumes.first(where: { $0.id == id }) else { return [] }
             let prefix = volume.url.standardized.path
@@ -303,6 +304,22 @@ extension ImageViewModel {
             }
         }
         return sf.matchAll ? results.allSatisfy { $0 } : results.contains { $0 }
+    }
+
+    private func applySmartFolderLimit(_ docs: [ImageDocument], sf: SmartFolder) -> [ImageDocument] {
+        guard sf.limitEnabled, sf.limitCount > 0, docs.count > sf.limitCount else { return docs }
+        switch sf.limitSelection {
+        case .random:
+            return Array(docs.shuffled().prefix(sf.limitCount))
+        case .highestRating:
+            return Array(docs.sorted { $0.rating > $1.rating }.prefix(sf.limitCount))
+        case .lowestRating:
+            return Array(docs.sorted { $0.rating < $1.rating }.prefix(sf.limitCount))
+        case .newest:
+            return Array(docs.sorted { dateSortKey($0) > dateSortKey($1) }.prefix(sf.limitCount))
+        case .oldest:
+            return Array(docs.sorted { dateSortKey($0) < dateSortKey($1) }.prefix(sf.limitCount))
+        }
     }
 
     private func applyEnumOp<T: Equatable>(_ op: SmartFolderOperator, lhs: T, rhs: T) -> Bool {

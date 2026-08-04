@@ -15,13 +15,19 @@ struct SmartFolderSheet: View {
     @State private var matchAll: Bool
     @State private var criteria: [SmartFolderCriterion]
     @State private var group: String
+    @State private var limitEnabled: Bool
+    @State private var limitCount: Int
+    @State private var limitSelection: SmartFolderLimitSelection
 
     init(editing: SmartFolder? = nil) {
         self.editing = editing
-        _name     = State(initialValue: editing?.name ?? "")
-        _matchAll = State(initialValue: editing?.matchAll ?? true)
-        _criteria = State(initialValue: editing?.criteria ?? [SmartFolderCriterion()])
-        _group    = State(initialValue: editing?.group ?? "")
+        _name           = State(initialValue: editing?.name ?? "")
+        _matchAll       = State(initialValue: editing?.matchAll ?? true)
+        _criteria       = State(initialValue: editing?.criteria ?? [SmartFolderCriterion()])
+        _group          = State(initialValue: editing?.group ?? "")
+        _limitEnabled   = State(initialValue: editing?.limitEnabled ?? false)
+        _limitCount     = State(initialValue: editing?.limitCount ?? 25)
+        _limitSelection = State(initialValue: editing?.limitSelection ?? .highestRating)
     }
 
     var body: some View {
@@ -95,6 +101,38 @@ struct SmartFolderSheet: View {
 
             Divider()
 
+            HStack(spacing: 8) {
+                Toggle("", isOn: $limitEnabled)
+                    .labelsHidden()
+                    .toggleStyle(CheckboxToggleStyle())
+                Text("Begrenze auf")
+                    .foregroundColor(limitEnabled ? .primary : .secondary)
+                TextField("", value: $limitCount, formatter: {
+                    let f = NumberFormatter()
+                    f.numberStyle = .decimal
+                    f.allowsFloats = false
+                    f.minimum = 1
+                    f.maximum = 10000
+                    return f
+                }())
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .frame(width: 60)
+                .disabled(!limitEnabled)
+                Text("Bilder, ausgewählt nach:")
+                    .foregroundColor(limitEnabled ? .primary : .secondary)
+                Picker("", selection: $limitSelection) {
+                    ForEach(SmartFolderLimitSelection.allCases, id: \.self) { sel in
+                        Text(sel.displayName).tag(sel)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(MenuPickerStyle())
+                .frame(width: 170)
+                .disabled(!limitEnabled)
+            }
+
+            Divider()
+
             HStack {
                 Spacer()
                 Button("Abbrechen") { presentationMode.wrappedValue.dismiss() }
@@ -114,14 +152,15 @@ struct SmartFolderSheet: View {
     private func save() {
         NSApp.keyWindow?.makeFirstResponder(nil)
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        let trimmedGroup = group.trimmingCharacters(in: .whitespaces)
-        let resolvedGroup: String? = trimmedGroup.isEmpty ? nil : trimmedGroup
+        let resolvedGroup: String? = group.trimmingCharacters(in: .whitespaces).isEmpty ? nil : group.trimmingCharacters(in: .whitespaces)
         if var sf = editing {
             sf.name = trimmed; sf.criteria = criteria; sf.matchAll = matchAll; sf.group = resolvedGroup
+            sf.limitEnabled = limitEnabled; sf.limitCount = max(1, limitCount); sf.limitSelection = limitSelection
             viewModel.updateSmartFolder(sf)
         } else {
             var sf = SmartFolder(name: trimmed)
             sf.criteria = criteria; sf.matchAll = matchAll; sf.group = resolvedGroup
+            sf.limitEnabled = limitEnabled; sf.limitCount = max(1, limitCount); sf.limitSelection = limitSelection
             viewModel.createSmartFolder(sf)
         }
     }

@@ -189,6 +189,26 @@ struct SmartFolderCriterion: Identifiable, Codable {
     init() {}
 }
 
+// MARK: - Limit Selection
+
+enum SmartFolderLimitSelection: String, Codable, CaseIterable {
+    case random
+    case highestRating
+    case lowestRating
+    case newest
+    case oldest
+
+    var displayName: String {
+        switch self {
+        case .random:         return "Zufällig"
+        case .highestRating:  return "Beste Bewertung"
+        case .lowestRating:   return "Schlechteste Bewertung"
+        case .newest:         return "Neueste zuerst"
+        case .oldest:         return "Älteste zuerst"
+        }
+    }
+}
+
 // MARK: - SmartFolder
 
 struct SmartFolder: Identifiable, Codable {
@@ -197,6 +217,9 @@ struct SmartFolder: Identifiable, Codable {
     var criteria: [SmartFolderCriterion]
     var matchAll: Bool
     var group: String?
+    var limitEnabled: Bool
+    var limitCount: Int
+    var limitSelection: SmartFolderLimitSelection
 
     init(name: String) {
         id = UUID()
@@ -204,15 +227,21 @@ struct SmartFolder: Identifiable, Codable {
         criteria = []
         matchAll = true
         group = nil
+        limitEnabled = false
+        limitCount = 25
+        limitSelection = .highestRating
     }
 
-    // Custom decode for backward compatibility with saved folders that lack the group field.
+    // Custom decode for backward compatibility with saved folders that lack limit fields.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id       = try c.decodeIfPresent(UUID.self,                    forKey: .id)       ?? UUID()
-        name     = try c.decodeIfPresent(String.self,                  forKey: .name)     ?? ""
-        criteria = try c.decodeIfPresent([SmartFolderCriterion].self,  forKey: .criteria) ?? []
-        matchAll = try c.decodeIfPresent(Bool.self,                    forKey: .matchAll) ?? true
-        group    = try c.decodeIfPresent(String.self,                  forKey: .group)
+        id             = try c.decodeIfPresent(UUID.self,                        forKey: .id)             ?? UUID()
+        name           = try c.decodeIfPresent(String.self,                      forKey: .name)           ?? ""
+        criteria       = try c.decodeIfPresent([SmartFolderCriterion].self,      forKey: .criteria)       ?? []
+        matchAll       = try c.decodeIfPresent(Bool.self,                        forKey: .matchAll)       ?? true
+        group          = try c.decodeIfPresent(String.self,                      forKey: .group)
+        limitEnabled   = try c.decodeIfPresent(Bool.self,                        forKey: .limitEnabled)   ?? false
+        limitCount     = try c.decodeIfPresent(Int.self,                         forKey: .limitCount)     ?? 25
+        limitSelection = try c.decodeIfPresent(SmartFolderLimitSelection.self,   forKey: .limitSelection) ?? .highestRating
     }
 }

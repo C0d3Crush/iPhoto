@@ -64,6 +64,112 @@ struct ContentView: View {
                     .environmentObject(viewModel)
             }
         }
+        .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                Button(action: { viewModel.navSidebarVisible.toggle() }) {
+                    Image(systemName: "sidebar.left")
+                        .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
+                }
+                .help("Navigation ein-/ausblenden")
+
+                if viewModel.showingLibraryDetail {
+                    Button(action: { viewModel.showingLibraryDetail = false }) {
+                        Image(systemName: "square.grid.3x3")
+                    }
+                    .help("Zurück zur Bibliothek")
+                }
+
+                let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
+                if !isLibrary && !viewModel.compareModeActive {
+                    Button(action: { viewModel.showFullGrid.toggle() }) {
+                        Image(systemName: viewModel.showFullGrid ? "rectangle.split.2x1" : "square.grid.3x3")
+                            .opacity(viewModel.showFullGrid ? 1.0 : 0.6)
+                    }
+                    .help(viewModel.showFullGrid ? "Detail-Ansicht" : "Rasteransicht")
+                }
+
+                if !viewModel.compareModeActive {
+                    Button(action: { viewModel.previous() }) {
+                        Image(systemName: "chevron.left")
+                    }
+                    .disabled(!viewModel.collection.hasPrevious)
+                    .help("Vorheriges Bild")
+
+                    Button(action: { viewModel.next() }) {
+                        Image(systemName: "chevron.right")
+                    }
+                    .disabled(!viewModel.collection.hasNext)
+                    .help("Nächstes Bild")
+                }
+            }
+
+            ToolbarItemGroup(placement: .automatic) {
+                if !viewModel.compareModeActive {
+                    SortMenuButton()
+                        .environmentObject(viewModel)
+
+                    Button(action: { viewModel.adj.showOriginal.toggle() }) {
+                        Image(systemName: viewModel.adj.showOriginal ? "eye.slash" : "eye")
+                    }
+                    .help("Original / Anpassungen")
+                    .disabled(viewModel.currentImage == nil)
+                }
+            }
+
+            ToolbarItemGroup(placement: .automatic) {
+                if !viewModel.compareModeActive {
+                    Button(action: { viewModel.rotateLeft() }) {
+                        Image(systemName: "rotate.left")
+                    }
+                    .help("90° links drehen (⌘[)")
+                    .keyboardShortcut("[", modifiers: .command)
+                    .disabled(viewModel.currentImage == nil)
+
+                    Button(action: { viewModel.rotateRight() }) {
+                        Image(systemName: "rotate.right")
+                    }
+                    .help("90° rechts drehen (⌘])")
+                    .keyboardShortcut("]", modifiers: .command)
+                    .disabled(viewModel.currentImage == nil)
+
+                    Button(action: { viewModel.zoomOut() }) {
+                        Image(systemName: "minus.magnifyingglass")
+                    }
+                    .help("Verkleinern")
+                    .keyboardShortcut("-", modifiers: .command)
+                    .disabled(viewModel.currentImage == nil)
+
+                    Button(action: { viewModel.fitToWindow() }) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    }
+                    .help("An Fenster anpassen")
+                    .disabled(viewModel.currentImage == nil)
+
+                    Button(action: { viewModel.actualSize() }) {
+                        Image(systemName: "1.magnifyingglass")
+                    }
+                    .help("Originalgröße")
+                    .keyboardShortcut("0", modifiers: .command)
+                    .disabled(viewModel.currentImage == nil)
+
+                    Button(action: { viewModel.zoomIn() }) {
+                        Image(systemName: "plus.magnifyingglass")
+                    }
+                    .help("Vergrößern")
+                    .keyboardShortcut("=", modifiers: .command)
+                    .disabled(viewModel.currentImage == nil)
+                }
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(action: { viewModel.toggleInspector() }) {
+                    Image(systemName: "sidebar.right")
+                        .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
+                }
+                .help("Inspector ein-/ausblenden")
+                .keyboardShortcut("i", modifiers: .command)
+            }
+        }
         .onChange(of: viewModel.navSelection) { _ in
             viewModel.showingLibraryDetail = false
             if viewModel.compareModeActive { viewModel.stopCompareMode() }
@@ -155,111 +261,6 @@ struct DetailView: View {
             DropTargetView()
                 .environmentObject(viewModel)
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
-                Button(action: { viewModel.navSidebarVisible.toggle() }) {
-                    Image(systemName: "sidebar.left")
-                        .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
-                }
-                .help("Navigation ein-/ausblenden")
-
-                if viewModel.showingLibraryDetail {
-                    Button(action: { viewModel.showingLibraryDetail = false }) {
-                        Image(systemName: "square.grid.3x3")
-                    }
-                    .help("Zurück zur Bibliothek")
-                }
-
-                let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
-                if !isLibrary {
-                    Button(action: { viewModel.showFullGrid.toggle() }) {
-                        Image(systemName: viewModel.showFullGrid ? "rectangle.split.2x1" : "square.grid.3x3")
-                            .opacity(viewModel.showFullGrid ? 1.0 : 0.6)
-                    }
-                    .help(viewModel.showFullGrid ? "Detail-Ansicht" : "Rasteransicht")
-                }
-
-                Button(action: { viewModel.previous() }) {
-                    Image(systemName: "chevron.left")
-                }
-                .disabled(!viewModel.collection.hasPrevious)
-                .help("Vorheriges Bild")
-
-                Button(action: { viewModel.next() }) {
-                    Image(systemName: "chevron.right")
-                }
-                .disabled(!viewModel.collection.hasNext)
-                .help("Nächstes Bild")
-            }
-
-            ToolbarItemGroup(placement: .automatic) {
-                SortMenuButton()
-                    .environmentObject(viewModel)
-
-                Button(action: { viewModel.adj.showOriginal.toggle() }) {
-                    Image(systemName: viewModel.adj.showOriginal ? "eye.slash" : "eye")
-                }
-                .help("Original / Anpassungen")
-                .disabled(viewModel.currentImage == nil)
-            }
-
-            ToolbarItemGroup(placement: .automatic) {
-                Button(action: { viewModel.rotateLeft() }) {
-                    Image(systemName: "rotate.left")
-                }
-                .help("90° links drehen (⌘[)")
-                .keyboardShortcut("[", modifiers: .command)
-                .disabled(viewModel.currentImage == nil)
-
-                Button(action: { viewModel.rotateRight() }) {
-                    Image(systemName: "rotate.right")
-                }
-                .help("90° rechts drehen (⌘])")
-                .keyboardShortcut("]", modifiers: .command)
-                .disabled(viewModel.currentImage == nil)
-
-                Button(action: { viewModel.zoomOut() }) {
-                    Image(systemName: "minus.magnifyingglass")
-                }
-                .help("Verkleinern")
-                .keyboardShortcut("-", modifiers: .command)
-                .disabled(viewModel.currentImage == nil)
-
-                Button(action: { viewModel.fitToWindow() }) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                }
-                .help("An Fenster anpassen")
-                .disabled(viewModel.currentImage == nil)
-
-                Button(action: { viewModel.actualSize() }) {
-                    Image(systemName: "1.magnifyingglass")
-                }
-                .help("Originalgröße")
-                .keyboardShortcut("0", modifiers: .command)
-                .disabled(viewModel.currentImage == nil)
-
-                Button(action: { viewModel.zoomIn() }) {
-                    Image(systemName: "plus.magnifyingglass")
-                }
-                .help("Vergrößern")
-                .keyboardShortcut("=", modifiers: .command)
-                .disabled(viewModel.currentImage == nil)
-            }
-
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: { viewModel.toggleInspector() }) {
-                    Image(systemName: "sidebar.right")
-                        .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
-                }
-                .help("Inspector ein-/ausblenden")
-                .keyboardShortcut("i", modifiers: .command)
-            }
-        }
-    }
-
-    private var subtitleText: String {
-        guard let img = viewModel.currentImage else { return "" }
-        return "\(img.width) × \(img.height)  –  \(Int(viewModel.zoomFactor * 100))%"
     }
 }
 
