@@ -2,6 +2,13 @@
 
 ---
 
+## 1.1.3
+**Bugfix — Cmd+A wählt alle Bilder aus, auch in Stapeln**
+
+- „Alle auswählen" (Cmd+A) markiert jetzt alle Bilder innerhalb eingeklappter Stapel — nicht nur das jeweils oberste Bild
+
+---
+
 ## 1.1.2
 **Chore — Python-Standardpfad korrigiert**
 
