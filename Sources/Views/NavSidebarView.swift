@@ -428,6 +428,44 @@ struct NavSidebarView: View {
         .contextMenu {
             Button("Neu scannen") { viewModel.detectBlurryImages() }
         }
+
+        Button(action: { viewModel.navSelection = .underexposed }) {
+            HStack(spacing: 4) {
+                Label("Unterbelichtet", systemImage: "circle.lefthalf.filled")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !viewModel.underexposedDocuments.isEmpty {
+                    Text("\(viewModel.underexposedDocuments.count)")
+                        .font(.caption2).foregroundColor(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Color.purple).cornerRadius(4)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(viewModel.navSelection == .underexposed ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
+        .contextMenu { Button("Neu scannen") { viewModel.detectExposureIssues() } }
+
+        Button(action: { viewModel.navSelection = .overexposed }) {
+            HStack(spacing: 4) {
+                Label("Überbelichtet", systemImage: "circle.righthalf.filled")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !viewModel.overexposedDocuments.isEmpty {
+                    Text("\(viewModel.overexposedDocuments.count)")
+                        .font(.caption2).foregroundColor(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Color.yellow.opacity(0.9)).cornerRadius(4)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(viewModel.navSelection == .overexposed ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
+        .contextMenu { Button("Neu scannen") { viewModel.detectExposureIssues() } }
     }
 
     private func navRow(label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

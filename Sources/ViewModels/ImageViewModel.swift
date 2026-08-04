@@ -29,6 +29,10 @@ class ImageViewModel: ObservableObject {
     @Published var duplicateGroups: [[ImageDocument]] = []
     @Published var blurryDocuments: [ImageDocument] = []
     @Published var blurThreshold: Double = BlurDetector.defaultThreshold
+    @Published var underexposedDocuments: [ImageDocument] = []
+    @Published var overexposedDocuments: [ImageDocument] = []
+    @Published var shadowClipThreshold: Double = ExposureDetector.defaultShadowClipThreshold
+    @Published var highlightClipThreshold: Double = ExposureDetector.defaultHighlightClipThreshold
     @Published var compareLeftID: UUID? = nil
     @Published var compareRightID: UUID? = nil
     var compareLoadInFlight: Set<URL> = []

@@ -97,7 +97,7 @@ extension ImageViewModel {
             filtered = collection.documents.filter { $0.isTrashed }
         case .duplicates:
             filtered = docs
-        case .blurry:
+        case .blurry, .underexposed, .overexposed:
             filtered = docs
         }
         return applyStacking(to: applySortCriterion(to: filtered))

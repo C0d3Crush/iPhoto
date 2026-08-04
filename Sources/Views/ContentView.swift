@@ -29,6 +29,10 @@ struct ContentView: View {
                     BlurryView()
                         .environmentObject(viewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.navSelection == .underexposed || viewModel.navSelection == .overexposed {
+                    ExposureView()
+                        .environmentObject(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if showGrid {
                     // Vollbild-Raster
                     LibraryFullGridView()

@@ -21,4 +21,6 @@ enum NavSelection: Hashable {
     case trash
     case duplicates
     case blurry
+    case underexposed
+    case overexposed
 }

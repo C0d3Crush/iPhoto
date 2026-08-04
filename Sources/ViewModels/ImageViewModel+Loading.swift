@@ -516,6 +516,37 @@ extension ImageViewModel {
         }
     }
 
+    func detectExposureIssues() {
+        let docs = collection.documents.filter { !$0.isTrashed }
+        guard !docs.isEmpty else { underexposedDocuments = []; overexposedDocuments = []; return }
+        let shadowThresh = shadowClipThreshold
+        let highlightThresh = highlightClipThreshold
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            var under: [ImageDocument] = []
+            var over:  [ImageDocument] = []
+            for doc in docs {
+                let src: CGImage?
+                if let thumb = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    src = thumb
+                } else if let ph = doc.placeholderThumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    src = ph
+                } else {
+                    src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
+                }
+                guard let img = src else { continue }
+                let result = ExposureDetector.analyze(from: img)
+                if result.underRatio >= shadowThresh    { under.append(doc) }
+                if result.overRatio  >= highlightThresh { over.append(doc) }
+            }
+            let sortedUnder = under.sorted { $0.filename < $1.filename }
+            let sortedOver  = over.sorted  { $0.filename < $1.filename }
+            DispatchQueue.main.async {
+                self?.underexposedDocuments = sortedUnder
+                self?.overexposedDocuments  = sortedOver
+            }
+        }
+    }
+
     // MARK: - EXIF Background Scan for Smart Folders
 
     func scanExifForLibrary() {
