@@ -2,6 +2,14 @@
 
 ---
 
+## 1.0.2
+**Bugfix — Zoom-Explosion beim Bildwechsel im Vergleich**
+
+- Zoom sprang manchmal auf 800%+, wenn ein hochauflösendes Bild durch ein neues Thumbnail ersetzt wurde (Ratio 6000px/150px = 40×)
+- Fix: ScrollView wird beim Dokumentwechsel komplett neu erstellt, kein fehlerhafter Ratio-Carry-over mehr
+
+---
+
 ## 1.0.1
 **Feature — Zoom im Bildvergleich**
 
