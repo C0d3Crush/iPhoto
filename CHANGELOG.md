@@ -2,6 +2,16 @@
 
 ---
 
+## 1.0.0
+**Feature — iOrdner-Limit & Toolbar im Bildvergleich**
+
+- Intelligente Ordner können jetzt auf eine maximale Anzahl von Bildern begrenzt werden (wie iTunes Smart-Playlists)
+- Auswahlstrategie wählbar: Zufällig, Beste Bewertung, Schlechteste Bewertung, Neueste oder Älteste zuerst
+- Limit-Zeile erscheint unterhalb der Kriterien im Erstellungs-/Bearbeitungsdialog; bei deaktiviertem Limit abgeblendet
+- Toolbar (Sidebar, Inspector, Navigation usw.) ist jetzt auch im Bildvergleich sichtbar
+
+---
+
 ## 0.99.1
 **Feature — SD-Karten-Sync vergibt automatisch 3 Sterne**
 
