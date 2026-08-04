@@ -2,6 +2,16 @@
 
 ---
 
+## 1.3.0
+**Feature — Unter- und Überbelichtung erkennen**
+
+- Neue Sidebar-Einträge „Unterbelichtet" und „Überbelichtet" unter der Sektion „Qualität"
+- Erkennung per vImage-Histogramm: Anteil geclippter Schatten- bzw. Lichter-Pixel wird gemessen
+- Schwellenwert per Slider einstellbar (Standard: 6 % geclippte Pixel)
+- Grid-Ansicht mit Einzellösch- und „Alle in Papierkorb"-Aktion
+
+---
+
 ## 1.2.0
 **Feature — Unscharfe Bilder erkennen**
 
