@@ -68,9 +68,11 @@ struct CompareView: View {
                 Color(NSColor.underPageBackgroundColor)
                 if let cg = doc.cgImage ?? doc.previewImage ?? doc.thumbnail {
                     ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit)
+                        .id(doc.id)
                 } else if let ns = doc.thumbnailImage ?? doc.placeholderThumbnailImage,
                           let cg = ns.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit)
+                        .id(doc.id)
                 } else {
                     ProgressView()
                 }
