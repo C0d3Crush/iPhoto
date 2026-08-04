@@ -492,6 +492,30 @@ extension ImageViewModel {
         }
     }
 
+    func detectBlurryImages() {
+        let docs = collection.documents.filter { !$0.isTrashed }
+        guard !docs.isEmpty else { blurryDocuments = []; return }
+        let threshold = blurThreshold
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            var blurry: [ImageDocument] = []
+            for doc in docs {
+                let src: CGImage?
+                if let thumb = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    src = thumb
+                } else if let placeholder = doc.placeholderThumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                    src = placeholder
+                } else {
+                    src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
+                }
+                guard let img = src else { continue }
+                let score = BlurDetector.score(from: img)
+                if score < threshold { blurry.append(doc) }
+            }
+            let sorted = blurry.sorted { $0.filename < $1.filename }
+            DispatchQueue.main.async { self?.blurryDocuments = sorted }
+        }
+    }
+
     // MARK: - EXIF Background Scan for Smart Folders
 
     func scanExifForLibrary() {

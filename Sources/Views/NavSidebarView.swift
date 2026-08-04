@@ -69,6 +69,7 @@ struct NavSidebarView: View {
                     volumesSection
                     trashSection
                     duplicatesSection
+                    blurrySection
                 }
                 .padding(.vertical, 8)
             }
@@ -397,6 +398,35 @@ struct NavSidebarView: View {
         .padding(.horizontal, 4)
         .contextMenu {
             Button("Neu scannen") { viewModel.detectDuplicates() }
+        }
+    }
+
+    @ViewBuilder private var blurrySection: some View {
+        sectionHeader("Qualität")
+        Button(action: { viewModel.navSelection = .blurry }) {
+            HStack(spacing: 4) {
+                Label("Unscharf", systemImage: "drop.triangle")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !viewModel.blurryDocuments.isEmpty {
+                    Text("\(viewModel.blurryDocuments.count)")
+                        .font(.caption2)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.purple)
+                        .cornerRadius(4)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(viewModel.navSelection == .blurry ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .contextMenu {
+            Button("Neu scannen") { viewModel.detectBlurryImages() }
         }
     }
 

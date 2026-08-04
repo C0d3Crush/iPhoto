@@ -20,4 +20,5 @@ enum NavSelection: Hashable {
     case volume(UUID)
     case trash
     case duplicates
+    case blurry
 }

@@ -27,6 +27,8 @@ class ImageViewModel: ObservableObject {
     @Published var shuffledOrder: [UUID] = []
     @Published var compareModeActive: Bool = false
     @Published var duplicateGroups: [[ImageDocument]] = []
+    @Published var blurryDocuments: [ImageDocument] = []
+    @Published var blurThreshold: Double = BlurDetector.defaultThreshold
     @Published var compareLeftID: UUID? = nil
     @Published var compareRightID: UUID? = nil
     var compareLoadInFlight: Set<URL> = []

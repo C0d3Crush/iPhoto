@@ -25,6 +25,10 @@ struct ContentView: View {
                     DuplicatesView()
                         .environmentObject(viewModel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.navSelection == .blurry {
+                    BlurryView()
+                        .environmentObject(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if showGrid {
                     // Vollbild-Raster
                     LibraryFullGridView()
