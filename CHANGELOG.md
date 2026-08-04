@@ -2,6 +2,13 @@
 
 ---
 
+## 1.1.2
+**Chore — Python-Standardpfad korrigiert**
+
+- Python-Standardpfad im Inpaint-Panel von `/usr/bin/python3` auf `/usr/local/bin/python3.10` geändert
+
+---
+
 ## 1.1.0
 **Feature — Inpaint: Bereiche mit CMT ausfüllen**
 
