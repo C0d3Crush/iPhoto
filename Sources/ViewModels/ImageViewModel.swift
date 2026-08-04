@@ -54,6 +54,9 @@ class ImageViewModel: ObservableObject {
     // MARK: - HDR Merge
     var hdr = HDRMergeState()
 
+    // MARK: - Inpaint
+    var inpaint = InpaintState()
+
     // MARK: - Internal state (accessible from extension files via internal access)
 
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
@@ -157,7 +160,7 @@ class ImageViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // Kind-ViewModels: Änderungen an Views weiterleiten, die nur ImageViewModel beobachten
-        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange] {
+        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange, inpaint.objectWillChange] {
             child
                 .sink { [weak self] _ in self?.objectWillChange.send() }
                 .store(in: &cancellables)

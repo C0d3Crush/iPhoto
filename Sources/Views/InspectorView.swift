@@ -9,6 +9,7 @@ enum InspectorPanel: String, CaseIterable {
     case analyse          = "Analyse"
     case navigation       = "Navigation"
     case hotpixel         = "Hotpixel"
+    case inpaint          = "Inpaint"
 
     var storageKey: String { "plugin.\(rawValue.lowercased())" }
 }
@@ -23,6 +24,7 @@ struct InspectorView: View {
     @AppStorage("plugin.analyse")     var analyseActive:          Bool = false
     @AppStorage("plugin.navigation")  var navigationActive:       Bool = false
     @AppStorage("plugin.hotpixel")    var hotpixelActive:         Bool = false
+    @AppStorage("plugin.inpaint")     var inpaintActive:          Bool = false
 
     @State private var panelOrder: [InspectorPanel] = InspectorView.loadOrder()
     @State private var collapsed: Set<InspectorPanel> = Set(InspectorPanel.allCases)
@@ -38,6 +40,7 @@ struct InspectorView: View {
         if analyseActive          { s.insert(.analyse) }
         if navigationActive       { s.insert(.navigation) }
         if hotpixelActive         { s.insert(.hotpixel) }
+        if inpaintActive          { s.insert(.inpaint) }
         return s
     }
 
@@ -210,6 +213,8 @@ private struct InspectorBlock: View {
             NavigationPanel()
         case .hotpixel:
             HotPixelPanel()
+        case .inpaint:
+            InpaintPanel()
         }
     }
 }

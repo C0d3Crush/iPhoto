@@ -2,6 +2,19 @@
 
 ---
 
+## 1.1.0
+**Feature — Inpaint: Bereiche mit CMT ausfüllen**
+
+- Neues Inspector-Panel „Inpaint" (über Plugins-Menü aktivierbar)
+- Pinsel-Tool: Bereich im Bild mit roter Maske anmalen (Größe 5–200 px einstellbar)
+- Masken-Zeichnen per Maus direkt im Bildbereich — Cursor wechselt auf Fadenkreuz
+- Inpaint-Engine: ruft [CMT](https://github.com/keunsoo-ko/CMT) (Continuously Masked Transformer, ICCV 2023) via Python-Subprocess auf
+- Pfade für Python 3, CMT-Verzeichnis und Checkpoint im Panel konfigurierbar
+- Ergebnis wird sofort angezeigt; beim Bildwechsel automatisch zurückgesetzt
+- „Maske löschen"- und „Zurücksetzen"-Buttons
+
+---
+
 ## 1.0.3
 **Bugfix — Zoom-Explosion im Vergleich (echter Fix)**
 

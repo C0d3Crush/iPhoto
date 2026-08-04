@@ -49,6 +49,7 @@ extension ImageViewModel {
         currentlyLoadingURL = doc.url
         evictDistantImages(keepRadius: 3)
         resetAdjustments()
+        clearInpaint()
         adj.isUndoRedoing = false
         if let saved = CatalogStore.shared.loadAdjustments(path: doc.url.path) {
             adj.adjustments = saved

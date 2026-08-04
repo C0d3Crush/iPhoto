@@ -227,13 +227,18 @@ struct DetailView: View {
                     Text("Bild wird geladen…")
                         .foregroundColor(.secondary)
                 }
-            } else if let image = viewModel.adj.showOriginal ? viewModel.currentImage : (viewModel.adj.adjustedImage ?? viewModel.currentImage) {
+            } else if let image = viewModel.adj.showOriginal ? viewModel.currentImage
+                        : (viewModel.inpaint.resultImage
+                           ?? viewModel.adj.adjustedImage
+                           ?? viewModel.currentImage) {
                 ZoomableScrollView(
                     image: image,
                     zoomFactor: $viewModel.zoomFactor,
-                    fitToWindow: $viewModel.fitToWindowRequested
+                    fitToWindow: $viewModel.fitToWindowRequested,
+                    maskModeEnabled: viewModel.inpaint.isMaskingMode,
+                    brushRadius: viewModel.inpaint.brushRadius,
+                    onMaskUpdate: { bmp in viewModel.inpaint.pendingMaskBitmap = bmp }
                 )
-
 
             } else if let err = viewModel.errorMessage {
                 VStack(spacing: 12) {
