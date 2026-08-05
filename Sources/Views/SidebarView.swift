@@ -11,7 +11,9 @@ struct SidebarView: View {
                     let actualIndex = viewModel.collectionIndex(for: doc) ?? 0
                     let isSelected = viewModel.collection.documents.indices.contains(viewModel.collection.currentIndex)
                         && viewModel.collection.documents[viewModel.collection.currentIndex].id == doc.id
-                    ThumbnailCell(document: doc, isSelected: isSelected)
+                    let q = viewModel.qualityFlags(for: doc)
+                    ThumbnailCell(document: doc, isSelected: isSelected,
+                                  isBlurry: q.blur, isUnder: q.under, isOver: q.over)
                         .frame(width: 156)
                         .contentShape(Rectangle())
                         .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }

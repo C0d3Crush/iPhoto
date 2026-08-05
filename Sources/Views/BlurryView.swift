@@ -3,18 +3,20 @@ import AppKit
 
 struct BlurryView: View {
     @EnvironmentObject var viewModel: ImageViewModel
-    @State private var isScanning = false
     @State private var threshold: Double = BlurDetector.defaultThreshold
 
     private var docs: [ImageDocument] { viewModel.quality.blurryDocuments }
+
+    // Wie viele Bilder wurden noch nicht analysiert? Anzeige "n von m gescannt".
+    private var pendingCount: Int {
+        viewModel.collection.documents.filter { !$0.isTrashed && !$0.qualityScanned }.count
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            if isScanning {
-                scanningState
-            } else if docs.isEmpty {
+            if docs.isEmpty {
                 emptyState
             } else {
                 imageGrid
@@ -22,7 +24,8 @@ struct BlurryView: View {
         }
         .onAppear {
             threshold = viewModel.quality.blurThreshold
-            if docs.isEmpty { scan() }
+            viewModel.refreshQualityLists()
+            if pendingCount > 0 { viewModel.scanQualityForLibrary() }
         }
     }
 
@@ -31,11 +34,14 @@ struct BlurryView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Unscharfe Bilder")
                     .font(.title2).fontWeight(.semibold)
-                if docs.isEmpty && !isScanning {
-                    Text("Keine unscharfen Bilder gefunden")
+                if docs.isEmpty {
+                    Text(pendingCount > 0
+                         ? "\(pendingCount) Bilder werden noch analysiert…"
+                         : "Keine unscharfen Bilder gefunden")
                         .font(.caption).foregroundColor(.secondary)
-                } else if !isScanning {
-                    Text("\(docs.count) \(docs.count == 1 ? "Bild" : "Bilder") erkannt")
+                } else {
+                    Text("\(docs.count) \(docs.count == 1 ? "Bild" : "Bilder") erkannt" +
+                         (pendingCount > 0 ? " · \(pendingCount) noch offen" : ""))
                         .font(.caption).foregroundColor(.secondary)
                 }
             }
@@ -47,6 +53,9 @@ struct BlurryView: View {
                     .foregroundColor(.secondary)
                 Slider(value: $threshold, in: 20...400, step: 10)
                     .frame(width: 110)
+                    .onChange(of: threshold) { newValue in
+                        viewModel.quality.blurThreshold = newValue
+                    }
                 Text(String(format: "%.0f", threshold))
                     .font(.caption.monospacedDigit())
                     .foregroundColor(.secondary)
@@ -54,51 +63,38 @@ struct BlurryView: View {
             }
 
             Button("Neu scannen") {
-                viewModel.quality.blurThreshold = threshold
-                scan()
+                viewModel.scanQualityForLibrary()
             }
             .buttonStyle(PlainButtonStyle())
             .foregroundColor(.accentColor)
-            .disabled(isScanning)
 
             if !docs.isEmpty {
                 Button("Alle in Papierkorb") {
                     viewModel.moveToAppTrash(docs)
-                    viewModel.quality.blurryDocuments = []
+                    viewModel.refreshQualityLists()
                 }
                 .foregroundColor(.red)
-                .disabled(isScanning)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
     }
 
-    private var scanningState: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle())
-                .scaleEffect(1.2)
-            Text("Bilder werden analysiert…")
-                .font(.callout)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Image(systemName: "checkmark.circle")
+            Image(systemName: pendingCount > 0 ? "hourglass" : "checkmark.circle")
                 .font(.system(size: 52))
-                .foregroundColor(.green)
-            Text("Keine unscharfen Bilder")
+                .foregroundColor(pendingCount > 0 ? .accentColor : .green)
+            Text(pendingCount > 0 ? "Analyse läuft" : "Keine unscharfen Bilder")
                 .font(.title3).fontWeight(.medium)
-            Text("Alle Bilder haben ausreichend Schärfe bei dem gewählten Schwellenwert.")
+            Text(pendingCount > 0
+                 ? "Noch \(pendingCount) Bilder müssen analysiert werden."
+                 : "Alle Bilder haben ausreichend Schärfe bei dem gewählten Schwellenwert.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
-            Button("Neu scannen") { scan() }
+            Button("Neu scannen") { viewModel.scanQualityForLibrary() }
                 .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -115,7 +111,7 @@ struct BlurryView: View {
                     let isSelected = colIdx.map { viewModel.collection.selectedIndices.contains($0) } ?? false
                     BlurryDocTile(doc: doc, isSelected: isSelected) {
                         viewModel.moveToAppTrash([doc])
-                        viewModel.quality.blurryDocuments.removeAll { $0.id == doc.id }
+                        viewModel.refreshQualityLists()
                     }
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { openDetail(for: doc) }
@@ -145,44 +141,6 @@ struct BlurryView: View {
         viewModel.qualityDetailActive = true
     }
 
-    private func scan() {
-        isScanning = true
-        viewModel.quality.blurThreshold = threshold
-        let docs = viewModel.collection.documents.filter { !$0.isTrashed }
-        let thresh = threshold
-        let taskID = UUID()
-        viewModel.activity.enqueue(id: taskID, label: "Unschärfe analysieren…",
-                                    icon: "drop.triangle.fill",
-                                    done: 0, total: docs.count, summaryVerb: "analysiert")
-        DispatchQueue.global(qos: .utility).async {
-            var blurry: [ImageDocument] = []
-            for (i, doc) in docs.enumerated() {
-                let src: CGImage?
-                if let thumb = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    src = thumb
-                } else if let ph = doc.placeholderThumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    src = ph
-                } else {
-                    src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
-                }
-                if let img = src, BlurDetector.score(from: img) < thresh {
-                    blurry.append(doc)
-                }
-                let done = i + 1
-                if done % 10 == 0 || done == docs.count {
-                    DispatchQueue.main.async {
-                        viewModel.activity.update(id: taskID, done: done, total: docs.count)
-                    }
-                }
-            }
-            let sorted = blurry.sorted { $0.filename < $1.filename }
-            DispatchQueue.main.async {
-                viewModel.quality.blurryDocuments = sorted
-                viewModel.activity.dequeue(id: taskID)
-                isScanning = false
-            }
-        }
-    }
 }
 
 private struct BlurryDocTile: View {

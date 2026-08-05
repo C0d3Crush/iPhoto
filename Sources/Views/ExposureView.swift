@@ -3,7 +3,6 @@ import AppKit
 
 struct ExposureView: View {
     @EnvironmentObject var viewModel: ImageViewModel
-    @State private var isScanning = false
     @State private var shadowThresh: Double = ExposureDetector.defaultShadowClipThreshold
     @State private var highlightThresh: Double = ExposureDetector.defaultHighlightClipThreshold
 
@@ -13,13 +12,15 @@ struct ExposureView: View {
         isUnder ? viewModel.quality.underexposedDocuments : viewModel.quality.overexposedDocuments
     }
 
+    private var pendingCount: Int {
+        viewModel.collection.documents.filter { !$0.isTrashed && !$0.qualityScanned }.count
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            if isScanning {
-                scanningState
-            } else if docs.isEmpty {
+            if docs.isEmpty {
                 emptyState
             } else {
                 imageGrid
@@ -28,10 +29,8 @@ struct ExposureView: View {
         .onAppear {
             shadowThresh = viewModel.quality.shadowClipThreshold
             highlightThresh = viewModel.quality.highlightClipThreshold
-            if docs.isEmpty { scan() }
-        }
-        .onChange(of: viewModel.navSelection) { _ in
-            if docs.isEmpty && !isScanning { scan() }
+            viewModel.refreshQualityLists()
+            if pendingCount > 0 { viewModel.scanQualityForLibrary() }
         }
     }
 
@@ -40,11 +39,14 @@ struct ExposureView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(isUnder ? "Unterbelichtete Bilder" : "Überbelichtete Bilder")
                     .font(.title2).fontWeight(.semibold)
-                if docs.isEmpty && !isScanning {
-                    Text("Keine \(isUnder ? "unterbelichteten" : "überbelichteten") Bilder gefunden")
+                if docs.isEmpty {
+                    Text(pendingCount > 0
+                         ? "\(pendingCount) Bilder werden noch analysiert…"
+                         : "Keine \(isUnder ? "unterbelichteten" : "überbelichteten") Bilder gefunden")
                         .font(.caption).foregroundColor(.secondary)
-                } else if !isScanning {
-                    Text("\(docs.count) \(docs.count == 1 ? "Bild" : "Bilder") erkannt")
+                } else {
+                    Text("\(docs.count) \(docs.count == 1 ? "Bild" : "Bilder") erkannt" +
+                         (pendingCount > 0 ? " · \(pendingCount) noch offen" : ""))
                         .font(.caption).foregroundColor(.secondary)
                 }
             }
@@ -58,6 +60,12 @@ struct ExposureView: View {
                     in: 0.01...0.30, step: 0.01
                 )
                 .frame(width: 110)
+                .onChange(of: shadowThresh) { newValue in
+                    viewModel.quality.shadowClipThreshold = newValue
+                }
+                .onChange(of: highlightThresh) { newValue in
+                    viewModel.quality.highlightClipThreshold = newValue
+                }
                 Text(String(format: "%.0f %%", (isUnder ? shadowThresh : highlightThresh) * 100))
                     .font(.caption.monospacedDigit())
                     .foregroundColor(.secondary)
@@ -65,47 +73,38 @@ struct ExposureView: View {
             }
 
             Button("Neu scannen") {
-                viewModel.quality.shadowClipThreshold = shadowThresh
-                viewModel.quality.highlightClipThreshold = highlightThresh
-                scan()
+                viewModel.scanQualityForLibrary()
             }
             .buttonStyle(PlainButtonStyle())
             .foregroundColor(.accentColor)
-            .disabled(isScanning)
 
             if !docs.isEmpty {
                 Button("Alle in Papierkorb") {
                     viewModel.moveToAppTrash(docs)
-                    if isUnder { viewModel.quality.underexposedDocuments = [] }
-                    else       { viewModel.quality.overexposedDocuments   = [] }
+                    viewModel.refreshQualityLists()
                 }
                 .foregroundColor(.red)
-                .disabled(isScanning)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
     }
 
-    private var scanningState: some View {
-        VStack(spacing: 14) {
-            ProgressView().progressViewStyle(CircularProgressViewStyle()).scaleEffect(1.2)
-            Text("Bilder werden analysiert…")
-                .font(.callout).foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 52)).foregroundColor(.green)
-            Text(isUnder ? "Keine unterbelichteten Bilder" : "Keine überbelichteten Bilder")
+            Image(systemName: pendingCount > 0 ? "hourglass" : "checkmark.circle")
+                .font(.system(size: 52))
+                .foregroundColor(pendingCount > 0 ? .accentColor : .green)
+            Text(pendingCount > 0
+                 ? "Analyse läuft"
+                 : (isUnder ? "Keine unterbelichteten Bilder" : "Keine überbelichteten Bilder"))
                 .font(.title3).fontWeight(.medium)
-            Text("Alle Bilder liegen innerhalb des gewählten Belichtungs-Schwellenwerts.")
+            Text(pendingCount > 0
+                 ? "Noch \(pendingCount) Bilder müssen analysiert werden."
+                 : "Alle Bilder liegen innerhalb des gewählten Belichtungs-Schwellenwerts.")
                 .font(.caption).foregroundColor(.secondary)
                 .multilineTextAlignment(.center).frame(maxWidth: 320)
-            Button("Neu scannen") { scan() }.padding(.top, 4)
+            Button("Neu scannen") { viewModel.scanQualityForLibrary() }.padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -121,8 +120,7 @@ struct ExposureView: View {
                     let isSelected = colIdx.map { viewModel.collection.selectedIndices.contains($0) } ?? false
                     ExposureDocTile(doc: doc, isUnder: isUnder, isSelected: isSelected) {
                         viewModel.moveToAppTrash([doc])
-                        if isUnder { viewModel.quality.underexposedDocuments.removeAll { $0.id == doc.id } }
-                        else       { viewModel.quality.overexposedDocuments.removeAll   { $0.id == doc.id } }
+                        viewModel.refreshQualityLists()
                     }
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { openDetail(for: doc) }
@@ -152,49 +150,6 @@ struct ExposureView: View {
         viewModel.qualityDetailActive = true
     }
 
-    private func scan() {
-        isScanning = true
-        viewModel.quality.shadowClipThreshold    = shadowThresh
-        viewModel.quality.highlightClipThreshold = highlightThresh
-        let shadT = shadowThresh
-        let highT = highlightThresh
-        let allDocs = viewModel.collection.documents.filter { !$0.isTrashed }
-        let taskID = UUID()
-        viewModel.activity.enqueue(id: taskID, label: "Belichtung analysieren…",
-                                    icon: "sun.max",
-                                    done: 0, total: allDocs.count, summaryVerb: "analysiert")
-        DispatchQueue.global(qos: .utility).async {
-            var under: [ImageDocument] = []
-            var over:  [ImageDocument] = []
-            for (i, doc) in allDocs.enumerated() {
-                let src: CGImage?
-                if let t = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    src = t
-                } else if let p = doc.placeholderThumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    src = p
-                } else {
-                    src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
-                }
-                if let img = src {
-                    let r = ExposureDetector.analyze(from: img)
-                    if r.underRatio >= shadT { under.append(doc) }
-                    if r.overRatio  >= highT { over.append(doc)  }
-                }
-                let done = i + 1
-                if done % 10 == 0 || done == allDocs.count {
-                    DispatchQueue.main.async {
-                        viewModel.activity.update(id: taskID, done: done, total: allDocs.count)
-                    }
-                }
-            }
-            DispatchQueue.main.async {
-                viewModel.quality.underexposedDocuments = under.sorted { $0.filename < $1.filename }
-                viewModel.quality.overexposedDocuments  = over.sorted  { $0.filename < $1.filename }
-                viewModel.activity.dequeue(id: taskID)
-                isScanning = false
-            }
-        }
-    }
 }
 
 private struct ExposureDocTile: View {

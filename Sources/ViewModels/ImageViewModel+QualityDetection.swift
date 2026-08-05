@@ -3,6 +3,11 @@ import Foundation
 
 // Bildanalyse (Duplikate, Unschärfe, Belichtung) — nicht Teil der Lade-Pipeline,
 // sondern Auswertungen auf bereits geladene Dokumente/Thumbnails.
+//
+// v1.7.0: Blur/Belichtung leiten die Listen aus den beim Import gescannten und in
+// CatalogStore persistierten Werten ab (ImageDocument.blurScore/underRatio/overRatio).
+// Nur duplicate detection scannt noch On-Demand — das läuft ausschließlich auf
+// EXIF-Metadaten (DateTimeOriginal + Dateigröße).
 extension ImageViewModel {
 
     func detectDuplicates() {
@@ -43,83 +48,116 @@ extension ImageViewModel {
         }
     }
 
+    /// Aktualisiert blurry/under/over-Listen aus den beim Import persistierten Werten.
+    /// Berücksichtigt Overrides (Nutzer hat "doch OK" gewählt) und die aktuellen
+    /// Schwellenwerte. Ruft *keinen* neuen Scan aus — dafür `scanQualityForLibrary()`.
+    func refreshQualityLists() {
+        let docs = collection.documents.filter { !$0.isTrashed && $0.qualityScanned }
+        let blurT = quality.blurThreshold
+        let shadT = quality.shadowClipThreshold
+        let highT = quality.highlightClipThreshold
+        var blurry: [ImageDocument] = []
+        var under:  [ImageDocument] = []
+        var over:   [ImageDocument] = []
+        for doc in docs {
+            if !doc.blurOverride,  let s = doc.blurScore,  s <  blurT  { blurry.append(doc) }
+            if !doc.underOverride, let r = doc.underRatio, r >= shadT  { under.append(doc)  }
+            if !doc.overOverride,  let r = doc.overRatio,  r >= highT  { over.append(doc)   }
+        }
+        quality.blurryDocuments       = blurry.sorted { $0.filename < $1.filename }
+        quality.underexposedDocuments = under.sorted  { $0.filename < $1.filename }
+        quality.overexposedDocuments  = over.sorted   { $0.filename < $1.filename }
+    }
+
+    /// Kompatibilitäts-Wrapper für Views, die weiterhin "Neu scannen" auslösen: leitet
+    /// die Ableitung aus persistierten Werten an + kickt einen neuen Scan an, falls
+    /// noch nicht analysierte Bilder existieren.
     func detectBlurryImages() {
-        let docs = collection.documents.filter { !$0.isTrashed }
-        guard !docs.isEmpty else { quality.blurryDocuments = []; return }
-        let threshold = quality.blurThreshold
+        refreshQualityLists()
+        scanQualityForLibrary()
+    }
+
+    func detectExposureIssues() {
+        refreshQualityLists()
+        scanQualityForLibrary()
+    }
+
+    /// Ähnliche-Bilder-Erkennung via pHash + Union-Find. Nutzt bereits persistierte
+    /// Hashes (vom Import-Scan) — kein neuer Decode nötig.
+    func detectSimilarImages() {
+        let docs = collection.documents.filter { !$0.isTrashed && $0.phash != nil }
+        guard docs.count > 1 else { quality.similarGroups = []; return }
         let taskID = UUID()
-        activity.enqueue(id: taskID, label: "Unschärfe analysieren…",
-                         icon: "drop.triangle.fill",
-                         done: 0, total: docs.count, summaryVerb: "analysiert")
+        activity.enqueue(id: taskID, label: "Ähnliche Bilder gruppieren…",
+                         icon: "square.on.square.dashed",
+                         done: 0, total: docs.count, summaryVerb: "gruppiert")
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            var blurry: [ImageDocument] = []
-            for (i, doc) in docs.enumerated() {
-                let src: CGImage?
-                if let thumb = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    src = thumb
-                } else if let placeholder = doc.placeholderThumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    src = placeholder
-                } else {
-                    src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
-                }
-                if let img = src, BlurDetector.score(from: img) < threshold {
-                    blurry.append(doc)
-                }
-                let done = i + 1
-                if done % 10 == 0 || done == docs.count {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.activity.update(id: taskID, done: done, total: docs.count)
-                    }
-                }
-            }
-            let sorted = blurry.sorted { $0.filename < $1.filename }
+            let groups = SimilarityGrouper.groups(from: docs)
             DispatchQueue.main.async {
-                self?.quality.blurryDocuments = sorted
+                self?.quality.similarGroups = groups
                 self?.activity.dequeue(id: taskID)
             }
         }
     }
 
-    func detectExposureIssues() {
-        let docs = collection.documents.filter { !$0.isTrashed }
-        guard !docs.isEmpty else { quality.underexposedDocuments = []; quality.overexposedDocuments = []; return }
-        let shadowThresh = quality.shadowClipThreshold
-        let highlightThresh = quality.highlightClipThreshold
-        let taskID = UUID()
-        activity.enqueue(id: taskID, label: "Belichtung analysieren…",
-                         icon: "sun.max",
-                         done: 0, total: docs.count, summaryVerb: "analysiert")
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            var under: [ImageDocument] = []
-            var over:  [ImageDocument] = []
-            for (i, doc) in docs.enumerated() {
-                let src: CGImage?
-                if let thumb = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    src = thumb
-                } else if let ph = doc.placeholderThumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                    src = ph
-                } else {
-                    src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
-                }
-                if let img = src {
-                    let result = ExposureDetector.analyze(from: img)
-                    if result.underRatio >= shadowThresh    { under.append(doc) }
-                    if result.overRatio  >= highlightThresh { over.append(doc) }
-                }
-                let done = i + 1
-                if done % 10 == 0 || done == docs.count {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.activity.update(id: taskID, done: done, total: docs.count)
-                    }
-                }
-            }
-            let sortedUnder = under.sorted { $0.filename < $1.filename }
-            let sortedOver  = over.sorted  { $0.filename < $1.filename }
-            DispatchQueue.main.async {
-                self?.quality.underexposedDocuments = sortedUnder
-                self?.quality.overexposedDocuments  = sortedOver
-                self?.activity.dequeue(id: taskID)
-            }
+    /// Für Thumbnail-Badges: wendet aktuelle Schwellenwerte + Overrides an, ohne die
+    /// Listen zu berühren. Nil-Werte (noch nicht gescannt) zählen als "kein Flag".
+    func qualityFlags(for doc: ImageDocument) -> (blur: Bool, under: Bool, over: Bool) {
+        guard doc.qualityScanned else { return (false, false, false) }
+        let blur  = !doc.blurOverride  && (doc.blurScore  ?? .infinity) <  quality.blurThreshold
+        let under = !doc.underOverride && (doc.underRatio ?? 0)         >= quality.shadowClipThreshold
+        let over  = !doc.overOverride  && (doc.overRatio  ?? 0)         >= quality.highlightClipThreshold
+        return (blur, under, over)
+    }
+
+    // Nutzer-Override: "Doch nicht unscharf/unter-/überbelichtet". Persistiert das Flag
+    // im Katalog, updated die in-memory Kopie, verschiebt den globalen Schwellenwert
+    // Richtung Bild-Score (Gewicht 0.1) — so lernt der Detektor mit der Zeit die
+    // Präferenzen des Nutzers. Umkehr via override=false setzt die Klassifikation zurück.
+    private static let overrideLearningWeight: Double = 0.1
+
+    func setBlurOverride(_ value: Bool, for doc: ImageDocument) {
+        guard let idx = collectionIndex(for: doc) else { return }
+        collection.documents[idx].blurOverride = value
+        CatalogStore.shared.setQualityOverride(path: doc.url.path, blur: value)
+        if value, let score = doc.blurScore {
+            let old = quality.blurThreshold
+            let new = (1 - Self.overrideLearningWeight) * old + Self.overrideLearningWeight * score
+            quality.blurThreshold = new
+            Log.info("Blur-Override: \(doc.filename) score=\(String(format: "%.1f", score)) — Threshold \(String(format: "%.1f", old)) → \(String(format: "%.1f", new))")
+        } else {
+            Log.info("Blur-Override zurückgesetzt: \(doc.filename)")
         }
+        refreshQualityLists()
+    }
+
+    func setUnderExposureOverride(_ value: Bool, for doc: ImageDocument) {
+        guard let idx = collectionIndex(for: doc) else { return }
+        collection.documents[idx].underOverride = value
+        CatalogStore.shared.setQualityOverride(path: doc.url.path, under: value)
+        if value, let ratio = doc.underRatio {
+            let old = quality.shadowClipThreshold
+            let new = (1 - Self.overrideLearningWeight) * old + Self.overrideLearningWeight * ratio
+            quality.shadowClipThreshold = min(0.30, new)
+            Log.info("Under-Override: \(doc.filename) ratio=\(String(format: "%.3f", ratio)) — Threshold \(String(format: "%.3f", old)) → \(String(format: "%.3f", new))")
+        } else {
+            Log.info("Under-Override zurückgesetzt: \(doc.filename)")
+        }
+        refreshQualityLists()
+    }
+
+    func setOverExposureOverride(_ value: Bool, for doc: ImageDocument) {
+        guard let idx = collectionIndex(for: doc) else { return }
+        collection.documents[idx].overOverride = value
+        CatalogStore.shared.setQualityOverride(path: doc.url.path, over: value)
+        if value, let ratio = doc.overRatio {
+            let old = quality.highlightClipThreshold
+            let new = (1 - Self.overrideLearningWeight) * old + Self.overrideLearningWeight * ratio
+            quality.highlightClipThreshold = min(0.30, new)
+            Log.info("Over-Override: \(doc.filename) ratio=\(String(format: "%.3f", ratio)) — Threshold \(String(format: "%.3f", old)) → \(String(format: "%.3f", new))")
+        } else {
+            Log.info("Over-Override zurückgesetzt: \(doc.filename)")
+        }
+        refreshQualityLists()
     }
 }

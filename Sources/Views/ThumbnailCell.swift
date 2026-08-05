@@ -8,6 +8,9 @@ struct ThumbnailCell: View {
     var isStackExpanded: Bool = false
     var isStackMember: Bool = false
     var onStackToggle: (() -> Void)? = nil
+    var isBlurry: Bool = false
+    var isUnder:  Bool = false
+    var isOver:   Bool = false
 
     private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
 
@@ -89,20 +92,7 @@ struct ThumbnailCell: View {
                 .frame(width: thumbnailWidth, height: thumbH)
             }
 
-            // Flag badge — top trailing
-                if document.flagStatus != .none {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Image(systemName: document.flagStatus == .pick ? "flag.fill" : "xmark.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(document.flagStatus == .pick ? .green : .red)
-                                .padding([.top, .trailing], 4)
-                        }
-                        Spacer()
-                    }
-                    .frame(width: thumbnailWidth, height: thumbH)
-                }
+                flagAndQualityOverlay
             }
 
             Text(document.filename)
@@ -134,5 +124,37 @@ struct ThumbnailCell: View {
                               : (isStackMember ? Color.accentColor.opacity(0.35) : Color.clear),
                               lineWidth: isSelected ? 1.5 : 1)
         )
+    }
+
+    private func qualityBadge(system: String, color: Color) -> some View {
+        Image(systemName: system)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(2)
+            .background(Circle().fill(color.opacity(0.85)))
+    }
+
+    // Separates VStack, damit der SwiftUI-Type-Checker die geschachtelte body nicht
+    // aufgibt ("unable to type-check this expression in reasonable time").
+    @ViewBuilder
+    private var flagAndQualityOverlay: some View {
+        if document.flagStatus != .none || isBlurry || isUnder || isOver {
+            VStack {
+                HStack(spacing: 3) {
+                    Spacer()
+                    if document.flagStatus != .none {
+                        Image(systemName: document.flagStatus == .pick ? "flag.fill" : "xmark.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(document.flagStatus == .pick ? .green : .red)
+                    }
+                    if isBlurry { qualityBadge(system: "drop.triangle.fill",       color: .purple) }
+                    if isUnder  { qualityBadge(system: "circle.lefthalf.filled",   color: .blue) }
+                    if isOver   { qualityBadge(system: "circle.righthalf.filled",  color: .yellow) }
+                }
+                .padding([.top, .trailing], 4)
+                Spacer()
+            }
+            .frame(width: thumbnailWidth, height: thumbH)
+        }
     }
 }

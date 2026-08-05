@@ -558,4 +558,64 @@ final class ImageLoadingOrchestrator {
             }
         }
     }
+
+    // Analysiert Blur/Belichtung/pHash pro Bild und persistiert die Werte im Katalog.
+    // Ergänzt zusätzlich die in-memory ImageDocument-Kopie, damit BlurryView/ExposureView
+    // die Werte ohne SQLite-Roundtrip lesen können.
+    func scanQualityForLibrary() {
+        guard let host = host else { return }
+        let paths = CatalogStore.shared.pathsNeedingQualityScan()
+        guard !paths.isEmpty else { return }
+
+        let taskID = UUID()
+        host.activity.enqueue(id: taskID, label: "Qualität analysieren",
+                              icon: "wand.and.stars",
+                              done: 0, total: paths.count, summaryVerb: "analysiert")
+
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            guard let self = self, let host = self.host else { return }
+            let total = paths.count
+            var done = 0
+            for path in paths {
+                host.activity.waitWhilePaused(id: taskID)
+                autoreleasepool {
+                    let url = URL(fileURLWithPath: path)
+                    let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                    defer { stopAccess() }
+                    guard let result = QualityAssessor.assess(url: accessURL) else {
+                        done += 1
+                        return
+                    }
+                    CatalogStore.shared.upsertQuality(
+                        path: path,
+                        blurScore: result.blurScore,
+                        underRatio: result.underRatio,
+                        overRatio: result.overRatio,
+                        phash: result.phash
+                    )
+                    done += 1
+                    let d = done, t = total
+                    DispatchQueue.main.async { [weak self] in
+                        guard let host = self?.host else { return }
+                        host.activity.update(id: taskID, done: d, total: t)
+                        if let idx = host.collection.documents.firstIndex(where: { $0.url.path == path }) {
+                            host.collection.documents[idx].blurScore     = result.blurScore
+                            host.collection.documents[idx].underRatio    = result.underRatio
+                            host.collection.documents[idx].overRatio     = result.overRatio
+                            host.collection.documents[idx].phash         = result.phash
+                            host.collection.documents[idx].qualityScanned = true
+                        }
+                    }
+                }
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let host = self?.host else { return }
+                host.activity.dequeue(id: taskID)
+                host.invalidateVisibleOrder()
+                host.refreshQualityLists()
+                host.objectWillChange.send()
+                Log.info("Quality-Scan abgeschlossen: \(total) Bilder")
+            }
+        }
+    }
 }

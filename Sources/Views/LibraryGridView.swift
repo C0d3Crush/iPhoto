@@ -22,11 +22,13 @@ struct LibraryGridView: View {
                         ForEach(viewModel.visibleDocuments, id: \.id) { doc in
                             let actualIndex = viewModel.collectionIndex(for: doc) ?? 0
                             let isSelected = viewModel.collection.selectedIndices.contains(actualIndex)
+                            let q = viewModel.qualityFlags(for: doc)
                             ThumbnailCell(document: doc, isSelected: isSelected,
                                           stackCount: viewModel.stackCounts[doc.id] ?? 0,
                                           isStackExpanded: viewModel.isStackExpanded(doc),
                                           isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
-                                          onStackToggle: { viewModel.toggleStack(leader: doc) })
+                                          onStackToggle: { viewModel.toggleStack(leader: doc) },
+                                          isBlurry: q.blur, isUnder: q.under, isOver: q.over)
                                 .frame(width: 156)
                                 .contentShape(Rectangle())
                                 .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }

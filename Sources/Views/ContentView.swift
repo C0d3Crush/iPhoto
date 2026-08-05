@@ -190,6 +190,10 @@ struct ContentView: View {
             DuplicatesView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.navSelection == .similar {
+            SimilarView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if inQualityOverview && viewModel.navSelection == .blurry {
             BlurryView()
                 .environmentObject(viewModel)

@@ -183,6 +183,17 @@ class ImageViewModel: ObservableObject {
                 .store(in: &cancellables)
         }
 
+        // Schwellenwert-Änderungen sofort auf die Listen anwenden (kein Re-Decode nötig —
+        // Scores stecken schon persistiert in den Documents).
+        for pub in [quality.$blurThreshold.map { _ in () },
+                    quality.$shadowClipThreshold.map { _ in () },
+                    quality.$highlightClipThreshold.map { _ in () }] {
+            pub.dropFirst()
+                .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+                .sink { [weak self] _ in self?.refreshQualityLists() }
+                .store(in: &cancellables)
+        }
+
         NotificationCenter.default.publisher(for: .importRequested)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.importFileDialog() }
@@ -408,6 +419,7 @@ class ImageViewModel: ObservableObject {
         }
         let catalogRatings = CatalogStore.shared.allRatings()
         let trashedPaths = CatalogStore.shared.trashedPaths()
+        let qualityRecords = CatalogStore.shared.allQualityRecords()
         let newDocs = newURLs
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map { url -> ImageDocument in
@@ -422,6 +434,16 @@ class ImageViewModel: ObservableObject {
                     doc.flagStatus = entry.flagStatus
                     doc.colorLabel = entry.colorLabel
                 }
+                if let q = qualityRecords[url.path] {
+                    doc.blurScore      = q.blurScore
+                    doc.underRatio     = q.underRatio
+                    doc.overRatio      = q.overRatio
+                    doc.phash          = q.phash
+                    doc.qualityScanned = q.scanned
+                    doc.blurOverride   = q.blurOverride
+                    doc.underOverride  = q.underOverride
+                    doc.overOverride   = q.overOverride
+                }
                 return doc
             }
         let batchItems = newDocs.map { doc in
@@ -435,6 +457,10 @@ class ImageViewModel: ObservableObject {
 
         let firstNewIndex = collection.documents.count
         collection.appendDocuments(newDocs)
+        // Persistierte Qualitätsflags der eben importierten Docs sofort in die Listen aufnehmen —
+        // der neue Scan im Hintergrund kann Minuten dauern, aber bereits gescannte Bilder
+        // (z. B. beim App-Neustart auf gleiche Library) sollen sofort sichtbar sein.
+        refreshQualityLists()
         if selectFirst || collection.documents.count == newDocs.count {
             collection.select(index: firstNewIndex)
             loadCurrentImage()
@@ -443,6 +469,7 @@ class ImageViewModel: ObservableObject {
         activity.enqueueWork { [weak self] in self?.loadThumbnails() }
         activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
         activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
+        activity.enqueueWork { [weak self] in self?.scanQualityForLibrary() }
     }
 
     func clearAll() {

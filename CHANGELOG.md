@@ -2,6 +2,17 @@
 
 ---
 
+## 1.7.0
+**Feature — Persistierte Qualitäts-Flags, Ähnlichkeits-Gruppen und globales Lernen**
+
+- Qualitätsanalyse (Unschärfe, Über-/Unterbelichtung) läuft jetzt einmalig beim Import und speichert Scores + pHash im Katalog — die Ansichten „Unscharf“, „Unter-/Überbelichtet“ leiten ihre Listen aus den persistierten Werten ab und öffnen sich sofort
+- Thumbnails zeigen kleine farbige Badges für Blur (lila Tropfen), Unterbelichtung (blauer Kreis) und Überbelichtung (gelber Kreis) — wirken in allen Rasteransichten
+- Rechtsklick-Overrides „Doch nicht unscharf / unter- / überbelichtet“ entfernen das Flag am Bild und verschieben den globalen Schwellenwert Richtung Bild-Score (Gewicht 0,1) — der Detektor lernt so die Präferenzen des Nutzers
+- Neuer Bereich „Ähnliche Bilder“ in der Seitenleiste unter Duplikate: visuelle Cluster (pHash + Union-Find) für Belichtungsreihen und Serienaufnahmen, mit „Beste“-Wahl und optionalem Verschieben der Übrigen in den Papierkorb
+- Neues Einstellungen-Panel (⌘,) mit Schiebereglern für Blur-/Shadow-/Highlight-Schwellenwerte plus „Auf Standardwerte zurücksetzen“ — Werte werden in `UserDefaults` persistiert
+
+---
+
 ## 1.6.1
 **Refactor — ImageViewModel entkoppelt, Main-Thread-Invarianten erweitert**
 

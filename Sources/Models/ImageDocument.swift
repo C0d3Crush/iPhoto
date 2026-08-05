@@ -43,6 +43,18 @@ struct ImageDocument: Identifiable, Equatable {
     var colorLabel: ColorLabel = .none
     var isTrashed: Bool = false
 
+    // Qualitäts-Analyse (persistiert in CatalogStore, hier gecacht damit Views nicht pro
+    // Render SQLite abfragen). Nil = noch nicht analysiert. Overrides = Nutzer hat manuell
+    // "Bild ist doch nicht unscharf/über-/unterbelichtet" gewählt.
+    var blurScore: Double? = nil
+    var underRatio: Double? = nil
+    var overRatio: Double? = nil
+    var phash: UInt64? = nil
+    var qualityScanned: Bool = false
+    var blurOverride: Bool = false
+    var underOverride: Bool = false
+    var overOverride: Bool = false
+
     var filename: String { url.lastPathComponent }
 
     static let rawExtensions: Set<String> = [

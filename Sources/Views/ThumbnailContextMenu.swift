@@ -52,6 +52,10 @@ struct ThumbnailContextMenu: View {
             ratingMenu
             Divider()
             colorLabelSection
+            if doc.qualityScanned {
+                Divider()
+                qualityOverrideSection
+            }
         }
         Group {
             Divider()
@@ -149,6 +153,28 @@ struct ThumbnailContextMenu: View {
             } else {
                 Text(name)
             }
+        }
+    }
+
+    @ViewBuilder private var qualityOverrideSection: some View {
+        let flags = vm.qualityFlags(for: doc)
+        // Blur
+        if flags.blur {
+            Button("Nicht unscharf") { vm.setBlurOverride(true, for: doc) }
+        } else if doc.blurOverride {
+            Button("Unschärfe-Override entfernen") { vm.setBlurOverride(false, for: doc) }
+        }
+        // Under
+        if flags.under {
+            Button("Nicht unterbelichtet") { vm.setUnderExposureOverride(true, for: doc) }
+        } else if doc.underOverride {
+            Button("Unterbelichtungs-Override entfernen") { vm.setUnderExposureOverride(false, for: doc) }
+        }
+        // Over
+        if flags.over {
+            Button("Nicht überbelichtet") { vm.setOverExposureOverride(true, for: doc) }
+        } else if doc.overOverride {
+            Button("Überbelichtungs-Override entfernen") { vm.setOverExposureOverride(false, for: doc) }
         }
     }
 

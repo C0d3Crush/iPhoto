@@ -12,6 +12,9 @@ struct iPhotoApp: App {
                 .frame(minWidth: 600, minHeight: 400)
                 .onAppear { }
         }
+        Settings {
+            SettingsView().environmentObject(viewModel)
+        }
         .commands {
             PluginCommands()
             CommandGroup(replacing: .appInfo) {

@@ -10,4 +10,8 @@ extension ImageViewModel {
     func scanExifForLibrary() {
         loader.scanExifForLibrary()
     }
+
+    func scanQualityForLibrary() {
+        loader.scanQualityForLibrary()
+    }
 }

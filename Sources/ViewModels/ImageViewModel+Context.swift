@@ -97,6 +97,8 @@ extension ImageViewModel {
             filtered = collection.documents.filter { $0.isTrashed }
         case .duplicates:
             filtered = docs
+        case .similar:
+            filtered = docs
         case .blurry:
             let ids = Set(quality.blurryDocuments.map { $0.id })
             filtered = docs.filter { ids.contains($0.id) }

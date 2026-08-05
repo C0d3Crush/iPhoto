@@ -111,6 +111,7 @@ final class CatalogStore {
         exec("CREATE INDEX IF NOT EXISTS idx_images_path     ON images(path)")
         exec("CREATE INDEX IF NOT EXISTS idx_images_filename ON images(filename)")
         migrateExifColumns()
+        migrateQualityColumns()
 
         exec("""
         CREATE TABLE IF NOT EXISTS ratings (
@@ -201,6 +202,26 @@ final class CatalogStore {
             exec("UPDATE images SET exif_scanned=0 WHERE lower(path) LIKE '%.raf' OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg'")
             UserDefaults.standard.set(1, forKey: "burstParserVersion")
         }
+    }
+
+    // v1.7.0: Qualitätsflags (Blur/Belichtung) + Overrides persistieren.
+    // blur_override/under_override/over_override: 0=nichts, 1=Nutzer sagt "doch ok" (Bild aus der Kategorie ausschließen).
+    // phash: 64-Bit perceptual hash für Similarity-Grouping.
+    private func migrateQualityColumns() {
+        let cols = [
+            "blur_score REAL",
+            "under_ratio REAL",
+            "over_ratio REAL",
+            "phash INTEGER",
+            "blur_override INTEGER NOT NULL DEFAULT 0",
+            "under_override INTEGER NOT NULL DEFAULT 0",
+            "over_override INTEGER NOT NULL DEFAULT 0",
+            "quality_scanned INTEGER NOT NULL DEFAULT 0"
+        ]
+        for col in cols {
+            exec("ALTER TABLE images ADD COLUMN \(col)")
+        }
+        exec("CREATE INDEX IF NOT EXISTS idx_images_quality_scanned ON images(quality_scanned)")
     }
 
     // MARK: - Migration from JSON
