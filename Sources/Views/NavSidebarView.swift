@@ -60,7 +60,7 @@ struct NavSidebarView: View {
                     navRow(
                         label: "Bildvergleich",
                         icon: "arrow.left.arrow.right",
-                        isSelected: viewModel.compareModeActive
+                        isSelected: viewModel.compare.active
                     ) {
                         viewModel.toggleCompareMode()
                     }
@@ -378,8 +378,8 @@ struct NavSidebarView: View {
             HStack(spacing: 4) {
                 Label("Duplikate", systemImage: "doc.on.doc")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.duplicateGroups.isEmpty {
-                    Text("\(viewModel.duplicateGroups.count)")
+                if !viewModel.quality.duplicateGroups.isEmpty {
+                    Text("\(viewModel.quality.duplicateGroups.count)")
                         .font(.caption2)
                         .foregroundColor(.white)
                         .padding(.horizontal, 5)
@@ -407,8 +407,8 @@ struct NavSidebarView: View {
             HStack(spacing: 4) {
                 Label("Unscharf", systemImage: "drop.triangle")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.blurryDocuments.isEmpty {
-                    Text("\(viewModel.blurryDocuments.count)")
+                if !viewModel.quality.blurryDocuments.isEmpty {
+                    Text("\(viewModel.quality.blurryDocuments.count)")
                         .font(.caption2)
                         .foregroundColor(.white)
                         .padding(.horizontal, 5)
@@ -433,8 +433,8 @@ struct NavSidebarView: View {
             HStack(spacing: 4) {
                 Label("Unterbelichtet", systemImage: "circle.lefthalf.filled")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.underexposedDocuments.isEmpty {
-                    Text("\(viewModel.underexposedDocuments.count)")
+                if !viewModel.quality.underexposedDocuments.isEmpty {
+                    Text("\(viewModel.quality.underexposedDocuments.count)")
                         .font(.caption2).foregroundColor(.white)
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(Color.purple).cornerRadius(4)
@@ -452,8 +452,8 @@ struct NavSidebarView: View {
             HStack(spacing: 4) {
                 Label("Überbelichtet", systemImage: "circle.righthalf.filled")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.overexposedDocuments.isEmpty {
-                    Text("\(viewModel.overexposedDocuments.count)")
+                if !viewModel.quality.overexposedDocuments.isEmpty {
+                    Text("\(viewModel.quality.overexposedDocuments.count)")
                         .font(.caption2).foregroundColor(.white)
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(Color.yellow.opacity(0.9)).cornerRadius(4)

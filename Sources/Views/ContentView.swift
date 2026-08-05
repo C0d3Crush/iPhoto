@@ -46,7 +46,7 @@ struct ContentView: View {
                 }
 
                 let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
-                if !isLibrary && !viewModel.compareModeActive {
+                if !isLibrary && !viewModel.compare.active {
                     Button(action: { viewModel.showFullGrid.toggle() }) {
                         Image(systemName: viewModel.showFullGrid ? "rectangle.split.2x1" : "square.grid.3x3")
                             .opacity(viewModel.showFullGrid ? 1.0 : 0.6)
@@ -54,7 +54,7 @@ struct ContentView: View {
                     .help(viewModel.showFullGrid ? "Detail-Ansicht" : "Rasteransicht")
                 }
 
-                if !viewModel.compareModeActive {
+                if !viewModel.compare.active {
                     Button(action: { viewModel.previous() }) {
                         Image(systemName: "chevron.left")
                     }
@@ -70,7 +70,7 @@ struct ContentView: View {
             }
 
             ToolbarItemGroup(placement: .automatic) {
-                if !viewModel.compareModeActive {
+                if !viewModel.compare.active {
                     SortMenuButton()
                         .environmentObject(viewModel)
 
@@ -83,7 +83,7 @@ struct ContentView: View {
             }
 
             ToolbarItemGroup(placement: .automatic) {
-                if !viewModel.compareModeActive {
+                if !viewModel.compare.active {
                     Button(action: { viewModel.rotateLeft() }) {
                         Image(systemName: "rotate.left")
                     }
@@ -139,7 +139,7 @@ struct ContentView: View {
         .onChange(of: viewModel.navSelection) { _ in
             viewModel.showingLibraryDetail = false
             viewModel.qualityDetailActive = false
-            if viewModel.compareModeActive { viewModel.stopCompareMode() }
+            if viewModel.compare.active { viewModel.stopCompareMode() }
         }
         .onChange(of: viewModel.windowTitle) { title in
             NSApp.mainWindow?.title = title
@@ -182,7 +182,7 @@ struct ContentView: View {
                 || viewModel.navSelection == .underexposed
                 || viewModel.navSelection == .overexposed)
 
-        if viewModel.compareModeActive {
+        if viewModel.compare.active {
             CompareView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

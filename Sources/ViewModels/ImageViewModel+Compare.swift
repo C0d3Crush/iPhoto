@@ -10,7 +10,7 @@ enum CompareVerdict {
 extension ImageViewModel {
 
     func toggleCompareMode() {
-        if compareModeActive {
+        if compare.active {
             stopCompareMode()
         } else {
             startCompareMode()
@@ -18,24 +18,24 @@ extension ImageViewModel {
     }
 
     func startCompareMode() {
-        compareModeActive = true
+        compare.active = true
         nextComparePair()
     }
 
     func stopCompareMode() {
-        compareModeActive = false
-        compareLeftID = nil
-        compareRightID = nil
-        lastComparePair = []
+        compare.active = false
+        compare.leftID = nil
+        compare.rightID = nil
+        compare.lastPair = []
     }
 
     var compareLeftDocument: ImageDocument? {
-        guard let id = compareLeftID else { return nil }
+        guard let id = compare.leftID else { return nil }
         return collection.documents.first(where: { $0.id == id && !$0.isTrashed })
     }
 
     var compareRightDocument: ImageDocument? {
-        guard let id = compareRightID else { return nil }
+        guard let id = compare.rightID else { return nil }
         return collection.documents.first(where: { $0.id == id && !$0.isTrashed })
     }
 
@@ -48,8 +48,8 @@ extension ImageViewModel {
     func nextComparePair() {
         let candidates = visibleDocuments.filter { !$0.isTrashed }
         guard candidates.count >= 2 else {
-            compareLeftID = nil
-            compareRightID = nil
+            compare.leftID = nil
+            compare.rightID = nil
             return
         }
 
@@ -58,7 +58,7 @@ extension ImageViewModel {
         // Zuletzt gezeigtes Paar nicht sofort wiederholen, wenn Alternativen existieren
         if candidates.count > 2 {
             groups = groups.mapValues { group -> [ImageDocument] in
-                group.count == 2 && Set(group.map { $0.id }) == lastComparePair ? [] : group
+                group.count == 2 && Set(group.map { $0.id }) == compare.lastPair ? [] : group
             }.filter { $0.value.count >= 2 }
         }
 
@@ -72,14 +72,14 @@ extension ImageViewModel {
         let pool = worst?.value ?? candidates
 
         var pair = Array(pool.shuffled().prefix(2))
-        if candidates.count > 2 && Set(pair.map { $0.id }) == lastComparePair {
+        if candidates.count > 2 && Set(pair.map { $0.id }) == compare.lastPair {
             pair = Array(candidates.shuffled().prefix(2))
         }
         guard pair.count == 2 else { return }
 
-        compareLeftID = pair[0].id
-        compareRightID = pair[1].id
-        lastComparePair = Set(pair.map { $0.id })
+        compare.leftID = pair[0].id
+        compare.rightID = pair[1].id
+        compare.lastPair = Set(pair.map { $0.id })
         ensureComparePreview(forID: pair[0].id)
         ensureComparePreview(forID: pair[1].id)
     }
@@ -128,8 +128,8 @@ extension ImageViewModel {
         guard let doc = collection.documents.first(where: { $0.id == id }),
               doc.cgImage == nil, doc.previewImage == nil else { return }
         let url = doc.url
-        guard !compareLoadInFlight.contains(url) else { return }
-        compareLoadInFlight.insert(url)
+        guard !compare.loadInFlight.contains(url) else { return }
+        compare.loadInFlight.insert(url)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             autoreleasepool {
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
@@ -143,7 +143,7 @@ extension ImageViewModel {
                 }
                 DispatchQueue.main.async {
                     guard let self = self else { return }
-                    self.compareLoadInFlight.remove(url)
+                    self.compare.loadInFlight.remove(url)
                     guard let preview = preview,
                           let idx = self.collection.documents.firstIndex(where: { $0.url == url }),
                           self.collection.documents[idx].previewImage == nil else { return }

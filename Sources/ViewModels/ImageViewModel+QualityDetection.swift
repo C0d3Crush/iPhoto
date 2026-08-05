@@ -8,7 +8,7 @@ extension ImageViewModel {
     func detectDuplicates() {
         let docs = collection.documents.filter { !$0.isTrashed && !$0.metadata.isEmpty }
         guard docs.count > 1 else {
-            duplicateGroups = []
+            quality.duplicateGroups = []
             return
         }
         let taskID = UUID()
@@ -37,7 +37,7 @@ extension ImageViewModel {
                 .map { $0.sorted { $0.url.path < $1.url.path } }
                 .sorted { $0[0].filename < $1[0].filename }
             DispatchQueue.main.async { [weak self] in
-                self?.duplicateGroups = groups
+                self?.quality.duplicateGroups = groups
                 self?.activity.dequeue(id: taskID)
             }
         }
@@ -45,8 +45,8 @@ extension ImageViewModel {
 
     func detectBlurryImages() {
         let docs = collection.documents.filter { !$0.isTrashed }
-        guard !docs.isEmpty else { blurryDocuments = []; return }
-        let threshold = blurThreshold
+        guard !docs.isEmpty else { quality.blurryDocuments = []; return }
+        let threshold = quality.blurThreshold
         let taskID = UUID()
         activity.enqueue(id: taskID, label: "Unschärfe analysieren…",
                          icon: "drop.triangle.fill",
@@ -74,7 +74,7 @@ extension ImageViewModel {
             }
             let sorted = blurry.sorted { $0.filename < $1.filename }
             DispatchQueue.main.async {
-                self?.blurryDocuments = sorted
+                self?.quality.blurryDocuments = sorted
                 self?.activity.dequeue(id: taskID)
             }
         }
@@ -82,9 +82,9 @@ extension ImageViewModel {
 
     func detectExposureIssues() {
         let docs = collection.documents.filter { !$0.isTrashed }
-        guard !docs.isEmpty else { underexposedDocuments = []; overexposedDocuments = []; return }
-        let shadowThresh = shadowClipThreshold
-        let highlightThresh = highlightClipThreshold
+        guard !docs.isEmpty else { quality.underexposedDocuments = []; quality.overexposedDocuments = []; return }
+        let shadowThresh = quality.shadowClipThreshold
+        let highlightThresh = quality.highlightClipThreshold
         let taskID = UUID()
         activity.enqueue(id: taskID, label: "Belichtung analysieren…",
                          icon: "sun.max",
@@ -116,8 +116,8 @@ extension ImageViewModel {
             let sortedUnder = under.sorted { $0.filename < $1.filename }
             let sortedOver  = over.sorted  { $0.filename < $1.filename }
             DispatchQueue.main.async {
-                self?.underexposedDocuments = sortedUnder
-                self?.overexposedDocuments  = sortedOver
+                self?.quality.underexposedDocuments = sortedUnder
+                self?.quality.overexposedDocuments  = sortedOver
                 self?.activity.dequeue(id: taskID)
             }
         }

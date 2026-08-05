@@ -18,7 +18,9 @@ struct HotPixelAnalyzer {
 
         guard !urls.isEmpty else { return nil }
 
-        let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+        // Geteilter CIContext (RAWImageDecoder.sharedSRGBCIContext) statt frischer Metal-Context
+        // pro Scan — verhindert GPU-Ressourcen-Aufbau parallel zu anderen Renders (vgl. Bug #15).
+        let ciContext = sharedSRGBCIContext
         var width = 0
         var height = 0
         var count = 0

@@ -2,6 +2,16 @@
 
 ---
 
+## 1.6.1
+**Refactor — ImageViewModel entkoppelt, Main-Thread-Invarianten erweitert**
+
+- Vergleichsmodus-State (aktiv, links/rechts, Load-Tracking) in `ComparisonState` ausgelagert — Views greifen via `viewModel.compare.active` etc. zu
+- Qualitätsanalyse-State (Duplikate, Unschärfe, Belichtung, Schwellenwerte) in `QualityDetectionState` ausgelagert — reduziert `ImageViewModel` um 12 Felder
+- Main-Thread-Preconditions (`dispatchPrecondition`) auf risikoreichen `@Published`-Feldern (Loading-Flags, Fehlermeldungen, Qualitäts-Listen, Hot-Pixel-Phase) — CoW-Data-Races werden jetzt sofort erkannt statt später als Speicherkorruption zu manifestieren (vgl. Bugs #7, #29, #33)
+- `HotPixelAnalyzer` nutzt jetzt den geteilten `sharedSRGBCIContext` statt einen frischen Metal-Context pro Scan (Konsistenz mit Bug-#15-Fix)
+
+---
+
 ## 1.6.0
 **Feature — Fortschrittsanzeige für Qualitäts-Scans und Batch-Bearbeitung**
 

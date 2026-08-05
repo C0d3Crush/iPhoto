@@ -7,16 +7,20 @@ class ImageViewModel: ObservableObject {
 
     // MARK: - Published state
 
+    // Main-Thread-Invariante: Alle @Published-Schreibzugriffe müssen auf dem Main-Thread erfolgen.
+    // Producers in BG-Threads dispatchen via DispatchQueue.main.async zurück — siehe
+    // ImageViewModel+QualityDetection.swift, MetadataService.writePhotoMetadata etc.
+    // Verletzungen sind CoW-Data-Races → Speicherkorruption (vgl. Bugs #7, #29, #33).
     @Published var collection = ImageCollection()
     @Published var zoomFactor: CGFloat = 1.0
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String? = nil
+    @Published var isLoading: Bool = false                       { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
+    @Published var errorMessage: String? = nil                   { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var fitToWindowRequested: Bool = false
     @Published var showExportSheet: Bool = false
     @Published var tetherMode: Bool = false
-    @Published var hotPixelPhase: HotPixelPhase = .idle
+    @Published var hotPixelPhase: HotPixelPhase = .idle          { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var inspectorVisible: Bool = false
-    @Published var isSavingMetadata: Bool = false
+    @Published var isSavingMetadata: Bool = false                { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var navSidebarVisible: Bool = true
     @Published var navSelection: NavSelection? = .library
     @Published var showingLibraryDetail: Bool = false
@@ -25,21 +29,17 @@ class ImageViewModel: ObservableObject {
     // Logik wie showingLibraryDetail, aber für navSelection = .blurry/.under-/.overexposed.
     @Published var qualityDetailActive: Bool = false
     @Published var gridThumbnailSize: CGFloat = 160
-    @Published var isStartupLoading: Bool = true
+    @Published var isStartupLoading: Bool = true                 { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
-    @Published var compareModeActive: Bool = false
-    @Published var duplicateGroups: [[ImageDocument]] = []
-    @Published var blurryDocuments: [ImageDocument] = []
-    @Published var blurThreshold: Double = BlurDetector.defaultThreshold
-    @Published var underexposedDocuments: [ImageDocument] = []
-    @Published var overexposedDocuments: [ImageDocument] = []
-    @Published var shadowClipThreshold: Double = ExposureDetector.defaultShadowClipThreshold
-    @Published var highlightClipThreshold: Double = ExposureDetector.defaultHighlightClipThreshold
-    @Published var compareLeftID: UUID? = nil
-    @Published var compareRightID: UUID? = nil
-    var compareLoadInFlight: Set<URL> = []
-    var lastComparePair: Set<UUID> = []
+    /// Qualitätsanalyse-Ergebnisse (Duplikate, Unschärfe, Belichtung) + Schwellenwerte.
+    /// Views greifen via `viewModel.quality.blurryDocuments` etc. zu.
+    let quality = QualityDetectionState()
+
+    /// Duell-/Vergleichsmodus (State + Load-Tracking). Änderungen laufen via
+    /// objectWillChange-Forwarding an SwiftUI-Views weiter.
+    let compare = ComparisonState()
+
     let library = LibraryStore()
 
     /// Lade-Queue + Import-Fortschritt (Sidebar). Änderungen werden via objectWillChange
@@ -158,7 +158,7 @@ class ImageViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // Kind-ViewModels: Änderungen an Views weiterleiten, die nur ImageViewModel beobachten
-        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange, inpaint.objectWillChange] {
+        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange, inpaint.objectWillChange, compare.objectWillChange, quality.objectWillChange] {
             child
                 .sink { [weak self] _ in self?.objectWillChange.send() }
                 .store(in: &cancellables)
@@ -175,9 +175,9 @@ class ImageViewModel: ObservableObject {
 
         // Qualitäts-Listen fließen in visibleDocuments ein (blurry/underexposed/overexposed),
         // Order-Cache muss invalidieren wenn sich die Listen ändern.
-        for pub in [$blurryDocuments.map { _ in () },
-                    $underexposedDocuments.map { _ in () },
-                    $overexposedDocuments.map { _ in () }] {
+        for pub in [quality.$blurryDocuments.map { _ in () },
+                    quality.$underexposedDocuments.map { _ in () },
+                    quality.$overexposedDocuments.map { _ in () }] {
             pub.dropFirst()
                 .sink { [weak self] _ in self?.invalidateVisibleOrder() }
                 .store(in: &cancellables)
@@ -300,7 +300,7 @@ class ImageViewModel: ObservableObject {
             let textFieldFocused = NSApp.keyWindow?.firstResponder is NSTextView
             // Pfeiltasten tragen .function/.numericPad — für den Vergleich ausblenden
             let realMods = mods.subtracting([.function, .numericPad])
-            if self.compareModeActive, realMods.isEmpty, !textFieldFocused {
+            if self.compare.active, realMods.isEmpty, !textFieldFocused {
                 switch event.keyCode {
                 case 123: DispatchQueue.main.async { self.resolveCompare(.left) };  return nil // ←
                 case 124: DispatchQueue.main.async { self.resolveCompare(.right) }; return nil // →
@@ -507,7 +507,7 @@ class ImageViewModel: ObservableObject {
         var keepFar: Set<UUID> = []
         // Vergleichsmodus: die beiden Duell-Bilder liegen meist weit vom currentIndex —
         // ohne Schutz würden ihre frisch geladenen Previews sofort wieder verworfen.
-        for id in [compareLeftID, compareRightID].compactMap({ $0 }) {
+        for id in [compare.leftID, compare.rightID].compactMap({ $0 }) {
             keepNear.insert(id)
             keepFar.insert(id)
         }

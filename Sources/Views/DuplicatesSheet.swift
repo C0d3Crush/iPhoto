@@ -5,7 +5,7 @@ struct DuplicatesView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var keepOverrides: [Int: Int] = [:]
 
-    private var groups: [[ImageDocument]] { viewModel.duplicateGroups }
+    private var groups: [[ImageDocument]] { viewModel.quality.duplicateGroups }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -111,7 +111,7 @@ struct DuplicatesView: View {
         }
         viewModel.moveToAppTrash(toTrash)
         keepOverrides = [:]
-        viewModel.duplicateGroups = []
+        viewModel.quality.duplicateGroups = []
     }
 }
 

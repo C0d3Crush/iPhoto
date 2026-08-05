@@ -10,7 +10,7 @@ struct ExposureView: View {
     private var isUnder: Bool { viewModel.navSelection == .underexposed }
 
     private var docs: [ImageDocument] {
-        isUnder ? viewModel.underexposedDocuments : viewModel.overexposedDocuments
+        isUnder ? viewModel.quality.underexposedDocuments : viewModel.quality.overexposedDocuments
     }
 
     var body: some View {
@@ -26,8 +26,8 @@ struct ExposureView: View {
             }
         }
         .onAppear {
-            shadowThresh = viewModel.shadowClipThreshold
-            highlightThresh = viewModel.highlightClipThreshold
+            shadowThresh = viewModel.quality.shadowClipThreshold
+            highlightThresh = viewModel.quality.highlightClipThreshold
             if docs.isEmpty { scan() }
         }
         .onChange(of: viewModel.navSelection) { _ in
@@ -65,8 +65,8 @@ struct ExposureView: View {
             }
 
             Button("Neu scannen") {
-                viewModel.shadowClipThreshold = shadowThresh
-                viewModel.highlightClipThreshold = highlightThresh
+                viewModel.quality.shadowClipThreshold = shadowThresh
+                viewModel.quality.highlightClipThreshold = highlightThresh
                 scan()
             }
             .buttonStyle(PlainButtonStyle())
@@ -76,8 +76,8 @@ struct ExposureView: View {
             if !docs.isEmpty {
                 Button("Alle in Papierkorb") {
                     viewModel.moveToAppTrash(docs)
-                    if isUnder { viewModel.underexposedDocuments = [] }
-                    else       { viewModel.overexposedDocuments   = [] }
+                    if isUnder { viewModel.quality.underexposedDocuments = [] }
+                    else       { viewModel.quality.overexposedDocuments   = [] }
                 }
                 .foregroundColor(.red)
                 .disabled(isScanning)
@@ -121,8 +121,8 @@ struct ExposureView: View {
                     let isSelected = colIdx.map { viewModel.collection.selectedIndices.contains($0) } ?? false
                     ExposureDocTile(doc: doc, isUnder: isUnder, isSelected: isSelected) {
                         viewModel.moveToAppTrash([doc])
-                        if isUnder { viewModel.underexposedDocuments.removeAll { $0.id == doc.id } }
-                        else       { viewModel.overexposedDocuments.removeAll   { $0.id == doc.id } }
+                        if isUnder { viewModel.quality.underexposedDocuments.removeAll { $0.id == doc.id } }
+                        else       { viewModel.quality.overexposedDocuments.removeAll   { $0.id == doc.id } }
                     }
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { openDetail(for: doc) }
@@ -154,8 +154,8 @@ struct ExposureView: View {
 
     private func scan() {
         isScanning = true
-        viewModel.shadowClipThreshold    = shadowThresh
-        viewModel.highlightClipThreshold = highlightThresh
+        viewModel.quality.shadowClipThreshold    = shadowThresh
+        viewModel.quality.highlightClipThreshold = highlightThresh
         let shadT = shadowThresh
         let highT = highlightThresh
         let allDocs = viewModel.collection.documents.filter { !$0.isTrashed }
@@ -188,8 +188,8 @@ struct ExposureView: View {
                 }
             }
             DispatchQueue.main.async {
-                viewModel.underexposedDocuments = under.sorted { $0.filename < $1.filename }
-                viewModel.overexposedDocuments  = over.sorted  { $0.filename < $1.filename }
+                viewModel.quality.underexposedDocuments = under.sorted { $0.filename < $1.filename }
+                viewModel.quality.overexposedDocuments  = over.sorted  { $0.filename < $1.filename }
                 viewModel.activity.dequeue(id: taskID)
                 isScanning = false
             }

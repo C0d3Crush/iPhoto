@@ -6,7 +6,7 @@ struct BlurryView: View {
     @State private var isScanning = false
     @State private var threshold: Double = BlurDetector.defaultThreshold
 
-    private var docs: [ImageDocument] { viewModel.blurryDocuments }
+    private var docs: [ImageDocument] { viewModel.quality.blurryDocuments }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,7 +21,7 @@ struct BlurryView: View {
             }
         }
         .onAppear {
-            threshold = viewModel.blurThreshold
+            threshold = viewModel.quality.blurThreshold
             if docs.isEmpty { scan() }
         }
     }
@@ -54,7 +54,7 @@ struct BlurryView: View {
             }
 
             Button("Neu scannen") {
-                viewModel.blurThreshold = threshold
+                viewModel.quality.blurThreshold = threshold
                 scan()
             }
             .buttonStyle(PlainButtonStyle())
@@ -64,7 +64,7 @@ struct BlurryView: View {
             if !docs.isEmpty {
                 Button("Alle in Papierkorb") {
                     viewModel.moveToAppTrash(docs)
-                    viewModel.blurryDocuments = []
+                    viewModel.quality.blurryDocuments = []
                 }
                 .foregroundColor(.red)
                 .disabled(isScanning)
@@ -115,7 +115,7 @@ struct BlurryView: View {
                     let isSelected = colIdx.map { viewModel.collection.selectedIndices.contains($0) } ?? false
                     BlurryDocTile(doc: doc, isSelected: isSelected) {
                         viewModel.moveToAppTrash([doc])
-                        viewModel.blurryDocuments.removeAll { $0.id == doc.id }
+                        viewModel.quality.blurryDocuments.removeAll { $0.id == doc.id }
                     }
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { openDetail(for: doc) }
@@ -147,7 +147,7 @@ struct BlurryView: View {
 
     private func scan() {
         isScanning = true
-        viewModel.blurThreshold = threshold
+        viewModel.quality.blurThreshold = threshold
         let docs = viewModel.collection.documents.filter { !$0.isTrashed }
         let thresh = threshold
         let taskID = UUID()
@@ -177,7 +177,7 @@ struct BlurryView: View {
             }
             let sorted = blurry.sorted { $0.filename < $1.filename }
             DispatchQueue.main.async {
-                viewModel.blurryDocuments = sorted
+                viewModel.quality.blurryDocuments = sorted
                 viewModel.activity.dequeue(id: taskID)
                 isScanning = false
             }
