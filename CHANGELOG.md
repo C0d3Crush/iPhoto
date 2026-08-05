@@ -2,6 +2,15 @@
 
 ---
 
+## 1.11.0
+**Feature — Speed-Metriken pro Bild-Switch im Log**
+
+- Jeder Bild-Switch loggt jetzt Millisekunden vom User-Klick bis zum ersten sichtbaren Frame, kategorisiert nach Display-Pfad: `SWITCH cache-hit`, `SWITCH thumbnail-hit`, `SWITCH preview-hit`, `SWITCH preview-decoded`, `SWITCH full-res` — plus separater `SWITCH full-res-decode` für die reine Dekoder-Zeit. Live-Beobachtung: `tail -f ~/Library/Logs/iPhoto/iPhoto.log | grep SWITCH`
+- Ziel: Perf-Regressionen der Bild-Switch-Latenz nicht mehr manuell erraten, sondern in der App-Log-Datei nachweisen. Ist ein Programmier-Build — Metriken bleiben dauerhaft drin
+- Neue Hot-Paths sollen konsistent eine eigene SWITCH-Zeile emittieren, damit Regressionen sich nicht in Timings verstecken können
+
+---
+
 ## 1.10.1
 **Bugfix — Bild-Switch nicht mehr blockiert vom Quality-Scan**
 

@@ -66,6 +66,32 @@ final class ImageLoadingOrchestrator {
     let metaTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
     var prefetchInFlight: Set<URL> = []
 
+    // Perf-Instrumentierung: Zeitpunkt, an dem der Nutzer ein neues Bild ausgewählt hat.
+    // Speedmetriken (SWITCH cache/preview/full) messen von hier bis zum ersten Display.
+    // Der Programmier-Build behält dieses Logging bewusst: Regressionen der
+    // Switch-Latenz sind sonst unsichtbar, bis der User es merkt.
+    var switchStartedAt: Date? = nil
+    var switchLoggedFirstFrame: Bool = false
+
+    // Loggt Millisekunden seit `switchStartedAt` mit Kategorielabel (cache/preview/full).
+    // Nur der *erste* Frame pro Switch zählt — sonst überschriebe der spätere
+    // Full-Res-Decode die eigentliche Nutzer-Wahrnehmung des Bild-Switchens.
+    func logSwitchDisplay(_ label: String, url: URL) {
+        guard let t0 = switchStartedAt, !switchLoggedFirstFrame else { return }
+        switchLoggedFirstFrame = true
+        let ms = -t0.timeIntervalSinceNow * 1000
+        Log.info(String(format: "SWITCH %@ %.1f ms: %@", label, ms, url.lastPathComponent))
+    }
+
+    // Zusatzmetrik: Dauer vom Full-Res-Decode-Start bis zum on-screen Frame.
+    // Läuft unabhängig vom Switch-Timer, weil Full-Res oft *nach* dem ersten Preview-Frame
+    // kommt (Dwell 1.5 s) und trotzdem eine eigene Perf-Größe ist.
+    func logFullResDisplay(startedAt: Date, url: URL, size: CGSize) {
+        let ms = -startedAt.timeIntervalSinceNow * 1000
+        Log.info(String(format: "SWITCH full-res-decode %.1f ms: %@ %d×%d",
+                        ms, url.lastPathComponent, Int(size.width), Int(size.height)))
+    }
+
     // MARK: - Deinit / Cleanup
 
     func cancelPendingWork() {
@@ -79,6 +105,8 @@ final class ImageLoadingOrchestrator {
         guard let host = host else { return }
         guard let doc = host.collection.currentDocument else { return }
         guard doc.url != currentlyLoadingURL || doc.cgImage == nil else { return }
+        switchStartedAt = Date()
+        switchLoggedFirstFrame = false
         currentlyLoadingURL = doc.url
         host.evictDistantImages(keepRadius: 3)
         host.resetAdjustments()
@@ -98,6 +126,7 @@ final class ImageLoadingOrchestrator {
             Log.trace("Bild bereits im Cache: \(doc.url.lastPathComponent)")
             host.fitToWindowRequested = true
             host.adj.displayImageVersion = UUID()
+            logSwitchDisplay("cache-hit", url: doc.url)
             prefetchAdjacent()
             return
         }
@@ -112,6 +141,8 @@ final class ImageLoadingOrchestrator {
             host.adj.displayImageVersion = UUID()
             host.fitToWindowRequested = true
             host.isLoading = false
+            let label = doc.previewImage != nil ? "preview-hit" : "thumbnail-hit"
+            logSwitchDisplay(label, url: doc.url)
         } else {
             host.isLoading = true
         }
@@ -158,6 +189,7 @@ final class ImageLoadingOrchestrator {
                     host.isLoading = false
                     host.fitToWindowRequested = true
                     host.adj.displayImageVersion = UUID()
+                    self.logSwitchDisplay("preview-decoded", url: url)
                     if host.hasActiveAdjustments { host.applyAdjustments() }
                 }
             }
@@ -204,18 +236,21 @@ final class ImageLoadingOrchestrator {
                 return
             }
             Log.trace("loadFullRes BG gestartet: \(url.lastPathComponent) token=\(token)")
+            let decodeStart = Date()
             let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
             defer { stopAccess() }
             do {
                 let image = try RAWImageDecoder.decode(url: accessURL)
                 let size = CGSize(width: image.width, height: image.height)
+                let decodeMs = -decodeStart.timeIntervalSinceNow * 1000
                 let metadata: [MetadataEntry]
                 if preloadedMetadata.isEmpty, let host = self.host {
                     metadata = host.metadataService.readPhotoMetadata(from: accessURL)
                 } else {
                     metadata = preloadedMetadata
                 }
-                Log.info("Bild dekodiert (voll): \(url.lastPathComponent) \(Int(size.width))×\(Int(size.height)), \(metadata.count) Metadaten-Einträge")
+                Log.info(String(format: "Bild dekodiert (voll) %.1f ms: %@ %d×%d, %d Metadaten-Einträge",
+                                decodeMs, url.lastPathComponent, Int(size.width), Int(size.height), metadata.count))
                 // SQLite-Zugriffe noch im BG-Thread erledigen — nicht auf dem Main-Thread blockieren
                 let catalogRating = CatalogStore.shared.rating(forPath: url.path)
                 let fallbackRating = catalogRating == nil ? RatingStore.shared.load(for: url) : nil
@@ -271,6 +306,8 @@ final class ImageLoadingOrchestrator {
                         host.fitToWindowRequested = true
                     }
                     host.adj.displayImageVersion = UUID()
+                    self.logSwitchDisplay("full-res", url: url)
+                    self.logFullResDisplay(startedAt: decodeStart, url: url, size: size)
                     if host.hasActiveAdjustments { host.applyAdjustments() }
                     host.loadVersionsForCurrentImage()
                     NSDocumentController.shared.noteNewRecentDocumentURL(url)

@@ -17,16 +17,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Measure, don't guess.** Trace-Logs in `~/Library/Logs/iPhoto/iPhoto.log` have timestamps — compare cache-hit vs. UI-display deltas. Suspicious latency is a bug, even if the feature "works."
 
+**Built-in speed metrics.** `ImageLoadingOrchestrator` emits `SWITCH <path> <ms>` info-lines per image switch, tagged with the display path (`cache-hit`, `thumbnail-hit`, `preview-hit`, `preview-decoded`, `full-res`) plus `full-res-decode <ms>` for the decoder itself. This is a programmer build — keep these metrics in and read them (`tail -f ~/Library/Logs/iPhoto/iPhoto.log | grep SWITCH`) whenever you touch the load pipeline. If you add a new hot path, add its own SWITCH-style line so regressions cannot hide.
+
 ## Build & Run
 
 Requires macOS Command Line Tools (`xcode-select --install`). No Xcode project — compiled directly via `swiftc`.
 
 ```bash
-./build.sh          # compiles all Sources/**/*.swift → build/iPhoto.app
+./build.sh          # compiles all Sources/**/*.swift → build/iPhoto.app + build/iphoto-cli
 open build/iPhoto.app
 ```
 
-The build script auto-detects architecture (arm64/x86_64) and the best available macOS SDK ≥ 11. No test suite exists.
+The build script auto-detects architecture (arm64/x86_64) and the best available macOS SDK ≥ 11. Produces two artifacts: the SwiftUI app and a headless CLI (`iphoto-cli`) built from `Sources/CLI/main.swift` — used for export regression tests and scripting.
+
+## Tests
+
+No XCTest / SPM. Each test suite is its own `swiftc` compile + run, driven by shell scripts. All test binaries and temp files are cleaned up on exit; exit-code 1 signals at least one FAIL.
+
+```bash
+./Tests/run_library.sh       # Skalierungstest 10/100/500/1000 Bilder (5–7 min)
+./Tests/run_bench.sh         # Absolute Perf-Benchmarks 2/12/24 MP (1–3 min)
+./Tests/run_catalog.sh       # SQLite-Katalog-Korrektheit (<30 s)
+./Tests/run_librarystore.sh  # JSON-Persistenz für Alben/SmartFolders/WatchedFolders (<10 s)
+./Tests/run_adjustments.sh   # Adjustment-Pipeline Roundtrips
+./Tests/run_stacking.sh      # Bracketing-/Sequenz-Erkennung
+./Tests/test_formats.sh      # CLI-Export Regression (setzt build/iphoto-cli voraus)
+```
+
+CI (`.github/workflows/build.yml`) runs on macos-latest against every push/PR to `main`: `./build.sh` + stacking + catalog + adjustments + librarystore + test_formats. The heavy `run_library.sh` and `run_bench.sh` are **not** part of CI — run them locally when touching decoder/export/thumbnail paths.
+
+Deep context lives in `ARCHITECTURE.md` (module map, threading model) and `STRATEGY.md` (product direction). `Tests/README.md` documents each suite's thresholds and pass/fail semantics.
 
 ## Architecture
 
