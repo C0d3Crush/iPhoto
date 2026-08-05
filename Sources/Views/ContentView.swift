@@ -14,56 +14,7 @@ struct ContentView: View {
             }
 
             ZStack {
-                let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
-                let showGrid = (isLibrary && !viewModel.showingLibraryDetail) || (!isLibrary && viewModel.showFullGrid)
-
-                if viewModel.compareModeActive {
-                    CompareView()
-                        .environmentObject(viewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.navSelection == .duplicates {
-                    DuplicatesView()
-                        .environmentObject(viewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.navSelection == .blurry {
-                    BlurryView()
-                        .environmentObject(viewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.navSelection == .underexposed || viewModel.navSelection == .overexposed {
-                    ExposureView()
-                        .environmentObject(viewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if showGrid {
-                    // Vollbild-Raster
-                    LibraryFullGridView()
-                        .environmentObject(viewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    // Detail-Ansicht + Strip
-                    VStack(spacing: 0) {
-                        DetailView()
-                            .environmentObject(viewModel)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                        if !viewModel.collection.documents.isEmpty {
-                            Divider()
-
-                            LibraryGridView()
-                                .environmentObject(viewModel)
-                                .frame(height: 138)
-                        }
-                    }
-
-                    if viewModel.adj.cropToolActive, let img = viewModel.currentImage {
-                        CropEditorView(
-                            image: img,
-                            initialCrop: viewModel.adj.adjustments.cropRect,
-                            initialRotation: viewModel.adj.adjustments.rotation
-                        )
-                        .environmentObject(viewModel)
-                    }
-                }
-
+                mainContent
             }
 
             if viewModel.inspectorVisible {
@@ -85,6 +36,13 @@ struct ContentView: View {
                         Image(systemName: "square.grid.3x3")
                     }
                     .help("Zurück zur Bibliothek")
+                }
+
+                if viewModel.qualityDetailActive {
+                    Button(action: { viewModel.qualityDetailActive = false }) {
+                        Image(systemName: "square.grid.3x3")
+                    }
+                    .help("Zurück zur Übersicht")
                 }
 
                 let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
@@ -180,6 +138,7 @@ struct ContentView: View {
         }
         .onChange(of: viewModel.navSelection) { _ in
             viewModel.showingLibraryDetail = false
+            viewModel.qualityDetailActive = false
             if viewModel.compareModeActive { viewModel.stopCompareMode() }
         }
         .onChange(of: viewModel.windowTitle) { title in
@@ -212,6 +171,63 @@ struct ContentView: View {
                 currentAdjustments: viewModel.hasActiveAdjustments ? viewModel.adj.adjustments : nil,
                 isPresented: $viewModel.showExportSheet
             )
+        }
+    }
+
+    @ViewBuilder private var mainContent: some View {
+        let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
+        let showGrid = (isLibrary && !viewModel.showingLibraryDetail) || (!isLibrary && viewModel.showFullGrid)
+        let inQualityOverview = !viewModel.qualityDetailActive
+            && (viewModel.navSelection == .blurry
+                || viewModel.navSelection == .underexposed
+                || viewModel.navSelection == .overexposed)
+
+        if viewModel.compareModeActive {
+            CompareView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.navSelection == .duplicates {
+            DuplicatesView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if inQualityOverview && viewModel.navSelection == .blurry {
+            BlurryView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if inQualityOverview {
+            ExposureView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if showGrid {
+            LibraryFullGridView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            detailWithStrip
+        }
+    }
+
+    @ViewBuilder private var detailWithStrip: some View {
+        VStack(spacing: 0) {
+            DetailView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if !viewModel.collection.documents.isEmpty {
+                Divider()
+                LibraryGridView()
+                    .environmentObject(viewModel)
+                    .frame(height: 138)
+            }
+        }
+
+        if viewModel.adj.cropToolActive, let img = viewModel.currentImage {
+            CropEditorView(
+                image: img,
+                initialCrop: viewModel.adj.adjustments.cropRect,
+                initialRotation: viewModel.adj.adjustments.rotation
+            )
+            .environmentObject(viewModel)
         }
     }
 }

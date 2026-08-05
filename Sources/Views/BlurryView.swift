@@ -111,14 +111,38 @@ struct BlurryView: View {
                 spacing: 10
             ) {
                 ForEach(docs) { doc in
-                    BlurryDocTile(doc: doc) {
+                    let colIdx = viewModel.collectionIndex(for: doc)
+                    let isSelected = colIdx.map { viewModel.collection.selectedIndices.contains($0) } ?? false
+                    BlurryDocTile(doc: doc, isSelected: isSelected) {
                         viewModel.moveToAppTrash([doc])
                         viewModel.blurryDocuments.removeAll { $0.id == doc.id }
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { openDetail(for: doc) }
+                    .onTapGesture { handleTap(for: doc) }
+                    .contextMenu { ThumbnailContextMenu(doc: doc).environmentObject(viewModel) }
                 }
             }
             .padding(16)
         }
+    }
+
+    private func handleTap(for doc: ImageDocument) {
+        guard let idx = viewModel.collectionIndex(for: doc) else { return }
+        let flags = viewModel.lastClickModifiers
+        if flags.contains(.command) {
+            viewModel.toggleSelection(at: idx)
+        } else if flags.contains(.shift) {
+            viewModel.extendSelection(to: idx)
+        } else {
+            viewModel.selectDocument(at: idx)
+        }
+    }
+
+    private func openDetail(for doc: ImageDocument) {
+        guard let idx = viewModel.collectionIndex(for: doc) else { return }
+        viewModel.selectDocument(at: idx)
+        viewModel.qualityDetailActive = true
     }
 
     private func scan() {
@@ -151,6 +175,7 @@ struct BlurryView: View {
 
 private struct BlurryDocTile: View {
     let doc: ImageDocument
+    let isSelected: Bool
     let onTrash: () -> Void
 
     var body: some View {
@@ -172,7 +197,8 @@ private struct BlurryDocTile: View {
                 .cornerRadius(7)
                 .overlay(
                     RoundedRectangle(cornerRadius: 7)
-                        .stroke(Color.purple.opacity(0.5), lineWidth: 1.5)
+                        .stroke(isSelected ? Color.accentColor : Color.purple.opacity(0.5),
+                                lineWidth: isSelected ? 3 : 1.5)
                 )
 
                 Image(systemName: "drop.triangle.fill")

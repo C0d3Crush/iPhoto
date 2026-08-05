@@ -21,6 +21,9 @@ class ImageViewModel: ObservableObject {
     @Published var navSelection: NavSelection? = .library
     @Published var showingLibraryDetail: Bool = false
     @Published var showFullGrid: Bool = false
+    // Detail-Ansicht aus Qualitäts-Views (Unscharf/Belichtung) heraus: gleiche
+    // Logik wie showingLibraryDetail, aber für navSelection = .blurry/.under-/.overexposed.
+    @Published var qualityDetailActive: Bool = false
     @Published var gridThumbnailSize: CGFloat = 160
     @Published var isStartupLoading: Bool = true
     @Published var sortCriterion: SortCriterion = .filenameAsc
@@ -169,6 +172,16 @@ class ImageViewModel: ObservableObject {
                 self?.scheduleSmartFolderCountRefresh()
             }
             .store(in: &cancellables)
+
+        // Qualitäts-Listen fließen in visibleDocuments ein (blurry/underexposed/overexposed),
+        // Order-Cache muss invalidieren wenn sich die Listen ändern.
+        for pub in [$blurryDocuments.map { _ in () },
+                    $underexposedDocuments.map { _ in () },
+                    $overexposedDocuments.map { _ in () }] {
+            pub.dropFirst()
+                .sink { [weak self] _ in self?.invalidateVisibleOrder() }
+                .store(in: &cancellables)
+        }
 
         NotificationCenter.default.publisher(for: .importRequested)
             .receive(on: DispatchQueue.main)

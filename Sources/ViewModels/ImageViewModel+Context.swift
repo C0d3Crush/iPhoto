@@ -97,8 +97,15 @@ extension ImageViewModel {
             filtered = collection.documents.filter { $0.isTrashed }
         case .duplicates:
             filtered = docs
-        case .blurry, .underexposed, .overexposed:
-            filtered = docs
+        case .blurry:
+            let ids = Set(blurryDocuments.map { $0.id })
+            filtered = docs.filter { ids.contains($0.id) }
+        case .underexposed:
+            let ids = Set(underexposedDocuments.map { $0.id })
+            filtered = docs.filter { ids.contains($0.id) }
+        case .overexposed:
+            let ids = Set(overexposedDocuments.map { $0.id })
+            filtered = docs.filter { ids.contains($0.id) }
         }
         return applyStacking(to: applySortCriterion(to: filtered))
     }

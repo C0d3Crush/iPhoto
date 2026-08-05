@@ -117,15 +117,39 @@ struct ExposureView: View {
                 spacing: 10
             ) {
                 ForEach(docs) { doc in
-                    ExposureDocTile(doc: doc, isUnder: isUnder) {
+                    let colIdx = viewModel.collectionIndex(for: doc)
+                    let isSelected = colIdx.map { viewModel.collection.selectedIndices.contains($0) } ?? false
+                    ExposureDocTile(doc: doc, isUnder: isUnder, isSelected: isSelected) {
                         viewModel.moveToAppTrash([doc])
                         if isUnder { viewModel.underexposedDocuments.removeAll { $0.id == doc.id } }
                         else       { viewModel.overexposedDocuments.removeAll   { $0.id == doc.id } }
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { openDetail(for: doc) }
+                    .onTapGesture { handleTap(for: doc) }
+                    .contextMenu { ThumbnailContextMenu(doc: doc).environmentObject(viewModel) }
                 }
             }
             .padding(16)
         }
+    }
+
+    private func handleTap(for doc: ImageDocument) {
+        guard let idx = viewModel.collectionIndex(for: doc) else { return }
+        let flags = viewModel.lastClickModifiers
+        if flags.contains(.command) {
+            viewModel.toggleSelection(at: idx)
+        } else if flags.contains(.shift) {
+            viewModel.extendSelection(to: idx)
+        } else {
+            viewModel.selectDocument(at: idx)
+        }
+    }
+
+    private func openDetail(for doc: ImageDocument) {
+        guard let idx = viewModel.collectionIndex(for: doc) else { return }
+        viewModel.selectDocument(at: idx)
+        viewModel.qualityDetailActive = true
     }
 
     private func scan() {
@@ -164,6 +188,7 @@ struct ExposureView: View {
 private struct ExposureDocTile: View {
     let doc: ImageDocument
     let isUnder: Bool
+    let isSelected: Bool
     let onTrash: () -> Void
 
     private var accentColor: Color { isUnder ? .purple : .yellow }
@@ -184,7 +209,9 @@ private struct ExposureDocTile: View {
                     }
                 }
                 .cornerRadius(7)
-                .overlay(RoundedRectangle(cornerRadius: 7).stroke(accentColor.opacity(0.6), lineWidth: 1.5))
+                .overlay(RoundedRectangle(cornerRadius: 7)
+                    .stroke(isSelected ? Color.accentColor : accentColor.opacity(0.6),
+                            lineWidth: isSelected ? 3 : 1.5))
 
                 Image(systemName: icon)
                     .font(.system(size: 14))

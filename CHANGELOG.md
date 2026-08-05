@@ -2,6 +2,16 @@
 
 ---
 
+## 1.5.0
+**Feature — Auswahl, Kontextmenü und Detail-Ansicht in Qualitäts-Views**
+
+- In den Ansichten „Unscharfe Bilder“, „Unterbelichtet“ und „Überbelichtet“ können Bilder jetzt per Klick markiert werden (⌘-Klick für Mehrfachauswahl, ⇧-Klick für Bereich)
+- Rechtsklick auf ein Bild öffnet das bekannte Kontextmenü (Pick/Reject, Bewertung, Farb-Label, Export, In Papierkorb, Album, …)
+- Doppelklick öffnet das Bild in der Detail-Ansicht mit Filmstreifen — der Streifen zeigt nur die Bilder der jeweiligen Qualitäts-Liste, ⌘Pfeile navigieren nur innerhalb dieser
+- Toolbar-Button „Zurück zur Übersicht“ führt zurück zum Raster
+
+---
+
 ## 1.4.3
 **Bugfix — Inpaint-Pipeline korrigiert**
 
