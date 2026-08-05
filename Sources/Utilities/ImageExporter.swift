@@ -55,8 +55,6 @@ struct ExportResult {
 }
 
 struct ImageExporter {
-    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
-
     static func exportSingle(
         image: CGImage,
         to url: URL,
@@ -89,7 +87,7 @@ struct ImageExporter {
     private static func convertToSRGB(_ image: CGImage) -> CGImage? {
         guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         let ci = CIImage(cgImage: image)
-        return ciContext.createCGImage(ci, from: ci.extent, format: .RGBA8, colorSpace: srgb)
+        return sharedSRGBCIContext.createCGImage(ci, from: ci.extent, format: .RGBA8, colorSpace: srgb)
     }
 
 }

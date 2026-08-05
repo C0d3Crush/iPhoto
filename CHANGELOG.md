@@ -2,6 +2,15 @@
 
 ---
 
+## 1.3.1
+**Refactor — Doppelte CIContext-Instanzen zusammengefasst**
+
+- `ImageExporter` und `RAWImageDecoder` teilen sich jetzt einen gemeinsamen sRGB-CIContext (`sharedSRGBCIContext`)
+- `AdjustmentSessionState.ciContext` verweist jetzt auf `AdjustmentRenderer.context` — beide Konfigurationen waren identisch (linear-sRGB, RGBAh)
+- Weniger GPU-Ressourcen bei parallelen Export/Decode-Vorgängen, keine funktionale Änderung
+
+---
+
 ## 1.3.0
 **Feature — Unter- und Überbelichtung erkennen**
 

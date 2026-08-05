@@ -24,14 +24,9 @@ final class AdjustmentSessionState: ObservableObject {
     /// Verwirft veraltete Render-Ergebnisse nach schnellem Bildwechsel
     var renderToken: UUID = UUID()
 
-    let ciContext: CIContext = {
-        var opts: [CIContextOption: Any] = [.useSoftwareRenderer: false]
-        if let linearSRGB = CGColorSpace(name: CGColorSpace.linearSRGB) {
-            opts[.workingColorSpace] = linearSRGB
-        }
-        opts[.workingFormat] = CIFormat.RGBAh
-        return CIContext(options: opts)
-    }()
+    /// Geteilter linearer CIContext — identisch zu AdjustmentRenderer.context.
+    /// Zwei Contexts mit gleicher Konfiguration verdoppelten die GPU-Ressourcen ohne Nutzen.
+    var ciContext: CIContext { AdjustmentRenderer.context }
 
     var hasActiveAdjustments: Bool { adjustments != AdjustmentState() }
 }

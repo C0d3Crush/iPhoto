@@ -18,8 +18,8 @@ func iphotoBreadcrumb(_ message: String) {
 
 // Geteilter CIContext — laut Apple-Dokumentation thread-safe für Rendering.
 // Einen Context pro App statt einen pro Thread: Metal/GPU erschöpft sich nicht mehr
-// wenn 20+ Thumbnails gleichzeitig dekodiert werden.
-private let sharedCIContext = CIContext(options: [.useSoftwareRenderer: false])
+// wenn 20+ Thumbnails gleichzeitig dekodiert werden. Auch von ImageExporter genutzt.
+let sharedSRGBCIContext = CIContext(options: [.useSoftwareRenderer: false])
 
 // Begrenzt gleichzeitige CIContext-Renders auf 2 (GPU-Schutz bei Vollbild-Decodes).
 private let ciSemaphore = DispatchSemaphore(value: 2)
@@ -29,7 +29,7 @@ private let ciSemaphore = DispatchSemaphore(value: 2)
 // bei parallelem Zugriff auf viele RAF-embedded-JPEGs → SIGSEGV.
 private let imageIOSemaphore = DispatchSemaphore(value: 3)
 
-private func makeCIContext() -> CIContext { sharedCIContext }
+private func makeCIContext() -> CIContext { sharedSRGBCIContext }
 
 enum DecoderError: LocalizedError {
     case cannotCreateSource
@@ -235,7 +235,7 @@ struct RAWImageDecoder {
         let ci = CIImage(cgImage: image).oriented(orientation)
         iphotoBreadcrumb("applyExifOrientation: CIContext.createCGImage")
         Log.trace("CIContext.createCGImage: \(Int(ci.extent.width))×\(Int(ci.extent.height))")
-        let result = sharedCIContext.createCGImage(ci, from: ci.extent)
+        let result = sharedSRGBCIContext.createCGImage(ci, from: ci.extent)
         iphotoBreadcrumb("applyExifOrientation: done")
         return result ?? image
     }
