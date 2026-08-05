@@ -2,6 +2,14 @@
 
 ---
 
+## 1.13.1
+**Chore — Notarization-Skript + Sparkle-Integrationsplan**
+
+- Neues `notarize.sh` signiert `build/iPhoto.app` mit einer Developer-ID, sendet per `xcrun notarytool` an Apple, wartet auf das Ticket und `staple`t es in die .app. Voraussetzung: `xcrun notarytool store-credentials iPhoto-Notary` einmalig laufen lassen. Damit ist der Vertrieb ausserhalb des App Store ohne Gatekeeper-Warnung moeglich
+- Der Sparkle-Integrationsplan (Framework-Ablage ohne SPM, Info.plist-Keys, Ed25519-Signatur, GitHub-Pages-Appcast) steht als Kommentar-Block oben im Skript. Umsetzung wird spaeter angestossen, wenn Auto-Update-Bedarf konkret wird
+
+---
+
 ## 1.13.0
 **Feature — Draft-Mode für Adjustments + ADJUST-Perf-Log**
 
