@@ -2,6 +2,15 @@
 
 ---
 
+## 1.4.1
+**Refactor — ImageViewModel+Loading in fokussierte Extensions aufgeteilt**
+
+- `ImageViewModel+Loading.swift` (614 Zeilen) auf 282 Zeilen reduziert (nur noch die Bild-Pipeline)
+- Neue Extensions: `+Thumbnails.swift` (Grid- und High-Res-Thumbnails), `+MetadataScan.swift` (Metadaten + EXIF-Library-Scan), `+QualityDetection.swift` (Duplikate, Unschärfe, Belichtung)
+- Keine API-Änderung, keine funktionale Änderung — nur Datei-Organisation
+
+---
+
 ## 1.4.0
 **Feature — Automatische Katalog-Backups**
 
