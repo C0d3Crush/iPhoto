@@ -68,26 +68,16 @@ class ImageViewModel: ObservableObject {
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
     let metadataService = MetadataService()
     private var cancellables = Set<AnyCancellable>()
-    var loadToken: UUID = UUID()
-    var currentlyLoadingURL: URL? = nil
-    // Tracks URLs that have an active 1500px-preview background task.
-    // Prevents 7+ duplicate decode tasks when albums are switched rapidly.
-    var previewLoadInFlight: Set<URL> = []
+    // Lade-Pipeline (Bild, Thumbnails, Metadaten) — kompletter State + Queues lebt
+    // im Orchestrator; VM ruft nur noch die passenden Methoden auf.
+    lazy var loader: ImageLoadingOrchestrator = {
+        let o = ImageLoadingOrchestrator()
+        o.host = self
+        return o
+    }()
     var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
     private var eventMonitors: [Any] = []
     var syncedFolderIDs: Set<UUID> = []
-    var isLoadingFullRes = false
-    var activeFullResToken: UUID? = nil
-    var fullResWorkItem: DispatchWorkItem? = nil
-    var thumbQueued: Int = 0
-    var thumbDone: Int = 0
-    var thumbHideTask: DispatchWorkItem? = nil
-    var thumbInFlight: Set<URL> = []
-    var hiResInFlight: Set<URL> = []
-    let thumbnailTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
-    var metaDone: Int = 0
-    var metaTotal: Int = 0
-    let metaTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
 
     // Reihenfolge-Cache für visibleDocuments: Filter+Sortierung (800+ teure
     // localizedStandardCompare) wird als ID-Liste gecacht, die Dokument-Inhalte
@@ -109,7 +99,6 @@ class ImageViewModel: ObservableObject {
     // unverändert ist. Spart das Dictionary-Rebuild pro SwiftUI-Render-Zugriff.
     var visibleResolvedCache: [ImageDocument]? = nil
     var visibleResolvedRevision: UInt64 = 0
-    var prefetchInFlight: Set<URL> = []
 
     // Serienbild-/Bracketing-Stapel (Fuji 0x1101 SequenceNumber):
     // Anführer-Pfad → aufgeklappt; Zähler/Zuordnung als Nebenprodukt der Order-Berechnung.
@@ -378,8 +367,7 @@ class ImageViewModel: ObservableObject {
 
     deinit {
         folderWatchers.values.forEach { $0.cancel() }
-        fullResWorkItem?.cancel()
-        thumbHideTask?.cancel()
+        loader.cancelPendingWork()
         eventMonitors.forEach { NSEvent.removeMonitor($0) }
     }
 

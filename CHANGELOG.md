@@ -2,6 +2,16 @@
 
 ---
 
+## 1.4.2
+**Refactor — Lade-Pipeline in ImageLoadingOrchestrator ausgelagert**
+
+- Neue Klasse `ImageLoadingOrchestrator` besitzt den kompletten Lade-State (15 Felder + 4 Queues + Semaphore) und die Implementierung von Bild-, Thumbnail- und Metadaten-Pipeline
+- `ImageViewModel` hält nur noch eine `lazy var loader`-Referenz; die 8 öffentlichen Lade-Methoden werden über dünne Wrapper (`+Loading`, `+Thumbnails`, `+MetadataScan`, ~20 Zeilen zusammen) an den Orchestrator delegiert
+- Alle 14 Aufrufer-Dateien bleiben unverändert — keine API-Änderung
+- Motivation: `ImageViewModel` shrinkt um 15 State-Felder und die Lade-Logik lebt nun in einer verantwortlichen Klasse
+
+---
+
 ## 1.4.1
 **Refactor — ImageViewModel+Loading in fokussierte Extensions aufgeteilt**
 

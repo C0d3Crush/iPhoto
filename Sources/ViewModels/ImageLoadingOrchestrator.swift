@@ -1,0 +1,561 @@
+import AppKit
+import Foundation
+
+// Prozess-weite Koordinations-Primitiven (kein per-Instanz-State):
+// OperationQueues statt "ein GCD-Block pro Bild + Semaphore" — Hunderte wartende
+// Blöcke erschöpften GCDs Thread-Pool (Soft-Limit 64) → Bug #35.
+private let thumbnailBatchQueue: OperationQueue = {
+    let q = OperationQueue()
+    q.name = "iphoto.thumbnails.batch"
+    q.maxConcurrentOperationCount = 2
+    q.qualityOfService = .background
+    return q
+}()
+
+private let visibleThumbnailQueue: OperationQueue = {
+    let q = OperationQueue()
+    q.name = "iphoto.thumbnails.visible"
+    q.maxConcurrentOperationCount = 2
+    q.qualityOfService = .userInitiated
+    return q
+}()
+
+// Deckelt parallele Metadaten-Reads (RAF: 128 KB JPEG-Header pro Datei).
+private let metadataQueue: OperationQueue = {
+    let q = OperationQueue()
+    q.name = "iphoto.metadata"
+    q.maxConcurrentOperationCount = 4
+    q.qualityOfService = .background
+    return q
+}()
+
+// Serialisiert Voll-Decodes — nur ein RAF/JPEG gleichzeitig, sonst OOM → SIGSEGV.
+private let fullResDecodeSemaphore = DispatchSemaphore(value: 1)
+
+// Kapselt die gesamte Bild-, Thumbnail- und Metadaten-Lade-Pipeline.
+// Zuvor lag der State (15 Felder + 4 Queues) direkt auf ImageViewModel und wurde
+// über 3 Extension-Dateien verteilt manipuliert — die VM war dadurch ein „god object".
+// Orchestrator besitzt den State selbst; die VM hält nur noch eine Referenz und
+// leitet Aufrufe über dünne Wrapper (ImageViewModel+Loading/Thumbnails/MetadataScan)
+// weiter, damit die 14 Aufrufer-Dateien unverändert bleiben.
+//
+// Der Rückgriff auf VM-Zustand (collection, adj, activity, errorMessage etc.)
+// erfolgt über `weak var host` — VM lebt so lange wie die App, aber `weak` ist
+// konsistent mit den [weak self]-Patterns in der bestehenden Code-Basis.
+final class ImageLoadingOrchestrator {
+
+    weak var host: ImageViewModel?
+
+    // MARK: - State (zuvor auf ImageViewModel)
+
+    var loadToken: UUID = UUID()
+    var currentlyLoadingURL: URL? = nil
+    // Verhindert 7+ Duplikat-Decode-Tasks pro URL bei schnellem Alben-Wechsel.
+    var previewLoadInFlight: Set<URL> = []
+    var isLoadingFullRes = false
+    var activeFullResToken: UUID? = nil
+    var fullResWorkItem: DispatchWorkItem? = nil
+    var thumbQueued: Int = 0
+    var thumbDone: Int = 0
+    var thumbHideTask: DispatchWorkItem? = nil
+    var thumbInFlight: Set<URL> = []
+    var hiResInFlight: Set<URL> = []
+    let thumbnailTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    var metaDone: Int = 0
+    var metaTotal: Int = 0
+    let metaTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+    var prefetchInFlight: Set<URL> = []
+
+    // MARK: - Deinit / Cleanup
+
+    func cancelPendingWork() {
+        fullResWorkItem?.cancel()
+        thumbHideTask?.cancel()
+    }
+
+    // MARK: - Bild-Pipeline
+
+    func loadCurrentImage() {
+        guard let host = host else { return }
+        guard let doc = host.collection.currentDocument else { return }
+        guard doc.url != currentlyLoadingURL || doc.cgImage == nil else { return }
+        currentlyLoadingURL = doc.url
+        host.evictDistantImages(keepRadius: 3)
+        host.resetAdjustments()
+        host.clearInpaint()
+        host.adj.isUndoRedoing = false
+        if let saved = CatalogStore.shared.loadAdjustments(path: doc.url.path) {
+            host.adj.adjustments = saved
+        }
+        host.adj.history.reset(to: host.adj.adjustments)
+        host.adj.lastPersisted = host.adj.adjustments
+        activeFullResToken = nil
+        isLoadingFullRes = false
+        fullResWorkItem?.cancel()
+        fullResWorkItem = nil
+
+        if doc.cgImage != nil {
+            Log.trace("Bild bereits im Cache: \(doc.url.lastPathComponent)")
+            host.fitToWindowRequested = true
+            host.adj.displayImageVersion = UUID()
+            prefetchAdjacent()
+            return
+        }
+
+        host.errorMessage = nil
+        let url = doc.url
+        let token = UUID()
+        loadToken = token
+
+        let hasQuickPreview = doc.thumbnail != nil || doc.previewImage != nil
+        if hasQuickPreview {
+            host.adj.displayImageVersion = UUID()
+            host.fitToWindowRequested = true
+            host.isLoading = false
+        } else {
+            host.isLoading = true
+        }
+
+        // RAF auf macOS 11: „Vollbild" ist ohnehin nur das eingebettete JPEG (~100 ms) —
+        // Preview-Phase und 1,5-s-Dwell entfallen, direkt Vollbild laden.
+        if RAWImageDecoder.fullDecodeIsCheap(url: url) {
+            Log.info("Lade Bild (direkt voll): \(url.lastPathComponent)")
+            loadFullRes(url: url, token: token)
+            return
+        }
+
+        if doc.previewImage != nil {
+            Log.trace("Dwell geplant (previewImage vorhanden): \(url.lastPathComponent) token=\(token)")
+            let item = DispatchWorkItem { [weak self] in
+                guard let self = self, self.loadToken == token else { return }
+                self.fullResWorkItem = nil
+                self.loadFullRes(url: url, token: token)
+            }
+            fullResWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: item)
+            return
+        }
+
+        guard !previewLoadInFlight.contains(url) else { return }
+        previewLoadInFlight.insert(url)
+
+        Log.info("Lade Bild: \(url.lastPathComponent)")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            defer {
+                DispatchQueue.main.async { self?.previewLoadInFlight.remove(url) }
+            }
+            guard let self = self else { return }
+            Log.trace("loadCurrentImage thumbnail-Phase BG: \(url.lastPathComponent) token=\(token)")
+            let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+            defer { stopAccess() }
+
+            // Phase 2: Preview in Bildschirmauflösung (~1500px)
+            if let preview = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 1500) {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, let host = self.host, self.loadToken == token else { return }
+                    guard let idx = host.collection.documents.firstIndex(where: { $0.url == url }) else { return }
+                    host.collection.documents[idx].previewImage = preview
+                    host.isLoading = false
+                    host.fitToWindowRequested = true
+                    host.adj.displayImageVersion = UUID()
+                    if host.hasActiveAdjustments { host.applyAdjustments() }
+                }
+            }
+
+            // Phase 3: Vollbild nach Dwell-Zeit (1.5 s)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.loadToken == token else { return }
+                self.fullResWorkItem?.cancel()
+                Log.trace("Dwell geplant (Phase 3): \(url.lastPathComponent) token=\(token)")
+                let item = DispatchWorkItem { [weak self] in
+                    guard let self = self, self.loadToken == token else { return }
+                    Log.trace("Dwell gefeuert: \(url.lastPathComponent) token=\(token)")
+                    self.fullResWorkItem = nil
+                    self.loadFullRes(url: url, token: token)
+                }
+                self.fullResWorkItem = item
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: item)
+            }
+        }
+    }
+
+    func loadFullRes(url: URL, token: UUID) {
+        guard let host = host else { return }
+        guard !isLoadingFullRes,
+              activeFullResToken == nil,
+              token == loadToken,
+              let idx = host.collection.documents.firstIndex(where: { $0.url == url }),
+              host.collection.documents[idx].cgImage == nil else { return }
+        isLoadingFullRes = true
+        activeFullResToken = token
+        let preloadedMetadata = host.collection.documents[idx].metadata
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            fullResDecodeSemaphore.wait()
+            defer { fullResDecodeSemaphore.signal() }
+            guard let self = self else { return }
+            // Token-Prüfung nach dem Warten: stale wenn Nutzer weitergeklickt hat.
+            guard self.loadToken == token else {
+                DispatchQueue.main.async {
+                    self.isLoadingFullRes = false
+                    self.activeFullResToken = nil
+                    self.upgradeToFullResIfNeeded()
+                }
+                return
+            }
+            Log.trace("loadFullRes BG gestartet: \(url.lastPathComponent) token=\(token)")
+            let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+            defer { stopAccess() }
+            do {
+                let image = try RAWImageDecoder.decode(url: accessURL)
+                let size = CGSize(width: image.width, height: image.height)
+                let metadata: [MetadataEntry]
+                if preloadedMetadata.isEmpty, let host = self.host {
+                    metadata = host.metadataService.readPhotoMetadata(from: accessURL)
+                } else {
+                    metadata = preloadedMetadata
+                }
+                Log.info("Bild dekodiert (voll): \(url.lastPathComponent) \(Int(size.width))×\(Int(size.height)), \(metadata.count) Metadaten-Einträge")
+                // SQLite-Zugriffe noch im BG-Thread erledigen — nicht auf dem Main-Thread blockieren
+                let catalogRating = CatalogStore.shared.rating(forPath: url.path)
+                let fallbackRating = catalogRating == nil ? RatingStore.shared.load(for: url) : nil
+                let sizeBytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { Int64($0) } ?? 0
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, let host = self.host, self.loadToken == token else {
+                        Log.debug("Vollbild verworfen (Token ungültig): \(url.lastPathComponent)")
+                        self?.isLoadingFullRes = false
+                        self?.activeFullResToken = nil
+                        return
+                    }
+                    guard let idx = host.collection.documents.firstIndex(where: { $0.url == url }) else {
+                        self.isLoadingFullRes = false
+                        self.activeFullResToken = nil
+                        return
+                    }
+                    let old = host.collection.documents[idx]
+                    var updated = old
+                    updated.cgImage = image
+                    updated.imageSize = size
+                    updated.metadata = metadata
+                    if let r = catalogRating {
+                        updated.rating = r.rating
+                        updated.flagStatus = FlagStatus(rawValue: r.flag) ?? .none
+                        updated.colorLabel = ColorLabel(rawValue: r.colorLabel) ?? .none
+                    } else if let entry = fallbackRating {
+                        updated.rating = entry.rating
+                        updated.flagStatus = entry.flagStatus
+                        updated.colorLabel = entry.colorLabel
+                    }
+                    host.collection.update(document: updated, at: idx)
+                    if old.metadata.count != updated.metadata.count
+                        || old.rating != updated.rating
+                        || old.flagStatus != updated.flagStatus
+                        || old.colorLabel != updated.colorLabel {
+                        host.invalidateVisibleOrder()
+                    }
+                    let dateTaken  = updated.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value
+                    let camMake    = updated.metadata.first(where: { $0.key == "tiff.Make" })?.value
+                    let camModel   = updated.metadata.first(where: { $0.key == "tiff.Model" })?.value
+                    let isRAW = updated.isRAW
+                    DispatchQueue.global(qos: .utility).async {
+                        CatalogStore.shared.upsertImage(path: url.path, filename: url.lastPathComponent,
+                                                        isRAW: isRAW, width: Int(size.width),
+                                                        height: Int(size.height), sizeBytes: sizeBytes,
+                                                        dateTaken: dateTaken, cameraMake: camMake, cameraModel: camModel)
+                    }
+                    self.isLoadingFullRes = false
+                    self.activeFullResToken = nil
+                    self.currentlyLoadingURL = nil
+                    host.isLoading = false
+                    if updated.previewImage == nil && updated.thumbnail == nil {
+                        host.fitToWindowRequested = true
+                    }
+                    host.adj.displayImageVersion = UUID()
+                    if host.hasActiveAdjustments { host.applyAdjustments() }
+                    host.loadVersionsForCurrentImage()
+                    NSDocumentController.shared.noteNewRecentDocumentURL(url)
+                    host.evictDistantImages()
+                    self.prefetchAdjacent()
+                }
+            } catch {
+                Log.error("Vollbild laden fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, let host = self.host, self.loadToken == token else { return }
+                    self.isLoadingFullRes = false
+                    self.activeFullResToken = nil
+                    if host.collection.currentDocument?.url == url {
+                        host.isLoading = false
+                        host.errorMessage = error.localizedDescription
+                    }
+                }
+            }
+        }
+    }
+
+    func upgradeToFullResIfNeeded() {
+        guard let host = host, let doc = host.collection.currentDocument, doc.cgImage == nil else { return }
+        loadFullRes(url: doc.url, token: loadToken)
+    }
+
+    func prefetchAdjacent() {
+        guard let host = host else { return }
+        let visible = host.visibleDocuments
+        guard let cur = host.collection.currentDocument,
+              let visPos = visible.firstIndex(where: { $0.id == cur.id }) else { return }
+        // Vorwärts zuerst — häufigste Navigationsrichtung.
+        for offset in [1, -1] {
+            let neighborPos = visPos + offset
+            guard neighborPos >= 0, neighborPos < visible.count,
+                  let colIdx = host.collectionIndex(for: visible[neighborPos]),
+                  host.collection.documents[colIdx].cgImage == nil else { continue }
+            let url = host.collection.documents[colIdx].url
+            guard !prefetchInFlight.contains(url) else { continue }
+            prefetchInFlight.insert(url)
+            let idx = colIdx
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                fullResDecodeSemaphore.wait()
+                defer { fullResDecodeSemaphore.signal() }
+                autoreleasepool {
+                    let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                    defer { stopAccess() }
+                    let image: CGImage?
+                    do {
+                        image = try RAWImageDecoder.decode(url: accessURL)
+                    } catch {
+                        Log.error("Prefetch-Decode fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
+                        image = nil
+                    }
+                    DispatchQueue.main.async {
+                        guard let self = self, let host = self.host else { return }
+                        self.prefetchInFlight.remove(url)
+                        guard let image = image,
+                              idx < host.collection.documents.count,
+                              host.collection.documents[idx].url == url,
+                              host.collection.documents[idx].cgImage == nil else { return }
+                        Log.trace("Prefetch fertig: \(url.lastPathComponent)")
+                        host.collection.documents[idx].cgImage = image
+                        host.collection.documents[idx].imageSize = CGSize(width: image.width, height: image.height)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Thumbnails
+
+    func loadThumbnails() {
+        guard let host = host else { return }
+        guard host.activity.importProgress.isEmpty else { return }
+        let visibleURLs = Set(host.visibleDocuments.map { $0.url })
+        let pending = host.collection.documents.enumerated().filter {
+            visibleURLs.contains($0.element.url) &&
+            $0.element.placeholderThumbnailImage == nil &&
+            $0.element.thumbnailImage == nil &&
+            !thumbInFlight.contains($0.element.url)
+        }
+        guard !pending.isEmpty else { return }
+
+        thumbHideTask?.cancel()
+        thumbHideTask = nil
+        for (_, doc) in pending { thumbInFlight.insert(doc.url) }
+        thumbQueued += pending.count
+        host.activity.enqueue(id: thumbnailTaskID, label: "Lade Thumbnails",
+                              icon: "photo", done: thumbDone, total: thumbQueued)
+
+        let thumbTaskID = thumbnailTaskID
+        for (_, doc) in pending {
+            let url = doc.url
+            thumbnailBatchQueue.addOperation { [weak self] in
+                self?.host?.activity.waitWhilePaused(id: thumbTaskID)
+                autoreleasepool {
+                    let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                    defer { stopAccess() }
+                    let nsImage: NSImage?
+                    var decodeError: String? = nil
+                    do {
+                        let cg = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 80)
+                        nsImage = NSImage(cgImage: cg, size: .zero)
+                    } catch {
+                        Log.error("Thumbnail-Decode fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
+                        nsImage = nil
+                        decodeError = error.localizedDescription
+                    }
+                    DispatchQueue.main.async {
+                        guard let self = self, let host = self.host else { return }
+                        self.thumbInFlight.remove(url)
+                        if let idx = host.collection.documents.firstIndex(where: { $0.url == url }) {
+                            if let img = nsImage, host.collection.documents[idx].thumbnailImage == nil {
+                                host.collection.documents[idx].placeholderThumbnailImage = img
+                            } else if let msg = decodeError,
+                                      host.collection.documents[idx].errorMessage == nil {
+                                host.collection.documents[idx].errorMessage = msg
+                            }
+                        }
+                        self.thumbDone += 1
+                        host.activity.update(id: self.thumbnailTaskID,
+                                             done: self.thumbDone, total: self.thumbQueued)
+                        if self.thumbDone >= self.thumbQueued {
+                            self.thumbDone   = 0
+                            self.thumbQueued = 0
+                            self.thumbInFlight.removeAll()
+                            let taskID = self.thumbnailTaskID
+                            let task = DispatchWorkItem { [weak self] in
+                                self?.host?.activity.dequeue(id: taskID)
+                            }
+                            self.thumbHideTask = task
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: task)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func requestVisibleThumbnail(at index: Int) {
+        guard let host = host else { return }
+        guard index < host.collection.documents.count else { return }
+        let doc = host.collection.documents[index]
+        guard doc.thumbnailImage == nil else { return }
+        let url = doc.url
+        guard !hiResInFlight.contains(url) else { return }
+        hiResInFlight.insert(url)
+        visibleThumbnailQueue.addOperation { [weak self] in
+            autoreleasepool {
+                let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                defer { stopAccess() }
+                let thumb: CGImage
+                do {
+                    thumb = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 160)
+                } catch {
+                    Log.error("Thumbnail-Decode (160px) fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        guard let self = self, let host = self.host else { return }
+                        self.hiResInFlight.remove(url)
+                        if let idx = host.collection.documents.firstIndex(where: { $0.url == url }),
+                           host.collection.documents[idx].errorMessage == nil {
+                            host.collection.documents[idx].errorMessage = error.localizedDescription
+                        }
+                    }
+                    return
+                }
+                let nsImage = NSImage(cgImage: thumb, size: .zero)
+                DispatchQueue.main.async {
+                    guard let self = self, let host = self.host else { return }
+                    self.hiResInFlight.remove(url)
+                    guard let idx = host.collection.documents.firstIndex(where: { $0.url == url }) else { return }
+                    host.collection.documents[idx].thumbnail = thumb
+                    host.collection.documents[idx].thumbnailImage = nsImage
+                    host.collection.documents[idx].placeholderThumbnailImage = nil
+                }
+            }
+        }
+    }
+
+    // MARK: - Metadaten-Scans
+
+    // urls: die gerade importierten Bilder — zeigt genau deren Anzahl in der Loading-Bar.
+    func loadMetadataInBackground(for urls: [URL]) {
+        guard let host = host else { return }
+        let urlSet = Set(urls)
+        let pending = host.collection.documents.filter {
+            urlSet.contains($0.url) && $0.metadata.isEmpty
+        }
+        guard !pending.isEmpty else { return }
+
+        metaTotal += pending.count
+        host.activity.enqueue(id: metaTaskID, label: "Metadaten laden",
+                              icon: "doc.text.magnifyingglass", done: metaDone, total: metaTotal)
+
+        let metaID = metaTaskID
+        for doc in pending {
+            let url = doc.url
+            metadataQueue.addOperation { [weak self] in
+                self?.host?.activity.waitWhilePaused(id: metaID)
+                guard let self = self, let host = self.host else { return }
+                let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                defer { stopAccess() }
+                let metadata = host.metadataService.readPhotoMetadata(from: accessURL)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, let host = self.host else { return }
+                    if !metadata.isEmpty,
+                       let idx = host.collection.documents.firstIndex(where: { $0.url == url }),
+                       host.collection.documents[idx].metadata.isEmpty {
+                        host.collection.documents[idx].metadata = metadata
+                        host.invalidateVisibleOrder()
+                    }
+                    self.metaDone += 1
+                    host.activity.update(id: self.metaTaskID,
+                                         done: self.metaDone, total: self.metaTotal)
+                    if self.metaDone >= self.metaTotal {
+                        self.metaDone  = 0
+                        self.metaTotal = 0
+                        host.activity.dequeue(id: self.metaTaskID)
+                        host.detectDuplicates()
+                    }
+                }
+            }
+        }
+    }
+
+    func scanExifForLibrary() {
+        guard let host = host else { return }
+        let paths = CatalogStore.shared.pathsNeedingExifScan()
+        guard !paths.isEmpty else { return }
+
+        let taskID = UUID()
+        host.activity.enqueue(id: taskID, label: "Metadaten lesen", icon: "info.circle",
+                              done: 0, total: paths.count)
+
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            guard let self = self, let host = self.host else { return }
+            let total = paths.count
+            var done = 0
+            for path in paths {
+                host.activity.waitWhilePaused(id: taskID)
+                autoreleasepool {
+                    let url = URL(fileURLWithPath: path)
+                    let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                    defer { stopAccess() }
+                    let metadata = host.metadataService.readPhotoMetadata(from: accessURL)
+                    let fl = (metadata.first(where: { $0.key == "exif.FocalLength" })?.value)
+                        .flatMap { s -> Double? in
+                            var t = s
+                            if t.hasSuffix(" mm") { t = String(t.dropLast(3)) }
+                            return Double(t)
+                        }
+                    let iso = (metadata.first(where: { $0.key == "exif.ISO" })?.value)
+                        .flatMap { s -> Int? in
+                            var t = s
+                            if t.hasPrefix("ISO ") { t = String(t.dropFirst(4)) }
+                            return Int(t)
+                        }
+                    let ap = (metadata.first(where: { $0.key == "exif.FNumber" })?.value)
+                        .flatMap { s -> Double? in
+                            var t = s
+                            if t.hasPrefix("f/") { t = String(t.dropFirst(2)) }
+                            return Double(t)
+                        }
+                    let lens = metadata.first(where: { $0.key == "exif.LensModel" })?.value
+                    let hdr = metadata.first(where: { $0.key == "exif.HDR" })?.value == "Ja"
+                    let filmSim = metadata.first(where: { $0.key == "exif.FilmSimulation" })?.value
+                    let seq = (metadata.first(where: { $0.key == "exif.SequenceNumber" })?.value).flatMap { Int($0) }
+                    let bkt = metadata.first(where: { $0.key == "exif.AutoBracketing" })?.value == "Ja"
+                    CatalogStore.shared.upsertExif(path: path, focalLength: fl, iso: iso, aperture: ap, lensModel: lens, hdr: hdr, filmSimulation: filmSim, sequenceNumber: seq, autoBracketing: bkt)
+                    done += 1
+                    let d = done, t = total
+                    DispatchQueue.main.async { [weak self] in
+                        self?.host?.activity.update(id: taskID, done: d, total: t)
+                    }
+                }
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let host = self?.host else { return }
+                host.activity.dequeue(id: taskID)
+                // Frisch gescannte Sequenz-Nummern können neue Stapel ergeben
+                host.invalidateVisibleOrder()
+                host.objectWillChange.send()
+                Log.info("EXIF-Scan abgeschlossen: \(total) Bilder")
+            }
+        }
+    }
+}
