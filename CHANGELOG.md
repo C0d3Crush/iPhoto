@@ -2,6 +2,17 @@
 
 ---
 
+## 1.9.1
+**Bugfix — Ähnliche-Bilder-Cluster und Duplikat-Erkennung robuster**
+
+- Ähnliche-Bilder-Gruppierung: Union-Find erzeugte transitive Ketten (A~B, B~C, C~D → alle in einer Gruppe, auch wenn A und D visuell nichts gemein hatten). Speziell bei dunklen/kontrastarmen Motiven bildeten sich Riesen-Cluster mit völlig unähnlichen Bildern. Neu: Seed-and-Pull — jede Gruppe hat einen Seed, alle Mitglieder liegen garantiert innerhalb `maxDistance` vom Seed
+- Ähnlichkeits-Schwelle von 10 → 8 Bits Hamming-Distanz gesenkt (12,5 % statt 15,6 % Unterschied) — Bracketing-Serien bleiben zusammen, unähnliche Motive nicht mehr
+- „Neu gruppieren" reagiert nicht mehr stumm, wenn noch kein pHash vorliegt: der Quality-Scan wird automatisch gestartet, Fortschritt sichtbar in der Statuszeile
+- Duplikat-Erkennung: bisherige Priorisierung (pHash → EXIF-Datum → Filename) fiel auseinander, sobald ein Duplikat-Paar aus zwei unterschiedlichen Tiers kam (z. B. ein Bild mit pHash, das andere nur mit Filename+Größe). Neu: Multi-Key-Bucketing mit Union-Find — jeder Doc trägt bis zu 3 Signale bei, teilen sich zwei Docs *irgendeines*, gelten sie als Kandidat
+- Kandidaten werden anschließend per SHA über die ersten 256 KB der Datei verifiziert — echte Progress-Anzeige und belastbare Duplikat-Aussage statt millisekunden-schneller Wörterbuch-Aggregation
+
+---
+
 ## 1.9.0
 **Feature — Persistierte Duplikat- und Similarity-Gruppen**
 

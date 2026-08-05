@@ -21,45 +21,96 @@ extension ImageViewModel {
                          icon: "square.on.square",
                          done: 0, total: docs.count, summaryVerb: "geprüft")
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            // Grouping-Key priorisiert (in dieser Reihenfolge):
-            //   1. pHash + Dateigröße — greift auch bei Exports ohne EXIF und bit-exakten Kopien
-            //   2. DateTimeOriginal + Dateigröße — Fallback, falls pHash noch nicht gescannt
-            //   3. Dateigröße + Dateiname (lowercased) — letzter Fallback für Kopien ohne Metadaten
-            // Alle 3 Wege sind unabhängig; findet ein Bild via Weg 1 einen Partner,
-            // reicht das — keine Notwendigkeit für dupliziertes Grouping.
-            var byKey: [String: [ImageDocument]] = [:]
-            for (i, doc) in docs.enumerated() {
+            // Multi-Key-Bucketing + Union-Find: jeder Doc trägt bis zu 3 unabhängige
+            // Signale bei; teilen sich zwei Docs *irgendeinen* Bucket, gelten sie als
+            // Duplikat-Kandidaten. Historisch v1.8.0: exklusive Keys (ph→dt→nm) — dabei
+            // fielen Docs auseinander, wenn nur eines der beiden bereits pHash hatte
+            // und das andere nur Filename+Size — sie landeten in verschiedenen Tiers.
+            //
+            //   Signale:
+            //     A. pHash (exakter Match, hash-only — Größe bewusst *nicht* mit im Key,
+            //        damit re-encodete Kopien trotz abweichender Bytes matchen)
+            //     B. Dateigröße + Dateiname (lowercased) — fängt einfache Kopien
+            //     C. EXIF DateTimeOriginal + Größe — fängt Kamera-JPGs
+            //
+            // Für Verifikation lesen wir bei Kandidaten-Gruppen anschließend die ersten
+            // 256 KB per SHA-256 und splitten Gruppen, deren Bytes definitiv abweichen.
+            let n = docs.count
+            var parent = Array(0..<n)
+            func find(_ x: Int) -> Int {
+                var r = x
+                while parent[r] != r { r = parent[r] }
+                var i = x
+                while parent[i] != r { let nx = parent[i]; parent[i] = r; i = nx }
+                return r
+            }
+            func union(_ a: Int, _ b: Int) {
+                let ra = find(a), rb = find(b)
+                if ra != rb { parent[rb] = ra }
+            }
+
+            var byKey: [String: [Int]] = [:]
+            var sizes: [Int] = Array(repeating: 0, count: n)
+            for (idx, doc) in docs.enumerated() {
                 let size = (try? doc.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap({ $0 }) ?? 0
-                let key: String
-                if let ph = doc.phash, size > 0 {
-                    key = "ph:\(ph)|\(size)"
-                } else if let dateTaken = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value,
-                          !dateTaken.isEmpty, size > 0 {
-                    key = "dt:\(dateTaken)|\(size)"
-                } else if size > 0 {
-                    key = "nm:\(size)|\(doc.filename.lowercased())"
-                } else {
-                    let done = i + 1
-                    if done % 25 == 0 || done == docs.count {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.activity.update(id: taskID, done: done, total: docs.count)
-                        }
-                    }
-                    continue
+                sizes[idx] = size
+                if let ph = doc.phash {
+                    byKey["ph:\(ph)", default: []].append(idx)
                 }
-                byKey[key, default: []].append(doc)
-                let done = i + 1
-                if done % 25 == 0 || done == docs.count {
+                if size > 0 {
+                    byKey["fn:\(size)|\(doc.filename.lowercased())", default: []].append(idx)
+                    if let dateTaken = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value,
+                       !dateTaken.isEmpty {
+                        byKey["dt:\(dateTaken)|\(size)", default: []].append(idx)
+                    }
+                }
+                let done = idx + 1
+                if done % 50 == 0 || done == n {
                     DispatchQueue.main.async { [weak self] in
-                        self?.activity.update(id: taskID, done: done, total: docs.count)
+                        self?.activity.update(id: taskID, done: done / 2, total: n)
                     }
                 }
             }
-            let groups = byKey.values
-                .filter { $0.count > 1 }
-                .map { $0.sorted { $0.url.path < $1.url.path } }
-                .sorted { $0[0].filename < $1[0].filename }
-            Log.info("Duplikate: \(groups.count) Gruppen aus \(docs.count) Bildern (pHash-Coverage: \(docs.filter { $0.phash != nil }.count)/\(docs.count))")
+            for indices in byKey.values where indices.count > 1 {
+                let base = indices[0]
+                for i in 1..<indices.count { union(base, indices[i]) }
+            }
+
+            // Kandidaten-Gruppen sammeln
+            var buckets: [Int: [Int]] = [:]
+            for i in 0..<n { buckets[find(i), default: []].append(i) }
+            let candidates = buckets.values.filter { $0.count > 1 }
+
+            // Verifikation: erste 256 KB pro Datei hashen, Gruppen splitten wo Bytes
+            // definitiv abweichen. Datei-Öffnen ist schnell (~ms pro File), so bekommt
+            // der Nutzer echte Fortschritts-Anzeige und die Duplikat-Aussage ist belastbar.
+            var verified: [[ImageDocument]] = []
+            let filesToHash = candidates.reduce(0) { $0 + $1.count }
+            var hashed = 0
+            for group in candidates {
+                var byContent: [String: [Int]] = [:]
+                for idx in group {
+                    let sig = Self.contentSignature(url: docs[idx].url, size: sizes[idx])
+                    byContent[sig, default: []].append(idx)
+                    hashed += 1
+                    if hashed % 20 == 0 || hashed == filesToHash {
+                        let mid = n / 2
+                        let extra = filesToHash > 0 ? (n - mid) * hashed / filesToHash : (n - mid)
+                        let progress = mid + extra
+                        DispatchQueue.main.async { [weak self] in
+                            self?.activity.update(id: taskID, done: progress, total: n)
+                        }
+                    }
+                }
+                for sub in byContent.values where sub.count > 1 {
+                    let subDocs = sub.map { docs[$0] }.sorted { $0.url.path < $1.url.path }
+                    verified.append(subDocs)
+                }
+            }
+
+            let groups = verified.sorted { $0[0].filename < $1[0].filename }
+            let pHashCoverage = docs.filter { $0.phash != nil }.count
+            Log.info("Duplikate: \(groups.count) verifizierte Gruppen aus \(candidates.count) Kandidaten (pHash-Coverage: \(pHashCoverage)/\(n))")
             let paths = groups.map { $0.map { $0.url.path } }
             CatalogStore.shared.setDuplicateGroups(paths)
             DispatchQueue.main.async { [weak self] in
@@ -67,6 +118,24 @@ extension ImageViewModel {
                 self?.activity.dequeue(id: taskID)
             }
         }
+    }
+
+    // 256-KB-Head-Hash: schnell genug für tausende Dateien, präzise genug um zwei
+    // Bilder mit identischem pHash aber wirklich unterschiedlichem Inhalt zu trennen
+    // (JPEG-Header + erste DCT-Blöcke differieren garantiert wenn Motive verschieden).
+    // Fällt der Read fehl (Berechtigung, Netzlaufwerk offline), liefern wir eine
+    // Path-basierte Signatur — der Doc bleibt so isoliert, statt fälschlich zu matchen.
+    private static func contentSignature(url: URL, size: Int) -> String {
+        let head = 256 * 1024
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            return "err:\(url.path)"
+        }
+        defer { try? handle.close() }
+        let data = handle.readData(ofLength: head)
+        var hasher = Hasher()
+        hasher.combine(size)
+        hasher.combine(data)
+        return "sig:\(size)|\(hasher.finalize())"
     }
 
     /// Lädt beim App-Start die zuletzt persistierten Duplikat-/Similarity-Gruppen aus
@@ -127,11 +196,21 @@ extension ImageViewModel {
         scanQualityForLibrary()
     }
 
-    /// Ähnliche-Bilder-Erkennung via pHash + Union-Find. Nutzt bereits persistierte
-    /// Hashes (vom Import-Scan) — kein neuer Decode nötig.
+    /// Ähnliche-Bilder-Erkennung via pHash + Seed-and-Pull. Nutzt bereits persistierte
+    /// Hashes (vom Import-Scan) — kein neuer Decode nötig. Fehlt für den Großteil der
+    /// Bilder noch der Hash, wird ein Quality-Scan angestoßen (Fortschritt via activity),
+    /// damit "Neu gruppieren" nicht stumm ins Leere läuft.
     func detectSimilarImages() {
-        let docs = collection.documents.filter { !$0.isTrashed && $0.phash != nil }
-        guard docs.count > 1 else { quality.similarGroups = []; return }
+        let live = collection.documents.filter { !$0.isTrashed }
+        let docs = live.filter { $0.phash != nil }
+        guard docs.count > 1 else {
+            quality.similarGroups = []
+            if !live.isEmpty {
+                Log.info("Ähnliche Bilder: pHash fehlt (\(docs.count)/\(live.count)) — starte Quality-Scan")
+                scanQualityForLibrary()
+            }
+            return
+        }
         let taskID = UUID()
         activity.enqueue(id: taskID, label: "Ähnliche Bilder gruppieren…",
                          icon: "square.on.square.dashed",
@@ -140,6 +219,7 @@ extension ImageViewModel {
             let groups = SimilarityGrouper.groups(from: docs)
             let paths = groups.map { $0.map { $0.url.path } }
             CatalogStore.shared.setSimilarGroups(paths)
+            Log.info("Ähnliche Bilder: \(groups.count) Gruppen aus \(docs.count) Bildern (Ø \(groups.isEmpty ? 0 : groups.reduce(0) { $0 + $1.count } / groups.count) pro Gruppe)")
             DispatchQueue.main.async {
                 self?.quality.similarGroups = groups
                 self?.activity.dequeue(id: taskID)
