@@ -15,8 +15,73 @@ private struct MetadataPanelContent: View {
     @State private var editedEntries: [MetadataEntry] = []
 
     private var sourceEntries: [MetadataEntry] {
-        let entries = viewModel.collection.currentDocument?.metadata ?? []
-        return entries.isEmpty ? MetadataService().defaultEntries() : entries
+        let base: [MetadataEntry]
+        if let doc = viewModel.collection.currentDocument {
+            base = doc.metadata.isEmpty ? MetadataService().defaultEntries() : doc.metadata
+        } else {
+            base = MetadataService().defaultEntries()
+        }
+        return base + qualityEntries()
+    }
+
+    // Qualitäts-Kategorie: dynamisch aus persistierten Scores + aktuellen Schwellen +
+    // Overrides berechnet. Nicht editierbar. Aktualisiert sich automatisch, wenn der
+    // Nutzer Schwellenwerte verstellt oder Overrides setzt — sourceEntries wird via
+    // .id(currentDocument.id) neu evaluiert.
+    private func qualityEntries() -> [MetadataEntry] {
+        guard let doc = viewModel.collection.currentDocument else { return [] }
+        if !doc.qualityScanned {
+            return [MetadataEntry(displayName: "Analyse",
+                                  key: "quality.status",
+                                  category: .quality,
+                                  value: "Noch nicht analysiert",
+                                  isEditable: false)]
+        }
+        var out: [MetadataEntry] = []
+        let flags = viewModel.qualityFlags(for: doc)
+
+        if let s = doc.blurScore {
+            let label: String
+            if doc.blurOverride {
+                label = String(format: "OK (Override, Score %.1f)", s)
+            } else if flags.blur {
+                label = String(format: "Unscharf (Score %.1f)", s)
+            } else {
+                label = String(format: "Scharf (Score %.1f)", s)
+            }
+            out.append(MetadataEntry(displayName: "Schärfe",
+                                     key: "quality.blur", category: .quality,
+                                     value: label, isEditable: false))
+        }
+        if let r = doc.underRatio {
+            let pct = r * 100
+            let label: String
+            if doc.underOverride {
+                label = String(format: "OK (Override, %.1f%% Schatten)", pct)
+            } else if flags.under {
+                label = String(format: "Unterbelichtet (%.1f%% Schatten)", pct)
+            } else {
+                label = String(format: "OK (%.1f%% Schatten)", pct)
+            }
+            out.append(MetadataEntry(displayName: "Unterbel.",
+                                     key: "quality.under", category: .quality,
+                                     value: label, isEditable: false))
+        }
+        if let r = doc.overRatio {
+            let pct = r * 100
+            let label: String
+            if doc.overOverride {
+                label = String(format: "OK (Override, %.1f%% Lichter)", pct)
+            } else if flags.over {
+                label = String(format: "Überbelichtet (%.1f%% Lichter)", pct)
+            } else {
+                label = String(format: "OK (%.1f%% Lichter)", pct)
+            }
+            out.append(MetadataEntry(displayName: "Überbel.",
+                                     key: "quality.over", category: .quality,
+                                     value: label, isEditable: false))
+        }
+        return out
     }
 
     private var sourceSignature: String {

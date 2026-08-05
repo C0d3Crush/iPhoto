@@ -159,7 +159,7 @@ private struct ExposureDocTile: View {
     let onTrash: () -> Void
 
     private var accentColor: Color { isUnder ? .purple : .yellow }
-    private var icon: String { isUnder ? "circle.lefthalf.filled" : "circle.righthalf.filled" }
+    private var icon: String { isUnder ? "moon.fill" : "sun.max.fill" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {

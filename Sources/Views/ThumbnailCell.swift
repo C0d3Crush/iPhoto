@@ -148,8 +148,8 @@ struct ThumbnailCell: View {
                             .foregroundColor(document.flagStatus == .pick ? .green : .red)
                     }
                     if isBlurry { qualityBadge(system: "drop.triangle.fill",       color: .purple) }
-                    if isUnder  { qualityBadge(system: "circle.lefthalf.filled",   color: .blue) }
-                    if isOver   { qualityBadge(system: "circle.righthalf.filled",  color: .yellow) }
+                    if isUnder  { qualityBadge(system: "moon.fill",                color: .blue) }
+                    if isOver   { qualityBadge(system: "sun.max.fill",             color: .yellow) }
                 }
                 .padding([.top, .trailing], 4)
                 Spacer()

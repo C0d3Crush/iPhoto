@@ -5,6 +5,7 @@ enum MetadataCategory: String, CaseIterable {
     case dateTime = "Datum & Zeit"
     case camera   = "Kamera"
     case location = "Ort"
+    case quality  = "Qualität"
 }
 
 struct MetadataEntry: Identifiable {

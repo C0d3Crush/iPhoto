@@ -457,7 +457,7 @@ struct NavSidebarView: View {
 
         Button(action: { viewModel.navSelection = .underexposed }) {
             HStack(spacing: 4) {
-                Label("Unterbelichtet", systemImage: "circle.lefthalf.filled")
+                Label("Unterbelichtet", systemImage: "moon.fill")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if !viewModel.quality.underexposedDocuments.isEmpty {
                     Text("\(viewModel.quality.underexposedDocuments.count)")
@@ -476,7 +476,7 @@ struct NavSidebarView: View {
 
         Button(action: { viewModel.navSelection = .overexposed }) {
             HStack(spacing: 4) {
-                Label("Überbelichtet", systemImage: "circle.righthalf.filled")
+                Label("Überbelichtet", systemImage: "sun.max.fill")
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if !viewModel.quality.overexposedDocuments.isEmpty {
                     Text("\(viewModel.quality.overexposedDocuments.count)")

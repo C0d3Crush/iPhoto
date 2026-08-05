@@ -2,6 +2,14 @@
 
 ---
 
+## 1.7.1
+**Feature — Qualitäts-Metadaten-Eintrag + Icon-Fix für Belichtungs-Badges**
+
+- Neue Kategorie „Qualität" im Metadaten-Panel: zeigt Schärfe-Score, Schatten-/Lichter-Clipping mit aktueller Klassifikation (Scharf/Unscharf, OK/Unter-/Überbelichtet) sowie Override-Status
+- Icons für Unter-/Überbelichtung in Sidebar, Thumbnails und Belichtungs-View: `circle.lefthalf.filled`/`circle.righthalf.filled` sind auf macOS 11 nicht verfügbar — Fallback auf `moon.fill` (Unterbelichtet) und `sun.max.fill` (Überbelichtet)
+
+---
+
 ## 1.7.0
 **Feature — Persistierte Qualitäts-Flags, Ähnlichkeits-Gruppen und globales Lernen**
 
