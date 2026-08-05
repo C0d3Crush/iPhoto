@@ -8,6 +8,7 @@
 ./Tests/run_catalog.sh      # SQLite-Katalog-Tests
 ./Tests/run_librarystore.sh # LibraryStore-JSON-Persistenz-Tests
 ./Tests/test_formats.sh     # Export-Format-Regression
+./Tests/run_viewsmoke.sh    # View-Rendering-Smoketest (App-Launch)
 ```
 
 Voraussetzung: macOS Command Line Tools (`xcode-select --install`).  
@@ -124,6 +125,22 @@ Voraussetzung: `./build.sh` muss vorher ausgeführt worden sein.
 
 **FAIL bedeutet:** `iphoto-cli` gibt Exit-Code ≠ 0 zurück oder Ausgabedatei fehlt.  
 Laufzeit: < 10 Sekunden.
+
+---
+
+## run_viewsmoke.sh — View-Rendering-Smoketest
+
+**Was wird getestet:** Die gebaute `build/iPhoto.app` startet mit `IPHOTO_SMOKETEST=1`, wartet 2 s (Zeit für Combine-Subscriptions, LazyStacks, Toolbar-Layout) und beendet sich sauber mit exit(0). Fängt Regressionen ab, die reinen Model-/CatalogStore-Tests entgehen: Force-Unwraps in SwiftUI-Views, Threading-Verstöße bei `@Published`-Zugriff aus BG-Threads, verkorkste Combine-Ketten beim Initialstart.
+
+Voraussetzung: `./build.sh` muss vorher gelaufen sein und ein Display-Server verfügbar sein (auf CI `macos-latest`: WindowServer ist da).
+
+| Ergebnis | Bedeutung |
+|----------|-----------|
+| PASS (exit 0) | App startet, rendert 2 s ohne Crash, beendet sich sauber |
+| FAIL (exit ≠ 0) | App crasht während Layout — CrashReporter schreibt Report nach `~/Documents/bugreports/` |
+| FAIL (Timeout) | App hängt >8 s beim Rendern — hartes SIGKILL |
+
+Kein Snapshot-Test — es wird nur "startet ohne Crash" verifiziert, nicht Pixel-Gleichheit. Laufzeit: ~3 Sekunden.
 
 ---
 

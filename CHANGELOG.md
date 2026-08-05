@@ -2,6 +2,15 @@
 
 ---
 
+## 1.14.0
+**Feature — View-Rendering-Smoketest im CI**
+
+- Neuer `Tests/run_viewsmoke.sh` startet die gebaute `iPhoto.app` mit `IPHOTO_SMOKETEST=1`, wartet 2 s auf sauberes Rendern und beendet mit exit(0). Fängt Regressionen ab, die Model-/CatalogStore-Tests nicht sehen: Force-Unwraps in SwiftUI-Views, Threading-Verstöße bei `@Published`-Zugriff aus BG-Threads, kaputte Combine-Ketten beim Initialstart
+- CI-Workflow (`.github/workflows/build.yml`) ruft den Smoketest zusammen mit den anderen Suites auf. Kein Snapshot-Test — nur "startet ohne Crash", aber deutlich näher an der Realität als isolierte Unit-Tests
+- Kosten: ~3 s pro CI-Lauf. Bei Crash landet der CrashReporter-Bericht wie üblich in `~/Documents/bugreports/`, sodass das Fehlerbild reproduzierbar bleibt
+
+---
+
 ## 1.13.1
 **Chore — Notarization-Skript + Sparkle-Integrationsplan**
 
