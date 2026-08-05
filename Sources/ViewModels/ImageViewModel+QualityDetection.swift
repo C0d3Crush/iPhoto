@@ -11,15 +11,26 @@ extension ImageViewModel {
             duplicateGroups = []
             return
         }
+        let taskID = UUID()
+        activity.enqueue(id: taskID, label: "Duplikate suchen…",
+                         icon: "square.on.square",
+                         done: 0, total: docs.count, summaryVerb: "geprüft")
         DispatchQueue.global(qos: .utility).async { [weak self] in
             var byKey: [String: [ImageDocument]] = [:]
-            for doc in docs {
-                guard let dateTaken = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value,
-                      !dateTaken.isEmpty else { continue }
-                guard let size = (try? doc.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap({ $0 }),
-                      size > 0 else { continue }
-                let key = "\(dateTaken)|\(size)"
-                byKey[key, default: []].append(doc)
+            for (i, doc) in docs.enumerated() {
+                if let dateTaken = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value,
+                   !dateTaken.isEmpty,
+                   let size = (try? doc.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap({ $0 }),
+                   size > 0 {
+                    let key = "\(dateTaken)|\(size)"
+                    byKey[key, default: []].append(doc)
+                }
+                let done = i + 1
+                if done % 25 == 0 || done == docs.count {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.activity.update(id: taskID, done: done, total: docs.count)
+                    }
+                }
             }
             let groups = byKey.values
                 .filter { $0.count > 1 }
@@ -27,6 +38,7 @@ extension ImageViewModel {
                 .sorted { $0[0].filename < $1[0].filename }
             DispatchQueue.main.async { [weak self] in
                 self?.duplicateGroups = groups
+                self?.activity.dequeue(id: taskID)
             }
         }
     }
@@ -35,9 +47,13 @@ extension ImageViewModel {
         let docs = collection.documents.filter { !$0.isTrashed }
         guard !docs.isEmpty else { blurryDocuments = []; return }
         let threshold = blurThreshold
+        let taskID = UUID()
+        activity.enqueue(id: taskID, label: "Unschärfe analysieren…",
+                         icon: "drop.triangle.fill",
+                         done: 0, total: docs.count, summaryVerb: "analysiert")
         DispatchQueue.global(qos: .utility).async { [weak self] in
             var blurry: [ImageDocument] = []
-            for doc in docs {
+            for (i, doc) in docs.enumerated() {
                 let src: CGImage?
                 if let thumb = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     src = thumb
@@ -46,12 +62,21 @@ extension ImageViewModel {
                 } else {
                     src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
                 }
-                guard let img = src else { continue }
-                let score = BlurDetector.score(from: img)
-                if score < threshold { blurry.append(doc) }
+                if let img = src, BlurDetector.score(from: img) < threshold {
+                    blurry.append(doc)
+                }
+                let done = i + 1
+                if done % 10 == 0 || done == docs.count {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.activity.update(id: taskID, done: done, total: docs.count)
+                    }
+                }
             }
             let sorted = blurry.sorted { $0.filename < $1.filename }
-            DispatchQueue.main.async { self?.blurryDocuments = sorted }
+            DispatchQueue.main.async {
+                self?.blurryDocuments = sorted
+                self?.activity.dequeue(id: taskID)
+            }
         }
     }
 
@@ -60,10 +85,14 @@ extension ImageViewModel {
         guard !docs.isEmpty else { underexposedDocuments = []; overexposedDocuments = []; return }
         let shadowThresh = shadowClipThreshold
         let highlightThresh = highlightClipThreshold
+        let taskID = UUID()
+        activity.enqueue(id: taskID, label: "Belichtung analysieren…",
+                         icon: "sun.max",
+                         done: 0, total: docs.count, summaryVerb: "analysiert")
         DispatchQueue.global(qos: .utility).async { [weak self] in
             var under: [ImageDocument] = []
             var over:  [ImageDocument] = []
-            for doc in docs {
+            for (i, doc) in docs.enumerated() {
                 let src: CGImage?
                 if let thumb = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     src = thumb
@@ -72,16 +101,24 @@ extension ImageViewModel {
                 } else {
                     src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
                 }
-                guard let img = src else { continue }
-                let result = ExposureDetector.analyze(from: img)
-                if result.underRatio >= shadowThresh    { under.append(doc) }
-                if result.overRatio  >= highlightThresh { over.append(doc) }
+                if let img = src {
+                    let result = ExposureDetector.analyze(from: img)
+                    if result.underRatio >= shadowThresh    { under.append(doc) }
+                    if result.overRatio  >= highlightThresh { over.append(doc) }
+                }
+                let done = i + 1
+                if done % 10 == 0 || done == docs.count {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.activity.update(id: taskID, done: done, total: docs.count)
+                    }
+                }
             }
             let sortedUnder = under.sorted { $0.filename < $1.filename }
             let sortedOver  = over.sorted  { $0.filename < $1.filename }
             DispatchQueue.main.async {
                 self?.underexposedDocuments = sortedUnder
                 self?.overexposedDocuments  = sortedOver
+                self?.activity.dequeue(id: taskID)
             }
         }
     }

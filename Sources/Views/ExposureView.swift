@@ -159,10 +159,14 @@ struct ExposureView: View {
         let shadT = shadowThresh
         let highT = highlightThresh
         let allDocs = viewModel.collection.documents.filter { !$0.isTrashed }
+        let taskID = UUID()
+        viewModel.activity.enqueue(id: taskID, label: "Belichtung analysieren…",
+                                    icon: "sun.max",
+                                    done: 0, total: allDocs.count, summaryVerb: "analysiert")
         DispatchQueue.global(qos: .utility).async {
             var under: [ImageDocument] = []
             var over:  [ImageDocument] = []
-            for doc in allDocs {
+            for (i, doc) in allDocs.enumerated() {
                 let src: CGImage?
                 if let t = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     src = t
@@ -171,14 +175,22 @@ struct ExposureView: View {
                 } else {
                     src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
                 }
-                guard let img = src else { continue }
-                let r = ExposureDetector.analyze(from: img)
-                if r.underRatio >= shadT { under.append(doc) }
-                if r.overRatio  >= highT { over.append(doc)  }
+                if let img = src {
+                    let r = ExposureDetector.analyze(from: img)
+                    if r.underRatio >= shadT { under.append(doc) }
+                    if r.overRatio  >= highT { over.append(doc)  }
+                }
+                let done = i + 1
+                if done % 10 == 0 || done == allDocs.count {
+                    DispatchQueue.main.async {
+                        viewModel.activity.update(id: taskID, done: done, total: allDocs.count)
+                    }
+                }
             }
             DispatchQueue.main.async {
                 viewModel.underexposedDocuments = under.sorted { $0.filename < $1.filename }
                 viewModel.overexposedDocuments  = over.sorted  { $0.filename < $1.filename }
+                viewModel.activity.dequeue(id: taskID)
                 isScanning = false
             }
         }

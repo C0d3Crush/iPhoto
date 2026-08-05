@@ -24,8 +24,8 @@ extension ImageViewModel {
         let newStatus: FlagStatus = allSet ? .none : flag
         for idx in indices {
             collection.documents[idx].flagStatus = newStatus
-            persistRating(at: idx)
         }
+        persistRatings(at: indices, label: "Markierungen speichern…", icon: "flag.fill")
         advanceIfCurrentExcluded(previousVisible: prev)
     }
 
@@ -69,10 +69,11 @@ extension ImageViewModel {
     func setRating(_ r: Int, for doc: ImageDocument) {
         let prev = visibleDocuments
         let indices = affectedIndices(for: doc)
+        guard !indices.isEmpty else { return }
         for idx in indices {
             collection.documents[idx].rating = r
-            persistRating(at: idx)
         }
+        persistRatings(at: indices, label: "Bewertungen speichern…", icon: "star.fill")
         advanceIfCurrentExcluded(previousVisible: prev)
     }
 
@@ -84,8 +85,8 @@ extension ImageViewModel {
         let newStatus: FlagStatus = allSet ? .none : flag
         for idx in indices {
             collection.documents[idx].flagStatus = newStatus
-            persistRating(at: idx)
         }
+        persistRatings(at: indices, label: "Markierungen speichern…", icon: "flag.fill")
         advanceIfCurrentExcluded(previousVisible: prev)
     }
 
@@ -97,9 +98,9 @@ extension ImageViewModel {
         let newLabel: ColorLabel = allSet ? .none : label
         for idx in indices {
             collection.documents[idx].colorLabel = newLabel
-            persistRating(at: idx)
             applyFinderColorLabel(newLabel, to: collection.documents[idx].url)
         }
+        persistRatings(at: indices, label: "Farb-Labels speichern…", icon: "tag.fill")
         advanceIfCurrentExcluded(previousVisible: prev)
     }
 
@@ -122,5 +123,45 @@ extension ImageViewModel {
         RatingStore.shared.save(entry, for: doc.url)
         CatalogStore.shared.saveRating(path: doc.url.path, rating: doc.rating,
                                        flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
+    }
+
+    /// Persistiert Ratings/Flags/Farb-Labels für mehrere Indizes. Bei kleinen Mengen
+    /// synchron, bei größeren asynchron mit Fortschrittsanzeige im Ladebalken.
+    func persistRatings(at indices: [Int], label: String, icon: String) {
+        guard !indices.isEmpty else { return }
+        invalidateVisibleOrder()
+        struct Snap { let url: URL; let entry: RatingEntry; let path: String; let rating: Int; let flag: String; let colorLabel: String }
+        let snaps: [Snap] = indices.compactMap { idx in
+            guard idx < collection.documents.count else { return nil }
+            let doc = collection.documents[idx]
+            let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel)
+            return Snap(url: doc.url, entry: entry, path: doc.url.path,
+                        rating: doc.rating, flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
+        }
+        guard snaps.count >= 20 else {
+            for s in snaps {
+                RatingStore.shared.save(s.entry, for: s.url)
+                CatalogStore.shared.saveRating(path: s.path, rating: s.rating, flag: s.flag, colorLabel: s.colorLabel)
+            }
+            return
+        }
+        let taskID = UUID()
+        activity.enqueue(id: taskID, label: label, icon: icon,
+                         done: 0, total: snaps.count, summaryVerb: "gespeichert")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            for (i, s) in snaps.enumerated() {
+                RatingStore.shared.save(s.entry, for: s.url)
+                CatalogStore.shared.saveRating(path: s.path, rating: s.rating, flag: s.flag, colorLabel: s.colorLabel)
+                let done = i + 1
+                if done % 10 == 0 || done == snaps.count {
+                    DispatchQueue.main.async {
+                        self?.activity.update(id: taskID, done: done, total: snaps.count)
+                    }
+                }
+            }
+            DispatchQueue.main.async {
+                self?.activity.dequeue(id: taskID)
+            }
+        }
     }
 }

@@ -148,11 +148,15 @@ struct BlurryView: View {
     private func scan() {
         isScanning = true
         viewModel.blurThreshold = threshold
+        let docs = viewModel.collection.documents.filter { !$0.isTrashed }
+        let thresh = threshold
+        let taskID = UUID()
+        viewModel.activity.enqueue(id: taskID, label: "Unschärfe analysieren…",
+                                    icon: "drop.triangle.fill",
+                                    done: 0, total: docs.count, summaryVerb: "analysiert")
         DispatchQueue.global(qos: .utility).async {
-            let docs = viewModel.collection.documents.filter { !$0.isTrashed }
-            let thresh = threshold
             var blurry: [ImageDocument] = []
-            for doc in docs {
+            for (i, doc) in docs.enumerated() {
                 let src: CGImage?
                 if let thumb = doc.thumbnailImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     src = thumb
@@ -161,12 +165,20 @@ struct BlurryView: View {
                 } else {
                     src = try? RAWImageDecoder.thumbnail(url: doc.url, maxDimension: 512)
                 }
-                guard let img = src else { continue }
-                if BlurDetector.score(from: img) < thresh { blurry.append(doc) }
+                if let img = src, BlurDetector.score(from: img) < thresh {
+                    blurry.append(doc)
+                }
+                let done = i + 1
+                if done % 10 == 0 || done == docs.count {
+                    DispatchQueue.main.async {
+                        viewModel.activity.update(id: taskID, done: done, total: docs.count)
+                    }
+                }
             }
             let sorted = blurry.sorted { $0.filename < $1.filename }
             DispatchQueue.main.async {
                 viewModel.blurryDocuments = sorted
+                viewModel.activity.dequeue(id: taskID)
                 isScanning = false
             }
         }

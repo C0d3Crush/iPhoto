@@ -2,6 +2,15 @@
 
 ---
 
+## 1.6.0
+**Feature — Fortschrittsanzeige für Qualitäts-Scans und Batch-Bearbeitung**
+
+- Scans in den Ansichten „Unscharf“, „Unter-/Überbelichtet“ und „Duplikate“ zeigen jetzt Fortschritt im Ladebalken (Sidebar) inklusive Bildanzahl und Zeit
+- Bewertungen, Pick-/Reject-Markierungen und Farb-Labels für viele Bilder gleichzeitig (ab 20 Bildern) laufen im Hintergrund und zeigen ebenfalls Fortschritt — das UI bleibt bei großen Auswahlen reaktionsfähig
+- Kleine Bearbeitungen (< 20 Bilder) bleiben synchron und ohne Ladebalken
+
+---
+
 ## 1.5.1
 **Feature — Pick-Schutz beim Löschen**
 
