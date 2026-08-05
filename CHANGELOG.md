@@ -2,6 +2,16 @@
 
 ---
 
+## 1.4.3
+**Bugfix — Inpaint-Pipeline korrigiert**
+
+- Bild und Maske werden jetzt in separate Verzeichnisse (`img/inpaint.png`, `mask/inpaint.png`) geschrieben — `demo.py` matcht beide anhand des Dateinamens
+- Aufruf erfolgt über Wrapper-Script `run_inpaint.sh` im CMT-Verzeichnis (Environment-Setup lebt dort), statt `python3 demo.py` direkt
+- Maskenkonvertierung liest jetzt den Alpha-Kanal des Pinselstrichs und erzeugt eine binäre Schwarz-Weiß-Maske (vorher gingen die Pinselstriche beim Zeichnen in den Grau-Kontext verloren)
+- Fehlermeldung enthält jetzt kombiniertes stdout + stderr statt nur den letzten 500 Zeichen von stderr
+
+---
+
 ## 1.4.2
 **Refactor — Lade-Pipeline in ImageLoadingOrchestrator ausgelagert**
 

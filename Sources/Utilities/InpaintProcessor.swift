@@ -55,40 +55,48 @@ struct InpaintProcessor {
         try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmp) }
 
-        let imgURL  = tmp.appendingPathComponent("input.png")
-        let maskURL = tmp.appendingPathComponent("mask.png")
+        // demo.py matches image and mask by filename — both must share the same name.
+        let imgDir  = tmp.appendingPathComponent("img")
+        let maskDir = tmp.appendingPathComponent("mask")
         let outDir  = tmp.appendingPathComponent("out")
-        try fm.createDirectory(at: outDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: imgDir,  withIntermediateDirectories: true)
+        try fm.createDirectory(at: maskDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: outDir,  withIntermediateDirectories: true)
 
-        guard savePNG(image, to: imgURL) else { throw InpaintError.writeFailed }
+        guard savePNG(image, to: imgDir.appendingPathComponent("inpaint.png")) else { throw InpaintError.writeFailed }
 
         let grayMask = toGrayscale(mask) ?? mask
-        guard savePNG(grayMask, to: maskURL) else { throw InpaintError.writeFailed }
+        guard savePNG(grayMask, to: maskDir.appendingPathComponent("inpaint.png")) else { throw InpaintError.writeFailed }
 
         let cmtDir = expand(config.cmtDirectory)
         let python = expand(config.python3Path)
         let ckpt   = expand(config.checkpointPath)
 
+        let wrapperScript = (cmtDir as NSString).appendingPathComponent("run_inpaint.sh")
+
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: python)
+        task.executableURL = URL(fileURLWithPath: wrapperScript)
         task.currentDirectoryURL = URL(fileURLWithPath: cmtDir)
         task.arguments = [
-            "demo.py",
-            "--ckpt",         ckpt,
-            "--img_path",     imgURL.path,
-            "--mask_path",    maskURL.path,
-            "--output_path",  outDir.path
+            "--ckpt",        ckpt,
+            "--img_path",    imgDir.path,
+            "--mask_path",   maskDir.path,
+            "--output_path", outDir.path
         ]
+
         let errPipe = Pipe()
+        let outPipe = Pipe()
         task.standardError  = errPipe
-        task.standardOutput = Pipe()
+        task.standardOutput = outPipe
 
         try task.run()
         task.waitUntilExit()
 
         let stderr = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let stdout = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         guard task.terminationStatus == 0 else {
-            throw InpaintError.processExited(task.terminationStatus, String(stderr.suffix(500)))
+            let combined = (stdout + "\n" + stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw InpaintError.processExited(task.terminationStatus, combined)
         }
 
         let files = (try? fm.contentsOfDirectory(at: outDir, includingPropertiesForKeys: nil)) ?? []
@@ -113,13 +121,32 @@ struct InpaintProcessor {
         return CGImageDestinationFinalize(dst)
     }
 
+    // Converts the brush-stroke mask (red on transparent) to a binary grayscale mask:
+    // any pixel with alpha > 0 → white (255), transparent → black (0).
     private static func toGrayscale(_ image: CGImage) -> CGImage? {
         let w = image.width, h = image.height
+        let bytesPerRow = w * 4
         guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
-                                  bytesPerRow: w,
-                                  space: CGColorSpaceCreateDeviceGray(),
-                                  bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+                                  bytesPerRow: bytesPerRow,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let ptr = ctx.data else { return nil }
+        ctx.clear(CGRect(x: 0, y: 0, width: w, height: h))
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        return ctx.makeImage()
+
+        // Build binary grayscale from alpha channel
+        let rgba = ptr.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        var gray = [UInt8](repeating: 0, count: w * h)
+        for i in 0 ..< w * h {
+            gray[i] = rgba[i * 4 + 3] > 0 ? 255 : 0
+        }
+        return gray.withUnsafeMutableBytes { buf in
+            guard let grayCtx = CGContext(data: buf.baseAddress, width: w, height: h,
+                                          bitsPerComponent: 8, bytesPerRow: w,
+                                          space: CGColorSpaceCreateDeviceGray(),
+                                          bitmapInfo: CGImageAlphaInfo.none.rawValue)
+            else { return nil }
+            return grayCtx.makeImage()
+        }
     }
 }
