@@ -280,10 +280,20 @@ class ImageViewModel: ObservableObject {
 
         scanForRemovableVolumes()
 
+        // Draft-Render (kleiner, schneller) für jedes Slider-Tick nach 50 ms Ruhe.
         adj.$adjustments
             .dropFirst()
             .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applyAdjustments() }
+            .sink { [weak self] _ in self?.applyAdjustments(hiRes: false) }
+            .store(in: &cancellables)
+
+        // Hi-Res-Upgrade: 250 ms nach dem letzten Slider-Wechsel erneut rendern,
+        // diesmal mit 1500 px. Erwischt den "Loslassen"-Zeitpunkt ohne Slider-
+        // Gesture-Wrapper und bleibt bei aktiver Slider-Bewegung inaktiv.
+        adj.$adjustments
+            .dropFirst()
+            .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyAdjustments(hiRes: true) }
             .store(in: &cancellables)
 
         adj.$adjustments

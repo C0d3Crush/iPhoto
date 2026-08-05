@@ -2,6 +2,15 @@
 
 ---
 
+## 1.13.0
+**Feature — Draft-Mode für Adjustments + ADJUST-Perf-Log**
+
+- Slider-Bewegungen rendern jetzt zuerst bei 800 px längster Kante (Draft), 250 ms nach dem letzten Wert erfolgt automatisch ein Hi-Res-Upgrade auf 1500 px. Bei RAWs im hundertstel-MP-Bereich fühlt sich das Ziehen dadurch sichtbar direkter an — der finale Preview bleibt qualitativ unverändert
+- Umgesetzt als Debouncer-Kaskade (50 ms Draft, 250 ms Hi-Res, 500 ms Undo-Commit) statt als Slider-Gesture-Wrapper. Kein SwiftUI-`DragGesture` nötig, funktioniert automatisch für alle 16 vorhandenen Regler
+- Neue Log-Zeile `ADJUST draft|hi-res N ms scale=X.XX` pro Render — sichtbar via `tail -f ~/Library/Logs/iPhoto/iPhoto.log | grep ADJUST`. Perf-Regressionen der Adjustment-Pipeline sind damit im Log statt in Bauchgefühl-Reports messbar
+
+---
+
 ## 1.12.0
 **Feature — O(1)-Position-Lookups + EXIF-Cache-Invalidation nach Metadata-Write**
 

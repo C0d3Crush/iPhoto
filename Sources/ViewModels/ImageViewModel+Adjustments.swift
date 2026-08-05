@@ -5,7 +5,7 @@ import CoreImage
 
 extension ImageViewModel {
 
-    func applyAdjustments() {
+    func applyAdjustments(hiRes: Bool = false) {
         guard hasActiveAdjustments, let source = currentImage else {
             adj.adjustedImage = nil
             adj.displayImageVersion = UUID()
@@ -26,6 +26,10 @@ extension ImageViewModel {
         let useRAW      = collection.currentDocument?.isRAW ?? false
         let rawURL      = collection.currentDocument?.url
         let nativeSize  = imageSize
+        let startedAt   = Date()
+        // Draft-Cap: 800 px während aktivem Slider-Drag; Hi-Res-Upgrade auf 1500 px
+        // nach 250 ms Ruhe (siehe ImageViewModel.init-Debouncer-Kaskade).
+        let scaleCap: Double = hiRes ? 1500.0 : 800.0
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -35,7 +39,7 @@ extension ImageViewModel {
             var wbApplied = false
 
             let longestEdge  = max(nativeSize.width, nativeSize.height)
-            let previewScale = longestEdge > 0 ? min(1.0, 1500.0 / Double(longestEdge)) : 1.0
+            let previewScale = longestEdge > 0 ? min(1.0, scaleCap / Double(longestEdge)) : 1.0
 
             if useRAW, let url = rawURL,
                let result = AdjustmentRenderer.rawPipeline(url: url, snap: snap,
@@ -51,10 +55,13 @@ extension ImageViewModel {
                                              exposureApplied: exposureApplied, wbApplied: wbApplied)
 
             let result = self.adj.ciContext.createCGImage(ci, from: ci.extent)
+            let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
             DispatchQueue.main.async { [weak self] in
                 guard let self = self, self.adj.renderToken == token else { return }
                 self.adj.adjustedImage = result
                 self.adj.displayImageVersion = UUID()
+                let mode = hiRes ? "hi-res" : "draft"
+                Log.info("ADJUST \(mode) \(ms) ms scale=\(String(format: "%.2f", previewScale))")
             }
         }
     }
