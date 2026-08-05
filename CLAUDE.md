@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Performance is Priority #1
+
+**Speed is the primary product value.** Image loading, thumbnail generation, view switching, scan pipelines — everything must feel instant. Bild-Switch-Latenz misst in Millisekunden, nicht Hundertstelsekunden.
+
+**Every change must be perf-reviewed before it ships.** After editing, ask yourself:
+1. Did I add work on the main thread? Move it off.
+2. Did I touch a `@Published` array via subscript? That's an O(N) copy per write — batch mutations into one write-back (see `project_perf_diagnosis.md` / Bug #33).
+3. Did I add per-doc `firstIndex(where:)` in a loop? That's O(N²) — build a `[Path: Int]` dictionary once.
+4. Did I add synchronous I/O (SQLite, disk) in a render or hot path? Move to background, cache, or debounce.
+5. Did I add an observer/publish that fires per-frame or per-doc? Consolidate.
+
+**Look for new speedups proactively.** When touching a path, check whether the surrounding code is already optimal. If not, propose the improvement in the same change (or flag it explicitly). Don't leave known-slow code alone just because the current task doesn't require touching it.
+
+**Measure, don't guess.** Trace-Logs in `~/Library/Logs/iPhoto/iPhoto.log` have timestamps — compare cache-hit vs. UI-display deltas. Suspicious latency is a bug, even if the feature "works."
+
 ## Build & Run
 
 Requires macOS Command Line Tools (`xcode-select --install`). No Xcode project — compiled directly via `swiftc`.

@@ -2,6 +2,14 @@
 
 ---
 
+## 1.10.1
+**Bugfix — Bild-Switch nicht mehr blockiert vom Quality-Scan**
+
+- Der v1.10.0-Rescan (ausgelöst durch die `phash_v`-Migration) schrieb pro gescanntem Bild sechsmal einzeln in `collection.documents[idx]`. Jeder Subscript-Write auf einem `@Published`-Array triggert eine komplette Array-Kopie — bei einer 5000-Bilder-Library summierte sich das zu O(N²) Publishes, saturierte den Main-Thread und riss die Bild-Switch-Latenz von wenigen Millisekunden auf mehrere hundert hoch
+- Scan-Ergebnisse werden jetzt in Batches à 100 Docs gesammelt und in einem einzigen Main-Thread-Dispatch geflusht: lokale Kopie mutieren, Pfad→Index-Dictionary einmal pro Batch (statt `firstIndex` pro Doc), dann ein Write-Back. Ergibt ~N/100 Publishes statt 6·N mit jeweils O(N) Suche
+
+---
+
 ## 1.10.0
 **Feature — Zweite Hash-Achse für Similarity + Ähnliche-Gruppe als Album im Viewer**
 

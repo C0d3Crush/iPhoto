@@ -562,6 +562,11 @@ final class ImageLoadingOrchestrator {
     // Analysiert Blur/Belichtung/pHash pro Bild und persistiert die Werte im Katalog.
     // Ergänzt zusätzlich die in-memory ImageDocument-Kopie, damit BlurryView/ExposureView
     // die Werte ohne SQLite-Roundtrip lesen können.
+    //
+    // Perf-kritisch: Scan-Ergebnisse werden in Batches à ~100 gesammelt und in *einem*
+    // Main-Thread-Dispatch geflusht — sonst ergäbe 6 Subscript-Writes × N Docs eine
+    // O(N²)-Publish-Kaskade, die den Bild-Switcher auf hunderte ms hochzieht
+    // (siehe project_perf_diagnosis.md, Bug #33).
     func scanQualityForLibrary() {
         guard let host = host else { return }
         let paths = CatalogStore.shared.pathsNeedingQualityScan()
@@ -576,6 +581,31 @@ final class ImageLoadingOrchestrator {
             guard let self = self, let host = self.host else { return }
             let total = paths.count
             var done = 0
+            var pending: [(String, QualityAssessor.Result)] = []
+            pending.reserveCapacity(128)
+            let flushBatch: ([(String, QualityAssessor.Result)], Int, Int) -> Void = { batch, d, t in
+                DispatchQueue.main.async { [weak self] in
+                    guard let host = self?.host else { return }
+                    host.activity.update(id: taskID, done: d, total: t)
+                    guard !batch.isEmpty else { return }
+                    var docs = host.collection.documents
+                    var indexByPath: [String: Int] = [:]
+                    indexByPath.reserveCapacity(docs.count)
+                    for (i, doc) in docs.enumerated() { indexByPath[doc.url.path] = i }
+                    var touched = false
+                    for (path, result) in batch {
+                        guard let idx = indexByPath[path] else { continue }
+                        docs[idx].blurScore      = result.blurScore
+                        docs[idx].underRatio     = result.underRatio
+                        docs[idx].overRatio      = result.overRatio
+                        docs[idx].phash          = result.phash
+                        docs[idx].phashV         = result.phashV
+                        docs[idx].qualityScanned = true
+                        touched = true
+                    }
+                    if touched { host.collection.documents = docs }
+                }
+            }
             for path in paths {
                 host.activity.waitWhilePaused(id: taskID)
                 autoreleasepool {
@@ -595,20 +625,18 @@ final class ImageLoadingOrchestrator {
                         phashV: result.phashV
                     )
                     done += 1
-                    let d = done, t = total
-                    DispatchQueue.main.async { [weak self] in
-                        guard let host = self?.host else { return }
-                        host.activity.update(id: taskID, done: d, total: t)
-                        if let idx = host.collection.documents.firstIndex(where: { $0.url.path == path }) {
-                            host.collection.documents[idx].blurScore     = result.blurScore
-                            host.collection.documents[idx].underRatio    = result.underRatio
-                            host.collection.documents[idx].overRatio     = result.overRatio
-                            host.collection.documents[idx].phash         = result.phash
-                            host.collection.documents[idx].phashV        = result.phashV
-                            host.collection.documents[idx].qualityScanned = true
-                        }
+                    pending.append((path, result))
+                    if pending.count >= 100 {
+                        let batch = pending
+                        pending.removeAll(keepingCapacity: true)
+                        flushBatch(batch, done, total)
                     }
                 }
+            }
+            if !pending.isEmpty {
+                let batch = pending
+                pending.removeAll(keepingCapacity: true)
+                flushBatch(batch, done, total)
             }
             DispatchQueue.main.async { [weak self] in
                 guard let host = self?.host else { return }
