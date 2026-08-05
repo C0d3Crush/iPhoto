@@ -51,6 +51,9 @@ final class CatalogStore {
             self.isDefaultCatalog = true
         }
         queue.sync { self.open() }
+        // Nach erfolgreichem open() den Katalog sichern — schützt vor stiller Korruption.
+        // Testpfade (dbPath != nil) ausnehmen, damit Testläufe nicht die echten Backups überschreiben.
+        if isDefaultCatalog { scheduleStartupBackup() }
     }
 
     deinit { sqlite3_close(db) }

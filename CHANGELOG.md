@@ -2,6 +2,16 @@
 
 ---
 
+## 1.4.0
+**Feature — Automatische Katalog-Backups**
+
+- Beim App-Start wird der SQLite-Katalog (Ratings, Alben, Anpassungen, EXIF-Cache) via `VACUUM INTO` gesichert
+- Speicherort: `~/Library/Application Support/iPhoto/backups/catalog-<Zeitstempel>.db`
+- Die letzten 5 Backups werden aufbewahrt, ältere automatisch gelöscht
+- Backup läuft asynchron auf der Katalog-Queue und blockiert weder Start noch UI
+
+---
+
 ## 1.3.1
 **Refactor — Doppelte CIContext-Instanzen zusammengefasst**
 
