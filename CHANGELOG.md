@@ -2,6 +2,15 @@
 
 ---
 
+## 1.8.0
+**Feature — Ähnliche-Bilder-Lightbox mit Pfeiltasten + verbesserte Duplikat-Erkennung**
+
+- Klick auf ein Bild in „Ähnliche Bilder" öffnet jetzt eine Vollbild-Lightbox mit Preview (1600 px). Pfeiltasten ◄ ► navigieren durch die Gruppe, Leertaste markiert das aktuelle Bild als „Beste", ESC schließt
+- Thumbnails in der Ähnliche-Bilder-Übersicht wurden bei frisch gescanntem Grouping nicht angezeigt: die persistierten Snapshots hielten stale `thumbnailImage`-Werte — jetzt werden die Dokumente pro Render aus der Collection re-resolved
+- Duplikat-Erkennung greift jetzt auch ohne EXIF-Datum: Primär pHash + Dateigröße (findet bit-exakte Kopien und Exports ohne EXIF), Fallback auf DateTimeOriginal + Größe, letzter Fallback Dateiname + Größe
+
+---
+
 ## 1.7.1
 **Feature — Qualitäts-Metadaten-Eintrag + Icon-Fix für Belichtungs-Badges**
 
