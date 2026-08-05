@@ -2,6 +2,15 @@
 
 ---
 
+## 1.5.1
+**Feature — Pick-Schutz beim Löschen**
+
+- Als „Pick“ markierte Bilder können nicht mehr in den Papierkorb verschoben oder endgültig gelöscht werden — die Operation wird komplett abgebrochen und ein Hinweis zeigt die betroffenen Bilder
+- Der Schutz greift überall: Kontextmenü, „Alle in Papierkorb“ in Unscharf-/Belichtungs-Views, Duplikate-Ausführen und Papierkorb-Leeren
+- Um ein Pick-Bild zu löschen, muss zuerst die Pick-Markierung entfernt werden
+
+---
+
 ## 1.5.0
 **Feature — Auswahl, Kontextmenü und Detail-Ansicht in Qualitäts-Views**
 

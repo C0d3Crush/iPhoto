@@ -45,32 +45,42 @@ extension ImageViewModel {
             deletePermanently(docs)
             return
         }
+        // Pick-geschützt: enthält die Auswahl ein Pick, wird komplett blockiert.
+        if showPickBlockedAlertIfNeeded(docs) { return }
         let count = docs.count
 
-        let picks = docs.filter { $0.flagStatus == .pick }
         let alert = NSAlert()
-        if picks.isEmpty {
-            alert.messageText = count == 1 ? "Datei in den Papierkorb?" : "\(count) Dateien in den Papierkorb?"
-            alert.informativeText = count == 1
-                ? "Das Bild wird in den iPhoto-Papierkorb verschoben und kann dort wiederhergestellt werden."
-                : "Die \(count) Bilder werden in den iPhoto-Papierkorb verschoben und können dort wiederhergestellt werden."
-            alert.addButton(withTitle: "In Papierkorb")
-            alert.alertStyle = .warning
-        } else {
-            alert.messageText = picks.count == 1
-                ? "Ein Bild ist als Pick markiert!"
-                : "\(picks.count) Bilder sind als Pick markiert!"
-            let names = picks.prefix(3).map { $0.filename }.joined(separator: ", ")
-                + (picks.count > 3 ? ", …" : "")
-            alert.informativeText = count == 1
-                ? "„\(names)“ ist als Pick markiert. Trotzdem in den Papierkorb verschieben?"
-                : "Von den \(count) Dateien sind als Pick markiert: \(names). Trotzdem alle \(count) in den Papierkorb verschieben?"
-            alert.addButton(withTitle: "Trotzdem in Papierkorb")
-            alert.alertStyle = .critical
-        }
+        alert.messageText = count == 1 ? "Datei in den Papierkorb?" : "\(count) Dateien in den Papierkorb?"
+        alert.informativeText = count == 1
+            ? "Das Bild wird in den iPhoto-Papierkorb verschoben und kann dort wiederhergestellt werden."
+            : "Die \(count) Bilder werden in den iPhoto-Papierkorb verschoben und können dort wiederhergestellt werden."
+        alert.addButton(withTitle: "In Papierkorb")
+        alert.alertStyle = .warning
         alert.addButton(withTitle: "Abbrechen")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         moveToAppTrash(docs)
+    }
+
+    /// Zentraler Pick-Schutz: enthält `docs` mindestens ein als Pick markiertes Bild,
+    /// wird ein Hinweis-Alert gezeigt und `true` zurückgegeben — die Operation muss
+    /// dann abgebrochen werden. Sonst `false` und der Aufrufer fährt fort.
+    @discardableResult
+    func showPickBlockedAlertIfNeeded(_ docs: [ImageDocument]) -> Bool {
+        let picks = docs.filter { $0.flagStatus == .pick }
+        guard !picks.isEmpty else { return false }
+        let alert = NSAlert()
+        alert.messageText = picks.count == 1
+            ? "Bild ist als Pick markiert"
+            : "\(picks.count) Bilder sind als Pick markiert"
+        let names = picks.prefix(3).map { $0.filename }.joined(separator: ", ")
+            + (picks.count > 3 ? ", …" : "")
+        alert.informativeText = picks.count == 1
+            ? "„\(names)“ kann nicht gelöscht werden. Entferne zuerst die Pick-Markierung."
+            : "Die folgenden Bilder können nicht gelöscht werden: \(names). Entferne zuerst die Pick-Markierung."
+        alert.addButton(withTitle: "OK")
+        alert.alertStyle = .warning
+        alert.runModal()
+        return true
     }
 
     // MARK: - Interner Papierkorb
@@ -83,6 +93,8 @@ extension ImageViewModel {
     /// aber nur noch im Trash-Tab sichtbar und dort wiederherstellbar.
     func moveToAppTrash(_ docs: [ImageDocument]) {
         guard !docs.isEmpty else { return }
+        // Pick-Schutz: als Pick markierte Bilder blockieren die gesamte Operation.
+        if showPickBlockedAlertIfNeeded(docs) { return }
         let prev = visibleDocuments
         let ids = Set(docs.map { $0.id })
         for i in collection.documents.indices where ids.contains(collection.documents[i].id) {
@@ -118,6 +130,8 @@ extension ImageViewModel {
     /// Verschiebt die Originaldateien in den macOS-Papierkorb und entfernt sie aus iPhoto.
     func deletePermanently(_ docs: [ImageDocument]) {
         guard !docs.isEmpty else { return }
+        // Pick-Schutz gilt auch für endgültiges Löschen (aus dem Papierkorb).
+        if showPickBlockedAlertIfNeeded(docs) { return }
         let count = docs.count
         let alert = NSAlert()
         alert.messageText = count == 1 ? "Datei endgültig löschen?" : "\(count) Dateien endgültig löschen?"
