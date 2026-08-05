@@ -338,7 +338,7 @@ final class ImageLoadingOrchestrator {
         guard let host = host else { return }
         let visible = host.visibleDocuments
         guard let cur = host.collection.currentDocument,
-              let visPos = visible.firstIndex(where: { $0.id == cur.id }) else { return }
+              let visPos = host.visiblePosition(for: cur.id) else { return }
         // Vorwärts zuerst — häufigste Navigationsrichtung.
         for offset in [1, -1] {
             let neighborPos = visPos + offset

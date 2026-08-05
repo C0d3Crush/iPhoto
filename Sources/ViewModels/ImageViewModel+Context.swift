@@ -55,6 +55,7 @@ extension ImageViewModel {
             let resolved = order.compactMap { byID[$0] }
             visibleResolvedCache = resolved
             visibleResolvedRevision = collection.documentsRevision
+            visiblePositionCache = Self.buildPositions(resolved)
             return resolved
         }
         let result = computeVisibleDocuments()
@@ -62,11 +63,30 @@ extension ImageViewModel {
         visibleOrderCacheKey = key
         visibleResolvedCache = result
         visibleResolvedRevision = collection.documentsRevision
+        visiblePositionCache = Self.buildPositions(result)
         return result
     }
 
     func invalidateVisibleOrder() {
         visibleOrderVersion &+= 1
+        visiblePositionCache = nil
+    }
+
+    private static func buildPositions(_ docs: [ImageDocument]) -> [UUID: Int] {
+        var m: [UUID: Int] = [:]
+        m.reserveCapacity(docs.count)
+        for (i, d) in docs.enumerated() { m[d.id] = i }
+        return m
+    }
+
+    // O(1)-Lookup: Index eines Dokuments in visibleDocuments. Baut den Cache lazy
+    // auf, falls er noch nicht existiert (erster Aufruf nach invalidateVisibleOrder).
+    // Ersatz für `visibleDocuments.firstIndex(where: { $0.id == id })` in Hot-Paths.
+    func visiblePosition(for id: UUID) -> Int? {
+        dispatchPrecondition(condition: .onQueue(.main))
+        if let cache = visiblePositionCache { return cache[id] }
+        _ = visibleDocuments  // triggert Cache-Aufbau
+        return visiblePositionCache?[id]
     }
 
     private func computeVisibleDocuments() -> [ImageDocument] {

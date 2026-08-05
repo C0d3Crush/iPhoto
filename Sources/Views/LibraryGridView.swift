@@ -55,7 +55,7 @@ struct LibraryGridView: View {
     // Scroll-Ziel, das nach Layout-Neuaufbau crasht (Bug #31) — AppKit-Scroll.
     private func scrollToCurrent() {
         guard let cur = viewModel.collection.currentDocument,
-              let pos = viewModel.visibleDocuments.firstIndex(where: { $0.id == cur.id }) else { return }
+              let pos = viewModel.visiblePosition(for: cur.id) else { return }
         scroller.centerHorizontally(position: pos, cellWidth: 156, spacing: 12, padding: 8)
     }
 

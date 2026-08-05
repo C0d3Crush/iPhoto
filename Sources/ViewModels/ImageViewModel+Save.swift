@@ -75,6 +75,7 @@ extension ImageViewModel {
             try VersionStore.shared.writeImage(image, to: accessURL)
             if let entries = metaEntries {
                 try self.metadataService.writePhotoMetadataSync(url: accessURL, entries: entries)
+                CatalogStore.shared.invalidateExifCache(path: accessURL.path)
             }
             Log.info("Bild gespeichert: \(url.lastPathComponent)")
             let updatedMeta = self.metadataService.readPhotoMetadata(from: accessURL)
@@ -160,6 +161,9 @@ extension ImageViewModel {
                 self.errorMessage = "Metadaten speichern fehlgeschlagen: \(error.localizedDescription)"
             } else {
                 Log.info("Metadaten erfolgreich gespeichert")
+                // Katalog-EXIF-Cache invalidieren: geschriebene EXIF/IPTC-Felder werden auch
+                // in CatalogStore gecached — ohne Invalidate liefern SmartFolder-Filter stale Werte.
+                CatalogStore.shared.invalidateExifCache(path: doc.url.path)
                 let updated = self.metadataService.readPhotoMetadata(from: doc.url)
                 guard index < self.collection.documents.count,
                       self.collection.documents[index].url == doc.url else { return }
@@ -182,6 +186,7 @@ extension ImageViewModel {
             guard let self = self else { return {} }
             let meta = try VersionStore.shared.backupFile(at: accessURL, label: label)
             try self.metadataService.writePhotoMetadataSync(url: accessURL, entries: entries)
+            CatalogStore.shared.invalidateExifCache(path: accessURL.path)
             let updatedMeta = self.metadataService.readPhotoMetadata(from: accessURL)
             Log.info("Metadaten gespeichert: \(url.lastPathComponent)")
             return { [weak self] in

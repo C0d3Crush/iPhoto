@@ -102,6 +102,10 @@ class ImageViewModel: ObservableObject {
     // unverändert ist. Spart das Dictionary-Rebuild pro SwiftUI-Render-Zugriff.
     var visibleResolvedCache: [ImageDocument]? = nil
     var visibleResolvedRevision: UInt64 = 0
+    // Positions-Lookup für visibleDocuments: id → Index. Ersetzt firstIndex(where:)
+    // in next()/previous()/evictDistantImages/Grid-Views (bisher O(N) pro Aufruf,
+    // bei 10k+ Bildern spürbar). Gebaut synchron zu visibleResolvedCache.
+    var visiblePositionCache: [UUID: Int]? = nil
 
     // Serienbild-/Bracketing-Stapel (Fuji 0x1101 SequenceNumber):
     // Anführer-Pfad → aufgeklappt; Zähler/Zuordnung als Nebenprodukt der Order-Berechnung.
@@ -496,7 +500,7 @@ class ImageViewModel: ObservableObject {
         persistAdjustmentsForCurrent()
         let visible = visibleDocuments
         guard let cur = collection.currentDocument,
-              let visPos = visible.firstIndex(where: { $0.id == cur.id }),
+              let visPos = visiblePosition(for: cur.id),
               visPos + 1 < visible.count,
               let nextIdx = collectionIndex(for: visible[visPos + 1]) else { return }
         collection.select(index: nextIdx)
@@ -509,7 +513,7 @@ class ImageViewModel: ObservableObject {
         persistAdjustmentsForCurrent()
         let visible = visibleDocuments
         guard let cur = collection.currentDocument,
-              let visPos = visible.firstIndex(where: { $0.id == cur.id }),
+              let visPos = visiblePosition(for: cur.id),
               visPos > 0,
               let prevIdx = collectionIndex(for: visible[visPos - 1]) else { return }
         collection.select(index: prevIdx)
@@ -543,7 +547,7 @@ class ImageViewModel: ObservableObject {
         if let curID = curID {
             keepNear.insert(curID)
             keepFar.insert(curID)
-            if let pos = visible.firstIndex(where: { $0.id == curID }) {
+            if let pos = visiblePosition(for: curID) {
                 for off in -farRadius...farRadius {
                     let i = pos + off
                     guard i >= 0, i < visible.count else { continue }

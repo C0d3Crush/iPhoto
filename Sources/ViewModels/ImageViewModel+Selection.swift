@@ -234,7 +234,7 @@ extension ImageViewModel {
     func extendSelectionToNext() {
         let visible = visibleDocuments
         guard let cur = collection.currentDocument,
-              let visPos = visible.firstIndex(where: { $0.id == cur.id }),
+              let visPos = visiblePosition(for: cur.id),
               visPos + 1 < visible.count,
               let nextIdx = collectionIndex(for: visible[visPos + 1]) else { return }
         extendSelection(to: nextIdx)
@@ -243,7 +243,7 @@ extension ImageViewModel {
     func extendSelectionToPrevious() {
         let visible = visibleDocuments
         guard let cur = collection.currentDocument,
-              let visPos = visible.firstIndex(where: { $0.id == cur.id }),
+              let visPos = visiblePosition(for: cur.id),
               visPos > 0,
               let prevIdx = collectionIndex(for: visible[visPos - 1]) else { return }
         extendSelection(to: prevIdx)

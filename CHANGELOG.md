@@ -2,6 +2,14 @@
 
 ---
 
+## 1.12.0
+**Feature — O(1)-Position-Lookups + EXIF-Cache-Invalidation nach Metadata-Write**
+
+- Dictionary-Cache für `visibleDocuments`-Positionen: `next()`/`previous()`, Selection-Extension, Adjacent-Prefetch, Evict-Distant und die drei `scrollToCurrent`-Aufrufer (Sidebar, LibraryGrid, LibraryFullGrid) benutzten bislang `firstIndex(where:)` — O(N) pro Klick. Neuer `visiblePositionCache: [UUID: Int]` wird synchron zu `visibleResolvedCache` gebaut und über alle 9 Call-Sites per `visiblePosition(for:)` mit O(1) genutzt. `dispatchPrecondition(.onQueue(.main))` sichert die Main-Thread-Zusage ab
+- Bugfix Stale-EXIF-Cache: nach `Metadaten speichern` blieb der In-Memory-EXIF-Cache in `CatalogStore` stehen — Smart-Folder-Filter (ISO/Blende/Brennweite/Objektiv) lieferten alte Werte bis zum Neustart. Alle drei Save-Pfade rufen jetzt `CatalogStore.shared.invalidateExifCache(path:)` auf und markieren die Datei per `exif_scanned=0` für den nächsten Rescan. Invalidate-Call sitzt im ViewModel, damit die CLI ohne CatalogStore-Abhängigkeit weiter baut
+
+---
+
 ## 1.11.0
 **Feature — Speed-Metriken pro Bild-Switch im Log**
 

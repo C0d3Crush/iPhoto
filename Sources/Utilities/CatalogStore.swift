@@ -350,6 +350,23 @@ final class CatalogStore {
         exifCacheLock.unlock()
     }
 
+    // Invalidiert den in-memory EXIF-Cache für einen Pfad. Aufrufer nach jedem
+    // externen EXIF-Write (MetadataService.writePhotoMetadata), damit der nächste
+    // exif(forPath:) frisch aus DB liest statt einen stale Cache-Wert zu liefern.
+    // Zusätzlich Pfad für Rescan markieren, damit scanExifForLibrary die Datei
+    // beim nächsten Lauf neu einliest und die DB-Werte synct.
+    func invalidateExifCache(path: String) {
+        exifCacheLock.lock()
+        exifCache.removeValue(forKey: path)
+        exifCacheMisses.remove(path)
+        exifCacheLock.unlock()
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            let stmt = self.prepare("UPDATE images SET exif_scanned=0 WHERE path=?")
+            self.bind(stmt, 1, path); self.step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
     func exif(forPath path: String) -> (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool, filmSimulation: String?, sequenceNumber: Int?, autoBracketing: Bool)? {
         exifCacheLock.lock()
         let cached = exifCache[path]

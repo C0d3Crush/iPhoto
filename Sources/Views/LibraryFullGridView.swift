@@ -100,7 +100,7 @@ struct LibraryFullGridView: View {
     // Scroll-Ziel, das nach Layout-Neuaufbau crasht (Bug #31) — AppKit-Scroll.
     private func scrollToCurrent() {
         guard let cur = viewModel.collection.currentDocument,
-              let pos = viewModel.visibleDocuments.firstIndex(where: { $0.id == cur.id }) else { return }
+              let pos = viewModel.visiblePosition(for: cur.id) else { return }
         let count = viewModel.visibleDocuments.count
         let clipWidth = scroller.scrollView?.contentView.bounds.width ?? 0
         let itemWidth = cellWidth + 8
