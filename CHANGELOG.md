@@ -2,6 +2,14 @@
 
 ---
 
+## 1.9.0
+**Feature — Persistierte Duplikat- und Similarity-Gruppen**
+
+- Duplikat- und Ähnlichkeits-Gruppen werden jetzt im Katalog gespeichert (neue Spalten `duplicate_group_id`, `similar_group_id`) — beim App-Neustart auf dieselbe Library sind die Gruppen sofort verfügbar, ohne dass Union-Find über alle pHashes neu laufen muss
+- Nach jedem `detectDuplicates`/`detectSimilarImages`-Lauf wird der Katalog idempotent aktualisiert (vorher alle IDs geNULLt, dann neu gesetzt) — gelöschte oder umsortierte Gruppen leben nicht als Geister weiter
+
+---
+
 ## 1.8.0
 **Feature — Ähnliche-Bilder-Lightbox mit Pfeiltasten + verbesserte Duplikat-Erkennung**
 

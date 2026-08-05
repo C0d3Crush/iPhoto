@@ -60,11 +60,37 @@ extension ImageViewModel {
                 .map { $0.sorted { $0.url.path < $1.url.path } }
                 .sorted { $0[0].filename < $1[0].filename }
             Log.info("Duplikate: \(groups.count) Gruppen aus \(docs.count) Bildern (pHash-Coverage: \(docs.filter { $0.phash != nil }.count)/\(docs.count))")
+            let paths = groups.map { $0.map { $0.url.path } }
+            CatalogStore.shared.setDuplicateGroups(paths)
             DispatchQueue.main.async { [weak self] in
                 self?.quality.duplicateGroups = groups
                 self?.activity.dequeue(id: taskID)
             }
         }
+    }
+
+    /// Lädt beim App-Start die zuletzt persistierten Duplikat-/Similarity-Gruppen aus
+    /// dem Katalog und mappt sie auf die aktuell geladenen Documents. Fehlt ein Pfad
+    /// (Bild gelöscht/nicht mehr im Import), wird die Gruppe entsprechend verkürzt;
+    /// Gruppen mit weniger als 2 verbleibenden Docs fallen raus. Neue Scans werden
+    /// erst durch expliziten Nutzer-Aufruf oder `scan*ForLibrary()` ausgelöst — hier
+    /// nur der Load, damit die Ansichten nach Neustart sofort gefüllt sind.
+    func loadPersistedGroupsIfAvailable() {
+        let byPath = Dictionary(collection.documents.map { ($0.url.path, $0) },
+                                uniquingKeysWith: { a, _ in a })
+        let dupPaths = CatalogStore.shared.loadDuplicateGroups()
+        let simPaths = CatalogStore.shared.loadSimilarGroups()
+        let dupGroups = dupPaths
+            .map { grp in grp.compactMap { byPath[$0] } }
+            .filter { $0.count > 1 }
+            .map { $0.sorted { $0.url.path < $1.url.path } }
+            .sorted { $0[0].filename < $1[0].filename }
+        let simGroups = simPaths
+            .map { grp in grp.compactMap { byPath[$0] } }
+            .filter { $0.count > 1 }
+        quality.duplicateGroups = dupGroups
+        quality.similarGroups = simGroups
+        Log.info("Persistierte Gruppen geladen: \(dupGroups.count) Duplikate, \(simGroups.count) Similar")
     }
 
     /// Aktualisiert blurry/under/over-Listen aus den beim Import persistierten Werten.
@@ -112,6 +138,8 @@ extension ImageViewModel {
                          done: 0, total: docs.count, summaryVerb: "gruppiert")
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let groups = SimilarityGrouper.groups(from: docs)
+            let paths = groups.map { $0.map { $0.url.path } }
+            CatalogStore.shared.setSimilarGroups(paths)
             DispatchQueue.main.async {
                 self?.quality.similarGroups = groups
                 self?.activity.dequeue(id: taskID)

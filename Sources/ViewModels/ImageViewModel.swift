@@ -461,6 +461,7 @@ class ImageViewModel: ObservableObject {
         // der neue Scan im Hintergrund kann Minuten dauern, aber bereits gescannte Bilder
         // (z. B. beim App-Neustart auf gleiche Library) sollen sofort sichtbar sein.
         refreshQualityLists()
+        loadPersistedGroupsIfAvailable()
         if selectFirst || collection.documents.count == newDocs.count {
             collection.select(index: firstNewIndex)
             loadCurrentImage()

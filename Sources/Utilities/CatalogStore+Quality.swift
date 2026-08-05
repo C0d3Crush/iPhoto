@@ -155,4 +155,62 @@ extension CatalogStore {
             sqlite3_finalize(stmt); return out
         }
     }
+
+    // MARK: - Duplicate / Similar Group Persistence
+    //
+    // Speichert die von detectDuplicates bzw. detectSimilarImages ermittelten Gruppen als
+    // group_id-Spalte pro Bild. Beim App-Start werden die Gruppen mit einem GROUP BY
+    // rekonstruiert — deutlich billiger als Union-Find über hunderte pHashes neu zu laufen.
+    //
+    // API-Kontrakt: setDuplicateGroups/setSimilarGroups sind idempotent — sie NULL-en
+    // vorher alle Werte, damit gelöschte oder umsortierte Gruppen nicht als Geister leben.
+
+    func setDuplicateGroups(_ groups: [[String]]) {
+        setGroups(column: "duplicate_group_id", groups: groups)
+    }
+
+    func setSimilarGroups(_ groups: [[String]]) {
+        setGroups(column: "similar_group_id", groups: groups)
+    }
+
+    func loadDuplicateGroups() -> [[String]] {
+        loadGroups(column: "duplicate_group_id")
+    }
+
+    func loadSimilarGroups() -> [[String]] {
+        loadGroups(column: "similar_group_id")
+    }
+
+    private func setGroups(column: String, groups: [[String]]) {
+        queue.sync {
+            exec("BEGIN")
+            exec("UPDATE images SET \(column)=NULL")
+            let stmt = prepare("UPDATE images SET \(column)=? WHERE path=?")
+            for (gIdx, group) in groups.enumerated() {
+                let gid = Int32(gIdx + 1)
+                for path in group {
+                    sqlite3_reset(stmt)
+                    sqlite3_bind_int(stmt, 1, gid)
+                    bind(stmt, 2, path)
+                    step(stmt)
+                }
+            }
+            sqlite3_finalize(stmt)
+            exec("COMMIT")
+        }
+    }
+
+    private func loadGroups(column: String) -> [[String]] {
+        queue.sync {
+            let stmt = prepare("SELECT \(column), path FROM images WHERE \(column) IS NOT NULL ORDER BY \(column), path")
+            var buckets: [Int32: [String]] = [:]
+            while step(stmt) == SQLITE_ROW {
+                let gid = sqlite3_column_int(stmt, 0)
+                let path = String(cString: sqlite3_column_text(stmt, 1))
+                buckets[gid, default: []].append(path)
+            }
+            sqlite3_finalize(stmt)
+            return buckets.keys.sorted().compactMap { buckets[$0] }.filter { $0.count > 1 }
+        }
+    }
 }

@@ -207,6 +207,9 @@ final class CatalogStore {
     // v1.7.0: Qualitätsflags (Blur/Belichtung) + Overrides persistieren.
     // blur_override/under_override/over_override: 0=nichts, 1=Nutzer sagt "doch ok" (Bild aus der Kategorie ausschließen).
     // phash: 64-Bit perceptual hash für Similarity-Grouping.
+    // v1.9.0: duplicate_group_id / similar_group_id persistieren Gruppen-Membership —
+    // spart Re-Berechnung beim App-Start (vor allem Similarity mit Union-Find über
+    // hunderte pHashes).
     private func migrateQualityColumns() {
         let cols = [
             "blur_score REAL",
@@ -216,12 +219,16 @@ final class CatalogStore {
             "blur_override INTEGER NOT NULL DEFAULT 0",
             "under_override INTEGER NOT NULL DEFAULT 0",
             "over_override INTEGER NOT NULL DEFAULT 0",
-            "quality_scanned INTEGER NOT NULL DEFAULT 0"
+            "quality_scanned INTEGER NOT NULL DEFAULT 0",
+            "duplicate_group_id INTEGER",
+            "similar_group_id INTEGER"
         ]
         for col in cols {
             exec("ALTER TABLE images ADD COLUMN \(col)")
         }
         exec("CREATE INDEX IF NOT EXISTS idx_images_quality_scanned ON images(quality_scanned)")
+        exec("CREATE INDEX IF NOT EXISTS idx_images_duplicate_group ON images(duplicate_group_id)")
+        exec("CREATE INDEX IF NOT EXISTS idx_images_similar_group   ON images(similar_group_id)")
     }
 
     // MARK: - Migration from JSON
