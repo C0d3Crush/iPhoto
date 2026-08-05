@@ -2,6 +2,15 @@
 
 ---
 
+## 1.10.0
+**Feature — Zweite Hash-Achse für Similarity + Ähnliche-Gruppe als Album im Viewer**
+
+- Similarity-Grouping nutzt jetzt zwei orthogonale dHash-Signale (horizontale + vertikale Gradienten). Ein einzelner dHash lieferte bei dunklen/kontrastarmen Motiven zu viele identische Bits und clusterte unähnliche Bilder zusammen. Beide Achsen müssen matchen (≤ 6 Bits Hamming pro Achse) — die effektive Diskriminierung ist damit deutlich strenger, Bracketing-Serien bleiben aber weiterhin zusammen
+- Migration: neue Spalte `phash_v` in der Katalog-DB. Alte Records werden beim App-Start für einen Rescan markiert (`quality_scanned=0 WHERE phash_v IS NULL`) — der Import-Scan berechnet den zweiten Hash automatisch mit
+- Klick auf ein Tile in „Ähnliche Bilder" öffnet die Gruppe jetzt im Haupt-Viewer, nicht mehr in einer separaten Lightbox. Pfeiltasten navigieren nur innerhalb der Gruppe, exakt wie in einem Album. Rückkehr zur Übersicht über den Sidebar-Eintrag „Ähnliche Bilder"
+
+---
+
 ## 1.9.1
 **Bugfix — Ähnliche-Bilder-Cluster und Duplikat-Erkennung robuster**
 

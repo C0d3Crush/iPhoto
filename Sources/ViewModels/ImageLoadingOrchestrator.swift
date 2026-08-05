@@ -591,7 +591,8 @@ final class ImageLoadingOrchestrator {
                         blurScore: result.blurScore,
                         underRatio: result.underRatio,
                         overRatio: result.overRatio,
-                        phash: result.phash
+                        phash: result.phash,
+                        phashV: result.phashV
                     )
                     done += 1
                     let d = done, t = total
@@ -603,6 +604,7 @@ final class ImageLoadingOrchestrator {
                             host.collection.documents[idx].underRatio    = result.underRatio
                             host.collection.documents[idx].overRatio     = result.overRatio
                             host.collection.documents[idx].phash         = result.phash
+                            host.collection.documents[idx].phashV        = result.phashV
                             host.collection.documents[idx].qualityScanned = true
                         }
                     }

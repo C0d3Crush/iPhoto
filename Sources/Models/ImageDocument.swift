@@ -50,6 +50,10 @@ struct ImageDocument: Identifiable, Equatable {
     var underRatio: Double? = nil
     var overRatio: Double? = nil
     var phash: UInt64? = nil
+    // Zweiter, orthogonaler Hash für Similarity — dHash allein (horizontale Gradienten)
+    // gruppiert bei dunklen/kontrastarmen Motiven zu aggressiv. phashV (vertikale
+    // Gradienten) unabhängig davon, Grouping verlangt Match in beiden Achsen.
+    var phashV: UInt64? = nil
     var qualityScanned: Bool = false
     var blurOverride: Bool = false
     var underOverride: Bool = false

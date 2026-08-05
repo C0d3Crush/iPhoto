@@ -216,6 +216,9 @@ final class CatalogStore {
             "under_ratio REAL",
             "over_ratio REAL",
             "phash INTEGER",
+            // v1.9.2: zweiter Hash (vertikale Gradienten) für Similarity-Grouping.
+            // Alte Records ohne phash_v werden über die UPDATE unten für Rescan markiert.
+            "phash_v INTEGER",
             "blur_override INTEGER NOT NULL DEFAULT 0",
             "under_override INTEGER NOT NULL DEFAULT 0",
             "over_override INTEGER NOT NULL DEFAULT 0",
@@ -229,6 +232,10 @@ final class CatalogStore {
         exec("CREATE INDEX IF NOT EXISTS idx_images_quality_scanned ON images(quality_scanned)")
         exec("CREATE INDEX IF NOT EXISTS idx_images_duplicate_group ON images(duplicate_group_id)")
         exec("CREATE INDEX IF NOT EXISTS idx_images_similar_group   ON images(similar_group_id)")
+        // Records aus früheren Versionen ohne phash_v: Rescan markieren, damit der
+        // Similarity-Grouper mit beiden Hashes arbeiten kann. Idempotent — no-op
+        // sobald alle Bilder den zweiten Hash haben.
+        exec("UPDATE images SET quality_scanned=0 WHERE quality_scanned=1 AND phash_v IS NULL")
     }
 
     // MARK: - Migration from JSON

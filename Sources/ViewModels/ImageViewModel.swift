@@ -439,6 +439,7 @@ class ImageViewModel: ObservableObject {
                     doc.underRatio     = q.underRatio
                     doc.overRatio      = q.overRatio
                     doc.phash          = q.phash
+                    doc.phashV         = q.phashV
                     doc.qualityScanned = q.scanned
                     doc.blurOverride   = q.blurOverride
                     doc.underOverride  = q.underOverride

@@ -14,7 +14,8 @@ struct QualityAssessor {
         let blurScore: Double
         let underRatio: Double
         let overRatio: Double
-        let phash: UInt64
+        let phash: UInt64          // horizontale Gradienten (dHash)
+        let phashV: UInt64         // vertikale Gradienten (dHash) — orthogonaler Zweitsignal
     }
 
     static func assess(url: URL) -> Result? {
@@ -25,10 +26,7 @@ struct QualityAssessor {
             cg = nil
         }
         guard let img = cg else { return nil }
-        let blur = BlurDetector.score(from: img)
-        let expo = ExposureDetector.analyze(from: img)
-        let hash = PerceptualHash.dHash(from: img)
-        return Result(blurScore: blur, underRatio: expo.underRatio, overRatio: expo.overRatio, phash: hash)
+        return assess(image: img)
     }
 
     // Kann auch mit einem bereits dekodierten CGImage aufgerufen werden (z. B. wenn ein
@@ -36,38 +34,59 @@ struct QualityAssessor {
     static func assess(image: CGImage) -> Result {
         let blur = BlurDetector.score(from: image)
         let expo = ExposureDetector.analyze(from: image)
-        let hash = PerceptualHash.dHash(from: image)
-        return Result(blurScore: blur, underRatio: expo.underRatio, overRatio: expo.overRatio, phash: hash)
+        let (hashH, hashV) = PerceptualHash.dHashPair(from: image)
+        return Result(blurScore: blur, underRatio: expo.underRatio, overRatio: expo.overRatio,
+                      phash: hashH, phashV: hashV)
     }
 }
 
-// dHash: 9×8 Grauwerte → 64 Bits, wobei jedes Bit angibt, ob der Pixel heller ist als sein
-// rechter Nachbar. Invariant gegenüber Helligkeit/WB-Änderungen (nur Gradienten zählen) —
-// ideal für Bracketing-Erkennung (siehe Nutzer-Wunsch: gleiche Szene, verschiedene Kelvin).
+// dHash: 9×8 Grauwerte → 64 Bits (horizontal), plus 8×9 → 64 Bits (vertikal).
+// Invariant gegenüber Helligkeit/WB-Änderungen (nur Gradienten zählen) — ideal für
+// Bracketing-Erkennung. Zwei Achsen: bei dunklen Motiven produziert ein 9×8 dHash
+// viele identische Bits (Flächen ohne Struktur). Der zweite Hash entlang der
+// anderen Achse gibt Grouping-Code eine unabhängige Prüfung — Bilder gelten nur
+// dann als ähnlich, wenn beide Hashes matchen.
 struct PerceptualHash {
     static func dHash(from image: CGImage) -> UInt64 {
-        let w = 9, h = 8, n = w * h
+        return dHashPair(from: image).0
+    }
+
+    static func dHashPair(from image: CGImage) -> (UInt64, UInt64) {
+        // 9×9 Grauwertraster: aus einem einzigen Downscale beide Hashes ableiten.
+        // Vorher: zweimal getrennter Downscale → doppelter Rendering-Aufwand.
+        let side = 9, n = side * side
         var gray = [UInt8](repeating: 0, count: n)
         guard let ctx = CGContext(
-            data: &gray, width: w, height: h,
-            bitsPerComponent: 8, bytesPerRow: w,
+            data: &gray, width: side, height: side,
+            bitsPerComponent: 8, bytesPerRow: side,
             space: CGColorSpaceCreateDeviceGray(),
             bitmapInfo: CGImageAlphaInfo.none.rawValue
-        ) else { return 0 }
+        ) else { return (0, 0) }
         ctx.interpolationQuality = .medium
-        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
 
-        var hash: UInt64 = 0
-        var bit = 0
-        for y in 0..<h {
-            for x in 0..<(w - 1) {
-                if gray[y * w + x] > gray[y * w + x + 1] {
-                    hash |= (1 << bit)
+        var hashH: UInt64 = 0
+        var bitH = 0
+        for y in 0..<8 {
+            for x in 0..<8 {
+                if gray[y * side + x] > gray[y * side + x + 1] {
+                    hashH |= (1 << bitH)
                 }
-                bit += 1
+                bitH += 1
             }
         }
-        return hash
+
+        var hashV: UInt64 = 0
+        var bitV = 0
+        for x in 0..<8 {
+            for y in 0..<8 {
+                if gray[y * side + x] > gray[(y + 1) * side + x] {
+                    hashV |= (1 << bitV)
+                }
+                bitV += 1
+            }
+        }
+        return (hashH, hashV)
     }
 
     static func hammingDistance(_ a: UInt64, _ b: UInt64) -> Int {

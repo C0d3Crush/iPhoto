@@ -21,6 +21,9 @@ enum NavSelection: Hashable {
     case trash
     case duplicates
     case similar
+    // Temporärer Scope auf eine einzelne Similar-Gruppe: main viewer + Pfeiltasten
+    // iterieren nur innerhalb dieser Gruppe. Int = Index in quality.similarGroups.
+    case similarGroup(Int)
     case blurry
     case underexposed
     case overexposed

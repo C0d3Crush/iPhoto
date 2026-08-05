@@ -1,32 +1,32 @@
 import Foundation
 
-// Gruppiert Bilder anhand ihres pHash (dHash) mit Hamming-Distanz.
+// Gruppiert Bilder anhand von zwei orthogonalen dHash-Signalen (horizontal + vertikal)
+// mit Hamming-Distanz. Bildgruppen brauchen einen Match in *beiden* Achsen.
 //
-// Use Case (Nutzer-Wunsch v1.7.0): "Ich mache oft einige Bilder mit verschienden
-// Einstellungen wie Kelvin oder Helligkeit … ich will an der linken Seite so n
-// Feature das ähnliche Bilder gruppiert werden."
-//
-// dHash ist invariant gegen Helligkeit/WB — genau richtig für Bracketing-Serien.
-//
-// Historisch: v1.7.0 nutzte Union-Find — das erzeugte transitive Ketten (A~B, B~C, C~D
-// werden alle in einer Gruppe zusammengefasst, auch wenn d(A,D) sehr groß ist).
-// Bei dunklen/kontrastarmen Bildern führte das zu Riesen-Clustern völlig unähnlicher Bilder.
-// Ab v1.9.1: seed-and-pull — jede Gruppe hat einen Seed, alle Mitglieder liegen innerhalb
-// `maxDistance` vom Seed. Cluster-Durchmesser damit ≤ 2·maxDistance (Dreiecksungleichung).
+// Historie:
+// - v1.7.0: Union-Find über einen einzelnen dHash — transitive Ketten erzeugten
+//   Riesen-Cluster.
+// - v1.9.1: Seed-and-Pull statt Union-Find; nur ein Hash → dunkle/kontrastarme Motive
+//   liefern immer noch viele False Positives (Hash hat zu viele identische Bits).
+// - v1.9.2: Zweiter Hash (vertikale Gradienten) als unabhängige Prüfung. Beide müssen
+//   innerhalb der Schwelle liegen — Bilder mit ähnlicher horizontaler Struktur, aber
+//   verschiedener vertikaler Struktur (z. B. zwei nächtliche Landschaften mit anderer
+//   Silhouette) werden jetzt sauber getrennt.
 
 struct SimilarityGrouper {
-    /// Standard-Distanz für 64-Bit dHash. 8 Bits = 12,5 % Unterschied — eng genug, dass
-    /// unähnliche Motive nicht zusammengezogen werden, weit genug für Bracketing-Serien.
-    static let defaultMaxHammingDistance = 8
+    /// Standard-Distanz pro Achse (64-Bit dHash). 6 Bits = 9,4 % Unterschied. Da BEIDE
+    /// Achsen matchen müssen, ist das effektiv strenger als ein einzelner Hash mit 6 Bits.
+    static let defaultMaxHammingDistance = 6
 
     /// Gruppen ähnlicher Bilder (Größe ≥ 2). Jede Gruppe: Seed + alle Docs mit
-    /// Hamming-Distanz ≤ maxDistance zum Seed. Sortierung nach filename bestimmt den
-    /// Seed deterministisch (erster nicht-verarbeiteter Doc der sortierten Liste).
+    /// Hamming-Distanz ≤ maxDistance in beiden dHash-Achsen. Docs ohne phashV
+    /// werden übersprungen (fallen in einen Rescan-Cycle, siehe Migration in
+    /// CatalogStore.migrateQualityColumns).
     static func groups(from docs: [ImageDocument], maxDistance: Int = defaultMaxHammingDistance) -> [[ImageDocument]] {
         let hashed = docs
-            .compactMap { doc -> (ImageDocument, UInt64)? in
-                guard let h = doc.phash else { return nil }
-                return (doc, h)
+            .compactMap { doc -> (ImageDocument, UInt64, UInt64)? in
+                guard let h = doc.phash, let v = doc.phashV else { return nil }
+                return (doc, h, v)
             }
             .sorted { $0.0.filename < $1.0.filename }
         guard hashed.count > 1 else { return [] }
@@ -35,15 +35,17 @@ struct SimilarityGrouper {
         var result: [[ImageDocument]] = []
 
         for i in 0..<hashed.count where !claimed[i] {
-            let seedHash = hashed[i].1
+            let seedH = hashed[i].1
+            let seedV = hashed[i].2
             var group: [ImageDocument] = [hashed[i].0]
             claimed[i] = true
             for j in (i + 1)..<hashed.count where !claimed[j] {
-                let d = (seedHash ^ hashed[j].1).nonzeroBitCount
-                if d <= maxDistance {
-                    group.append(hashed[j].0)
-                    claimed[j] = true
-                }
+                let dH = (seedH ^ hashed[j].1).nonzeroBitCount
+                if dH > maxDistance { continue }
+                let dV = (seedV ^ hashed[j].2).nonzeroBitCount
+                if dV > maxDistance { continue }
+                group.append(hashed[j].0)
+                claimed[j] = true
             }
             if group.count > 1 {
                 result.append(group.sorted { $0.filename < $1.filename })

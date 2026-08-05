@@ -372,6 +372,15 @@ struct NavSidebarView: View {
         }
     }
 
+    // Sidebar-Highlight bleibt auf "Ähnliche Bilder", auch wenn der Nutzer in eine
+    // konkrete Gruppe hineinzoomt (nav = .similarGroup(_)). Ohne dieses Mapping
+    // würde nach Klick auf ein Gruppen-Tile die Sidebar den aktiven Bereich verlieren.
+    private var isSimilarSelected: Bool {
+        if case .similar = viewModel.navSelection { return true }
+        if case .similarGroup = viewModel.navSelection { return true }
+        return false
+    }
+
     @ViewBuilder private var duplicatesSection: some View {
         sectionHeader("Duplikate")
         Button(action: { viewModel.navSelection = .duplicates }) {
@@ -417,7 +426,7 @@ struct NavSidebarView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(viewModel.navSelection == .similar ? Color.accentColor.opacity(0.2) : Color.clear)
+            .background(isSimilarSelected ? Color.accentColor.opacity(0.2) : Color.clear)
             .cornerRadius(6)
         }
         .buttonStyle(PlainButtonStyle())

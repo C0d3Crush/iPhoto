@@ -99,6 +99,14 @@ extension ImageViewModel {
             filtered = docs
         case .similar:
             filtered = docs
+        case .similarGroup(let idx):
+            // Gruppe-als-Album: main viewer scoped auf diese Similar-Cluster —
+            // Pfeiltasten navigieren nur innerhalb. Index out-of-range (Gruppen
+            // wurden zwischenzeitlich neu berechnet) → leere Auswahl statt Crash.
+            let groups = quality.similarGroups
+            guard idx >= 0, idx < groups.count else { return [] }
+            let groupIDs = Set(groups[idx].map { $0.id })
+            filtered = docs.filter { groupIDs.contains($0.id) }
         case .blurry:
             let ids = Set(quality.blurryDocuments.map { $0.id })
             filtered = docs.filter { ids.contains($0.id) }
