@@ -99,6 +99,15 @@ extension ImageViewModel {
         case .album(let id):
             guard let album = library.albums.first(where: { $0.id == id }) else { return [] }
             filtered = docs.filter { album.photoURLs.contains($0.url) }
+        case .albumFolder(let id):
+            // Rekursiv alle Fotos aus Alben unterhalb dieses Ordners aggregieren.
+            // Duplikate zwischen Alben werden ausgeblendet (Set-Union der URLs).
+            let descendantAlbumIDs = collectDescendantAlbumIDs(folderID: id)
+            var unionURLs = Set<URL>()
+            for album in library.albums where descendantAlbumIDs.contains(album.id) {
+                for url in album.photoURLs { unionURLs.insert(url) }
+            }
+            filtered = docs.filter { unionURLs.contains($0.url) }
         case .folder(let id):
             guard let folder = library.watchedFolders.first(where: { $0.id == id }),
                   let (folderURL, stop) = folder.resolveURL() else { return [] }

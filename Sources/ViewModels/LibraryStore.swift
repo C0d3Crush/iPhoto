@@ -7,6 +7,7 @@ import Combine
 /// ImageViewModel. Zugriff nur vom Main-Thread (gleiche Invariante wie ImageCollection).
 final class LibraryStore: ObservableObject {
     @Published var albums: [Album] = []
+    @Published var albumFolders: [AlbumFolder] = []
     @Published var watchedFolders: [WatchedFolder] = []
     @Published var smartFolders: [SmartFolder] = []
     @Published var detectedVolumes: [DetectedVolume] = []
@@ -39,6 +40,7 @@ final class LibraryStore: ObservableObject {
     }()
 
     private var albumsFileURL: URL         { supportDirectory.appendingPathComponent("albums.json") }
+    private var albumFoldersFileURL: URL   { supportDirectory.appendingPathComponent("albumFolders.json") }
     private var watchedFoldersFileURL: URL { supportDirectory.appendingPathComponent("watchedFolders.json") }
     private var smartFoldersFileURL: URL   { supportDirectory.appendingPathComponent("smartFolders.json") }
 
@@ -47,6 +49,13 @@ final class LibraryStore: ObservableObject {
     func loadAlbums() {
         if let decoded = load([Album].self, from: albumsFileURL, description: "Album-Datei") {
             albums = decoded
+        }
+    }
+
+    func loadAlbumFolders() {
+        // Datei existiert erst nach dem ersten Anlegen eines Ordners — leer = ok.
+        if let decoded = load([AlbumFolder].self, from: albumFoldersFileURL, description: "Album-Ordner-Datei") {
+            albumFolders = decoded
         }
     }
 
@@ -81,6 +90,11 @@ final class LibraryStore: ObservableObject {
     func saveAlbums() {
         guard let data = try? JSONEncoder().encode(albums) else { return }
         persist(data, to: albumsFileURL, description: "Album-Datei")
+    }
+
+    func saveAlbumFolders() {
+        guard let data = try? JSONEncoder().encode(albumFolders) else { return }
+        persist(data, to: albumFoldersFileURL, description: "Album-Ordner-Datei")
     }
 
     func saveWatchedFolders() {

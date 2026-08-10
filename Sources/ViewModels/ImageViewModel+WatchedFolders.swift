@@ -211,7 +211,7 @@ extension ImageViewModel {
             foldersToLoad = library.watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
         case .folder(let id):
             foldersToLoad = library.watchedFolders.filter { $0.id == id && !syncedFolderIDs.contains($0.id) }
-        case .album:
+        case .album, .albumFolder:
             foldersToLoad = library.watchedFolders.filter { !syncedFolderIDs.contains($0.id) }
         case .smartFolder(let id):
             foldersToLoad = library.watchedFolders.filter { !syncedFolderIDs.contains($0.id) }

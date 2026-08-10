@@ -141,6 +141,7 @@ class ImageViewModel: ObservableObject {
     init() {
         library.onError = { [weak self] msg in self?.errorMessage = msg }
         library.loadAlbums()
+        library.loadAlbumFolders()
         library.loadSmartFolders()
         library.loadWatchedFolders()
         // Backward compat: Filesystem-Verzeichnisse für bestehende Alben anlegen

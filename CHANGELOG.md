@@ -2,6 +2,17 @@
 
 ---
 
+## 1.16.0
+**Feature — Verschachtelte Album-Ordner**
+
+- Neuer Container-Typ `AlbumFolder`: hält Alben (und weitere AlbumFolders) beliebig tief verschachtelt. Alben behalten ihre Fotos, Ordner enthalten selbst keine Fotos — beim Klick auf einen Ordner werden alle Fotos aller enthaltenen Alben rekursiv aggregiert (wie in Fotos.app)
+- „+"-Button im Alben-Header hat jetzt ein Popup mit **Neues Album…** und **Neuer Ordner…**. Kontextmenü auf Ordner/Album bietet Umbenennen, „Verschieben nach…" (Root oder beliebiger Zielordner), Löschen
+- Drag-and-Drop: Alben und Ordner lassen sich per Drag zwischen Ordnern verschieben oder auf die Root-Zone (Alben-Sektion) fallen; Zyklus-Schutz verhindert, dass ein Ordner in sich selbst oder einen seiner Nachfahren gezogen wird
+- Beim Löschen eines Ordners werden enthaltene Alben und Sub-Ordner auf die nächsthöhere Ebene promotet (kein Datenverlust). Bestehende Alben laden ohne Migration weiter — alte JSON-Dateien ohne `parentID` landen automatisch auf Root
+- Persistenz: neue `~/Library/Application Support/iPhoto/albumFolders.json`, Alben-JSON um optionales `parentID` erweitert
+
+---
+
 ## 1.15.0
 **Feature — JPEG-Backup direkt aus dem Kontextmenü**
 

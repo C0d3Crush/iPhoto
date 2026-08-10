@@ -3,130 +3,22 @@ import SwiftUI
 struct NavigationPanel: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var showCreateAlbum = false
+    @State private var showCreateFolder = false
     @State private var newAlbumName = ""
+    @State private var newFolderName = ""
     @State private var renamingAlbum: Album? = nil
+    @State private var renamingFolder: AlbumFolder? = nil
     @State private var renameText = ""
     @State private var smartFolderSheetItem: SmartFolderSheetItem? = nil
+    @State private var isRootDropTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            panelSectionHeader("Bibliothek")
-
-            panelNavRow(label: "Library", icon: "photo.stack",
-                        isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil) {
-                viewModel.navSelection = .library
-            }
-
-            panelSectionHeader("Alben", trailing: AnyView(
-                Button(action: { newAlbumName = ""; showCreateAlbum = true }) {
-                    Image(systemName: "plus").font(.caption)
-                }
-                .buttonStyle(PlainButtonStyle())
-            ))
-
-            ForEach(viewModel.library.albums) { album in
-                PanelAlbumRow(album: album,
-                              isSelected: viewModel.navSelection == .album(album.id))
-                    .environmentObject(viewModel)
-            }
-
-            panelSectionHeader("Ordner", trailing: AnyView(
-                Button(action: { viewModel.addFolderDialog() }) {
-                    Image(systemName: "plus").font(.caption)
-                }
-                .buttonStyle(PlainButtonStyle())
-            ))
-
-            // Import progress banner
-            if !viewModel.activity.importProgress.isEmpty {
-                ImportProgressBanner()
-                    .environmentObject(viewModel)
-            }
-
-            ForEach(viewModel.library.watchedFolders) { folder in
-                PanelFolderRow(folder: folder,
-                               isSelected: viewModel.navSelection == .folder(folder.id))
-                    .environmentObject(viewModel)
-                    .contextMenu {
-                        Button {
-                            viewModel.toggleAutoSync(for: folder)
-                        } label: {
-                            Label(
-                                folder.autoSync ? "Auto-Sync deaktivieren" : "Auto-Sync bei Einführen",
-                                systemImage: folder.autoSync ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath"
-                            )
-                        }
-
-                        Divider()
-
-                        if !folder.isRemovableMedia {
-                            Button {
-                                let panel = NSOpenPanel()
-                                panel.canChooseFiles = false
-                                panel.canChooseDirectories = true
-                                panel.canCreateDirectories = true
-                                panel.title = "Importziel wählen"
-                                panel.prompt = "Auswählen"
-                                if panel.runModal() == .OK, let url = panel.url {
-                                    viewModel.setImportDestination(for: folder, path: url.path)
-                                }
-                            } label: {
-                                Label("Importziel festlegen…", systemImage: "folder.badge.plus")
-                            }
-                        }
-
-                        if folder.isRemovableMedia || folder.importDestinationPath != nil {
-                            Button {
-                                viewModel.importImages(from: folder)
-                            } label: {
-                                Label("Jetzt importieren", systemImage: "arrow.down.circle")
-                            }
-                            .disabled(!folder.isAvailable || viewModel.activity.importProgress[folder.id] != nil)
-
-                            if !folder.isRemovableMedia {
-                                Button {
-                                    viewModel.setImportDestination(for: folder, path: nil)
-                                } label: {
-                                    Label("Importziel entfernen", systemImage: "folder.badge.minus")
-                                }
-                            }
-                        }
-
-                        Divider()
-                        Button("Ordner entfernen") { viewModel.deleteWatchedFolder(folder) }
-                    }
-            }
-
-            if !viewModel.library.detectedVolumes.isEmpty {
-                panelSectionHeader("Wechseldatenträger")
-                ForEach(viewModel.library.detectedVolumes) { volume in
-                    PanelVolumeRow(volume: volume,
-                                   isSelected: viewModel.navSelection == .volume(volume.id))
-                        .environmentObject(viewModel)
-                }
-            }
-
-            panelSectionHeader("Intelligente Ordner", trailing: AnyView(
-                Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
-                    Image(systemName: "plus").font(.caption)
-                }
-                .buttonStyle(PlainButtonStyle())
-            ))
-
-            ForEach(viewModel.library.smartFolders) { sf in
-                panelNavRow(
-                    label: sf.name,
-                    icon: "folder.badge.gearshape",
-                    isSelected: viewModel.navSelection == .smartFolder(sf.id)
-                ) {
-                    viewModel.navSelection = .smartFolder(sf.id)
-                }
-                .contextMenu {
-                    Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
-                    Divider()
-                    Button("Löschen") { viewModel.deleteSmartFolder(sf) }
-                }
-            }
+            librarySection
+            albumsSection
+            watchedFoldersSection
+            volumesSection
+            smartFoldersSection
         }
         .padding(.bottom, 8)
         .sheet(item: $smartFolderSheetItem) { item in
@@ -142,6 +34,15 @@ struct NavigationPanel: View {
                 isPresented: $showCreateAlbum
             ) { name in viewModel.createAlbum(name: name) }
         }
+        .sheet(isPresented: $showCreateFolder) {
+            PanelAlbumNameSheet(
+                title: "Neuer Ordner",
+                placeholder: "Ordnername",
+                confirmLabel: "Erstellen",
+                name: $newFolderName,
+                isPresented: $showCreateFolder
+            ) { name in viewModel.createAlbumFolder(name: name) }
+        }
         .sheet(item: $renamingAlbum) { album in
             PanelAlbumNameSheet(
                 title: "Umbenennen",
@@ -153,6 +54,170 @@ struct NavigationPanel: View {
                     set: { if !$0 { renamingAlbum = nil } }
                 )
             ) { name in viewModel.renameAlbum(album, to: name) }
+        }
+        .sheet(item: $renamingFolder) { folder in
+            PanelAlbumNameSheet(
+                title: "Ordner umbenennen",
+                placeholder: folder.name,
+                confirmLabel: "Speichern",
+                name: $renameText,
+                isPresented: Binding(
+                    get: { renamingFolder != nil },
+                    set: { if !$0 { renamingFolder = nil } }
+                )
+            ) { name in viewModel.renameAlbumFolder(folder, to: name) }
+        }
+    }
+
+    // MARK: - Sections
+
+    @ViewBuilder private var librarySection: some View {
+        panelSectionHeader("Bibliothek")
+        panelNavRow(label: "Library", icon: "photo.stack",
+                    isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil) {
+            viewModel.navSelection = .library
+        }
+    }
+
+    @ViewBuilder private var albumsSection: some View {
+        panelSectionHeader("Alben", trailing: AnyView(albumsAddMenu))
+        // Root-Ebene: Folders zuerst, dann parentlose Alben. Drop-Zone promotet
+        // per Drag zurück auf Root (parentID = nil).
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(viewModel.childFolders(of: nil)) { folder in
+                PanelAlbumFolderRow(folder: folder, depth: 0,
+                                    renamingFolder: $renamingFolder,
+                                    renameText: $renameText)
+                    .environmentObject(viewModel)
+            }
+            ForEach(viewModel.childAlbums(of: nil)) { album in
+                PanelAlbumRow(album: album, depth: 0,
+                              isSelected: viewModel.navSelection == .album(album.id),
+                              renamingAlbum: $renamingAlbum,
+                              renameText: $renameText)
+                    .environmentObject(viewModel)
+            }
+        }
+        .background(isRootDropTargeted ? Color.accentColor.opacity(0.06) : Color.clear)
+        .onDrop(of: [AlbumTreeDrag.uti], isTargeted: $isRootDropTargeted) { providers in
+            AlbumTreeDrag.handle(providers: providers, viewModel: viewModel, targetFolderID: nil)
+            return true
+        }
+    }
+
+    private var albumsAddMenu: some View {
+        Menu {
+            Button("Neues Album…") { newAlbumName = ""; showCreateAlbum = true }
+            Button("Neuer Ordner…") { newFolderName = ""; showCreateFolder = true }
+        } label: {
+            Image(systemName: "plus").font(.caption)
+        }
+        .menuStyle(BorderlessButtonMenuStyle())
+        .frame(width: 20)
+    }
+
+    @ViewBuilder private var watchedFoldersSection: some View {
+        panelSectionHeader("Ordner", trailing: AnyView(
+            Button(action: { viewModel.addFolderDialog() }) {
+                Image(systemName: "plus").font(.caption)
+            }
+            .buttonStyle(PlainButtonStyle())
+        ))
+        if !viewModel.activity.importProgress.isEmpty {
+            ImportProgressBanner()
+                .environmentObject(viewModel)
+        }
+        ForEach(viewModel.library.watchedFolders) { folder in
+            watchedFolderRow(folder)
+        }
+    }
+
+    @ViewBuilder private func watchedFolderRow(_ folder: WatchedFolder) -> some View {
+        PanelFolderRow(folder: folder,
+                       isSelected: viewModel.navSelection == .folder(folder.id))
+            .environmentObject(viewModel)
+            .contextMenu { watchedFolderContextMenu(folder) }
+    }
+
+    @ViewBuilder private func watchedFolderContextMenu(_ folder: WatchedFolder) -> some View {
+        Button {
+            viewModel.toggleAutoSync(for: folder)
+        } label: {
+            Label(
+                folder.autoSync ? "Auto-Sync deaktivieren" : "Auto-Sync bei Einführen",
+                systemImage: folder.autoSync ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath"
+            )
+        }
+        Divider()
+        if !folder.isRemovableMedia {
+            Button {
+                let panel = NSOpenPanel()
+                panel.canChooseFiles = false
+                panel.canChooseDirectories = true
+                panel.canCreateDirectories = true
+                panel.title = "Importziel wählen"
+                panel.prompt = "Auswählen"
+                if panel.runModal() == .OK, let url = panel.url {
+                    viewModel.setImportDestination(for: folder, path: url.path)
+                }
+            } label: {
+                Label("Importziel festlegen…", systemImage: "folder.badge.plus")
+            }
+        }
+        if folder.isRemovableMedia || folder.importDestinationPath != nil {
+            Button {
+                viewModel.importImages(from: folder)
+            } label: {
+                Label("Jetzt importieren", systemImage: "arrow.down.circle")
+            }
+            .disabled(!folder.isAvailable || viewModel.activity.importProgress[folder.id] != nil)
+            if !folder.isRemovableMedia {
+                Button {
+                    viewModel.setImportDestination(for: folder, path: nil)
+                } label: {
+                    Label("Importziel entfernen", systemImage: "folder.badge.minus")
+                }
+            }
+        }
+        Divider()
+        Button("Ordner entfernen") { viewModel.deleteWatchedFolder(folder) }
+    }
+
+    @ViewBuilder private var volumesSection: some View {
+        if !viewModel.library.detectedVolumes.isEmpty {
+            panelSectionHeader("Wechseldatenträger")
+            ForEach(viewModel.library.detectedVolumes) { volume in
+                PanelVolumeRow(volume: volume,
+                               isSelected: viewModel.navSelection == .volume(volume.id))
+                    .environmentObject(viewModel)
+            }
+        }
+    }
+
+    @ViewBuilder private var smartFoldersSection: some View {
+        panelSectionHeader("Intelligente Ordner", trailing: AnyView(
+            Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
+                Image(systemName: "plus").font(.caption)
+            }
+            .buttonStyle(PlainButtonStyle())
+        ))
+        ForEach(viewModel.library.smartFolders) { sf in
+            smartFolderRow(sf)
+        }
+    }
+
+    @ViewBuilder private func smartFolderRow(_ sf: SmartFolder) -> some View {
+        panelNavRow(
+            label: sf.name,
+            icon: "folder.badge.gearshape",
+            isSelected: viewModel.navSelection == .smartFolder(sf.id)
+        ) {
+            viewModel.navSelection = .smartFolder(sf.id)
+        }
+        .contextMenu {
+            Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
+            Divider()
+            Button("Löschen") { viewModel.deleteSmartFolder(sf) }
         }
     }
 
@@ -186,21 +251,40 @@ struct NavigationPanel: View {
 
 private struct PanelAlbumRow: View {
     let album: Album
+    let depth: Int
     let isSelected: Bool
+    @Binding var renamingAlbum: Album?
+    @Binding var renameText: String
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var isTargeted = false
+
+    private var indent: CGFloat { CGFloat(depth) * 14 }
 
     var body: some View {
         Button(action: { viewModel.selectAlbum(album) }) {
             Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
+                .padding(.leading, 10 + indent)
+                .padding(.trailing, 10)
                 .padding(.vertical, 5)
                 .background(isSelected ? Color.accentColor.opacity(0.2) : (isTargeted ? Color.accentColor.opacity(0.1) : Color.clear))
                 .cornerRadius(6)
         }
         .buttonStyle(PlainButtonStyle())
         .padding(.horizontal, 4)
+        .contextMenu {
+            Button("Umbenennen…") {
+                renameText = album.name
+                renamingAlbum = album
+            }
+            Divider()
+            albumMoveMenu(for: album)
+            Divider()
+            Button("Löschen") { viewModel.deleteAlbum(album) }
+        }
+        .onDrag {
+            NSItemProvider(object: AlbumTreeDrag.encode(.album(album.id)) as NSString)
+        }
         .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
             providers.first?.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
                 guard let data = item as? Data,
@@ -219,6 +303,174 @@ private struct PanelAlbumRow: View {
                 }
             }
             return true
+        }
+    }
+
+    @ViewBuilder
+    private func albumMoveMenu(for album: Album) -> some View {
+        Menu("Verschieben nach…") {
+            Button("Root-Ebene") { viewModel.moveAlbum(album, into: nil) }
+                .disabled(album.parentID == nil)
+            Divider()
+            ForEach(viewModel.library.albumFolders) { folder in
+                Button(folder.name) { viewModel.moveAlbum(album, into: folder.id) }
+                    .disabled(album.parentID == folder.id)
+            }
+        }
+    }
+}
+
+// MARK: - AlbumFolder row (rekursiv)
+
+private struct PanelAlbumFolderRow: View {
+    let folder: AlbumFolder
+    let depth: Int
+    @Binding var renamingFolder: AlbumFolder?
+    @Binding var renameText: String
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isExpanded: Bool = true
+    @State private var isDropTargeted = false
+
+    private var indent: CGFloat { CGFloat(depth) * 14 }
+    private var isSelected: Bool { viewModel.navSelection == .albumFolder(folder.id) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                viewModel.selectAlbumFolder(folder)
+            } label: {
+                HStack(spacing: 4) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .frame(width: 12)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    Label(folder.name, systemImage: isExpanded ? "folder.fill" : "folder")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.leading, 6 + indent)
+                .padding(.trailing, 10)
+                .padding(.vertical, 5)
+                .background(
+                    isSelected
+                        ? Color.accentColor.opacity(0.2)
+                        : (isDropTargeted ? Color.accentColor.opacity(0.12) : Color.clear)
+                )
+                .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 4)
+            .contextMenu {
+                Button("Umbenennen…") {
+                    renameText = folder.name
+                    renamingFolder = folder
+                }
+                Divider()
+                folderMoveMenu(for: folder)
+                Divider()
+                Button("Ordner löschen") { viewModel.deleteAlbumFolder(folder) }
+            }
+            .onDrag {
+                NSItemProvider(object: AlbumTreeDrag.encode(.folder(folder.id)) as NSString)
+            }
+            .onDrop(of: [AlbumTreeDrag.uti], isTargeted: $isDropTargeted) { providers in
+                AlbumTreeDrag.handle(providers: providers, viewModel: viewModel, targetFolderID: folder.id)
+                return true
+            }
+
+            if isExpanded {
+                ForEach(viewModel.childFolders(of: folder.id)) { sub in
+                    PanelAlbumFolderRow(folder: sub, depth: depth + 1,
+                                        renamingFolder: $renamingFolder,
+                                        renameText: $renameText)
+                        .environmentObject(viewModel)
+                }
+                ForEach(viewModel.childAlbums(of: folder.id)) { album in
+                    PanelAlbumRow(album: album, depth: depth + 1,
+                                  isSelected: viewModel.navSelection == .album(album.id),
+                                  renamingAlbum: .constant(nil),
+                                  renameText: .constant(""))
+                        .environmentObject(viewModel)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func folderMoveMenu(for folder: AlbumFolder) -> some View {
+        Menu("Verschieben nach…") {
+            Button("Root-Ebene") { viewModel.moveAlbumFolder(folder, into: nil) }
+                .disabled(folder.parentID == nil)
+            Divider()
+            ForEach(viewModel.library.albumFolders) { target in
+                Button(target.name) { viewModel.moveAlbumFolder(folder, into: target.id) }
+                    .disabled(target.id == folder.id || folder.parentID == target.id)
+            }
+        }
+    }
+}
+
+// MARK: - Album/Folder drag-payload
+
+enum AlbumTreeDrag {
+    /// Custom Plain-Text-Payload. Ein eigenes UTI würde saubere Trennung von
+    /// public.file-url erlauben, verlangt aber Info.plist-Registrierung —
+    /// mit Prefix-Marker (`album:` / `folder:`) im UTF8-String bleibt es simpel.
+    static let uti = "public.utf8-plain-text"
+
+    enum Payload {
+        case album(UUID)
+        case folder(UUID)
+    }
+
+    static func encode(_ payload: Payload) -> String {
+        switch payload {
+        case .album(let id):  return "iphoto-album:\(id.uuidString)"
+        case .folder(let id): return "iphoto-folder:\(id.uuidString)"
+        }
+    }
+
+    static func decode(_ s: String) -> Payload? {
+        if s.hasPrefix("iphoto-album:"),
+           let uuid = UUID(uuidString: String(s.dropFirst("iphoto-album:".count))) {
+            return .album(uuid)
+        }
+        if s.hasPrefix("iphoto-folder:"),
+           let uuid = UUID(uuidString: String(s.dropFirst("iphoto-folder:".count))) {
+            return .folder(uuid)
+        }
+        return nil
+    }
+
+    static func handle(providers: [NSItemProvider],
+                       viewModel: ImageViewModel,
+                       targetFolderID: UUID?) {
+        for provider in providers {
+            provider.loadItem(forTypeIdentifier: uti, options: nil) { item, _ in
+                let string: String? = {
+                    if let s = item as? String { return s }
+                    if let d = item as? Data { return String(data: d, encoding: .utf8) }
+                    return nil
+                }()
+                guard let s = string, let payload = decode(s) else { return }
+                DispatchQueue.main.async {
+                    switch payload {
+                    case .album(let id):
+                        if let album = viewModel.library.albums.first(where: { $0.id == id }) {
+                            viewModel.moveAlbum(album, into: targetFolderID)
+                        }
+                    case .folder(let id):
+                        if let folder = viewModel.library.albumFolders.first(where: { $0.id == id }) {
+                            viewModel.moveAlbumFolder(folder, into: targetFolderID)
+                        }
+                    }
+                }
+            }
         }
     }
 }
