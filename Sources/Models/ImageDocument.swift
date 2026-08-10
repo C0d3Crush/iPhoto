@@ -54,10 +54,15 @@ struct ImageDocument: Identifiable, Equatable {
     // gruppiert bei dunklen/kontrastarmen Motiven zu aggressiv. phashV (vertikale
     // Gradienten) unabhängig davon, Grouping verlangt Match in beiden Achsen.
     var phashV: UInt64? = nil
+    // Kleinste Eye-Aspect-Ratio aller erkannten Gesichter (nil = kein Gesicht erkannt
+    // oder noch nicht gescannt). Ein einziges geschlossenes Auge markiert das Bild —
+    // "Gruppenfoto mit Blinzler" ist der typische Fehlerfall, den wir fangen wollen.
+    var eyeOpenness: Double? = nil
     var qualityScanned: Bool = false
     var blurOverride: Bool = false
     var underOverride: Bool = false
     var overOverride: Bool = false
+    var eyesClosedOverride: Bool = false
 
     var filename: String { url.lastPathComponent }
 

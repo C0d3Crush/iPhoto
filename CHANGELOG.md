@@ -2,6 +2,18 @@
 
 ---
 
+## 1.17.0
+**Feature — Geschlossene Augen erkennen**
+
+- Neuer Sidebar-Eintrag **„Augen zu"** (pink, Icon `eye.slash.fill`) neben Unschärfe/Über-/Unterbelichtung. Zählt Bilder mit erkannten geschlossenen Augen und öffnet eine dedizierte Übersicht mit Schwellenwert-Slider (0.05–0.35, Default 0.18 EAR)
+- Analyse läuft mit dem Rest der Qualitätsprüfung während des Imports (Vision `VNDetectFaceLandmarksRequest` Rev 3): pro Bild wird die kleinste Eye-Aspect-Ratio (EAR) über alle erkannten Gesichter berechnet und in SQLite persistiert. Kein Gesicht ⇒ kein Flag (keine False Positives auf Landschaften/Produktfotos)
+- Thumbnails erhalten ein pinkes `eye.slash.fill`-Badge in der oberen rechten Ecke — parallel zu den bestehenden Blur-/Belichtungs-Badges. Metadaten-Inspektor zeigt Status **„Offen (EAR x.xx)"** / **„Augen zu (EAR x.xx)"** / **„Kein Gesicht erkannt"**
+- Kontextmenü-Override **„Augen sind offen"** korrigiert Fehlerkennungen und lernt gleichzeitig den Schwellenwert nach (Gewicht 10 %, gedeckelt bei 0.30), wie schon bei Blur/Belichtung. Umgekehrt gibt es „Augen-Override entfernen", sobald ein Bild manuell freigegeben wurde
+- SQLite-Migration: neue Spalten `eye_openness REAL` + `eyes_closed_override INTEGER` in `images`. Beim ersten Start nach dem Update wird `quality_scanned=0` gesetzt, damit bestehende Bilder das neue Signal beim nächsten Scan bekommen
+- Build linkt jetzt zusätzlich `-framework Vision`. `Tests/run_catalog.sh` compiliert `CatalogStore+Backup.swift` mit (Lücke aus v1.4.0 mitgeschlossen), damit die Test-Suite nach der Schema-Erweiterung wieder durchläuft
+
+---
+
 ## 1.16.0
 **Feature — Verschachtelte Album-Ordner**
 

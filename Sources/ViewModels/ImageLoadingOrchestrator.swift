@@ -637,6 +637,7 @@ final class ImageLoadingOrchestrator {
                         docs[idx].overRatio      = result.overRatio
                         docs[idx].phash          = result.phash
                         docs[idx].phashV         = result.phashV
+                        docs[idx].eyeOpenness    = result.eyeOpenness
                         docs[idx].qualityScanned = true
                         touched = true
                     }
@@ -659,7 +660,8 @@ final class ImageLoadingOrchestrator {
                         underRatio: result.underRatio,
                         overRatio: result.overRatio,
                         phash: result.phash,
-                        phashV: result.phashV
+                        phashV: result.phashV,
+                        eyeOpenness: result.eyeOpenness
                     )
                     done += 1
                     pending.append((path, result))

@@ -28,7 +28,8 @@ struct LibraryGridView: View {
                                           isStackExpanded: viewModel.isStackExpanded(doc),
                                           isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
                                           onStackToggle: { viewModel.toggleStack(leader: doc) },
-                                          isBlurry: q.blur, isUnder: q.under, isOver: q.over)
+                                          isBlurry: q.blur, isUnder: q.under, isOver: q.over,
+                                          isEyesClosed: q.eyes)
                                 .frame(width: 156)
                                 .contentShape(Rectangle())
                                 .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }

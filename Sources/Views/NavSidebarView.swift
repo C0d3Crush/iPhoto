@@ -501,6 +501,25 @@ struct NavSidebarView: View {
         }
         .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
         .contextMenu { Button("Neu scannen") { viewModel.detectExposureIssues() } }
+
+        Button(action: { viewModel.navSelection = .closedEyes }) {
+            HStack(spacing: 4) {
+                Label("Augen zu", systemImage: "eye.slash.fill")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !viewModel.quality.closedEyeDocuments.isEmpty {
+                    Text("\(viewModel.quality.closedEyeDocuments.count)")
+                        .font(.caption2).foregroundColor(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Color.pink).cornerRadius(4)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(viewModel.navSelection == .closedEyes ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
+        .contextMenu { Button("Neu scannen") { viewModel.detectClosedEyes() } }
     }
 
     private func navRow(label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

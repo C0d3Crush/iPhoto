@@ -13,7 +13,8 @@ struct SidebarView: View {
                         && viewModel.collection.documents[viewModel.collection.currentIndex].id == doc.id
                     let q = viewModel.qualityFlags(for: doc)
                     ThumbnailCell(document: doc, isSelected: isSelected,
-                                  isBlurry: q.blur, isUnder: q.under, isOver: q.over)
+                                  isBlurry: q.blur, isUnder: q.under, isOver: q.over,
+                                  isEyesClosed: q.eyes)
                         .frame(width: 156)
                         .contentShape(Rectangle())
                         .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }

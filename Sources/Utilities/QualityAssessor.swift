@@ -16,6 +16,8 @@ struct QualityAssessor {
         let overRatio: Double
         let phash: UInt64          // horizontale Gradienten (dHash)
         let phashV: UInt64         // vertikale Gradienten (dHash) — orthogonaler Zweitsignal
+        // Kleinste Eye-Aspect-Ratio aller erkannten Gesichter — nil = kein Gesicht.
+        let eyeOpenness: Double?
     }
 
     static func assess(url: URL) -> Result? {
@@ -35,8 +37,9 @@ struct QualityAssessor {
         let blur = BlurDetector.score(from: image)
         let expo = ExposureDetector.analyze(from: image)
         let (hashH, hashV) = PerceptualHash.dHashPair(from: image)
+        let eyeOpenness = ClosedEyeDetector.minEyeOpenness(from: image)
         return Result(blurScore: blur, underRatio: expo.underRatio, overRatio: expo.overRatio,
-                      phash: hashH, phashV: hashV)
+                      phash: hashH, phashV: hashV, eyeOpenness: eyeOpenness)
     }
 }
 

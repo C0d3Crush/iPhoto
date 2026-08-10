@@ -16,9 +16,11 @@ struct QualityRecord {
     let overRatio: Double?
     let phash: UInt64?
     let phashV: UInt64?
+    let eyeOpenness: Double?
     let blurOverride: Bool
     let underOverride: Bool
     let overOverride: Bool
+    let eyesClosedOverride: Bool
     let scanned: Bool
 }
 
@@ -31,10 +33,10 @@ extension CatalogStore {
     private static var qualityCacheMisses = Set<String>()
     private static let qualityCacheLock = NSLock()
 
-    func upsertQuality(path: String, blurScore: Double?, underRatio: Double?, overRatio: Double?, phash: UInt64?, phashV: UInt64?) {
+    func upsertQuality(path: String, blurScore: Double?, underRatio: Double?, overRatio: Double?, phash: UInt64?, phashV: UInt64?, eyeOpenness: Double?) {
         queue.sync {
             let stmt = prepare("""
-                UPDATE images SET blur_score=?, under_ratio=?, over_ratio=?, phash=?, phash_v=?, quality_scanned=1
+                UPDATE images SET blur_score=?, under_ratio=?, over_ratio=?, phash=?, phash_v=?, eye_openness=?, quality_scanned=1
                 WHERE path=?
             """)
             if let v = blurScore { sqlite3_bind_double(stmt, 1, v) } else { sqlite3_bind_null(stmt, 1) }
@@ -42,48 +44,57 @@ extension CatalogStore {
             if let v = overRatio { sqlite3_bind_double(stmt, 3, v) } else { sqlite3_bind_null(stmt, 3) }
             if let v = phash { sqlite3_bind_int64(stmt, 4, Int64(bitPattern: v)) } else { sqlite3_bind_null(stmt, 4) }
             if let v = phashV { sqlite3_bind_int64(stmt, 5, Int64(bitPattern: v)) } else { sqlite3_bind_null(stmt, 5) }
-            bind(stmt, 6, path)
+            if let v = eyeOpenness { sqlite3_bind_double(stmt, 6, v) } else { sqlite3_bind_null(stmt, 6) }
+            bind(stmt, 7, path)
             step(stmt); sqlite3_finalize(stmt)
         }
         Self.qualityCacheLock.lock()
         let existing = Self.qualityCache[path]
         Self.qualityCache[path] = QualityRecord(
             blurScore: blurScore, underRatio: underRatio, overRatio: overRatio, phash: phash, phashV: phashV,
+            eyeOpenness: eyeOpenness,
             blurOverride: existing?.blurOverride ?? false,
             underOverride: existing?.underOverride ?? false,
             overOverride: existing?.overOverride ?? false,
+            eyesClosedOverride: existing?.eyesClosedOverride ?? false,
             scanned: true
         )
         Self.qualityCacheMisses.remove(path)
         Self.qualityCacheLock.unlock()
     }
 
-    func setQualityOverride(path: String, blur: Bool? = nil, under: Bool? = nil, over: Bool? = nil) {
+    func setQualityOverride(path: String, blur: Bool? = nil, under: Bool? = nil, over: Bool? = nil, eyesClosed: Bool? = nil) {
         queue.sync {
             var sets: [String] = []
-            if blur  != nil { sets.append("blur_override=?") }
-            if under != nil { sets.append("under_override=?") }
-            if over  != nil { sets.append("over_override=?") }
+            if blur       != nil { sets.append("blur_override=?") }
+            if under      != nil { sets.append("under_override=?") }
+            if over       != nil { sets.append("over_override=?") }
+            if eyesClosed != nil { sets.append("eyes_closed_override=?") }
             guard !sets.isEmpty else { return }
             let stmt = prepare("UPDATE images SET \(sets.joined(separator: ",")) WHERE path=?")
             var i: Int32 = 1
-            if let v = blur  { sqlite3_bind_int(stmt, i, v ? 1 : 0); i += 1 }
-            if let v = under { sqlite3_bind_int(stmt, i, v ? 1 : 0); i += 1 }
-            if let v = over  { sqlite3_bind_int(stmt, i, v ? 1 : 0); i += 1 }
+            if let v = blur       { sqlite3_bind_int(stmt, i, v ? 1 : 0); i += 1 }
+            if let v = under      { sqlite3_bind_int(stmt, i, v ? 1 : 0); i += 1 }
+            if let v = over       { sqlite3_bind_int(stmt, i, v ? 1 : 0); i += 1 }
+            if let v = eyesClosed { sqlite3_bind_int(stmt, i, v ? 1 : 0); i += 1 }
             bind(stmt, i, path)
             step(stmt); sqlite3_finalize(stmt)
         }
         Self.qualityCacheLock.lock()
         let existing = Self.qualityCache[path] ?? QualityRecord(
             blurScore: nil, underRatio: nil, overRatio: nil, phash: nil, phashV: nil,
-            blurOverride: false, underOverride: false, overOverride: false, scanned: false
+            eyeOpenness: nil,
+            blurOverride: false, underOverride: false, overOverride: false, eyesClosedOverride: false,
+            scanned: false
         )
         Self.qualityCache[path] = QualityRecord(
             blurScore: existing.blurScore, underRatio: existing.underRatio,
             overRatio: existing.overRatio, phash: existing.phash, phashV: existing.phashV,
+            eyeOpenness: existing.eyeOpenness,
             blurOverride: blur ?? existing.blurOverride,
             underOverride: under ?? existing.underOverride,
             overOverride: over ?? existing.overOverride,
+            eyesClosedOverride: eyesClosed ?? existing.eyesClosedOverride,
             scanned: existing.scanned
         )
         Self.qualityCacheMisses.remove(path)
@@ -98,7 +109,7 @@ extension CatalogStore {
         if let hit = cached { return hit }
         if knownMiss { return nil }
         return queue.sync {
-            let stmt = prepare("SELECT blur_score, under_ratio, over_ratio, phash, phash_v, blur_override, under_override, over_override, quality_scanned FROM images WHERE path=?")
+            let stmt = prepare("SELECT blur_score, under_ratio, over_ratio, phash, phash_v, eye_openness, blur_override, under_override, over_override, eyes_closed_override, quality_scanned FROM images WHERE path=?")
             bind(stmt, 1, path)
             guard step(stmt) == SQLITE_ROW else {
                 sqlite3_finalize(stmt)
@@ -112,13 +123,17 @@ extension CatalogStore {
             let or: Double? = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 2)
             let ph: UInt64? = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : UInt64(bitPattern: sqlite3_column_int64(stmt, 3))
             let phV: UInt64? = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : UInt64(bitPattern: sqlite3_column_int64(stmt, 4))
-            let bov = sqlite3_column_int(stmt, 5) != 0
-            let uov = sqlite3_column_int(stmt, 6) != 0
-            let oov = sqlite3_column_int(stmt, 7) != 0
-            let scn = sqlite3_column_int(stmt, 8) != 0
+            let eo: Double? = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 5)
+            let bov = sqlite3_column_int(stmt, 6) != 0
+            let uov = sqlite3_column_int(stmt, 7) != 0
+            let oov = sqlite3_column_int(stmt, 8) != 0
+            let eov = sqlite3_column_int(stmt, 9) != 0
+            let scn = sqlite3_column_int(stmt, 10) != 0
             sqlite3_finalize(stmt)
             let rec = QualityRecord(blurScore: bs, underRatio: ur, overRatio: or, phash: ph, phashV: phV,
-                                    blurOverride: bov, underOverride: uov, overOverride: oov, scanned: scn)
+                                    eyeOpenness: eo,
+                                    blurOverride: bov, underOverride: uov, overOverride: oov, eyesClosedOverride: eov,
+                                    scanned: scn)
             Self.qualityCacheLock.lock()
             Self.qualityCache[path] = rec
             Self.qualityCacheLock.unlock()
@@ -129,7 +144,7 @@ extension CatalogStore {
     // Bulk-Zugriff für Similarity-Grouping/Filter: einmal alle Records laden statt N Roundtrips.
     func allQualityRecords() -> [String: QualityRecord] {
         queue.sync {
-            let stmt = prepare("SELECT path, blur_score, under_ratio, over_ratio, phash, phash_v, blur_override, under_override, over_override, quality_scanned FROM images WHERE quality_scanned=1")
+            let stmt = prepare("SELECT path, blur_score, under_ratio, over_ratio, phash, phash_v, eye_openness, blur_override, under_override, over_override, eyes_closed_override, quality_scanned FROM images WHERE quality_scanned=1")
             var out: [String: QualityRecord] = [:]
             while step(stmt) == SQLITE_ROW {
                 let path = String(cString: sqlite3_column_text(stmt, 0))
@@ -138,12 +153,16 @@ extension CatalogStore {
                 let or: Double? = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 3)
                 let ph: UInt64? = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil : UInt64(bitPattern: sqlite3_column_int64(stmt, 4))
                 let phV: UInt64? = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil : UInt64(bitPattern: sqlite3_column_int64(stmt, 5))
-                let bov = sqlite3_column_int(stmt, 6) != 0
-                let uov = sqlite3_column_int(stmt, 7) != 0
-                let oov = sqlite3_column_int(stmt, 8) != 0
-                let scn = sqlite3_column_int(stmt, 9) != 0
+                let eo: Double? = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil : sqlite3_column_double(stmt, 6)
+                let bov = sqlite3_column_int(stmt, 7) != 0
+                let uov = sqlite3_column_int(stmt, 8) != 0
+                let oov = sqlite3_column_int(stmt, 9) != 0
+                let eov = sqlite3_column_int(stmt, 10) != 0
+                let scn = sqlite3_column_int(stmt, 11) != 0
                 out[path] = QualityRecord(blurScore: bs, underRatio: ur, overRatio: or, phash: ph, phashV: phV,
-                                          blurOverride: bov, underOverride: uov, overOverride: oov, scanned: scn)
+                                          eyeOpenness: eo,
+                                          blurOverride: bov, underOverride: uov, overOverride: oov, eyesClosedOverride: eov,
+                                          scanned: scn)
             }
             sqlite3_finalize(stmt); return out
         }

@@ -170,17 +170,21 @@ extension ImageViewModel {
         let blurT = quality.blurThreshold
         let shadT = quality.shadowClipThreshold
         let highT = quality.highlightClipThreshold
+        let eyeT  = quality.eyeOpennessThreshold
         var blurry: [ImageDocument] = []
         var under:  [ImageDocument] = []
         var over:   [ImageDocument] = []
+        var eyes:   [ImageDocument] = []
         for doc in docs {
             if !doc.blurOverride,  let s = doc.blurScore,  s <  blurT  { blurry.append(doc) }
             if !doc.underOverride, let r = doc.underRatio, r >= shadT  { under.append(doc)  }
             if !doc.overOverride,  let r = doc.overRatio,  r >= highT  { over.append(doc)   }
+            if !doc.eyesClosedOverride, let e = doc.eyeOpenness, e < eyeT { eyes.append(doc) }
         }
         quality.blurryDocuments       = blurry.sorted { $0.filename < $1.filename }
         quality.underexposedDocuments = under.sorted  { $0.filename < $1.filename }
         quality.overexposedDocuments  = over.sorted   { $0.filename < $1.filename }
+        quality.closedEyeDocuments    = eyes.sorted   { $0.filename < $1.filename }
     }
 
     /// Kompatibilitäts-Wrapper für Views, die weiterhin "Neu scannen" auslösen: leitet
@@ -192,6 +196,11 @@ extension ImageViewModel {
     }
 
     func detectExposureIssues() {
+        refreshQualityLists()
+        scanQualityForLibrary()
+    }
+
+    func detectClosedEyes() {
         refreshQualityLists()
         scanQualityForLibrary()
     }
@@ -229,12 +238,14 @@ extension ImageViewModel {
 
     /// Für Thumbnail-Badges: wendet aktuelle Schwellenwerte + Overrides an, ohne die
     /// Listen zu berühren. Nil-Werte (noch nicht gescannt) zählen als "kein Flag".
-    func qualityFlags(for doc: ImageDocument) -> (blur: Bool, under: Bool, over: Bool) {
-        guard doc.qualityScanned else { return (false, false, false) }
-        let blur  = !doc.blurOverride  && (doc.blurScore  ?? .infinity) <  quality.blurThreshold
-        let under = !doc.underOverride && (doc.underRatio ?? 0)         >= quality.shadowClipThreshold
-        let over  = !doc.overOverride  && (doc.overRatio  ?? 0)         >= quality.highlightClipThreshold
-        return (blur, under, over)
+    func qualityFlags(for doc: ImageDocument) -> (blur: Bool, under: Bool, over: Bool, eyes: Bool) {
+        guard doc.qualityScanned else { return (false, false, false, false) }
+        let blur  = !doc.blurOverride       && (doc.blurScore   ?? .infinity) <  quality.blurThreshold
+        let under = !doc.underOverride      && (doc.underRatio  ?? 0)         >= quality.shadowClipThreshold
+        let over  = !doc.overOverride       && (doc.overRatio   ?? 0)         >= quality.highlightClipThreshold
+        // Nil eyeOpenness heißt: kein Gesicht erkannt — nicht flaggen.
+        let eyes  = !doc.eyesClosedOverride && (doc.eyeOpenness ?? .infinity) <  quality.eyeOpennessThreshold
+        return (blur, under, over, eyes)
     }
 
     // Nutzer-Override: "Doch nicht unscharf/unter-/überbelichtet". Persistiert das Flag
@@ -284,6 +295,23 @@ extension ImageViewModel {
             Log.info("Over-Override: \(doc.filename) ratio=\(String(format: "%.3f", ratio)) — Threshold \(String(format: "%.3f", old)) → \(String(format: "%.3f", new))")
         } else {
             Log.info("Over-Override zurückgesetzt: \(doc.filename)")
+        }
+        refreshQualityLists()
+    }
+
+    func setEyesClosedOverride(_ value: Bool, for doc: ImageDocument) {
+        guard let idx = collectionIndex(for: doc) else { return }
+        collection.documents[idx].eyesClosedOverride = value
+        CatalogStore.shared.setQualityOverride(path: doc.url.path, eyesClosed: value)
+        if value, let ear = doc.eyeOpenness {
+            // Threshold Richtung Bild-EAR ziehen — Nutzer sagt "diese Augen sind offen",
+            // also Grenze runter (weniger streng). Deckel auf 0.30, sonst degeneriert.
+            let old = quality.eyeOpennessThreshold
+            let new = (1 - Self.overrideLearningWeight) * old + Self.overrideLearningWeight * ear
+            quality.eyeOpennessThreshold = min(0.30, new)
+            Log.info("EyesClosed-Override: \(doc.filename) ear=\(String(format: "%.3f", ear)) — Threshold \(String(format: "%.3f", old)) → \(String(format: "%.3f", new))")
+        } else {
+            Log.info("EyesClosed-Override zurückgesetzt: \(doc.filename)")
         }
         refreshQualityLists()
     }

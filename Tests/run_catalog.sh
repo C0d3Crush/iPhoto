@@ -27,6 +27,7 @@ echo "==> Kompiliere iphoto-catalog-test …"
     "$ROOT/Sources/Utilities/CatalogStore+Ratings.swift" \
     "$ROOT/Sources/Utilities/CatalogStore+Albums.swift" \
     "$ROOT/Sources/Utilities/CatalogStore+Adjustments.swift" \
+    "$ROOT/Sources/Utilities/CatalogStore+Backup.swift" \
     "$ROOT/Sources/Utilities/Log.swift" \
     "$ROOT/Sources/Models/AdjustmentState.swift" \
     "$ROOT/Sources/Models/LocalAdjustment.swift" \

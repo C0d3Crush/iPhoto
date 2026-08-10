@@ -11,6 +11,7 @@ struct ThumbnailCell: View {
     var isBlurry: Bool = false
     var isUnder:  Bool = false
     var isOver:   Bool = false
+    var isEyesClosed: Bool = false
 
     private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
 
@@ -138,7 +139,7 @@ struct ThumbnailCell: View {
     // aufgibt ("unable to type-check this expression in reasonable time").
     @ViewBuilder
     private var flagAndQualityOverlay: some View {
-        if document.flagStatus != .none || isBlurry || isUnder || isOver {
+        if document.flagStatus != .none || isBlurry || isUnder || isOver || isEyesClosed {
             VStack {
                 HStack(spacing: 3) {
                     Spacer()
@@ -147,9 +148,10 @@ struct ThumbnailCell: View {
                             .font(.system(size: 10))
                             .foregroundColor(document.flagStatus == .pick ? .green : .red)
                     }
-                    if isBlurry { qualityBadge(system: "drop.triangle.fill",       color: .purple) }
-                    if isUnder  { qualityBadge(system: "moon.fill",                color: .blue) }
-                    if isOver   { qualityBadge(system: "sun.max.fill",             color: .yellow) }
+                    if isBlurry     { qualityBadge(system: "drop.triangle.fill", color: .purple) }
+                    if isUnder      { qualityBadge(system: "moon.fill",          color: .blue) }
+                    if isOver       { qualityBadge(system: "sun.max.fill",       color: .yellow) }
+                    if isEyesClosed { qualityBadge(system: "eye.slash.fill",     color: .pink) }
                 }
                 .padding([.top, .trailing], 4)
                 Spacer()

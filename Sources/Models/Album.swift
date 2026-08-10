@@ -60,4 +60,5 @@ enum NavSelection: Hashable {
     case blurry
     case underexposed
     case overexposed
+    case closedEyes
 }

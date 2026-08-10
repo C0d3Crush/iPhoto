@@ -145,6 +145,9 @@ extension ImageViewModel {
         case .overexposed:
             let ids = Set(quality.overexposedDocuments.map { $0.id })
             filtered = docs.filter { ids.contains($0.id) }
+        case .closedEyes:
+            let ids = Set(quality.closedEyeDocuments.map { $0.id })
+            filtered = docs.filter { ids.contains($0.id) }
         }
         return applyStacking(to: applySortCriterion(to: filtered))
     }

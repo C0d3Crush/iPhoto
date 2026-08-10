@@ -236,6 +236,14 @@ final class CatalogStore {
         // Similarity-Grouper mit beiden Hashes arbeiten kann. Idempotent — no-op
         // sobald alle Bilder den zweiten Hash haben.
         exec("UPDATE images SET quality_scanned=0 WHERE quality_scanned=1 AND phash_v IS NULL")
+        // v1.17.0: Closed-Eye-Detektion. NULL = kein Gesicht erkannt, sonst kleinste
+        // Eye-Aspect-Ratio aller Augen im Bild. Rescan-Trigger einmalig, damit bereits
+        // gescannte Bilder das neue Signal bekommen.
+        let hasEyeCol = exec("ALTER TABLE images ADD COLUMN eye_openness REAL")
+        exec("ALTER TABLE images ADD COLUMN eyes_closed_override INTEGER NOT NULL DEFAULT 0")
+        if hasEyeCol {
+            exec("UPDATE images SET quality_scanned=0")
+        }
     }
 
     // MARK: - Migration from JSON

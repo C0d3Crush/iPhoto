@@ -121,6 +121,7 @@ echo "==> Linke…"
     -framework CoreImage \
     -framework ImageIO \
     -framework PDFKit \
+    -framework Vision \
     -emit-executable \
     "$OBJ_DIR"/*.o \
     -o "$MACOS_DIR/$APP_NAME"

@@ -205,6 +205,12 @@ struct ThumbnailContextMenu: View {
         } else if doc.overOverride {
             Button("Überbelichtungs-Override entfernen") { vm.setOverExposureOverride(false, for: doc) }
         }
+        // Eyes closed
+        if flags.eyes {
+            Button("Augen sind offen") { vm.setEyesClosedOverride(true, for: doc) }
+        } else if doc.eyesClosedOverride {
+            Button("Augen-Override entfernen") { vm.setEyesClosedOverride(false, for: doc) }
+        }
     }
 
     @ViewBuilder private var actionSection: some View {

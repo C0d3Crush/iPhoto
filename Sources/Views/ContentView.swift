@@ -180,7 +180,8 @@ struct ContentView: View {
         let inQualityOverview = !viewModel.qualityDetailActive
             && (viewModel.navSelection == .blurry
                 || viewModel.navSelection == .underexposed
-                || viewModel.navSelection == .overexposed)
+                || viewModel.navSelection == .overexposed
+                || viewModel.navSelection == .closedEyes)
 
         if viewModel.compare.active {
             CompareView()
@@ -196,6 +197,10 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if inQualityOverview && viewModel.navSelection == .blurry {
             BlurryView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if inQualityOverview && viewModel.navSelection == .closedEyes {
+            ClosedEyesView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if inQualityOverview {

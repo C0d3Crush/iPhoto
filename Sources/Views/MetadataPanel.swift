@@ -81,6 +81,23 @@ private struct MetadataPanelContent: View {
                                      key: "quality.over", category: .quality,
                                      value: label, isEditable: false))
         }
+        if let ear = doc.eyeOpenness {
+            let label: String
+            if doc.eyesClosedOverride {
+                label = String(format: "Offen (Override, EAR %.2f)", ear)
+            } else if flags.eyes {
+                label = String(format: "Augen zu (EAR %.2f)", ear)
+            } else {
+                label = String(format: "Offen (EAR %.2f)", ear)
+            }
+            out.append(MetadataEntry(displayName: "Augen",
+                                     key: "quality.eyes", category: .quality,
+                                     value: label, isEditable: false))
+        } else if doc.qualityScanned {
+            out.append(MetadataEntry(displayName: "Augen",
+                                     key: "quality.eyes", category: .quality,
+                                     value: "Kein Gesicht erkannt", isEditable: false))
+        }
         return out
     }
 

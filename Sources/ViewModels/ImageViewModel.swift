@@ -454,15 +454,17 @@ class ImageViewModel: ObservableObject {
                     doc.colorLabel = entry.colorLabel
                 }
                 if let q = qualityRecords[url.path] {
-                    doc.blurScore      = q.blurScore
-                    doc.underRatio     = q.underRatio
-                    doc.overRatio      = q.overRatio
-                    doc.phash          = q.phash
-                    doc.phashV         = q.phashV
-                    doc.qualityScanned = q.scanned
-                    doc.blurOverride   = q.blurOverride
-                    doc.underOverride  = q.underOverride
-                    doc.overOverride   = q.overOverride
+                    doc.blurScore          = q.blurScore
+                    doc.underRatio         = q.underRatio
+                    doc.overRatio          = q.overRatio
+                    doc.phash              = q.phash
+                    doc.phashV             = q.phashV
+                    doc.eyeOpenness        = q.eyeOpenness
+                    doc.qualityScanned     = q.scanned
+                    doc.blurOverride       = q.blurOverride
+                    doc.underOverride      = q.underOverride
+                    doc.overOverride       = q.overOverride
+                    doc.eyesClosedOverride = q.eyesClosedOverride
                 }
                 return doc
             }
