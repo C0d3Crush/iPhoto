@@ -77,6 +77,35 @@ struct ThumbnailContextMenu: View {
                     Label("In Papierkorb", systemImage: "trash")
                 }
             }
+            Divider()
+            backupSection
+        }
+    }
+
+    @ViewBuilder private var backupSection: some View {
+        let targets = trashTargets
+        let n = targets.count
+        Button {
+            vm.backupDocuments(targets, deleteOriginal: false)
+        } label: {
+            if isInMultiSelection {
+                Label("\(n) Dateien als JPEG sichern", systemImage: "externaldrive.badge.checkmark")
+            } else if let members = stackMembers {
+                Label("Stapel (\(members.count)) als JPEG sichern", systemImage: "externaldrive.badge.checkmark")
+            } else {
+                Label("Als JPEG sichern", systemImage: "externaldrive.badge.checkmark")
+            }
+        }
+        Button {
+            vm.backupDocuments(targets, deleteOriginal: true)
+        } label: {
+            if isInMultiSelection {
+                Label("\(n) Dateien sichern & Original in Papierkorb", systemImage: "externaldrive.badge.minus")
+            } else if let members = stackMembers {
+                Label("Stapel (\(members.count)) sichern & Original in Papierkorb", systemImage: "externaldrive.badge.minus")
+            } else {
+                Label("Sichern & Original in Papierkorb", systemImage: "externaldrive.badge.minus")
+            }
         }
     }
 

@@ -2,6 +2,16 @@
 
 ---
 
+## 1.15.0
+**Feature — JPEG-Backup direkt aus dem Kontextmenü**
+
+- Rechtsklick auf ein Bild (Grid, Stapel oder Multi-Selection) hat zwei neue Einträge: **„Als JPEG sichern"** (Original bleibt) und **„Sichern & Original in Papierkorb"** (Original wandert nach erfolgreichem Backup in den iPhoto-Papierkorb, ist dort wiederherstellbar). Beide Aktionen wirken auf alle Mitglieder eines eingeklappten Stapels und auf die komplette Mehrfachauswahl
+- Backups landen in `~/Pictures/iPhoto/Backups/<Jahr>/<Monat>/` (Aufnahmedatum aus EXIF, Fallback: Dateidatum). Zielordner ist im Settings-Reiter **Backup** frei wählbar (Security-Scoped-Bookmark bleibt über App-Restarts erhalten)
+- Konfigurierbar in Settings: JPEG-Qualität (50–100 %, Default 85 %), EXIF/GPS-Kopie an/aus, optionaler Long-Side-Downscale (z. B. 2560 px), Kollisionsverhalten (Umbenennen `foto-2.jpg` / Überspringen / Überschreiben)
+- Läuft auf Background-Queue mit sichtbarem Fortschritt in der Sidebar (`BackgroundActivityState`); Pick-geschützte Bilder blockieren nur die Delete-Variante — reine Backups sind non-destruktiv und immer erlaubt. Fehlerhafte Backups verhindern das anschließende Papierkorb-Verschieben (kein Datenverlust)
+
+---
+
 ## 1.14.0
 **Feature — View-Rendering-Smoketest im CI**
 

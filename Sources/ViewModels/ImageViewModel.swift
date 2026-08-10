@@ -42,6 +42,10 @@ class ImageViewModel: ObservableObject {
 
     let library = LibraryStore()
 
+    /// Konfiguration für die Backup-Funktion (Kontextmenü → „Backup"/„Backup + Papierkorb").
+    /// Werte in UserDefaults persistiert; Zielordner via Security-Scoped-Bookmark.
+    let backupSettings = BackupSettings()
+
     /// Lade-Queue + Import-Fortschritt (Sidebar). Änderungen werden via objectWillChange
     /// weitergeleitet, Views können weiterhin nur ImageViewModel beobachten.
     let activity = BackgroundActivityState()
@@ -162,7 +166,7 @@ class ImageViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // Kind-ViewModels: Änderungen an Views weiterleiten, die nur ImageViewModel beobachten
-        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange, inpaint.objectWillChange, compare.objectWillChange, quality.objectWillChange] {
+        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange, inpaint.objectWillChange, compare.objectWillChange, quality.objectWillChange, backupSettings.objectWillChange] {
             child
                 .sink { [weak self] _ in self?.objectWillChange.send() }
                 .store(in: &cancellables)
