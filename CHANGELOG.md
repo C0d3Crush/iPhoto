@@ -2,6 +2,15 @@
 
 ---
 
+## 1.18.0
+**Feature — Bildvergleich verteilt jetzt über 0–5 Sterne**
+
+- Ziel-Verteilung im Duell-Modus umgestellt von 1–5 auf **0–5** Sterne: 0★ 5 %, 1★ 15 %, 2★ 30 %, 3★ 30 %, 4★ 15 %, 5★ 5 % (symmetrischer Gauß um 2.5)
+- 0★ ist damit eine reguläre Bucket-Stufe der Zielkurve — Verlierer eines Duells können jetzt auch tatsächlich nach 0★ absinken, statt dort nur „geparkt" zu bleiben. Die Paar-Auswahl bevorzugt weiterhin die Sternstufe mit dem größten Überschuss gegenüber der Zielkurve
+- Datei: `Sources/ViewModels/ImageViewModel+Compare.swift` (`compareRatingTargets`)
+
+---
+
 ## 1.17.0
 **Feature — Geschlossene Augen erkennen**
 

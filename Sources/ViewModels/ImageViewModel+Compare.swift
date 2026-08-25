@@ -39,9 +39,11 @@ extension ImageViewModel {
         return collection.documents.first(where: { $0.id == id && !$0.isTrashed })
     }
 
-    /// Ziel-Verteilung der Sterne (Gauß-artig): 1★ 10 %, 2★ 20 %, 3★ 40 %, 4★ 20 %, 5★ 10 %.
-    /// Unbewertete (0★) haben Ziel 0 % — sie werden bevorzugt verglichen und einsortiert.
-    static let compareRatingTargets: [Int: Double] = [0: 0.0, 1: 0.10, 2: 0.20, 3: 0.40, 4: 0.20, 5: 0.10]
+    /// Ziel-Verteilung der Sterne (Gauß-artig, symmetrisch um 2.5):
+    /// 0★ 5 %, 1★ 15 %, 2★ 30 %, 3★ 30 %, 4★ 15 %, 5★ 5 %.
+    /// 0★ ist jetzt eine reguläre Stufe der Zielkurve — Duelle können Bilder auch
+    /// nach 0★ absteigen lassen (statt sie dort nur „geparkt" zu halten).
+    static let compareRatingTargets: [Int: Double] = [0: 0.05, 1: 0.15, 2: 0.30, 3: 0.30, 4: 0.15, 5: 0.05]
 
     /// Wählt das nächste Paar aus einer Sternstufe, die über ihrem Ziel-Anteil liegt —
     /// Duelle dort verschieben Bilder in Nachbarstufen und nähern die Verteilung dem Ziel an.
