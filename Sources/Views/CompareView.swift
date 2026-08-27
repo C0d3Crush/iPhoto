@@ -132,8 +132,8 @@ struct CompareView: View {
     private var distributionPanel: some View {
         let docs = viewModel.visibleDocuments
         let total = max(1, docs.count)
-        return HStack(alignment: .center, spacing: 14) {
-            ForEach([1, 2, 3, 4, 5], id: \.self) { stars in
+        return HStack(alignment: .center, spacing: 12) {
+            ForEach([0, 1, 2, 3, 4, 5], id: \.self) { stars in
                 RatingDistributionColumn(
                     stars: stars,
                     current: Double(docs.filter { $0.rating == stars }.count) / Double(total),

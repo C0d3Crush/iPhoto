@@ -2,6 +2,14 @@
 
 ---
 
+## 1.18.1
+**Bugfix — 0★-Spalte in der Vergleichs-Verteilung sichtbar**
+
+- Prozent-Übersicht im Bildvergleich zeigt jetzt alle sechs Bucket-Stufen (0★ bis 5★) statt nur 1★–5★. Die 0★-Spalte war seit Umstellung der Zielkurve in v1.18.0 in der Datenlogik enthalten, wurde aber nicht gezeichnet — Ziel- und Ist-Prozente sind jetzt komplett sichtbar
+- Datei: `Sources/Views/CompareView.swift` (`distributionPanel`)
+
+---
+
 ## 1.18.0
 **Feature — Bildvergleich verteilt jetzt über 0–5 Sterne**
 
