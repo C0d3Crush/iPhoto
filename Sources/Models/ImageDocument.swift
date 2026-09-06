@@ -43,6 +43,12 @@ struct ImageDocument: Identifiable, Equatable {
     var colorLabel: ColorLabel = .none
     var isTrashed: Bool = false
 
+    // v1.19.0: ELO-Rating aus Bildvergleich. Bewusst getrennt von rating (Sternen):
+    // Sterne bleiben manuelle Nutzerbewertung, ELO ist ein aus paarweisen Duellen
+    // errechnetes Ranking. Alle Bilder starten bei 1500 (Standard-ELO-Baseline).
+    var elo: Double = 1500
+    var eloMatches: Int = 0
+
     // Qualitäts-Analyse (persistiert in CatalogStore, hier gecacht damit Views nicht pro
     // Render SQLite abfragen). Nil = noch nicht analysiert. Overrides = Nutzer hat manuell
     // "Bild ist doch nicht unscharf/über-/unterbelichtet" gewählt.

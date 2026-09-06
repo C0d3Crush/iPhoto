@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-// MARK: - Bildvergleich (Duell-Modus)
+// MARK: - Bildvergleich (Duell-Modus, ELO-basiert)
 
 enum CompareVerdict {
     case left, right, equal
@@ -39,14 +39,38 @@ extension ImageViewModel {
         return collection.documents.first(where: { $0.id == id && !$0.isTrashed })
     }
 
-    /// Ziel-Verteilung der Sterne (Gauß-artig, symmetrisch um 2.5):
-    /// 0★ 5 %, 1★ 15 %, 2★ 30 %, 3★ 30 %, 4★ 15 %, 5★ 5 %.
-    /// 0★ ist jetzt eine reguläre Stufe der Zielkurve — Duelle können Bilder auch
-    /// nach 0★ absteigen lassen (statt sie dort nur „geparkt" zu halten).
-    static let compareRatingTargets: [Int: Double] = [0: 0.05, 1: 0.15, 2: 0.30, 3: 0.30, 4: 0.15, 5: 0.05]
+    // MARK: ELO-Verteilung
 
-    /// Wählt das nächste Paar aus einer Sternstufe, die über ihrem Ziel-Anteil liegt —
-    /// Duelle dort verschieben Bilder in Nachbarstufen und nähern die Verteilung dem Ziel an.
+    /// Buckets für die Histogramm-Anzeige. Klassisches ELO-Raster mit 6 Stufen
+    /// um die Baseline 1500 — ähnliche Optik wie das alte 0-5-Sterne-Histogramm.
+    struct EloBucket: Identifiable {
+        let id: Int
+        let range: Range<Double>
+        let label: String
+        let short: String
+    }
+
+    static let compareEloBuckets: [EloBucket] = [
+        EloBucket(id: 0, range: -.infinity ..< 1300, label: "< 1300",     short: "1300−"),
+        EloBucket(id: 1, range: 1300 ..< 1400,       label: "1300–1400", short: "1300"),
+        EloBucket(id: 2, range: 1400 ..< 1500,       label: "1400–1500", short: "1400"),
+        EloBucket(id: 3, range: 1500 ..< 1600,       label: "1500–1600", short: "1500"),
+        EloBucket(id: 4, range: 1600 ..< 1700,       label: "1600–1700", short: "1600"),
+        EloBucket(id: 5, range: 1700 ..< .infinity,  label: "≥ 1700",    short: "1700+"),
+    ]
+
+    static func bucketIndex(forElo elo: Double) -> Int {
+        for b in compareEloBuckets where b.range.contains(elo) { return b.id }
+        return compareEloBuckets.count - 1
+    }
+
+    // MARK: Paar-Auswahl
+
+    /// Wählt das nächste Duell-Paar. Strategie:
+    /// 1) Bevorzuge Bilder mit wenigen bisherigen Matches (neue Bilder stabilisieren
+    ///    sich schnell, bestehende driften nicht unnötig).
+    /// 2) Als Gegner das nächstgelegene ELO — so ergeben sich aussagekräftige
+    ///    Duelle statt einseitiger Blowouts.
     func nextComparePair() {
         let candidates = visibleDocuments.filter { !$0.isTrashed }
         guard candidates.count >= 2 else {
@@ -55,74 +79,65 @@ extension ImageViewModel {
             return
         }
 
-        var groups = Dictionary(grouping: candidates, by: { $0.rating })
-            .filter { $0.value.count >= 2 }
-        // Zuletzt gezeigtes Paar nicht sofort wiederholen, wenn Alternativen existieren
-        if candidates.count > 2 {
-            groups = groups.mapValues { group -> [ImageDocument] in
-                group.count == 2 && Set(group.map { $0.id }) == compare.lastPair ? [] : group
-            }.filter { $0.value.count >= 2 }
+        // Anchor aus dem Pool der am wenigsten gespielten Bilder wählen
+        let minMatches = candidates.map(\.eloMatches).min() ?? 0
+        let leastPlayed = candidates.filter { $0.eloMatches <= minMatches + 2 }
+        let pool = leastPlayed.count >= 2 ? leastPlayed : candidates
+        guard let anchor = pool.randomElement() else { return }
+
+        // Partner: nächstgelegenes ELO (exkl. Anchor, möglichst nicht das letzte Paar)
+        let others = candidates.filter { $0.id != anchor.id }
+        let sortedByProximity = others.sorted {
+            abs($0.elo - anchor.elo) < abs($1.elo - anchor.elo)
+        }
+        var partner = sortedByProximity.first!
+        if candidates.count > 2,
+           Set([anchor.id, partner.id]) == compare.lastPair,
+           let alt = sortedByProximity.dropFirst().first {
+            partner = alt
         }
 
-        // Immer die Stufe mit dem größten Überschuss gegenüber der Gauß-Zielkurve wählen
-        let total = Double(candidates.count)
-        let worst = groups.max(by: { a, b in
-            let excessA = Double(a.value.count) / total - (Self.compareRatingTargets[a.key] ?? 0)
-            let excessB = Double(b.value.count) / total - (Self.compareRatingTargets[b.key] ?? 0)
-            return excessA < excessB
-        })
-        let pool = worst?.value ?? candidates
-
-        var pair = Array(pool.shuffled().prefix(2))
-        if candidates.count > 2 && Set(pair.map { $0.id }) == compare.lastPair {
-            pair = Array(candidates.shuffled().prefix(2))
-        }
-        guard pair.count == 2 else { return }
-
-        compare.leftID = pair[0].id
-        compare.rightID = pair[1].id
-        compare.lastPair = Set(pair.map { $0.id })
-        ensureComparePreview(forID: pair[0].id)
-        ensureComparePreview(forID: pair[1].id)
+        compare.leftID = anchor.id
+        compare.rightID = partner.id
+        compare.lastPair = Set([anchor.id, partner.id])
+        ensureComparePreview(forID: anchor.id)
+        ensureComparePreview(forID: partner.id)
     }
 
-    /// Zufällig steigt der Gewinner eine Stufe ODER der Verlierer sinkt eine Stufe.
-    /// Bei Gewinner auf 5 wird immer gesenkt, bei Verlierer auf 0 immer erhöht.
+    // MARK: Duell auflösen
+
+    /// ELO-Update beider Bilder nach dem Verdict. Sterne (rating) werden bewusst
+    /// nicht angefasst — ELO ist ein separater Ranking-Score.
     func resolveCompare(_ verdict: CompareVerdict) {
         defer { nextComparePair() }
-        guard verdict != .equal,
-              let left = compareLeftDocument,
+        guard let left = compareLeftDocument,
               let right = compareRightDocument else { return }
-        let winner = verdict == .left ? left : right
-        let loser = verdict == .left ? right : left
 
-        let canPromote = winner.rating < 5
-        let canDemote = loser.rating > 0
-        switch (canPromote, canDemote) {
-        case (true, true):
-            if Bool.random() {
-                applyCompareRating(winner.rating + 1, to: winner.id)
-            } else {
-                applyCompareRating(loser.rating - 1, to: loser.id)
-            }
-        case (true, false):
-            applyCompareRating(winner.rating + 1, to: winner.id)
-        case (false, true):
-            applyCompareRating(loser.rating - 1, to: loser.id)
-        case (false, false):
-            break
+        let leftScore: Double
+        switch verdict {
+        case .left:  leftScore = 1.0
+        case .right: leftScore = 0.0
+        case .equal: leftScore = 0.5
         }
+
+        let (newLeft, newRight) = EloRating.update(
+            leftRating: left.elo, leftMatches: left.eloMatches,
+            rightRating: right.elo, rightMatches: right.eloMatches,
+            leftScore: leftScore
+        )
+        applyEloUpdate(newLeft, to: left.id)
+        applyEloUpdate(newRight, to: right.id)
     }
 
-    private func applyCompareRating(_ r: Int, to id: UUID) {
+    private func applyEloUpdate(_ newElo: Double, to id: UUID) {
         guard let idx = collection.documents.firstIndex(where: { $0.id == id }) else { return }
-        collection.documents[idx].rating = r
-        invalidateVisibleOrder()
+        collection.documents[idx].elo = newElo
+        collection.documents[idx].eloMatches += 1
         let doc = collection.documents[idx]
-        let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel)
+        let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel,
+                                elo: doc.elo, eloMatches: doc.eloMatches)
         RatingStore.shared.save(entry, for: doc.url)
-        CatalogStore.shared.saveRating(path: doc.url.path, rating: doc.rating,
-                                       flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
+        CatalogStore.shared.saveElo(path: doc.url.path, elo: doc.elo, eloMatches: doc.eloMatches)
     }
 
     private func ensureComparePreview(forID id: UUID) {

@@ -2,6 +2,20 @@
 
 ---
 
+## 1.19.0
+**Feature — Bildvergleich mit ELO-Rating (getrennt von Sternen)**
+
+- Der Duell-Modus verändert nicht mehr die Sterne-Bewertung, sondern pflegt einen separaten **ELO-Score pro Bild** (Standard-Baseline 1500). Sterne bleiben manuelle Nutzerbewertung, ELO ist der aus paarweisen Vergleichen errechnete Ranking-Score
+- Neues Verdict-Handling: Sieger und Verlierer werden nach Standard-ELO-Formel neu berechnet (K-Faktor mit Decay: 40 für neue Bilder → 16 nach ~30 Duellen, verhindert Zappeln stabilisierter Bilder). „Gleich gut" wertet als 0.5:0.5
+- Paar-Auswahl neu: bevorzugt Bilder mit den wenigsten bisherigen Matches (Anchor) und paart sie mit dem nächstgelegenen ELO — statt Blowouts gibt es aussagekräftige Duelle
+- CompareView zeigt pro Bild `ELO 1523 · 7 Duelle` statt der Sterne-Zeile. Die Verteilungs-Leiste ist jetzt ein Histogramm über sechs ELO-Buckets (<1300, 1300, 1400, 1500, 1600, 1700+) mit Farbverlauf rot→gelb→grün
+- SQLite-Migration: neue Spalten `elo REAL NOT NULL DEFAULT 1500` + `elo_matches INTEGER NOT NULL DEFAULT 0` in der `ratings`-Tabelle plus Index auf `elo`. Bestehende Zeilen starten sauber bei 1500 / 0 Matches
+- Persistenz sauber getrennt: neuer `saveElo(path:elo:eloMatches:)` schreibt nur die ELO-Spalten; `saveRating(...)` schreibt weiterhin nur Sterne/Flag/Farb-Label — Sterne-Änderungen setzen ELO nicht zurück und umgekehrt
+- `RatingEntry` (JSON-Fallback) tolerant erweitert um `elo`/`eloMatches` mit Default-Werten — bestehende `ratings.json` bleibt kompatibel
+- Neue Dateien: `Sources/Utilities/EloRating.swift` (Standard-ELO-Formel). Angepasst: `Sources/Models/ImageDocument.swift`, `Sources/Models/RatingStore.swift`, `Sources/Utilities/CatalogStore.swift`, `Sources/Utilities/CatalogStore+Ratings.swift`, `Sources/ViewModels/ImageViewModel+Compare.swift`, `Sources/ViewModels/ImageViewModel.swift`, `Sources/ViewModels/ImageViewModel+Ratings.swift`, `Sources/ViewModels/ImageLoadingOrchestrator.swift`, `Sources/Views/CompareView.swift`
+
+---
+
 ## 1.18.1
 **Bugfix — 0★-Spalte in der Vergleichs-Verteilung sichtbar**
 

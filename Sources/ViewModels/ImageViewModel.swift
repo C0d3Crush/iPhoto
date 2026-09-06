@@ -437,6 +437,7 @@ class ImageViewModel: ObservableObject {
             BookmarkStore.shared.save(urls: newURLs)
         }
         let catalogRatings = CatalogStore.shared.allRatings()
+        let catalogElos = CatalogStore.shared.allElos()
         let trashedPaths = CatalogStore.shared.trashedPaths()
         let qualityRecords = CatalogStore.shared.allQualityRecords()
         let newDocs = newURLs
@@ -452,6 +453,12 @@ class ImageViewModel: ObservableObject {
                     doc.rating = entry.rating
                     doc.flagStatus = entry.flagStatus
                     doc.colorLabel = entry.colorLabel
+                    doc.elo = entry.elo
+                    doc.eloMatches = entry.eloMatches
+                }
+                if let e = catalogElos[url.path] {
+                    doc.elo = e.elo
+                    doc.eloMatches = e.matches
                 }
                 if let q = qualityRecords[url.path] {
                     doc.blurScore          = q.blurScore

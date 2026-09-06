@@ -253,6 +253,7 @@ final class ImageLoadingOrchestrator {
                                 decodeMs, url.lastPathComponent, Int(size.width), Int(size.height), metadata.count))
                 // SQLite-Zugriffe noch im BG-Thread erledigen — nicht auf dem Main-Thread blockieren
                 let catalogRating = CatalogStore.shared.rating(forPath: url.path)
+                let catalogElo = CatalogStore.shared.elo(forPath: url.path)
                 let fallbackRating = catalogRating == nil ? RatingStore.shared.load(for: url) : nil
                 let sizeBytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { Int64($0) } ?? 0
                 DispatchQueue.main.async { [weak self] in
@@ -280,6 +281,12 @@ final class ImageLoadingOrchestrator {
                         updated.rating = entry.rating
                         updated.flagStatus = entry.flagStatus
                         updated.colorLabel = entry.colorLabel
+                        updated.elo = entry.elo
+                        updated.eloMatches = entry.eloMatches
+                    }
+                    if let e = catalogElo {
+                        updated.elo = e.elo
+                        updated.eloMatches = e.matches
                     }
                     host.collection.update(document: updated, at: idx)
                     if old.metadata.count != updated.metadata.count

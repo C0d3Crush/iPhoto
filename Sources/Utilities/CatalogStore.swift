@@ -122,6 +122,7 @@ final class CatalogStore {
             updated_at  TEXT NOT NULL
         )
         """)
+        migrateEloColumns()
 
         exec("""
         CREATE TABLE IF NOT EXISTS trash (
@@ -165,6 +166,15 @@ final class CatalogStore {
             created_at TEXT NOT NULL
         )
         """)
+    }
+
+    // v1.19.0: ELO-Rating aus Bildvergleich. Getrennt von rating (Sternen) — Sterne
+    // sind manuelle Nutzerbewertung, ELO ist paarweise ausgeduellter Ranking-Score.
+    // Alle bestehenden Zeilen bekommen den Standard-Baseline 1500 / 0 Matches.
+    private func migrateEloColumns() {
+        exec("ALTER TABLE ratings ADD COLUMN elo REAL NOT NULL DEFAULT 1500")
+        exec("ALTER TABLE ratings ADD COLUMN elo_matches INTEGER NOT NULL DEFAULT 0")
+        exec("CREATE INDEX IF NOT EXISTS idx_ratings_elo ON ratings(elo)")
     }
 
     private func migrateExifColumns() {

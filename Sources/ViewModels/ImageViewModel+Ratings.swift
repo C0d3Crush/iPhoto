@@ -119,7 +119,10 @@ extension ImageViewModel {
         guard idx < collection.documents.count else { return }
         invalidateVisibleOrder()
         let doc = collection.documents[idx]
-        let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel)
+        // ELO immer mitschreiben, damit die JSON-Fallback-Kopie nicht auf 1500 zurückfällt.
+        // saveRating() in der SQLite-Ebene lässt die elo-Spalten bewusst unangetastet.
+        let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel,
+                                elo: doc.elo, eloMatches: doc.eloMatches)
         RatingStore.shared.save(entry, for: doc.url)
         CatalogStore.shared.saveRating(path: doc.url.path, rating: doc.rating,
                                        flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
@@ -134,7 +137,8 @@ extension ImageViewModel {
         let snaps: [Snap] = indices.compactMap { idx in
             guard idx < collection.documents.count else { return nil }
             let doc = collection.documents[idx]
-            let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel)
+            let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel,
+                                    elo: doc.elo, eloMatches: doc.eloMatches)
             return Snap(url: doc.url, entry: entry, path: doc.url.path,
                         rating: doc.rating, flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
         }

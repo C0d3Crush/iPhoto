@@ -46,6 +46,49 @@ extension CatalogStore {
         }
     }
 
+    // MARK: - ELO (Bildvergleich)
+
+    /// Persistiert nur die ELO-Spalten — bewusst getrennt von saveRating(), damit
+    /// ein Duell-Update nicht Sterne/Flag/Farb-Label zurücksetzt.
+    func saveElo(path: String, elo: Double, eloMatches: Int) {
+        queue.sync {
+            let stmt = prepare("""
+                INSERT INTO ratings (image_path,rating,flag,color_label,elo,elo_matches,updated_at)
+                VALUES (?,0,'none','none',?,?,?)
+                ON CONFLICT(image_path) DO UPDATE SET
+                    elo=excluded.elo, elo_matches=excluded.elo_matches,
+                    updated_at=excluded.updated_at
+            """)
+            bind(stmt, 1, path)
+            sqlite3_bind_double(stmt, 2, elo)
+            sqlite3_bind_int(stmt, 3, Int32(eloMatches))
+            bind(stmt, 4, iso8601())
+            step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
+    func elo(forPath path: String) -> (elo: Double, matches: Int)? {
+        queue.sync {
+            let stmt = prepare("SELECT elo,elo_matches FROM ratings WHERE image_path=?")
+            bind(stmt, 1, path)
+            guard step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
+            let r = (sqlite3_column_double(stmt, 0), Int(sqlite3_column_int(stmt, 1)))
+            sqlite3_finalize(stmt); return r
+        }
+    }
+
+    func allElos() -> [String: (elo: Double, matches: Int)] {
+        queue.sync {
+            let stmt = prepare("SELECT image_path,elo,elo_matches FROM ratings")
+            var out: [String: (elo: Double, matches: Int)] = [:]
+            while step(stmt) == SQLITE_ROW {
+                out[String(cString: sqlite3_column_text(stmt, 0))] =
+                    (sqlite3_column_double(stmt, 1), Int(sqlite3_column_int(stmt, 2)))
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
     func removeRating(path: String) {
         queue.sync {
             let stmt = prepare("DELETE FROM ratings WHERE image_path=?")

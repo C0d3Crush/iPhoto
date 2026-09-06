@@ -4,6 +4,27 @@ struct RatingEntry: Codable {
     var rating: Int
     var flagStatus: FlagStatus
     var colorLabel: ColorLabel
+    var elo: Double
+    var eloMatches: Int
+
+    init(rating: Int, flagStatus: FlagStatus, colorLabel: ColorLabel,
+         elo: Double = 1500, eloMatches: Int = 0) {
+        self.rating = rating
+        self.flagStatus = flagStatus
+        self.colorLabel = colorLabel
+        self.elo = elo
+        self.eloMatches = eloMatches
+    }
+
+    // Tolerantes Decoding — alte Einträge ohne elo/eloMatches bekommen die Defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.rating = try c.decode(Int.self, forKey: .rating)
+        self.flagStatus = try c.decode(FlagStatus.self, forKey: .flagStatus)
+        self.colorLabel = try c.decode(ColorLabel.self, forKey: .colorLabel)
+        self.elo = (try? c.decode(Double.self, forKey: .elo)) ?? 1500
+        self.eloMatches = (try? c.decode(Int.self, forKey: .eloMatches)) ?? 0
+    }
 }
 
 final class RatingStore {

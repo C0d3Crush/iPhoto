@@ -114,18 +114,22 @@ struct CompareView: View {
             }
             .padding(.horizontal, 8)
 
-            starRow(rating: doc.rating)
+            eloRow(elo: doc.elo, matches: doc.eloMatches)
                 .padding(.bottom, 8)
         }
     }
 
-    private func starRow(rating: Int) -> some View {
-        HStack(spacing: 3) {
-            ForEach(1...5, id: \.self) { i in
-                Image(systemName: i <= rating ? "star.fill" : "star")
-                    .font(.system(size: 11))
-                    .foregroundColor(i <= rating ? .yellow : .secondary)
-            }
+    private func eloRow(elo: Double, matches: Int) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 10))
+                .foregroundColor(.accentColor)
+            Text("ELO \(Int(elo.rounded()))")
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundColor(.primary)
+            Text("· \(matches) Duell\(matches == 1 ? "" : "e")")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary)
         }
     }
 
@@ -133,11 +137,10 @@ struct CompareView: View {
         let docs = viewModel.visibleDocuments
         let total = max(1, docs.count)
         return HStack(alignment: .center, spacing: 12) {
-            ForEach([0, 1, 2, 3, 4, 5], id: \.self) { stars in
-                RatingDistributionColumn(
-                    stars: stars,
-                    current: Double(docs.filter { $0.rating == stars }.count) / Double(total),
-                    target: ImageViewModel.compareRatingTargets[stars] ?? 0.0
+            ForEach(ImageViewModel.compareEloBuckets) { bucket in
+                EloDistributionColumn(
+                    bucket: bucket,
+                    current: Double(docs.filter { bucket.range.contains($0.elo) }.count) / Double(total)
                 )
             }
         }
@@ -171,31 +174,22 @@ struct CompareView: View {
     }
 }
 
-private struct RatingDistributionColumn: View {
-    let stars: Int
+private struct EloDistributionColumn: View {
+    let bucket: ImageViewModel.EloBucket
     let current: Double
-    let target: Double
 
     var body: some View {
         VStack(spacing: 4) {
-            starIcons
+            Text(bucket.short)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundColor(bucketColor)
             barChart
             Text("\(Int((current * 100).rounded())) %")
                 .font(.system(size: 9).monospacedDigit())
                 .foregroundColor(.secondary)
-            Text("Soll: \(Int(target * 100)) %")
-                .font(.system(size: 8))
+            Text(bucket.label)
+                .font(.system(size: 8, design: .monospaced))
                 .foregroundColor(.secondary.opacity(0.7))
-        }
-    }
-
-    private var starIcons: some View {
-        HStack(spacing: 1) {
-            ForEach(1...5, id: \.self) { i in
-                Image(systemName: "star.fill")
-                    .font(.system(size: 7))
-                    .foregroundColor(i <= stars ? .yellow : Color.yellow.opacity(0.15))
-            }
         }
     }
 
@@ -206,22 +200,24 @@ private struct RatingDistributionColumn: View {
                     .fill(Color.secondary.opacity(0.12))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(barColor)
-                    .frame(height: geo.size.height * CGFloat(current))
+                    .fill(bucketColor.opacity(0.75))
+                    .frame(height: geo.size.height * CGFloat(min(1.0, current * 2.5)))
                     .frame(maxWidth: .infinity)
-                Rectangle()
-                    .fill(Color.primary.opacity(0.45))
-                    .frame(height: 1.5)
-                    .offset(y: -geo.size.height * CGFloat(target))
             }
         }
         .frame(width: 36, height: 48)
     }
 
-    private var barColor: Color {
-        let diff = current - target
-        if diff > 0.07 { return .orange }
-        if diff < -0.07 { return Color.accentColor.opacity(0.55) }
-        return .green.opacity(0.75)
+    // Farbverlauf über die Buckets: rot für schwache ELO, gelb Mitte, grün für starke.
+    // Kein .mint (macOS 12+) — App unterstützt macOS 11.7.
+    private var bucketColor: Color {
+        switch bucket.id {
+        case 0: return .red
+        case 1: return .orange
+        case 2: return .yellow
+        case 3: return Color(red: 0.5, green: 0.85, blue: 0.5)
+        case 4: return .green
+        default: return .accentColor
+        }
     }
 }
