@@ -410,6 +410,10 @@ class ImageViewModel: ObservableObject {
         // $navSelection uses dropFirst() so the initial .library never fires loadContentForSelection.
         // Trigger it explicitly so watched folders sync on startup.
         loadContentForSelection(navSelection)
+
+        // Restore all previously imported images from the catalog that are not covered by
+        // watched folders (e.g. files dragged in from Desktop, Downloads, etc.).
+        restoreCatalogImages()
     }
 
     deinit {
@@ -505,6 +509,29 @@ class ImageViewModel: ObservableObject {
         activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
         activity.enqueueWork { [weak self] in self?.scanQualityForLibrary() }
         activity.enqueueWork { [weak self] in self?.scanMotifForLibrary() }
+    }
+
+    // Restores all catalog-known image paths that still exist on disk but are not yet
+    // in the in-memory collection (e.g. files imported in a previous session from outside
+    // any watched folder). Runs async; importFiles() deduplicates against watched-folder
+    // results that may arrive concurrently.
+    private func restoreCatalogImages() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let fm = FileManager.default
+            let paths = CatalogStore.shared.allImages()
+                .map { $0.path }
+                .filter { fm.fileExists(atPath: $0) }
+            guard !paths.isEmpty else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                let existing = Set(self.collection.documents.map { $0.url.path })
+                let newURLs = paths
+                    .filter { !existing.contains($0) }
+                    .map { URL(fileURLWithPath: $0) }
+                guard !newURLs.isEmpty else { return }
+                self.importFiles(newURLs, selectFirst: false)
+            }
+        }
     }
 
     func clearAll() {

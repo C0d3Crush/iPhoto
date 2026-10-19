@@ -2,6 +2,13 @@
 
 ---
 
+## 1.21.2
+**Bugfix — Bibliothek zeigt nicht alle Bilder**
+
+- Beim App-Start werden jetzt alle im Katalog bekannten Bilder wiederhergestellt, auch solche, die außerhalb überwachter Ordner importiert wurden (z. B. vom Desktop oder Downloads). `restoreCatalogImages()` prüft im Hintergrund, welche Katalog-Pfade noch auf der Festplatte existieren, und fügt fehlende Bilder zur Kollektion hinzu
+
+---
+
 ## 1.21.1
 **Bugfix — Bibliothek beim App-Start leer**
 
