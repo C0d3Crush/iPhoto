@@ -2,6 +2,17 @@
 
 ---
 
+## 1.21.0
+**Feature — Rust-Core unter der Haube (iPhoto 1.2)**
+
+- **Rust-Bibliothek `iphoto_rs`:** Blur-Erkennung (Laplacian-Varianz), Belichtungsanalyse (Histogramm-Clipping), pHash-Paar (dHash bitidentisch zu bisheriger SQLite-Cache-kompatibel) und HotPixel-Akkumulierung/Suche laufen jetzt in Rust via C-FFI
+- **rayon-Parallelismus:** HotPixel-Akkumulierung nutzt `par_iter_mut` für schnellere Multi-Frame-Analyse
+- **Zweite Build-Variante:** Branch erzeugt `build/iPhoto 1.2.app` (Bundle-ID `com.c0d3cru5h.iPhoto12`) — läuft parallel zu `build/iPhoto.app` auf `main`, teilt dieselbe Datenbank
+- **`import Accelerate` entfernt** aus BlurDetector und ExposureDetector — kein Framework-Overhead mehr für diese Berechnungen
+- `build.sh` baut automatisch Rust-Core via `cargo build --release` vor Swift-Kompilierung
+
+---
+
 ## 1.20.1
 **Bugfix — App-Start-Crash nach Motiverkennung-Feature**
 

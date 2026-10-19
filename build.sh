@@ -2,7 +2,7 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="iPhoto"
+APP_NAME="iPhoto 1.2"
 BUILD_DIR="$ROOT/build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
@@ -50,9 +50,12 @@ fi
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ]; then
     TARGET="arm64-apple-macosx11.0"
+    RUST_TARGET="aarch64-apple-darwin"
 else
     TARGET="x86_64-apple-macosx11.0"
+    RUST_TARGET="x86_64-apple-darwin"
 fi
+RUST_LIB="$ROOT/Rust/target/release/libiphoto_rs.a"
 
 echo "==> Baue $APP_NAME"
 echo "    Compiler    : $SWIFTC"
@@ -98,6 +101,16 @@ for o in "$OBJ_DIR"/*.o; do
     fi
 done
 
+# Rust-Core bauen (cargo ist inkrementell — bei unverändertem Code ~1s)
+echo "==> Baue Rust-Core (iphoto_rs)…"
+export PATH="$HOME/.cargo/bin:$PATH"
+export MACOSX_DEPLOYMENT_TARGET=11.0
+(cd "$ROOT/Rust" && cargo build --release 2>&1)
+if [ ! -f "$RUST_LIB" ]; then
+    echo "Fehler: Rust-Bibliothek nicht gefunden: $RUST_LIB"; exit 1
+fi
+echo ""
+
 # Kompilieren (inkrementell: nur geänderte Dateien)
 echo "==> Kompiliere…"
 "$SWIFTC" \
@@ -108,6 +121,7 @@ echo "==> Kompiliere…"
     -O \
     -incremental \
     -c \
+    -import-objc-header "$ROOT/Sources/Utilities/BridgingHeader.h" \
     -output-file-map "$OFM" \
     -j "$(sysctl -n hw.ncpu)" \
     $SOURCES
@@ -124,6 +138,8 @@ echo "==> Linke…"
     -framework Vision \
     -emit-executable \
     "$OBJ_DIR"/*.o \
+    "$RUST_LIB" \
+    -lc++ \
     -o "$MACOS_DIR/$APP_NAME"
 
 echo "==> Kopiere Ressourcen…"
@@ -180,9 +196,12 @@ fi
     -framework AppKit \
     -framework VideoToolbox \
     -framework CoreMedia \
+    -import-objc-header "$ROOT/Sources/Utilities/BridgingHeader.h" \
     -module-name iPhotoCLI \
     -O \
     $CLI_SOURCES \
+    "$RUST_LIB" \
+    -lc++ \
     -o "$BUILD_DIR/iphoto-cli"
 
 echo "Fertig: $BUILD_DIR/iphoto-cli"

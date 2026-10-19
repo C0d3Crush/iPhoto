@@ -1,10 +1,11 @@
-import Accelerate
 import CoreGraphics
 
 struct BlurDetector {
     static let defaultThreshold: Double = 120.0
 
-    // Laplacian-Varianz: höher = schärfer, niedriger = unscharf.
+    // Laplacian-Varianz via Rust-Core (iphoto_rs). CGContext-Render bleibt in Swift
+    // weil CGColorSpaceCreateDeviceGray() Apple-Framework benötigt; die eigentliche
+    // Rechenarbeit (3×3 Laplacian + Varianz) läuft in blur.rs.
     static func score(from image: CGImage) -> Double {
         let maxDim = 512
         let w0 = image.width, h0 = image.height
@@ -24,33 +25,6 @@ struct BlurDetector {
         ) else { return 0 }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
 
-        var floatBuf = [Float](repeating: 0, count: n)
-        vDSP_vfltu8(gray, 1, &floatBuf, 1, vDSP_Length(n))
-
-        let kernel: [Float] = [0, 1, 0,
-                               1,-4, 1,
-                               0, 1, 0]
-        var result = [Float](repeating: 0, count: n)
-        floatBuf.withUnsafeMutableBufferPointer { srcPtr in
-            result.withUnsafeMutableBufferPointer { dstPtr in
-                var srcBuf = vImage_Buffer(data: srcPtr.baseAddress!, height: UInt(h), width: UInt(w),
-                                           rowBytes: w * MemoryLayout<Float>.size)
-                var dstBuf = vImage_Buffer(data: dstPtr.baseAddress!, height: UInt(h), width: UInt(w),
-                                           rowBytes: w * MemoryLayout<Float>.size)
-                vImageConvolve_PlanarF(&srcBuf, &dstBuf, nil, 0, 0,
-                                       kernel, 3, 3, 0.0,
-                                       vImage_Flags(kvImageEdgeExtend))
-            }
-        }
-
-        var mean: Float = 0
-        vDSP_meanv(result, 1, &mean, vDSP_Length(n))
-        var negMean = -mean
-        vDSP_vsadd(result, 1, &negMean, &result, 1, vDSP_Length(n))
-        vDSP_vsq(result, 1, &result, 1, vDSP_Length(n))
-        var variance: Float = 0
-        vDSP_meanv(result, 1, &variance, vDSP_Length(n))
-
-        return Double(variance)
+        return iphoto_blur_score(gray, UInt32(w), UInt32(h))
     }
 }
