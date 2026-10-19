@@ -136,11 +136,16 @@ struct CompareView: View {
     private var distributionPanel: some View {
         let docs = viewModel.visibleDocuments
         let total = max(1, docs.count)
-        return HStack(alignment: .center, spacing: 12) {
-            ForEach(ImageViewModel.compareEloBuckets) { bucket in
+        let fractions = ImageViewModel.compareEloBuckets.map { bucket in
+            Double(docs.filter { bucket.range.contains($0.elo) }.count) / Double(total)
+        }
+        let maxFraction = max(fractions.max() ?? 0, 0.001)
+        return HStack(alignment: .bottom, spacing: 12) {
+            ForEach(Array(ImageViewModel.compareEloBuckets.enumerated()), id: \.element.id) { i, bucket in
                 EloDistributionColumn(
                     bucket: bucket,
-                    current: Double(docs.filter { bucket.range.contains($0.elo) }.count) / Double(total)
+                    current: fractions[i],
+                    relativeHeight: fractions[i] / maxFraction
                 )
             }
         }
@@ -177,35 +182,36 @@ struct CompareView: View {
 private struct EloDistributionColumn: View {
     let bucket: ImageViewModel.EloBucket
     let current: Double
+    let relativeHeight: Double
 
     var body: some View {
         VStack(spacing: 4) {
             Text(bucket.short)
                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundColor(bucketColor)
+                .foregroundColor(current > 0 ? bucketColor : .secondary.opacity(0.35))
             barChart
             Text("\(Int((current * 100).rounded())) %")
                 .font(.system(size: 9).monospacedDigit())
-                .foregroundColor(.secondary)
+                .foregroundColor(current > 0 ? .secondary : .secondary.opacity(0.4))
             Text(bucket.label)
                 .font(.system(size: 8, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.7))
+                .foregroundColor(.secondary.opacity(0.5))
         }
     }
 
     private var barChart: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .bottom) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.secondary.opacity(0.12))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(bucketColor.opacity(0.75))
-                    .frame(height: geo.size.height * CGFloat(min(1.0, current * 2.5)))
-                    .frame(maxWidth: .infinity)
+        let maxH: CGFloat = 60
+        let barH = CGFloat(relativeHeight) * maxH
+        return ZStack(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.secondary.opacity(0.10))
+                .frame(width: 36, height: maxH)
+            if barH > 0 {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(bucketColor.opacity(0.82))
+                    .frame(width: 36, height: max(barH, 3))
             }
         }
-        .frame(width: 36, height: 48)
     }
 
     // Farbverlauf über die Buckets: rot für schwache ELO, gelb Mitte, grün für starke.
