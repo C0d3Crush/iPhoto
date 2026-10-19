@@ -134,14 +134,22 @@ struct CompareView: View {
     }
 
     private var distributionPanel: some View {
-        let elos = viewModel.visibleDocuments.map { $0.elo }
+        let docs = viewModel.visibleDocuments
+        let elos = docs.map { $0.elo }
         let leftElo  = viewModel.compareLeftDocument?.elo
         let rightElo = viewModel.compareRightDocument?.elo
         let pts = Self.kdePoints(elos: elos)
-        return EloAreaGraph(points: pts, leftElo: leftElo, rightElo: rightElo)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
+        return EloAreaGraph(points: pts, leftElo: leftElo, rightElo: rightElo) { tappedElo in
+            // Find the image with the closest ELO to the tap position
+            guard let nearest = docs.min(by: { abs($0.elo - tappedElo) < abs($1.elo - tappedElo) }),
+                  let idx = viewModel.collectionIndex(for: nearest) else { return }
+            viewModel.stopCompareMode()
+            viewModel.collection.select(index: idx)
+            viewModel.loadCurrentImage()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
     }
 
     // Gaussian KDE: 40 sample points over the actual ELO range.
@@ -205,6 +213,9 @@ private struct EloAreaGraph: View {
     let points: [(x: Double, y: Double)]   // KDE sample points, sorted by x
     let leftElo:  Double?
     let rightElo: Double?
+    let onTap: (Double) -> Void
+
+    @State private var hoverX: CGFloat? = nil   // screen x of hover cursor
 
     var body: some View {
         VStack(spacing: 4) {
@@ -216,7 +227,21 @@ private struct EloAreaGraph: View {
                     linePath(in: geo.size)
                         .stroke(lineGradient, style: StrokeStyle(lineWidth: 2, lineJoin: .round))
                     eloMarkers(in: geo.size)
+                    hoverCursor(in: geo.size)
                 }
+                .contentShape(Rectangle())
+                .onHover { inside in
+                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop(); hoverX = nil }
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { v in hoverX = max(0, min(v.location.x, geo.size.width)) }
+                        .onEnded   { v in
+                            let elo = eloAt(screenX: v.location.x, width: geo.size.width)
+                            onTap(elo)
+                            hoverX = nil
+                        }
+                )
             }
             .frame(height: 72)
 
@@ -305,8 +330,35 @@ private struct EloAreaGraph: View {
 
     private func nearestDensity(for elo: Double) -> Double {
         guard !points.isEmpty else { return 0 }
-        let nearest = points.min(by: { abs($0.x - elo) < abs($1.x - elo) })
-        return nearest?.y ?? 0
+        return points.min(by: { abs($0.x - elo) < abs($1.x - elo) })?.y ?? 0
+    }
+
+    private func eloAt(screenX: CGFloat, width: CGFloat) -> Double {
+        guard width > 0 else { return xMin }
+        return xMin + Double(screenX / width) * xRange
+    }
+
+    private func hoverCursor(in size: CGSize) -> some View {
+        Group {
+            if let hx = hoverX {
+                let elo = eloAt(screenX: hx, width: size.width)
+                let density = nearestDensity(for: elo)
+                let yp = yScreen(density, height: size.height)
+                Path { p in
+                    p.move(to:    CGPoint(x: hx, y: size.height))
+                    p.addLine(to: CGPoint(x: hx, y: 0))
+                }
+                .stroke(Color.white.opacity(0.2), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                Circle()
+                    .fill(Color.white.opacity(0.85))
+                    .frame(width: 6, height: 6)
+                    .offset(x: hx - 3, y: yp - 3)
+                Text("\(Int(elo.rounded()))")
+                    .font(.system(size: 7, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.8))
+                    .offset(x: hx + 4, y: min(yp - 10, size.height - 14))
+            }
+        }
     }
 
     // MARK: - X-Axis

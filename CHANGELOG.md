@@ -2,6 +2,15 @@
 
 ---
 
+## 1.21.4
+**Feature — ELO-Kurve klickbar: Navigiert zum nächsten Bild**
+
+- Klick auf die ELO-Verteilungskurve beendet den Vergleich und wählt das Bild mit dem nächsten ELO-Wert an der Klickposition aus
+- Hover-Cursor zeigt eine gestrichelte Linie + ELO-Label beim Überfahren der Kurve
+- Zeigefinger-Cursor beim Hover signalisiert Klickbarkeit
+
+---
+
 ## 1.21.3
 **Feature — ELO-Kurve mit echten Datenpunkten (KDE)**
 
