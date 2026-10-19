@@ -694,4 +694,72 @@ final class ImageLoadingOrchestrator {
             }
         }
     }
+
+    // Motiv-Scan: VNClassifyImageRequest pro Thumbnail → Motive speichern.
+    // Gleiche Batch-Strategie wie Quality-Scan (100er-Batches, einmaliger Array-Write).
+    func scanMotifForLibrary() {
+        guard let host = host else { return }
+        let paths = CatalogStore.shared.pathsNeedingMotifScan()
+        guard !paths.isEmpty else { return }
+
+        let taskID = UUID()
+        host.activity.enqueue(id: taskID, label: "Motive erkennen",
+                              icon: "eye.fill",
+                              done: 0, total: paths.count, summaryVerb: "analysiert")
+
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            guard let self = self, let host = self.host else { return }
+            let total = paths.count
+            var done = 0
+            var pending: [(String, [String])] = []
+            pending.reserveCapacity(128)
+            let flushBatch: ([(String, [String])], Int, Int) -> Void = { batch, d, t in
+                DispatchQueue.main.async { [weak self] in
+                    guard let host = self?.host else { return }
+                    host.activity.update(id: taskID, done: d, total: t)
+                    guard !batch.isEmpty else { return }
+                    var docs = host.collection.documents
+                    var indexByPath: [String: Int] = [:]
+                    indexByPath.reserveCapacity(docs.count)
+                    for (i, doc) in docs.enumerated() { indexByPath[doc.url.path] = i }
+                    var touched = false
+                    for (path, tags) in batch {
+                        guard let idx = indexByPath[path] else { continue }
+                        docs[idx].motifTags    = tags
+                        docs[idx].motifScanned = true
+                        touched = true
+                    }
+                    if touched { host.collection.documents = docs }
+                }
+            }
+            for path in paths {
+                host.activity.waitWhilePaused(id: taskID)
+                autoreleasepool {
+                    let url = URL(fileURLWithPath: path)
+                    let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                    defer { stopAccess() }
+                    let result = MotifAssessor.assess(url: accessURL) ?? MotifAssessor.Result(tags: [])
+                    CatalogStore.shared.upsertMotifs(path: path, tags: result.tags)
+                    done += 1
+                    pending.append((path, result.tags))
+                    if pending.count >= 100 {
+                        let batch = pending
+                        pending.removeAll(keepingCapacity: true)
+                        flushBatch(batch, done, total)
+                    }
+                }
+            }
+            if !pending.isEmpty {
+                let batch = pending
+                pending.removeAll(keepingCapacity: true)
+                flushBatch(batch, done, total)
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let host = self?.host else { return }
+                host.activity.dequeue(id: taskID)
+                host.scheduleSmartFolderCountRefresh()
+                Log.info("Motiv-Scan abgeschlossen: \(total) Bilder")
+            }
+        }
+    }
 }

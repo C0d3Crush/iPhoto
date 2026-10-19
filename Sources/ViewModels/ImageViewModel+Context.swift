@@ -311,6 +311,8 @@ extension ImageViewModel {
                 return applyEnumOp(c.op, lhs: isHDR, rhs: c.boolValue)
             case .rating:
                 return applyNumericOp(c.op, value: Double(doc.rating), lo: Double(c.ratingValue), hi: Double(c.ratingValue2))
+            case .eloRating:
+                return applyNumericOp(c.op, value: doc.elo, lo: c.numericValue, hi: c.numericValue2)
             case .iso:
                 if let v = metadataDouble(doc, key: "exif.ISO", prefix: "ISO ") {
                     return applyNumericOp(c.op, value: v, lo: c.numericValue, hi: c.numericValue2)
@@ -347,6 +349,22 @@ extension ImageViewModel {
                 return applyDateOp(c.op, date: date, lo: c.dateValue, hi: c.dateValue2, dynamic: c.dynamicDateRange)
             case .filename:
                 return applyTextOp(c.op, haystack: doc.filename, needle: c.textValue)
+            case .motif:
+                let tags: [String]
+                if doc.motifScanned {
+                    tags = doc.motifTags ?? []
+                } else if let stored = CatalogStore.shared.motifs(forPath: doc.url.path) {
+                    tags = stored
+                } else {
+                    return false
+                }
+                let needle = c.textValue.lowercased()
+                let hasMotif = tags.contains { $0.contains(needle) || needle.contains($0) }
+                switch c.op {
+                case .isExact: return hasMotif
+                case .isNot:   return !hasMotif
+                default:       return hasMotif
+                }
             case .album:
                 guard let albumID = UUID(uuidString: c.textValue),
                       let album = library.albums.first(where: { $0.id == albumID }) else { return false }

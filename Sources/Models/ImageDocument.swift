@@ -70,6 +70,11 @@ struct ImageDocument: Identifiable, Equatable {
     var overOverride: Bool = false
     var eyesClosedOverride: Bool = false
 
+    // v1.20.0: Automatisch erkannte Motive (VNClassifyImageRequest). Leeres Array =
+    // Scan hat keine Treffer ≥ Schwellenwert ergeben. Nil = noch nicht gescannt.
+    var motifTags: [String]? = nil
+    var motifScanned: Bool = false
+
     var filename: String { url.lastPathComponent }
 
     static let rawExtensions: Set<String> = [

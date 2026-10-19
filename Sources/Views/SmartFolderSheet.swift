@@ -277,6 +277,20 @@ private struct CriterionRow: View {
                 }
             }
 
+        // --- ELO-Rating ---
+        case .eloRating:
+            Group {
+                if criterion.op == .inRange {
+                    numericRangeInput(unit: "ELO")
+                } else {
+                    numericSingleInput(unit: "ELO")
+                }
+            }
+            .onAppear {
+                if criterion.numericValue == 100 { criterion.numericValue = 1500 }
+                if criterion.numericValue2 == 400 { criterion.numericValue2 = 1800 }
+            }
+
         // --- ISO ---
         case .iso:
             if criterion.op == .inRange {
@@ -358,6 +372,22 @@ private struct CriterionRow: View {
             TextField(textPlaceholder, text: $criterion.textValue)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .frame(width: 150)
+
+        // --- Motiv (KI) ---
+        case .motif:
+            Picker("", selection: $criterion.textValue) {
+                ForEach(MotifAssessor.knownLabels, id: \.id) { label in
+                    Text(label.name).tag(label.id)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(MenuPickerStyle())
+            .frame(width: 160)
+            .onAppear {
+                if criterion.textValue.isEmpty {
+                    criterion.textValue = MotifAssessor.knownLabels.first?.id ?? ""
+                }
+            }
 
         // --- Album ---
         case .album:

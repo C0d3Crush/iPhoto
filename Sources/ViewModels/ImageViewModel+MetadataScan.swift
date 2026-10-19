@@ -14,4 +14,8 @@ extension ImageViewModel {
     func scanQualityForLibrary() {
         loader.scanQualityForLibrary()
     }
+
+    func scanMotifForLibrary() {
+        loader.scanMotifForLibrary()
+    }
 }

@@ -67,6 +67,7 @@ final class CatalogStore {
         createSchema()
         if isDefaultCatalog { migrateFromJSON() }
         loadExifCache()
+        loadMotifCache()
     }
 
     private func loadExifCache() {
@@ -112,6 +113,7 @@ final class CatalogStore {
         exec("CREATE INDEX IF NOT EXISTS idx_images_filename ON images(filename)")
         migrateExifColumns()
         migrateQualityColumns()
+        migrateMotifColumns()
 
         exec("""
         CREATE TABLE IF NOT EXISTS ratings (

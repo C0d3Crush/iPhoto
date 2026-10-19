@@ -2,6 +2,17 @@
 
 ---
 
+## 1.20.0
+**Feature — Automatische Motiverkennung + ELO als Intelligenter-Ordner-Filter**
+
+- **Motiverkennung per KI (VNClassifyImageRequest):** Beim Import analysiert iPhoto jedes Bild automatisch im Hintergrund und erkennt bis zu 8 Motive (Himmel, Natur, Hund, Person, Wasser, Architektur u.v.m.) mit einem Konfidenz-Schwellenwert von 0,25. Ergebnisse werden in SQLite (`motif_tags`, `motif_scanned`) persistiert und gecacht — kein SQLite-Zugriff aus Render-Pfaden
+- **Intelligente Ordner: Motiv (KI)** — neues Kriterium „Motiv (KI)" mit Dropdown der bekannten Labels (Himmel, Hund, Strand …) und den Operatoren „ist" / „ist nicht". Matching prüft via `contains()` auf Prefix-Match, sodass spezifischere Labels (z.B. „dog_domestic") auf den Parent-Begriff „dog" treffen
+- **Intelligente Ordner: ELO-Rating** — neues numerisches Kriterium „ELO-Rating" mit allen Operatoren (größer als, kleiner als, im Bereich …). Voreinstellung 1500 (ELO-Baseline) beim ersten Öffnen
+- SQLite-Migration: neue Spalten `motif_tags TEXT` + `motif_scanned INTEGER` in der `images`-Tabelle, Index auf `motif_scanned`
+- Neue Dateien: `Sources/Utilities/MotifAssessor.swift`, `Sources/Utilities/CatalogStore+Motifs.swift`
+
+---
+
 ## 1.19.0
 **Feature — Bildvergleich mit ELO-Rating (getrennt von Sternen)**
 

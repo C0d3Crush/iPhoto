@@ -500,6 +500,7 @@ class ImageViewModel: ObservableObject {
         activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
         activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
         activity.enqueueWork { [weak self] in self?.scanQualityForLibrary() }
+        activity.enqueueWork { [weak self] in self?.scanMotifForLibrary() }
     }
 
     func clearAll() {

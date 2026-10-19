@@ -57,11 +57,13 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
     // Enum-Typ
     case flag, colorLabel, isRAW, orientation, hdr
     // Numerisch
-    case rating, iso, focalLength, aperture
+    case rating, iso, focalLength, aperture, eloRating
     // Datum
     case captureDate
     // Text
     case cameraMake, cameraModel, lens, filename, filmSimulation
+    // Motiv (automatisch erkannt)
+    case motif
     // Album
     case album
 
@@ -72,7 +74,8 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .isRAW:            return "Dateityp"
         case .orientation:      return "Ausrichtung"
         case .hdr:              return "HDR"
-        case .rating:           return "Bewertung"
+        case .rating:           return "Bewertung (★)"
+        case .eloRating:        return "ELO-Rating"
         case .iso:              return "ISO"
         case .focalLength:      return "Brennweite"
         case .aperture:         return "Blende"
@@ -82,19 +85,21 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .lens:             return "Objektiv"
         case .filename:         return "Dateiname"
         case .filmSimulation:   return "Filmsimulation"
+        case .motif:            return "Motiv (KI)"
         case .album:            return "Album"
         }
     }
 
-    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType }
+    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType, motifType }
 
     var type: AttributeType {
         switch self {
         case .flag, .colorLabel, .isRAW, .orientation, .hdr: return .enumType
-        case .rating, .iso, .focalLength, .aperture:   return .numeric
+        case .rating, .iso, .focalLength, .aperture, .eloRating: return .numeric
         case .captureDate:                             return .dateType
         case .cameraMake, .cameraModel, .lens, .filename: return .text
         case .filmSimulation:                          return .filmSimType
+        case .motif:                                   return .motifType
         case .album:                                   return .albumType
         }
     }
@@ -106,6 +111,7 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .dateType:     return .isDynamic
         case .text:         return .contains
         case .filmSimType:  return .isExact
+        case .motifType:    return .isExact
         case .albumType:    return .isExact
         }
     }
@@ -117,6 +123,7 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .dateType:     return [.isDynamic, .isAfter, .isBefore, .inDateRange]
         case .text:         return [.contains, .notContains, .isExact, .isNot, .beginsWith, .endsWith]
         case .filmSimType:  return [.isExact, .isNot]
+        case .motifType:    return [.isExact, .isNot]
         case .albumType:    return [.isExact, .isNot]
         }
     }
