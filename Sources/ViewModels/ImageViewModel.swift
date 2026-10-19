@@ -406,6 +406,10 @@ class ImageViewModel: ObservableObject {
         memSource.setEventHandler { [weak self] in self?.evictDistantImages(keepRadius: 0) }
         memSource.resume()
         cancellables.insert(AnyCancellable { memSource.cancel() })
+
+        // $navSelection uses dropFirst() so the initial .library never fires loadContentForSelection.
+        // Trigger it explicitly so watched folders sync on startup.
+        loadContentForSelection(navSelection)
     }
 
     deinit {

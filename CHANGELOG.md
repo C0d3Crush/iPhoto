@@ -2,6 +2,13 @@
 
 ---
 
+## 1.21.1
+**Bugfix — Bibliothek beim App-Start leer**
+
+- Beim Start wurde `loadContentForSelection(.library)` nie aufgerufen, da `$navSelection.dropFirst()` den initialen Wert überspringt — überwachte Ordner wurden erst nach einem manuellen Navigationswechsel geladen. Fix: expliziter Aufruf am Ende von `init()`
+
+---
+
 ## 1.21.0
 **Feature — Rust-Core unter der Haube (iPhoto 1.2)**
 
