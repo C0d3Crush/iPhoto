@@ -134,16 +134,44 @@ struct CompareView: View {
     }
 
     private var distributionPanel: some View {
-        let docs = viewModel.visibleDocuments
-        let total = max(1, docs.count)
-        let buckets = ImageViewModel.compareEloBuckets
-        let fractions = buckets.map { bucket in
-            Double(docs.filter { bucket.range.contains($0.elo) }.count) / Double(total)
-        }
-        return EloAreaGraph(buckets: buckets, fractions: fractions)
+        let elos = viewModel.visibleDocuments.map { $0.elo }
+        let leftElo  = viewModel.compareLeftDocument?.elo
+        let rightElo = viewModel.compareRightDocument?.elo
+        let pts = Self.kdePoints(elos: elos)
+        return EloAreaGraph(points: pts, leftElo: leftElo, rightElo: rightElo)
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
+    }
+
+    // Gaussian KDE: 40 sample points over the actual ELO range.
+    // Scott's bandwidth; capped at 300 samples for large libraries.
+    private static func kdePoints(elos: [Double], sampleCount: Int = 40) -> [(x: Double, y: Double)] {
+        guard elos.count >= 2 else {
+            let x = elos.first ?? 1500
+            return [(x: x - 200, y: 0), (x: x, y: 1), (x: x + 200, y: 0)]
+        }
+        let n = Double(elos.count)
+        let mean = elos.reduce(0, +) / n
+        let variance = elos.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / n
+        let h = max(1.06 * sqrt(variance) * pow(n, -0.2), 20)
+
+        let lo = (elos.min() ?? 1000) - h * 2.5
+        let hi = (elos.max() ?? 2000) + h * 2.5
+        let step = (hi - lo) / Double(sampleCount - 1)
+
+        let sample: [Double] = elos.count <= 300 ? elos : stride(from: 0, to: elos.count, by: elos.count / 300).map { elos[$0] }
+        let ns = Double(sample.count)
+        let norm = ns * h * sqrt(2 * .pi)
+
+        return (0..<sampleCount).map { i in
+            let x = lo + Double(i) * step
+            let density = sample.reduce(0.0) { acc, xi in
+                let z = (x - xi) / h
+                return acc + exp(-0.5 * z * z)
+            } / norm
+            return (x: x, y: density)
+        }
     }
 
     private var verdictBar: some View {
@@ -171,92 +199,73 @@ struct CompareView: View {
     }
 }
 
-// MARK: - ELO Area Graph
+// MARK: - ELO Area Graph (KDE)
 
 private struct EloAreaGraph: View {
-    let buckets: [ImageViewModel.EloBucket]
-    let fractions: [Double]
+    let points: [(x: Double, y: Double)]   // KDE sample points, sorted by x
+    let leftElo:  Double?
+    let rightElo: Double?
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             GeometryReader { geo in
                 ZStack {
+                    gridLines(in: geo.size)
                     areaPath(in: geo.size)
                         .fill(areaGradient)
                     linePath(in: geo.size)
                         .stroke(lineGradient, style: StrokeStyle(lineWidth: 2, lineJoin: .round))
-                    dots(in: geo.size)
-                    gridLines(in: geo.size)
+                    eloMarkers(in: geo.size)
                 }
             }
             .frame(height: 72)
 
-            // X-Achsenbeschriftungen
-            HStack(spacing: 0) {
-                ForEach(Array(buckets.enumerated()), id: \.element.id) { i, bucket in
-                    VStack(spacing: 1) {
-                        Text("\(Int((fractions[i] * 100).rounded())) %")
-                            .font(.system(size: 8).monospacedDigit())
-                            .foregroundColor(fractions[i] > 0 ? bucketColor(i).opacity(0.9) : .secondary.opacity(0.35))
-                        Text(bucket.label)
-                            .font(.system(size: 7, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.55))
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
+            xAxisLabels
         }
+    }
+
+    // MARK: - Coordinate helpers
+
+    private var xMin: Double { points.first?.x ?? 0 }
+    private var xMax: Double { points.last?.x  ?? 1 }
+    private var xRange: Double { max(xMax - xMin, 1) }
+    private var yMax: Double { max(points.map { $0.y }.max() ?? 0, 1e-10) }
+
+    private func xScreen(_ elo: Double, width: CGFloat) -> CGFloat {
+        CGFloat((elo - xMin) / xRange) * width
+    }
+
+    private func yScreen(_ density: Double, height: CGFloat) -> CGFloat {
+        height - CGFloat(density / yMax) * (height - 6)
     }
 
     // MARK: - Paths
 
-    private func xPos(_ i: Int, width: CGFloat) -> CGFloat {
-        let count = CGFloat(buckets.count - 1)
-        return count == 0 ? width / 2 : CGFloat(i) / count * width
-    }
-
-    private func yPos(_ fraction: Double, height: CGFloat) -> CGFloat {
-        let maxF = max(fractions.max() ?? 0, 0.001)
-        return height - CGFloat(fraction / maxF) * (height - 6)
-    }
-
     private func linePath(in size: CGSize) -> Path {
         var path = Path()
-        guard !fractions.isEmpty else { return path }
-        path.move(to: CGPoint(x: xPos(0, width: size.width),
-                              y: yPos(fractions[0], height: size.height)))
-        for i in 1..<fractions.count {
-            let x = xPos(i, width: size.width)
-            let y = yPos(fractions[i], height: size.height)
-            let prevX = xPos(i - 1, width: size.width)
-            let prevY = yPos(fractions[i - 1], height: size.height)
-            let cp1 = CGPoint(x: prevX + (x - prevX) * 0.5, y: prevY)
-            let cp2 = CGPoint(x: prevX + (x - prevX) * 0.5, y: y)
-            path.addCurve(to: CGPoint(x: x, y: y), control1: cp1, control2: cp2)
+        guard points.count >= 2 else { return path }
+        path.move(to: CGPoint(x: xScreen(points[0].x, width: size.width),
+                              y: yScreen(points[0].y, height: size.height)))
+        for i in 1..<points.count {
+            let px = xScreen(points[i-1].x, width: size.width)
+            let py = yScreen(points[i-1].y, height: size.height)
+            let cx = xScreen(points[i].x, width: size.width)
+            let cy = yScreen(points[i].y, height: size.height)
+            let cpx = px + (cx - px) * 0.5
+            path.addCurve(to: CGPoint(x: cx, y: cy),
+                          control1: CGPoint(x: cpx, y: py),
+                          control2: CGPoint(x: cpx, y: cy))
         }
         return path
     }
 
     private func areaPath(in size: CGSize) -> Path {
         var path = linePath(in: size)
-        guard !fractions.isEmpty else { return path }
-        path.addLine(to: CGPoint(x: xPos(fractions.count - 1, width: size.width),
-                                 y: size.height))
-        path.addLine(to: CGPoint(x: xPos(0, width: size.width), y: size.height))
+        guard !points.isEmpty else { return path }
+        path.addLine(to: CGPoint(x: xScreen(points.last!.x, width: size.width), y: size.height))
+        path.addLine(to: CGPoint(x: xScreen(points.first!.x, width: size.width), y: size.height))
         path.closeSubpath()
         return path
-    }
-
-    private func dots(in size: CGSize) -> some View {
-        ForEach(Array(fractions.enumerated()), id: \.offset) { i, f in
-            if f > 0 {
-                Circle()
-                    .fill(bucketColor(i))
-                    .frame(width: 6, height: 6)
-                    .offset(x: xPos(i, width: size.width) - 3,
-                            y: yPos(f, height: size.height) - 3)
-            }
-        }
     }
 
     private func gridLines(in size: CGSize) -> some View {
@@ -270,7 +279,54 @@ private struct EloAreaGraph: View {
         .stroke(Color.secondary.opacity(0.08), lineWidth: 0.5)
     }
 
-    // MARK: - Gradients (macOS 11 kompatibel — kein LinearGradient über stops mit Color)
+    // Vertical markers for the two compared images
+    private func eloMarkers(in size: CGSize) -> some View {
+        let pairs: [(Double, Color)] = [
+            leftElo.map  { ($0, Color.accentColor) },
+            rightElo.map { ($0, Color.orange) }
+        ].compactMap { $0 }
+        return ForEach(Array(pairs.enumerated()), id: \.offset) { _, pair in
+            let (elo, color) = pair
+            let xp = xScreen(elo, width: size.width)
+            // Density at this ELO for the dot y-position (interpolate nearest point)
+            let density = nearestDensity(for: elo)
+            let yp = yScreen(density, height: size.height)
+            Path { p in
+                p.move(to:    CGPoint(x: xp, y: size.height))
+                p.addLine(to: CGPoint(x: xp, y: yp))
+            }
+            .stroke(color.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+                .offset(x: xp - 3.5, y: yp - 3.5)
+        }
+    }
+
+    private func nearestDensity(for elo: Double) -> Double {
+        guard !points.isEmpty else { return 0 }
+        let nearest = points.min(by: { abs($0.x - elo) < abs($1.x - elo) })
+        return nearest?.y ?? 0
+    }
+
+    // MARK: - X-Axis
+
+    private var xAxisLabels: some View {
+        // Show 6 evenly-spaced ELO tick labels across the range
+        let ticks = 6
+        let step = xRange / Double(ticks - 1)
+        let labels = (0..<ticks).map { Int((xMin + Double($0) * step).rounded()) }
+        return HStack(spacing: 0) {
+            ForEach(labels, id: \.self) { v in
+                Text("\(v)")
+                    .font(.system(size: 7, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.55))
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    // MARK: - Gradients
 
     private var areaGradient: LinearGradient {
         LinearGradient(
@@ -286,16 +342,5 @@ private struct EloAreaGraph: View {
                                         Color(red: 0.5, green: 0.85, blue: 0.5), .green, .accentColor]),
             startPoint: .leading, endPoint: .trailing
         )
-    }
-
-    private func bucketColor(_ i: Int) -> Color {
-        switch i {
-        case 0: return .red
-        case 1: return .orange
-        case 2: return .yellow
-        case 3: return Color(red: 0.5, green: 0.85, blue: 0.5)
-        case 4: return .green
-        default: return .accentColor
-        }
     }
 }

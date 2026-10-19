@@ -2,6 +2,15 @@
 
 ---
 
+## 1.21.3
+**Feature — ELO-Kurve mit echten Datenpunkten (KDE)**
+
+- ELO-Verteilungsdiagramm zeigt jetzt eine Kernel-Density-Estimation (Gauß-Kernel, Scott's Bandwidth) über alle tatsächlichen ELO-Werte der Bibliothek — statt 6 fixer Buckets eine glatte, datengetreue Dichtefunktion
+- X-Achse zeigt den realen ELO-Bereich der Bibliothek mit 6 gleichmäßig verteilten Tick-Labels
+- Zwei vertikale Marker (blau = links, orange = rechts) zeigen wo die aktuell verglichenen Bilder im Spektrum liegen, mit Punkt auf der Kurve
+
+---
+
 ## 1.21.2
 **Bugfix — Bibliothek zeigt nicht alle Bilder**
 
