@@ -2,6 +2,13 @@
 
 ---
 
+## 1.20.1
+**Bugfix — App-Start-Crash nach Motiverkennung-Feature**
+
+- Deadlock behoben: `loadMotifCache()` rief `queue.sync` auf, obwohl `open()` bereits innerhalb von `queue.sync` lief → `dispatch_sync`-Deadlock (SIGILL) beim ersten Start
+
+---
+
 ## 1.20.0
 **Feature — Automatische Motiverkennung + ELO als Intelligenter-Ordner-Filter**
 
