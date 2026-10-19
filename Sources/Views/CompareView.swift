@@ -139,13 +139,9 @@ struct CompareView: View {
         let leftElo  = viewModel.compareLeftDocument?.elo
         let rightElo = viewModel.compareRightDocument?.elo
         let pts = Self.kdePoints(elos: elos)
-        return EloAreaGraph(points: pts, leftElo: leftElo, rightElo: rightElo) { tappedElo in
-            // Find the image with the closest ELO to the tap position
-            guard let nearest = docs.min(by: { abs($0.elo - tappedElo) < abs($1.elo - tappedElo) }),
-                  let idx = viewModel.collectionIndex(for: nearest) else { return }
+        return EloAreaGraph(points: pts, leftElo: leftElo, rightElo: rightElo) { lo, hi in
             viewModel.stopCompareMode()
-            viewModel.collection.select(index: idx)
-            viewModel.loadCurrentImage()
+            viewModel.navSelection = .eloRange(lo, hi)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
@@ -213,9 +209,11 @@ private struct EloAreaGraph: View {
     let points: [(x: Double, y: Double)]   // KDE sample points, sorted by x
     let leftElo:  Double?
     let rightElo: Double?
-    let onTap: (Double) -> Void
+    let onSelectRange: (Double, Double) -> Void   // (loElo, hiElo)
 
-    @State private var hoverX: CGFloat? = nil   // screen x of hover cursor
+    @State private var hoverX:    CGFloat? = nil
+    @State private var dragStartX: CGFloat? = nil
+    @State private var dragEndX:   CGFloat? = nil
 
     var body: some View {
         VStack(spacing: 4) {
@@ -227,19 +225,29 @@ private struct EloAreaGraph: View {
                     linePath(in: geo.size)
                         .stroke(lineGradient, style: StrokeStyle(lineWidth: 2, lineJoin: .round))
                     eloMarkers(in: geo.size)
+                    rangeSelection(in: geo.size)
                     hoverCursor(in: geo.size)
                 }
                 .contentShape(Rectangle())
                 .onHover { inside in
-                    if inside { NSCursor.pointingHand.push() } else { NSCursor.pop(); hoverX = nil }
+                    if inside { NSCursor.crosshair.push() } else { NSCursor.pop(); hoverX = nil }
                 }
                 .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { v in hoverX = max(0, min(v.location.x, geo.size.width)) }
-                        .onEnded   { v in
-                            let elo = eloAt(screenX: v.location.x, width: geo.size.width)
-                            onTap(elo)
-                            hoverX = nil
+                    DragGesture(minimumDistance: 3)
+                        .onChanged { v in
+                            if dragStartX == nil { dragStartX = max(0, min(v.startLocation.x, geo.size.width)) }
+                            dragEndX = max(0, min(v.location.x, geo.size.width))
+                            hoverX = dragEndX
+                        }
+                        .onEnded { v in
+                            let start = dragStartX ?? 0
+                            let end   = max(0, min(v.location.x, geo.size.width))
+                            let loElo = eloAt(screenX: min(start, end), width: geo.size.width)
+                            let hiElo = eloAt(screenX: max(start, end), width: geo.size.width)
+                            dragStartX = nil; dragEndX = nil; hoverX = nil
+                            // Minimum range of 20 ELO so a near-click still selects something
+                            let margin = max((hiElo - loElo) < 20 ? 10 : 0, 0.0)
+                            onSelectRange(loElo - margin, hiElo + margin)
                         }
                 )
             }
@@ -325,6 +333,36 @@ private struct EloAreaGraph: View {
                 .fill(color)
                 .frame(width: 7, height: 7)
                 .offset(x: xp - 3.5, y: yp - 3.5)
+        }
+    }
+
+    private func rangeSelection(in size: CGSize) -> some View {
+        Group {
+            if let start = dragStartX, let end = dragEndX {
+                let lo = min(start, end)
+                let hi = max(start, end)
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.15))
+                    .frame(width: max(hi - lo, 1), height: size.height)
+                    .position(x: lo + (hi - lo) / 2, y: size.height / 2)
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.7))
+                    .frame(width: 1.5, height: size.height)
+                    .position(x: lo, y: size.height / 2)
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.7))
+                    .frame(width: 1.5, height: size.height)
+                    .position(x: hi, y: size.height / 2)
+                // ELO labels at edges
+                Text("\(Int(eloAt(screenX: lo, width: size.width).rounded()))")
+                    .font(.system(size: 7, design: .monospaced))
+                    .foregroundColor(.accentColor)
+                    .position(x: lo + 18, y: 8)
+                Text("\(Int(eloAt(screenX: hi, width: size.width).rounded()))")
+                    .font(.system(size: 7, design: .monospaced))
+                    .foregroundColor(.accentColor)
+                    .position(x: hi - 18, y: 8)
+            }
         }
     }
 

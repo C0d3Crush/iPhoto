@@ -2,6 +2,16 @@
 
 ---
 
+## 1.21.5
+**Feature — ELO-Bereich per Drag auswählen → gefilterter Bilder-View**
+
+- Drag auf der ELO-Kurve im Vergleichsmodus wählt einen ELO-Bereich aus (blaues Highlight + Bereichsgrenzen als Labels)
+- Loslassen beendet den Vergleich und öffnet einen gefilterten Grid-View mit nur den Bildern im gewählten ELO-Bereich
+- Neues `NavSelection.eloRange(min, max)` als vollwertige Navigation — Sortierung, Stacking, alle Grid-Funktionen funktionieren normal
+- Banner am oberen Rand zeigt "ELO 1450–1550 · 23 Bilder" mit ×-Button zum Zurückkehren zur Bibliothek
+
+---
+
 ## 1.21.4
 **Feature — ELO-Kurve klickbar: Navigiert zum nächsten Bild**
 

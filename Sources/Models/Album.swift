@@ -61,4 +61,5 @@ enum NavSelection: Hashable {
     case underexposed
     case overexposed
     case closedEyes
+    case eloRange(Double, Double)   // min (inclusive) … max (inclusive)
 }

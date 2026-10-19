@@ -29,6 +29,9 @@ struct LibraryFullGridView: View {
                 }
             } else {
                     ScrollView {
+                        if case .eloRange(let lo, let hi) = viewModel.navSelection {
+                            eloRangeBanner(lo: lo, hi: hi)
+                        }
                         LazyVGrid(columns: columns, spacing: 8) {
                             ForEach(viewModel.visibleDocuments, id: \.id) { doc in
                                 let idx = viewModel.collectionIndex(for: doc) ?? 0
@@ -108,6 +111,27 @@ struct LibraryFullGridView: View {
         let colSpacing: CGFloat = 8
         let cols = max(1, Int((clipWidth - 24 + colSpacing) / (itemWidth + colSpacing)))
         scroller.centerRow(position: pos, count: count, columns: cols, verticalPadding: 12)
+    }
+
+    private func eloRangeBanner(lo: Double, hi: Double) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .foregroundColor(.accentColor)
+            Text("ELO \(Int(lo.rounded())) – \(Int(hi.rounded()))")
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            Text("· \(viewModel.visibleDocuments.count) Bilder")
+                .foregroundColor(.secondary)
+            Spacer()
+            Button(action: { viewModel.navSelection = .library }) {
+                Label("Alle Bilder", systemImage: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("Filterung aufheben")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.controlBackgroundColor))
     }
 
     private func openDetail(at index: Int) {

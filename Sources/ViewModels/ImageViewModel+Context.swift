@@ -148,6 +148,8 @@ extension ImageViewModel {
         case .closedEyes:
             let ids = Set(quality.closedEyeDocuments.map { $0.id })
             filtered = docs.filter { ids.contains($0.id) }
+        case .eloRange(let lo, let hi):
+            filtered = docs.filter { $0.elo >= lo && $0.elo <= hi }
         }
         return applyStacking(to: applySortCriterion(to: filtered))
     }
