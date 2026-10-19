@@ -87,22 +87,22 @@ extension CatalogStore {
         }
     }
 
+    // Wird nur aus open() heraus aufgerufen — open() läuft bereits innerhalb von
+    // queue.sync, daher hier kein erneutes queue.sync (sonst Deadlock).
     func loadMotifCache() {
-        queue.sync {
-            let stmt = prepare("SELECT path, motif_tags FROM images WHERE motif_scanned=1")
-            var rows: [(String, String?)] = []
-            while step(stmt) == SQLITE_ROW {
-                let path = String(cString: sqlite3_column_text(stmt, 0))
-                let tags: String? = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil
-                    : String(cString: sqlite3_column_text(stmt, 1))
-                rows.append((path, tags))
-            }
-            sqlite3_finalize(stmt)
-            Self.motifCacheLock.lock()
-            for (path, raw) in rows {
-                Self.motifCache[path] = raw.map { $0.isEmpty ? [] : $0.split(separator: ",").map(String.init) } ?? []
-            }
-            Self.motifCacheLock.unlock()
+        let stmt = prepare("SELECT path, motif_tags FROM images WHERE motif_scanned=1")
+        var rows: [(String, String?)] = []
+        while step(stmt) == SQLITE_ROW {
+            let path = String(cString: sqlite3_column_text(stmt, 0))
+            let tags: String? = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? nil
+                : String(cString: sqlite3_column_text(stmt, 1))
+            rows.append((path, tags))
         }
+        sqlite3_finalize(stmt)
+        Self.motifCacheLock.lock()
+        for (path, raw) in rows {
+            Self.motifCache[path] = raw.map { $0.isEmpty ? [] : $0.split(separator: ",").map(String.init) } ?? []
+        }
+        Self.motifCacheLock.unlock()
     }
 }
