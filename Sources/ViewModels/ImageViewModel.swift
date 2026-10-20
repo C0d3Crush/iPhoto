@@ -120,7 +120,7 @@ class ImageViewModel: ObservableObject {
     var stackCounts: [UUID: Int] = [:]
     var stackLeaderByMember: [UUID: UUID] = [:]
     var stackMembersByLeader: [UUID: [UUID]] = [:]
-    @Published var bestInStackIDs: Set<UUID> = []
+    var bestInStackIDs: Set<UUID> = []
 
     // Smart-Folder-Zähler: Live-Filtern aller Dokumente (inkl. SQLite-Fallbacks)
     // kostete ~480 ms pro Render-Pass — daher debounced im Hintergrund berechnet.

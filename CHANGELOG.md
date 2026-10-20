@@ -2,6 +2,14 @@
 
 ---
 
+## 1.25.3
+**Bugfix — Regression SIGSEGV/SIGILL durch @Published in SwiftUI-Render-Pfad behoben**
+
+- `bestInStackIDs` war fälschlicherweise `@Published` — `applyStacking()` wurde von `visibleDocuments` direkt aus einem SwiftUI `body` aufgerufen, dabei feuerte `objectWillChange` mitten im Render → "Modifying state during view update" → SIGSEGV/SIGILL bei jeder Navigation nach längerem Gebrauch
+- Fix: `@Published` entfernt; der Wert wird in `applyStacking()` vor dem Return gesetzt, die View liest ihn im selben Render-Zyklus korrekt
+
+---
+
 ## 1.25.2
 **Feature — Verwerfen-Button in Anpassungen**
 
