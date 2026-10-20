@@ -172,6 +172,7 @@ extension ImageViewModel {
             stackCounts = [:]
             stackLeaderByMember = [:]
             stackMembersByLeader = [:]
+            bestInStackIDs = []
             return sorted
         }
         let items = zip(sorted, seqs).map {
@@ -181,6 +182,7 @@ extension ImageViewModel {
         stackCounts = r.counts
         stackLeaderByMember = r.leaderByMember
         stackMembersByLeader = r.membersByLeader
+        bestInStackIDs = computeBestInStackIDs(from: sorted, membersByLeader: r.membersByLeader)
         guard !r.counts.isEmpty else { return sorted }
 
         let byID = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -196,12 +198,11 @@ extension ImageViewModel {
         expandedStacks.contains(doc.url.path)
     }
 
-    /// Returns the set of document IDs that are the sharpest image in their stack group.
-    /// Only marked if the stack has ≥2 scanned members and the best score is >1.15× the second-best.
-    var bestInStackIDs: Set<UUID> {
+    private func computeBestInStackIDs(from docs: [ImageDocument],
+                                        membersByLeader: [UUID: [UUID]]) -> Set<UUID> {
         var result = Set<UUID>()
-        let byID = Dictionary(collection.documents.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        for (_, memberIDs) in stackMembersByLeader {
+        let byID = Dictionary(docs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        for (_, memberIDs) in membersByLeader {
             guard memberIDs.count >= 2 else { continue }
             let scanned = memberIDs.compactMap { byID[$0] }.filter { ($0.blurScore ?? 0) > 0 }
             guard scanned.count >= 2 else { continue }

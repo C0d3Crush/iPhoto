@@ -2,6 +2,14 @@
 
 ---
 
+## 1.25.1
+**Bugfix — SIGSEGV-Crash bei Bildnavigation behoben**
+
+- `bestInStackIDs` war eine computed property die pro SwiftUI-Grid-Zelle ein `Dictionary` über alle 2000+ Dokumente neu aufbaute (O(N) pro Zelle, O(N²) pro Render-Frame) — das führte unter Speicherdruck zu SIGSEGV auf dem Main-Thread beim Bildwechsel
+- Jetzt cached `@Published var bestInStackIDs` — wird einmalig in `applyStacking()` berechnet und nur bei Stapel-Erkennung aktualisiert
+
+---
+
 ## 1.25.0
 **Feature — CLI-Support für alle Plugins + Plugin-Testsuite**
 
