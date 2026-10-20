@@ -2,6 +2,15 @@
 
 ---
 
+## 1.24.1
+**Bugfix/Feature — Bildvergleich standardmäßig deaktiviert, in Einstellungen aktivierbar**
+
+- Der Bildvergleichs-Modus (ELO-Duell) ist jetzt standardmäßig ausgeblendet
+- In „Einstellungen → Funktionen" kann er dauerhaft aktiviert werden (UserDefaults-persistent)
+- Deaktivieren beendet einen laufenden Vergleich sofort und blendet den Sidebar-Eintrag aus
+
+---
+
 ## 1.24.0
 **Feature — Draft-Pipeline, Smart-Folder-Regelbäume & normalisierte Vignette**
 

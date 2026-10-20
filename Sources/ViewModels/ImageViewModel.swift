@@ -28,6 +28,9 @@ class ImageViewModel: ObservableObject {
     // Detail-Ansicht aus Qualitäts-Views (Unscharf/Belichtung) heraus: gleiche
     // Logik wie showingLibraryDetail, aber für navSelection = .blurry/.under-/.overexposed.
     @Published var qualityDetailActive: Bool = false
+    @Published var compareFeatureEnabled: Bool = UserDefaults.standard.bool(forKey: "feature.compareEnabled") {
+        didSet { UserDefaults.standard.set(compareFeatureEnabled, forKey: "feature.compareEnabled") }
+    }
     @Published var gridThumbnailSize: CGFloat = 160
     @Published var isStartupLoading: Bool = true                 { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var sortCriterion: SortCriterion = .filenameAsc

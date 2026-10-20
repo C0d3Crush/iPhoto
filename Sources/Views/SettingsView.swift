@@ -12,6 +12,8 @@ struct SettingsView: View {
                 .tabItem { Label("Qualität", systemImage: "wand.and.stars") }
             backupTab
                 .tabItem { Label("Backup", systemImage: "externaldrive.badge.checkmark") }
+            featuresTab
+                .tabItem { Label("Funktionen", systemImage: "slider.horizontal.3") }
         }
         .frame(width: 520, height: 420)
     }
@@ -91,6 +93,27 @@ struct SettingsView: View {
                 }
                 .pickerStyle(RadioGroupPickerStyle())
                 .labelsHidden()
+            }
+        }
+        .padding(20)
+    }
+
+    private var featuresTab: some View {
+        Form {
+            Section(header: Text("Experimentelle Funktionen").font(.headline)) {
+                Toggle(isOn: Binding(
+                    get: { viewModel.compareFeatureEnabled },
+                    set: { viewModel.compareFeatureEnabled = $0
+                           if !$0 && viewModel.compare.active { viewModel.stopCompareMode() }
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Bildvergleich (ELO-Rating)")
+                        Text("Aktiviert den Duell-Modus in der Seitenleiste: zwei Bilder werden nebeneinander verglichen und ein ELO-Score ermittelt.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
         }
         .padding(20)
