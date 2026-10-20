@@ -2,6 +2,17 @@
 
 ---
 
+## 1.23.0
+**Feature — OkLab-Farbanpassungen: Lebendigkeit & Farbton via Rust-3D-LUT**
+
+- Zwei neue Schieberegler im Anpassungspanel: „Lebendigkeit" (−1…+1) und „Farbton" (−180°…+180°)
+- Basiert auf dem perceptuellen OkLab-Farbraum (Björn Ottosson 2020) für natürliche, artefaktfreie Anpassungen
+- Rust generiert eine 32³-Eintrags-3D-LUT (`iphoto_oklab_lut`), die als `CIColorCube`-Filter angewendet wird
+- Lebendigkeit erhöht die Sättigung selektiv: ungesättigte Farben werden stärker angehoben als bereits kräftige
+- Farbton rotiert den (a,b)-Vektor im OkLab-Raum für gleichmäßige, helligkeitsneutrale Verschiebungen
+
+---
+
 ## 1.22.0
 **Feature — "Best of Burst": Krone-Badge für das schärfste Bild im Stapel**
 
