@@ -1,6 +1,7 @@
 mod blur;
 mod exposure;
 mod hotpixel;
+mod oklab;
 mod phash;
 
 use hotpixel::HotPixel;
@@ -90,6 +91,16 @@ pub extern "C" fn iphoto_hotpixel_find(
 pub extern "C" fn iphoto_hotpixel_free(ptr: *mut HotPixel, count: u32) {
     if ptr.is_null() { return; }
     unsafe { drop(Vec::from_raw_parts(ptr, count as usize, count as usize)); }
+}
+
+// ── OkLab LUT ─────────────────────────────────────────────────────────────────
+
+#[no_mangle]
+pub extern "C" fn iphoto_oklab_lut(vibrance: f32, hue_deg: f32, out: *mut f32, size: u32) {
+    if out.is_null() || size == 0 { return; }
+    let n = (size as usize).pow(3) * 4;
+    let slice = unsafe { std::slice::from_raw_parts_mut(out, n) };
+    oklab::build_lut(vibrance, hue_deg, slice, size as usize);
 }
 
 #[no_mangle]

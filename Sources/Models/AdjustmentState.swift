@@ -5,6 +5,8 @@ struct AdjustmentState: Codable, Equatable {
     var brightness:  Double = 0.0
     var contrast:    Double = 1.0
     var saturation:  Double = 1.0
+    var vibrance:    Double = 0.0   // -1…+1 (default 0 = no change)
+    var hue:         Double = 0.0   // -180…+180 degrees (default 0 = no change)
     var warmth:      Double = 0.0
     var tint:        Double = 0.0
     var clarity:     Double = 0.0
@@ -33,7 +35,8 @@ struct AdjustmentState: Codable, Equatable {
     var caAmount:       Double = 0      // 0–100 (chromatic aberration correction)
 
     init(exposure: Double = 0, brightness: Double = 0, contrast: Double = 1,
-         saturation: Double = 1, warmth: Double = 0, tint: Double = 0,
+         saturation: Double = 1, vibrance: Double = 0, hue: Double = 0,
+         warmth: Double = 0, tint: Double = 0,
          clarity: Double = 0, texture: Double = 0, dehaze: Double = 0,
          curvePoints: [CGPoint] = AdjustmentState.defaultCurve,
          curveR: [CGPoint] = AdjustmentState.defaultCurve,
@@ -43,7 +46,8 @@ struct AdjustmentState: Codable, Equatable {
          rotation: Double = 0,
          localAdjustments: [LocalAdjustment] = []) {
         self.exposure = exposure; self.brightness = brightness; self.contrast = contrast
-        self.saturation = saturation; self.warmth = warmth; self.tint = tint
+        self.saturation = saturation; self.vibrance = vibrance; self.hue = hue
+        self.warmth = warmth; self.tint = tint
         self.clarity = clarity; self.texture = texture; self.dehaze = dehaze
         self.curvePoints = curvePoints; self.curveR = curveR
         self.curveG = curveG; self.curveB = curveB

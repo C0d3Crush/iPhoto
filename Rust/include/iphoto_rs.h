@@ -39,6 +39,13 @@ void iphoto_hotpixel_free(IPhotoHotPixel *ptr, uint32_t count);
 void iphoto_mean_std(const float *values, uint32_t count,
                      float *out_mean, float *out_std);
 
+// ── OkLab LUT ────────────────────────────────────────────────────────────────
+// Baut einen 3D-LUT (size³ × 4 floats RGBA) mit Vibrance und Farbton-Rotation.
+// vibrance: −1.0 … +1.0 (selektive Chroma-Verstärkung in OkLab)
+// hue_deg:  −180 … +180 (Farbwinkel-Rotation in OkLCh, Grad)
+// out muss size³×4 floats vorab allokiert sein.
+void iphoto_oklab_lut(float vibrance, float hue_deg, float *out, uint32_t size);
+
 #ifdef __cplusplus
 }
 #endif

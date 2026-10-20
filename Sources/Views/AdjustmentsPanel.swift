@@ -83,6 +83,16 @@ struct AdjustmentsPanel: View {
                                range: 0...2,
                                format: "%.2f")
 
+                        adjRow(label: "Lebendigkeit",
+                               key: \.vibrance,
+                               range: -1...1,
+                               format: "%+.2f")
+
+                        adjRow(label: "Farbton",
+                               key: \.hue,
+                               range: -180...180,
+                               format: "%+.0f°")
+
                         adjRow(label: "Wärme",
                                key: \.warmth,
                                range: -1...1,

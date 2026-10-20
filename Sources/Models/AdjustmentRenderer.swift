@@ -28,6 +28,7 @@ enum AdjustmentRenderer {
         var ci = input
         ci = applyLensCorrections(ci, snap: snap)
         ci = applyToneAndColor(ci, snap: snap, exposureApplied: exposureApplied, wbApplied: wbApplied)
+        ci = applyOkLabAdjustments(ci, snap: snap)
         ci = applyNoiseAndSharpening(ci, snap: snap)
         ci = applyDetailAndHaze(ci, snap: snap)
         ci = applyRGBCurvesLUT(ci, snap: snap)
@@ -234,6 +235,19 @@ enum AdjustmentRenderer {
             if let r = f.outputImage { out = r }
         }
         return out
+    }
+
+    static func applyOkLabAdjustments(_ ci: CIImage, snap: AdjustmentState) -> CIImage {
+        guard snap.vibrance != 0.0 || snap.hue != 0.0 else { return ci }
+        let size = 32
+        var cubeData = [Float](repeating: 0, count: size * size * size * 4)
+        iphoto_oklab_lut(Float(snap.vibrance), Float(snap.hue), &cubeData, UInt32(size))
+        guard let f = CIFilter(name: "CIColorCube") else { return ci }
+        f.setValue(size, forKey: "inputCubeDimension")
+        f.setValue(Data(bytes: cubeData, count: cubeData.count * MemoryLayout<Float>.size) as NSData,
+                   forKey: "inputCubeData")
+        f.setValue(ci, forKey: kCIInputImageKey)
+        return f.outputImage ?? ci
     }
 
     static func applyGeometryAndCrop(_ ci: CIImage, snap: AdjustmentState) -> CIImage {

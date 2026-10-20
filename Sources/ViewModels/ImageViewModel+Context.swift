@@ -203,10 +203,10 @@ extension ImageViewModel {
         let byID = Dictionary(collection.documents.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         for (_, memberIDs) in stackMembersByLeader {
             guard memberIDs.count >= 2 else { continue }
-            let scanned = memberIDs.compactMap { byID[$0] }.filter { $0.blurScore > 0 }
+            let scanned = memberIDs.compactMap { byID[$0] }.filter { ($0.blurScore ?? 0) > 0 }
             guard scanned.count >= 2 else { continue }
-            let sorted = scanned.sorted { $0.blurScore > $1.blurScore }
-            if sorted[0].blurScore / sorted[1].blurScore > 1.15 {
+            let sorted = scanned.sorted { ($0.blurScore ?? 0) > ($1.blurScore ?? 0) }
+            if (sorted[0].blurScore ?? 0) / (sorted[1].blurScore ?? 1) > 1.15 {
                 result.insert(sorted[0].id)
             }
         }
