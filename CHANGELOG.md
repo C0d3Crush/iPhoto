@@ -2,6 +2,16 @@
 
 ---
 
+## 1.22.0
+**Feature — "Best of Burst": Krone-Badge für das schärfste Bild im Stapel**
+
+- Das schärfste Bild in einem Bracketing-/Burst-Stapel erhält ein gelbes Krone-Badge (`crown.fill`) oben rechts im Thumbnail
+- Auswertung basiert auf `blurScore` (Laplacian-Varianz aus `QualityAssessor`): nur gescannte Bilder (`blurScore > 0`) werden berücksichtigt
+- Badge erscheint nur, wenn der Stapel ≥2 gescannte Mitglieder hat **und** das beste Bild mindestens 15 % schärfer ist als das zweitbeste (Ratio > 1,15)
+- Neues computed property `bestInStackIDs: Set<UUID>` in `ImageViewModel+Context`
+
+---
+
 ## 1.21.5
 **Feature — ELO-Bereich per Drag auswählen → gefilterter Bilder-View**
 

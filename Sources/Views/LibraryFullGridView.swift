@@ -43,7 +43,8 @@ struct LibraryFullGridView: View {
                                               isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
                                               onStackToggle: { viewModel.toggleStack(leader: doc) },
                                               isBlurry: q.blur, isUnder: q.under, isOver: q.over,
-                                              isEyesClosed: q.eyes)
+                                              isEyesClosed: q.eyes,
+                                              isBestInStack: viewModel.bestInStackIDs.contains(doc.id))
                                     .frame(width: cellWidth + 8)
                                     .contentShape(Rectangle())
                                     .onAppear { viewModel.requestVisibleThumbnail(at: idx) }

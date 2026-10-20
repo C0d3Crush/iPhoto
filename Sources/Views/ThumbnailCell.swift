@@ -12,6 +12,7 @@ struct ThumbnailCell: View {
     var isUnder:  Bool = false
     var isOver:   Bool = false
     var isEyesClosed: Bool = false
+    var isBestInStack: Bool = false
 
     private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
 
@@ -139,10 +140,18 @@ struct ThumbnailCell: View {
     // aufgibt ("unable to type-check this expression in reasonable time").
     @ViewBuilder
     private var flagAndQualityOverlay: some View {
-        if document.flagStatus != .none || isBlurry || isUnder || isOver || isEyesClosed {
+        if document.flagStatus != .none || isBlurry || isUnder || isOver || isEyesClosed || isBestInStack {
             VStack {
                 HStack(spacing: 3) {
                     Spacer()
+                    if isBestInStack {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.yellow)
+                            .padding(3)
+                            .background(Color.black.opacity(0.55))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                    }
                     if document.flagStatus != .none {
                         Image(systemName: document.flagStatus == .pick ? "flag.fill" : "xmark.circle.fill")
                             .font(.system(size: 10))

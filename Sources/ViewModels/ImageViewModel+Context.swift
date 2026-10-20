@@ -196,6 +196,23 @@ extension ImageViewModel {
         expandedStacks.contains(doc.url.path)
     }
 
+    /// Returns the set of document IDs that are the sharpest image in their stack group.
+    /// Only marked if the stack has ≥2 scanned members and the best score is >1.15× the second-best.
+    var bestInStackIDs: Set<UUID> {
+        var result = Set<UUID>()
+        let byID = Dictionary(collection.documents.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        for (_, memberIDs) in stackMembersByLeader {
+            guard memberIDs.count >= 2 else { continue }
+            let scanned = memberIDs.compactMap { byID[$0] }.filter { $0.blurScore > 0 }
+            guard scanned.count >= 2 else { continue }
+            let sorted = scanned.sorted { $0.blurScore > $1.blurScore }
+            if sorted[0].blurScore / sorted[1].blurScore > 1.15 {
+                result.insert(sorted[0].id)
+            }
+        }
+        return result
+    }
+
     /// Alle Mitglieder (inkl. Anführer), wenn doc der Anführer eines eingeklappten
     /// Stapels ist — Aktionen (Löschen, Bewerten, …) wirken dann auf den ganzen Stapel.
     func collapsedStackMembers(for doc: ImageDocument) -> [ImageDocument]? {
