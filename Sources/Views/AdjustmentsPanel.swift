@@ -193,6 +193,10 @@ struct AdjustmentsPanel: View {
                             Button("Zurücksetzen") { viewModel.resetAdjustments() }
                                 .disabled(isNeutral)
                                 .buttonStyle(PlainButtonStyle())
+                            Button("Verwerfen") { viewModel.revertAdjustments() }
+                                .disabled(isReverted)
+                                .help("Änderungen seit dem letzten Speichern verwerfen")
+                                .buttonStyle(PlainButtonStyle())
                             Spacer()
                             Button("Kopieren") { viewModel.copyAdjustments() }
                                 .disabled(isNeutral)
@@ -216,6 +220,7 @@ struct AdjustmentsPanel: View {
     }
 
     private var isNeutral: Bool { !viewModel.hasActiveAdjustments }
+    private var isReverted: Bool { viewModel.adj.adjustments == viewModel.adj.lastPersisted }
 
     private var hasCropOrRotation: Bool {
         viewModel.adj.adjustments.rotation != 0 ||

@@ -88,6 +88,11 @@ extension ImageViewModel {
         versions.pendingMetadataEntries = nil
     }
 
+    func revertAdjustments() {
+        adj.adjustments = adj.lastPersisted
+        applyAdjustments(hiRes: true)
+    }
+
     func undoAdjustments() {
         guard let prev = adj.history.undo() else { return }
         adj.isUndoRedoing = true

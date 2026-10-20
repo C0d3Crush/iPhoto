@@ -2,6 +2,13 @@
 
 ---
 
+## 1.25.2
+**Feature — Verwerfen-Button in Anpassungen**
+
+- Neuer "Verwerfen"-Button neben "Zurücksetzen": setzt alle Anpassungen auf den zuletzt gespeicherten Stand zurück (nicht auf neutral), deaktiviert wenn keine ungespeicherten Änderungen vorhanden
+
+---
+
 ## 1.25.1
 **Bugfix — SIGSEGV-Crash bei Bildnavigation behoben**
 
