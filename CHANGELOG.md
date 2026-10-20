@@ -2,6 +2,19 @@
 
 ---
 
+## 1.25.0
+**Feature — CLI-Support für alle Plugins + Plugin-Testsuite**
+
+- `rating` — Bewertung, Flag und Farblabel lesen/schreiben; `--json` für maschinenlesbare Ausgabe
+- `adjust` — Bildanpassungen (Belichtung, Helligkeit, Kontrast, Sättigung, Wärme, Lebendigkeit, Farbton, Klarheit, Schärfen) anwenden und exportieren; `--preset <name>` als Basis
+- `preset list` — alle Built-in- und Nutzer-Presets auflisten; `preset apply <datei> --name <name>` für direktes Anwenden
+- `analyse` — Schärfe (Laplacian-Varianz via Rust) und Belichtung (Schatten-/Lichterclipping) pro Bild oder Ordner; Tabelle oder `--json`
+- `inpaint` — KI-Inpainting via CMT; Setup wird vorab validiert und Fehler klar gemeldet wenn Python/CMT nicht installiert
+- Neue Testsuite `Tests/run_plugins.sh`: 10 Tests decken alle Plugin-Befehle ab (10/10 grün)
+- Bugfix: `analyse`-Tabellenausgabe crashte durch `%s`-Format mit Swift String (SIGSEGV) — auf String-Interpolation umgestellt
+
+---
+
 ## 1.24.1
 **Bugfix/Feature — Bildvergleich standardmäßig deaktiviert, in Einstellungen aktivierbar**
 

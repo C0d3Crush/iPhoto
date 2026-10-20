@@ -1,0 +1,194 @@
+#!/bin/bash
+# Tests für alle iPhoto-Inspector-CLI-Plugins
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BIN="$ROOT/build/iphoto-cli"
+TMPDIR="$(mktemp -d)"
+trap "rm -rf $TMPDIR" EXIT
+
+PASS=0
+FAIL=0
+
+pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
+fail() { echo "  FAIL: $1 — $2"; FAIL=$((FAIL + 1)); }
+
+if [ ! -x "$BIN" ]; then
+    echo "Fehler: iphoto-cli nicht gefunden. Zuerst ./build.sh ausführen."
+    exit 1
+fi
+
+echo ""
+echo "=== iPhoto CLI — Plugin-Tests ==="
+echo "Binary : $BIN"
+echo "Tmpdir : $TMPDIR"
+echo ""
+
+# Alle katalogzugreifenden Befehle verwenden eine temporäre Test-DB
+export IPHOTO_CATALOG_DB="$TMPDIR/test_catalog.db"
+
+# ---------------------------------------------------------------------------
+# Test-PNG erstellen: minimales gültiges 4×4 Bild (analog test_formats.sh)
+# ---------------------------------------------------------------------------
+INPUT_PNG="$TMPDIR/test_input.png"
+python3 - <<'EOF' > "$INPUT_PNG"
+import struct, zlib, sys
+
+def chunk(name, data):
+    crc = zlib.crc32(name + data) & 0xffffffff
+    return struct.pack('>I', len(data)) + name + data + struct.pack('>I', crc)
+
+sig  = b'\x89PNG\r\n\x1a\n'
+# 4×4 RGB image
+ihdr = chunk(b'IHDR', struct.pack('>IIBBBBB', 4, 4, 8, 2, 0, 0, 0))
+# 4 rows, each: filter byte (0) + 4×RGB (12 bytes) = 13 bytes per row
+row  = b'\x00' + b'\xff\x80\x00' * 4  # filter=None, orange pixels
+raw  = row * 4
+idat = chunk(b'IDAT', zlib.compress(raw))
+iend = chunk(b'IEND', b'')
+sys.stdout.buffer.write(sig + ihdr + idat + iend)
+EOF
+
+if [ ! -f "$INPUT_PNG" ] || [ ! -s "$INPUT_PNG" ]; then
+    echo "Fehler: Test-PNG konnte nicht erstellt werden."
+    exit 1
+fi
+echo "Test-PNG erstellt: $INPUT_PNG"
+echo ""
+
+# ---------------------------------------------------------------------------
+# 1. rating — set 4, read back, check "4"
+# ---------------------------------------------------------------------------
+echo "--- Rating ---"
+RATING_OUT=$("$BIN" rating "$INPUT_PNG" --set 4 2>&1)
+if echo "$RATING_OUT" | grep -q "4"; then
+    pass "rating --set 4 (Output enthält '4')"
+else
+    fail "rating --set 4" "Output enthält keine '4': $RATING_OUT"
+fi
+
+# 2. rating --json — valid JSON mit "rating"
+RATING_JSON=$("$BIN" rating "$INPUT_PNG" --json 2>&1)
+if echo "$RATING_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'rating' in d" 2>/dev/null; then
+    pass "rating --json (valides JSON mit 'rating')"
+else
+    fail "rating --json" "Kein valides JSON oder fehlendes 'rating'-Feld: $RATING_JSON"
+fi
+
+# Reset auf 0
+"$BIN" rating "$INPUT_PNG" --set 0 > /dev/null 2>&1 || true
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 3. adjust --exposure — output file exists and is non-empty
+# ---------------------------------------------------------------------------
+echo "--- Adjust ---"
+ADJ_OUT="$TMPDIR/adjusted_exposure.png"
+if "$BIN" adjust "$INPUT_PNG" --output "$ADJ_OUT" --format png --exposure 0.3 2>/dev/null; then
+    if [ -f "$ADJ_OUT" ] && [ -s "$ADJ_OUT" ]; then
+        pass "adjust --exposure 0.3 (Ausgabedatei vorhanden und nicht leer)"
+    else
+        fail "adjust --exposure 0.3" "Ausgabedatei fehlt oder leer"
+    fi
+else
+    fail "adjust --exposure 0.3" "CLI-Fehler beim Ausführen"
+fi
+
+# 4. adjust --preset Chrome
+ADJ_PRESET_OUT="$TMPDIR/adjusted_preset.jpg"
+if "$BIN" adjust "$INPUT_PNG" --output "$ADJ_PRESET_OUT" --format jpeg --preset Chrome 2>/dev/null; then
+    if [ -f "$ADJ_PRESET_OUT" ] && [ -s "$ADJ_PRESET_OUT" ]; then
+        pass "adjust --preset Chrome (Ausgabedatei vorhanden)"
+    else
+        fail "adjust --preset Chrome" "Ausgabedatei fehlt oder leer"
+    fi
+else
+    fail "adjust --preset Chrome" "CLI-Fehler beim Ausführen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 5. preset list — contains "Chrome"
+# ---------------------------------------------------------------------------
+echo "--- Preset ---"
+PRESET_LIST=$("$BIN" preset list 2>&1)
+if echo "$PRESET_LIST" | grep -qi "chrome"; then
+    pass "preset list (enthält 'Chrome')"
+else
+    fail "preset list" "Output enthält kein 'Chrome': $PRESET_LIST"
+fi
+
+# 6. preset list --json — valid JSON array
+PRESET_JSON=$("$BIN" preset list --json 2>&1)
+if echo "$PRESET_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst, list) and len(lst) > 0" 2>/dev/null; then
+    pass "preset list --json (valides JSON-Array)"
+else
+    fail "preset list --json" "Kein valides JSON-Array: $PRESET_JSON"
+fi
+
+# 7. preset apply "Chrome"
+PRESET_APPLY_OUT="$TMPDIR/preset_applied.jpg"
+if "$BIN" preset apply "$INPUT_PNG" --name Chrome --output "$PRESET_APPLY_OUT" --format jpeg 2>/dev/null; then
+    if [ -f "$PRESET_APPLY_OUT" ] && [ -s "$PRESET_APPLY_OUT" ]; then
+        pass "preset apply Chrome (Ausgabedatei vorhanden)"
+    else
+        fail "preset apply Chrome" "Ausgabedatei fehlt oder leer"
+    fi
+else
+    fail "preset apply Chrome" "CLI-Fehler beim Ausführen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 8. analyse single file — output contains blur score (numeric value)
+# ---------------------------------------------------------------------------
+echo "--- Analyse ---"
+ANALYSE_OUT=$("$BIN" analyse "$INPUT_PNG" 2>&1)
+# Output should contain a float number (the blur score)
+if echo "$ANALYSE_OUT" | grep -qE '[0-9]+\.[0-9]+'; then
+    pass "analyse single (Output enthält Blur-Score)"
+else
+    fail "analyse single" "Output enthält keinen numerischen Blur-Score: $ANALYSE_OUT"
+fi
+
+# 9. analyse --json — valid JSON array
+ANALYSE_JSON=$("$BIN" analyse "$INPUT_PNG" --json 2>&1)
+if echo "$ANALYSE_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst, list) and len(lst) > 0 and 'blur_score' in lst[0]" 2>/dev/null; then
+    pass "analyse --json (valides JSON-Array mit 'blur_score')"
+else
+    fail "analyse --json" "Kein valides JSON-Array oder fehlendes 'blur_score': $ANALYSE_JSON"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 10. inpaint graceful failure — nonexistent python path → exit code 1 + error msg
+# ---------------------------------------------------------------------------
+echo "--- Inpaint ---"
+INPAINT_OUT="$TMPDIR/inpainted_result"
+INPAINT_STDERR=$("$BIN" inpaint "$INPUT_PNG" --output "$INPAINT_OUT" \
+    --python /nichtexistent/python99 \
+    --cmt /nichtexistent/cmt \
+    --checkpoint /nichtexistent/checkpoints 2>&1) || INPAINT_EXIT=$?
+
+if [ "${INPAINT_EXIT:-0}" -ne 0 ]; then
+    if echo "$INPAINT_STDERR" | grep -qi "fehler\|error\|nicht gefunden\|not found"; then
+        pass "inpaint graceful failure (Exitcode != 0 + Fehlermeldung)"
+    else
+        fail "inpaint graceful failure" "Exitcode != 0, aber keine verständliche Fehlermeldung: $INPAINT_STDERR"
+    fi
+else
+    fail "inpaint graceful failure" "Hätte fehlschlagen sollen (Exitcode 0 zurückgegeben)"
+fi
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+echo ""
+echo "=============================="
+echo "Ergebnis: $PASS bestanden, $FAIL fehlgeschlagen"
+echo "=============================="
+[ $FAIL -eq 0 ] && exit 0 || exit 1

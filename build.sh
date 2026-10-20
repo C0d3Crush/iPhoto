@@ -167,12 +167,36 @@ CLI_SOURCES="\
     $ROOT/Sources/Models/HDRMerger.swift \
     $ROOT/Sources/Models/HotPixelResult.swift \
     $ROOT/Sources/Models/MetadataEntry.swift \
+    $ROOT/Sources/Models/AdjustmentState.swift \
+    $ROOT/Sources/Models/AdjustmentHistory.swift \
+    $ROOT/Sources/Models/LocalAdjustment.swift \
+    $ROOT/Sources/Models/Preset.swift \
+    $ROOT/Sources/Models/ImageDocument.swift \
+    $ROOT/Sources/Models/DetectedVolume.swift \
+    $ROOT/Sources/Models/WatchedFolder.swift \
+    $ROOT/Sources/Models/Album.swift \
+    $ROOT/Sources/Models/RatingStore.swift \
+    $ROOT/Sources/Models/StackDetector.swift \
+    $ROOT/Sources/Models/SmartFolder.swift \
     $ROOT/Sources/Utilities/Data+Extensions.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \
     $ROOT/Sources/Utilities/Log.swift \
     $ROOT/Sources/Utilities/BookmarkStore.swift \
     $ROOT/Sources/Utilities/HotPixelAnalyzer.swift \
     $ROOT/Sources/Utilities/MetadataService.swift \
+    $ROOT/Sources/Utilities/BlurDetector.swift \
+    $ROOT/Sources/Utilities/ExposureDetector.swift \
+    $ROOT/Sources/Utilities/InpaintProcessor.swift \
+    $ROOT/Sources/Utilities/CatalogStore.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Adjustments.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Albums.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Backup.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Motifs.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Quality.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Ratings.swift \
+    $ROOT/Sources/Utilities/SmartFolderFileSync.swift \
+    $ROOT/Sources/Utilities/VersionStore.swift \
+    $ROOT/Sources/Utilities/EloRating.swift \
     $ROOT/Sources/CLI/main.swift"
 
 # Überspringen, wenn Binary aktueller als alle CLI-Quellen ist
