@@ -2,6 +2,16 @@
 
 ---
 
+## 1.24.0
+**Feature — Draft-Pipeline, Smart-Folder-Regelbäume & normalisierte Vignette**
+
+- **Sofortiges Hi-Res nach Slider-Loslassen**: Anpassungs-Schieberegler lösen den Hi-Res-Render (1500 px) direkt beim Loslassen aus — nicht erst nach 250 ms Wartezeit
+- **Smart-Folder-Regelbäume**: Intelligente Ordner können jetzt andere Intelligente Ordner als Kriterium referenzieren (Attribut „Intelligenter Ordner") — ermöglicht verschachtelte Filter-Hierarchien
+- **Zykluserkennung**: Gegenseitige Referenzen zwischen Intelligenten Ordnern werden erkannt und sicher abgebrochen (kein Endlos-Rekursion-Absturz)
+- **Vignetten-Radius**: Neuer Schieberegler „Vignetten-Radius" (0,30–1,00, Wert relativ zur Bilddiagonalen) erscheint, sobald eine Vignette aktiv ist — der Radius ist bildgrößenunabhängig gespeichert
+
+---
+
 ## 1.23.0
 **Feature — OkLab-Farbanpassungen: Lebendigkeit & Farbton via Rust-3D-LUT**
 

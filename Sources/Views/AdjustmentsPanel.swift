@@ -170,6 +170,13 @@ struct AdjustmentsPanel: View {
                                range: -100...100,
                                format: "%+.0f")
 
+                        if viewModel.adj.adjustments.vignetteAmount != 0 {
+                            adjRow(label: "  Vignetten-Radius",
+                                   key: \.vignetteRadius,
+                                   range: 0.3...1.0,
+                                   format: "%.2f")
+                        }
+
                         adjRow(label: "Verzeichnung",
                                key: \.distortion,
                                range: -100...100,
@@ -250,8 +257,10 @@ struct AdjustmentsPanel: View {
                 Spacer()
                 AdjustmentValueField(value: value, format: format)
             }
-            Slider(value: value, in: range)
-                .frame(maxWidth: .infinity)
+            Slider(value: value, in: range) { editing in
+                if !editing { viewModel.applyAdjustments(hiRes: true) }
+            }
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity)
         .opacity(bypassed ? 0.5 : 1.0)

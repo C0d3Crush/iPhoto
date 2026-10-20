@@ -298,6 +298,10 @@ extension ImageViewModel {
     }
 
     func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder) -> Bool {
+        smartFolderMatches(doc, sf: sf, visiting: [sf.id])
+    }
+
+    private func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder, visiting: Set<UUID>) -> Bool {
         guard !sf.criteria.isEmpty else { return true }
         let results = sf.criteria.map { c -> Bool in
             switch c.attribute {
@@ -389,6 +393,14 @@ extension ImageViewModel {
                       let album = library.albums.first(where: { $0.id == albumID }) else { return false }
                 let inAlbum = album.photoURLs.contains(doc.url)
                 return applyEnumOp(c.op, lhs: inAlbum, rhs: true)
+            case .smartFolderRef:
+                guard let refID = UUID(uuidString: c.textValue),
+                      !visiting.contains(refID),
+                      let refSf = library.smartFolders.first(where: { $0.id == refID }) else {
+                    return c.op == .isNot
+                }
+                let isInRef = smartFolderMatches(doc, sf: refSf, visiting: visiting.union([refID]))
+                return applyEnumOp(c.op, lhs: isInRef, rhs: true)
             }
         }
         return sf.matchAll ? results.allSatisfy { $0 } : results.contains { $0 }

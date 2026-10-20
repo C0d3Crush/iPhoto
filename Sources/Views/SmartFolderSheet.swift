@@ -82,10 +82,10 @@ struct SmartFolderSheet: View {
                                     criteria[i] = new
                                 }
                             }
-                        )
-                    ) {
-                        criteria.removeAll { $0.id == criterion.id }
-                    }
+                        ),
+                        onDelete: { criteria.removeAll { $0.id == criterion.id } },
+                        excludingSmartFolderID: editing?.id
+                    )
                 }
 
                 Button {
@@ -172,6 +172,7 @@ private struct CriterionRow: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @Binding var criterion: SmartFolderCriterion
     let onDelete: () -> Void
+    var excludingSmartFolderID: UUID? = nil
 
     var body: some View {
         HStack(spacing: 6) {
@@ -407,6 +408,30 @@ private struct CriterionRow: View {
                 .frame(width: 160)
                 .onAppear {
                     if criterion.textValue.isEmpty, let first = viewModel.library.albums.first {
+                        criterion.textValue = first.id.uuidString
+                    }
+                }
+            }
+
+        // --- Intelligenter Ordner (Rule-Tree) ---
+        case .smartFolderRef:
+            let available = viewModel.library.smartFolders.filter { $0.id != excludingSmartFolderID }
+            if available.isEmpty {
+                Text("Keine anderen Ordner")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            } else {
+                Picker("", selection: $criterion.textValue) {
+                    Text("Bitte wählen").tag("")
+                    ForEach(available) { sf in
+                        Text(sf.name).tag(sf.id.uuidString)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(MenuPickerStyle())
+                .frame(width: 160)
+                .onAppear {
+                    if criterion.textValue.isEmpty, let first = available.first {
                         criterion.textValue = first.id.uuidString
                     }
                 }

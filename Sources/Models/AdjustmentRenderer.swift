@@ -286,7 +286,7 @@ enum AdjustmentRenderer {
         }
         if snap.vignetteAmount != 0, let f = CIFilter(name: "CIVignetteEffect") {
             let center = CIVector(x: out.extent.midX, y: out.extent.midY)
-            let radius = hypot(out.extent.width, out.extent.height) * 0.55
+            let radius = hypot(out.extent.width, out.extent.height) * CGFloat(snap.vignetteRadius)
             f.setValue(out,                          forKey: kCIInputImageKey)
             f.setValue(center,                       forKey: kCIInputCenterKey)
             f.setValue(radius,                       forKey: kCIInputRadiusKey)

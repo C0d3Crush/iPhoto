@@ -66,6 +66,8 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
     case motif
     // Album
     case album
+    // Referenz auf anderen Intelligenten Ordner (Rule-Tree mit Zykluserkennung)
+    case smartFolderRef
 
     var displayName: String {
         switch self {
@@ -87,10 +89,11 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .filmSimulation:   return "Filmsimulation"
         case .motif:            return "Motiv (KI)"
         case .album:            return "Album"
+        case .smartFolderRef:   return "Intelligenter Ordner"
         }
     }
 
-    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType, motifType }
+    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType, motifType, smartFolderRefType }
 
     var type: AttributeType {
         switch self {
@@ -101,18 +104,20 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .filmSimulation:                          return .filmSimType
         case .motif:                                   return .motifType
         case .album:                                   return .albumType
+        case .smartFolderRef:                          return .smartFolderRefType
         }
     }
 
     var defaultOperator: SmartFolderOperator {
         switch type {
-        case .enumType:     return .isExact
-        case .numeric:      return .greaterThan
-        case .dateType:     return .isDynamic
-        case .text:         return .contains
-        case .filmSimType:  return .isExact
-        case .motifType:    return .isExact
-        case .albumType:    return .isExact
+        case .enumType:           return .isExact
+        case .numeric:            return .greaterThan
+        case .dateType:           return .isDynamic
+        case .text:               return .contains
+        case .filmSimType:        return .isExact
+        case .motifType:          return .isExact
+        case .albumType:          return .isExact
+        case .smartFolderRefType: return .isExact
         }
     }
 
@@ -122,9 +127,10 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .numeric:      return [.isExact, .isNot, .greaterThan, .lessThan, .inRange]
         case .dateType:     return [.isDynamic, .isAfter, .isBefore, .inDateRange]
         case .text:         return [.contains, .notContains, .isExact, .isNot, .beginsWith, .endsWith]
-        case .filmSimType:  return [.isExact, .isNot]
-        case .motifType:    return [.isExact, .isNot]
-        case .albumType:    return [.isExact, .isNot]
+        case .filmSimType:        return [.isExact, .isNot]
+        case .motifType:          return [.isExact, .isNot]
+        case .albumType:          return [.isExact, .isNot]
+        case .smartFolderRefType: return [.isExact, .isNot]
         }
     }
 }

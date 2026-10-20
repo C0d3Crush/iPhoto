@@ -31,6 +31,7 @@ struct AdjustmentState: Codable, Equatable {
 
     // Lens Corrections
     var vignetteAmount: Double = 0      // −100 (darken corners) … +100 (brighten corners)
+    var vignetteRadius: Double = 0.55   // image-relative: fraction of diagonal (0.3…1.0)
     var distortion:     Double = 0      // −100 (barrel) … +100 (pincushion)
     var caAmount:       Double = 0      // 0–100 (chromatic aberration correction)
 
