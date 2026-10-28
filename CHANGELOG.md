@@ -2,6 +2,14 @@
 
 ---
 
+## 1.26.1
+**Bugfix — SIGILL-Diagnose im Bildvergleichs-Modus verbessert (Bug #36)**
+
+- Main-Thread-Breadcrumbs in `resolveCompare`, `applyEloUpdate` und `nextComparePair` — zukünftige Crashes zeigen korrekten `[SIGNAL_LAST_OP]` statt veralteten BG-Decode-Wert
+- Defensive Bounds-Check in `applyEloUpdate` vor Subscript-Zugriff
+
+---
+
 ## 1.26.0
 **Feature — Tägliches Duell-Limit + ELO-Konvergenz-Anzeige**
 
