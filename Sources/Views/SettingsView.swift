@@ -15,7 +15,7 @@ struct SettingsView: View {
             featuresTab
                 .tabItem { Label("Funktionen", systemImage: "slider.horizontal.3") }
         }
-        .frame(width: 520, height: 420)
+        .frame(width: 520, height: 500)
     }
 
     // MARK: - Backup
@@ -114,6 +114,61 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+            }
+
+            Divider().padding(.vertical, 4)
+
+            Section(header: Text("Tageslimit").font(.headline)) {
+                Toggle(isOn: Binding(
+                    get: { viewModel.compareDailyLimit > 0 },
+                    set: { viewModel.compareDailyLimit = $0 ? 50 : 0 }
+                )) {
+                    Text("Tägliches Duell-Limit")
+                }
+                .disabled(!viewModel.compareFeatureEnabled)
+
+                if viewModel.compareDailyLimit > 0 {
+                    HStack {
+                        Text("Duelle pro Tag")
+                            .frame(width: 130, alignment: .leading)
+                        Stepper(value: Binding(
+                            get: { viewModel.compareDailyLimit },
+                            set: { viewModel.compareDailyLimit = max(5, $0) }
+                        ), in: 5...500, step: 5) {
+                            Text("\(viewModel.compareDailyLimit)")
+                                .font(.body.monospacedDigit())
+                        }
+                    }
+                    HStack {
+                        Text("Heute")
+                            .foregroundColor(.secondary)
+                            .frame(width: 130, alignment: .leading)
+                        ProgressView(value: Double(viewModel.compare.dailyCount),
+                                     total: Double(viewModel.compareDailyLimit))
+                        Text("\(viewModel.compare.dailyCount) / \(viewModel.compareDailyLimit)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.secondary)
+                            .frame(width: 60, alignment: .trailing)
+                    }
+                }
+            }
+
+            Divider().padding(.vertical, 4)
+
+            Section(header: Text("ELO-Konvergenz").font(.headline)) {
+                let factor = viewModel.eloConvergenceFactor
+                HStack {
+                    Text("Stabilität")
+                        .frame(width: 130, alignment: .leading)
+                    ProgressView(value: factor)
+                    Text(String(format: "%.0f %%", factor * 100))
+                        .font(.body.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 46, alignment: .trailing)
+                }
+                Text("100 % ≈ 20 Duelle pro Bild (K-Faktor stabilisiert). Erst ab ~80 % sind ELO-Rankings verlässlich.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
         .padding(20)

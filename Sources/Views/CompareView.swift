@@ -48,6 +48,13 @@ struct CompareView: View {
             Label("Bildvergleich", systemImage: "arrow.left.arrow.right")
                 .font(.headline)
             Spacer()
+            if viewModel.compareDailyLimit > 0 {
+                let remaining = max(0, viewModel.compareDailyLimit - viewModel.compare.dailyCount)
+                Text("\(remaining) / \(viewModel.compareDailyLimit)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(remaining == 0 ? .red : .secondary)
+                    .help("Verbleibende Duelle heute")
+            }
             Button(action: { viewModel.stopCompareMode() }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.secondary)

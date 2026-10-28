@@ -2,6 +2,16 @@
 
 ---
 
+## 1.26.0
+**Feature — Tägliches Duell-Limit + ELO-Konvergenz-Anzeige**
+
+- Neues konfigurierbares Tageslimit für Bildvergleiche (Standard: 50 Duelle/Tag, 0 = unbegrenzt)
+- Limit und heutiger Fortschritt einstellbar unter Einstellungen → Funktionen → Tageslimit
+- Verbleibende Duelle werden im Vergleichs-Header angezeigt (rot wenn aufgebraucht)
+- Einstellungen → Funktionen: neuer ELO-Konvergenz-Balken zeigt wie stabil das Ranking ist (Ziel: 20 Duelle/Bild ≈ 100 %)
+
+---
+
 ## 1.25.3
 **Bugfix — Regression SIGSEGV/SIGILL durch @Published in SwiftUI-Render-Pfad behoben**
 

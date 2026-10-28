@@ -31,6 +31,13 @@ class ImageViewModel: ObservableObject {
     @Published var compareFeatureEnabled: Bool = UserDefaults.standard.bool(forKey: "feature.compareEnabled") {
         didSet { UserDefaults.standard.set(compareFeatureEnabled, forKey: "feature.compareEnabled") }
     }
+    /// Maximale Duelle pro Tag. 0 = unbegrenzt. Erstes Starten: Default 50.
+    @Published var compareDailyLimit: Int = {
+        if UserDefaults.standard.object(forKey: "compare.dailyLimit") == nil { return 50 }
+        return UserDefaults.standard.integer(forKey: "compare.dailyLimit")
+    }() {
+        didSet { UserDefaults.standard.set(compareDailyLimit, forKey: "compare.dailyLimit") }
+    }
     @Published var gridThumbnailSize: CGFloat = 160
     @Published var isStartupLoading: Bool = true                 { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var sortCriterion: SortCriterion = .filenameAsc
