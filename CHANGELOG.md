@@ -2,6 +2,14 @@
 
 ---
 
+## 1.26.2
+**Feature — Sortierung nach ELO-Score**
+
+- Neue Sortieroptionen im Sortier-Menü: „ELO ↓" (beste zuerst) und „ELO ↑" (schwächste zuerst)
+- Sekundärsortierung nach Dateiname für stabile Reihenfolge bei gleichem ELO
+
+---
+
 ## 1.26.1
 **Bugfix — SIGILL-Diagnose im Bildvergleichs-Modus verbessert (Bug #36)**
 

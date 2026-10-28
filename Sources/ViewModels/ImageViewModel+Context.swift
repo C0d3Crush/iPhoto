@@ -9,6 +9,8 @@ enum SortCriterion: String, CaseIterable {
     case dateAsc      = "dateAsc"
     case dateDesc     = "dateDesc"
     case ratingDesc   = "ratingDesc"
+    case eloDesc      = "eloDesc"
+    case eloAsc       = "eloAsc"
     case random       = "random"
 
     var displayName: String {
@@ -18,6 +20,8 @@ enum SortCriterion: String, CaseIterable {
         case .dateAsc:      return "Datum ↑"
         case .dateDesc:     return "Datum ↓"
         case .ratingDesc:   return "Bewertung"
+        case .eloDesc:      return "ELO ↓"
+        case .eloAsc:       return "ELO ↑"
         case .random:       return "Zufall"
         }
     }
@@ -29,6 +33,8 @@ enum SortCriterion: String, CaseIterable {
         case .dateAsc:      return "calendar.badge.clock"
         case .dateDesc:     return "calendar.badge.clock"
         case .ratingDesc:   return "star"
+        case .eloDesc:      return "chart.line.uptrend.xyaxis"
+        case .eloAsc:       return "chart.line.uptrend.xyaxis"
         case .random:       return "shuffle"
         }
     }
@@ -254,6 +260,10 @@ extension ImageViewModel {
             return docs.sorted { dateSortKey($0) > dateSortKey($1) }
         case .ratingDesc:
             return docs.sorted { ($0.rating, $0.filename) > ($1.rating, $1.filename) }
+        case .eloDesc:
+            return docs.sorted { ($0.elo, $0.filename) > ($1.elo, $1.filename) }
+        case .eloAsc:
+            return docs.sorted { ($0.elo, $0.filename) < ($1.elo, $1.filename) }
         case .random:
             let orderMap = Dictionary(uniqueKeysWithValues: shuffledOrder.enumerated().map { ($1, $0) })
             return docs.sorted {
