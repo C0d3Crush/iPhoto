@@ -18,6 +18,39 @@ enum NavSidebarSection: String, CaseIterable, Hashable {
     static func saveOrder(_ order: [NavSidebarSection]) {
         UserDefaults.standard.set(order.map(\.rawValue).joined(separator: ","), forKey: "nav.sectionOrder")
     }
+
+    static func isVisible(_ section: NavSidebarSection) -> Bool {
+        let key = "sidebar.section.\(section.rawValue)"
+        return UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+
+    static func setVisible(_ section: NavSidebarSection, _ visible: Bool) {
+        UserDefaults.standard.set(visible, forKey: "sidebar.section.\(section.rawValue)")
+    }
+
+    var displayName: String {
+        switch self {
+        case .library:      return "Bibliothek"
+        case .albums:       return "Alben"
+        case .smartFolders: return "Intelligente Ordner"
+        case .volumes:      return "Wechseldatenträger"
+        case .trash:        return "Papierkorb"
+        case .duplicates:   return "Duplikate"
+        case .blurry:       return "Qualität"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .library:      return "photo.on.rectangle.angled"
+        case .albums:       return "rectangle.stack"
+        case .smartFolders: return "folder.badge.gearshape"
+        case .volumes:      return "externaldrive"
+        case .trash:        return "trash"
+        case .duplicates:   return "doc.on.doc"
+        case .blurry:       return "eye.trianglebadge.exclamationmark"
+        }
+    }
 }
 
 struct NavSidebarView: View {
@@ -91,7 +124,7 @@ struct NavSidebarView: View {
 
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(sectionOrder, id: \.self) { section in
+                    ForEach(sectionOrder.filter { NavSidebarSection.isVisible($0) }, id: \.self) { section in
                         sectionView(for: section)
                             .onDrag {
                                 DispatchQueue.main.async { self.draggingSection = section }

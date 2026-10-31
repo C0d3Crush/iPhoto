@@ -5,10 +5,38 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
-    @AppStorage("toolbar.sort")   private var showSort   = true
-    @AppStorage("toolbar.eye")    private var showEye    = true
-    @AppStorage("toolbar.rotate") private var showRotate = true
-    @AppStorage("toolbar.zoom")   private var showZoom   = true
+    @AppStorage("actionBar.order") private var actionBarOrderRaw: String = ""
+
+    // Per-item visibility
+    @AppStorage("toolbar.item.sort")        private var showSort        = true
+    @AppStorage("toolbar.item.eye")         private var showEye         = true
+    @AppStorage("toolbar.item.rotateLeft")  private var showRotateLeft  = true
+    @AppStorage("toolbar.item.rotateRight") private var showRotateRight = true
+    @AppStorage("toolbar.item.zoomOut")     private var showZoomOut     = true
+    @AppStorage("toolbar.item.fitToWindow") private var showFitToWindow = true
+    @AppStorage("toolbar.item.actualSize")  private var showActualSize  = true
+    @AppStorage("toolbar.item.zoomIn")      private var showZoomIn      = true
+
+    private var toolbarOrder: [ActionBarItem] {
+        if actionBarOrderRaw.isEmpty { return ActionBarItem.allCases }
+        let saved = actionBarOrderRaw.split(separator: ",")
+            .compactMap { ActionBarItem(rawValue: String($0)) }
+        let missing = ActionBarItem.allCases.filter { !saved.contains($0) }
+        return saved.isEmpty ? ActionBarItem.allCases : saved + missing
+    }
+
+    private func toolbarItemVisible(_ item: ActionBarItem) -> Bool {
+        switch item {
+        case .sort:        return showSort
+        case .eye:         return showEye
+        case .rotateLeft:  return showRotateLeft
+        case .rotateRight: return showRotateRight
+        case .zoomOut:     return showZoomOut
+        case .fitToWindow: return showFitToWindow
+        case .actualSize:  return showActualSize
+        case .zoomIn:      return showZoomIn
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -24,16 +52,10 @@ struct ContentView: View {
                         Divider()
                     }
 
-                    VStack(spacing: 0) {
-                        if !viewModel.compare.active {
-                            CustomActionBar()
-                                .environmentObject(viewModel)
-                        }
-                        ZStack {
-                            mainContent
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ZStack {
+                        mainContent
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
                 if viewModel.inspectorVisible {
@@ -126,6 +148,14 @@ struct ContentView: View {
                 }
             }
 
+            ToolbarItemGroup(placement: .automatic) {
+                if !viewModel.compare.active {
+                    ForEach(toolbarOrder.filter { toolbarItemVisible($0) }, id: \.self) { item in
+                        toolbarButton(for: item)
+                    }
+                }
+            }
+
             ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: { viewModel.toggleInspector() }) {
                     Image(systemName: "sidebar.right")
@@ -170,6 +200,43 @@ struct ContentView: View {
                 currentAdjustments: viewModel.hasActiveAdjustments ? viewModel.adj.adjustments : nil,
                 isPresented: $viewModel.showExportSheet
             )
+        }
+    }
+
+    @ViewBuilder
+    private func toolbarButton(for item: ActionBarItem) -> some View {
+        switch item {
+        case .sort:
+            SortMenuButton().environmentObject(viewModel).fixedSize()
+        case .eye:
+            Button(action: { viewModel.adj.showOriginal.toggle() }) {
+                Image(systemName: viewModel.adj.showOriginal ? "eye.slash" : "eye")
+            }
+            .help(item.helpText)
+            .disabled(viewModel.currentImage == nil)
+        case .rotateLeft:
+            Button(action: { viewModel.rotateLeft() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("[", modifiers: .command)
+        case .rotateRight:
+            Button(action: { viewModel.rotateRight() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("]", modifiers: .command)
+        case .zoomOut:
+            Button(action: { viewModel.zoomOut() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("-", modifiers: .command)
+        case .fitToWindow:
+            Button(action: { viewModel.fitToWindow() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+        case .actualSize:
+            Button(action: { viewModel.actualSize() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("0", modifiers: .command)
+        case .zoomIn:
+            Button(action: { viewModel.zoomIn() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("=", modifiers: .command)
         }
     }
 

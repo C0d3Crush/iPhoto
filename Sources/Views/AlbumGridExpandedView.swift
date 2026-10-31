@@ -67,33 +67,21 @@ struct AlbumGridExpandedView: View {
 private struct AlbumGridCell: View {
     @EnvironmentObject var viewModel: ImageViewModel
     let album: Album
-    @State private var coverImage: NSImage? = nil
+    @State private var coverImages: [NSImage] = []
     @State private var hovered = false
 
     var body: some View {
         Button(action: { selectAlbum() }) {
             VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(NSColor.separatorColor).opacity(0.3))
-                    if let img = coverImage {
-                        Image(nsImage: img)
-                            .resizable()
-                            .scaledToFill()
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    } else {
-                        Image(systemName: "photo.on.rectangle")
-                            .font(.system(size: 28))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .aspectRatio(1, contentMode: .fit)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(hovered ? Color.accentColor : Color.clear, lineWidth: 2)
-                )
-                .scaleEffect(hovered ? 1.03 : 1.0)
-                .animation(.easeOut(duration: 0.12), value: hovered)
+                mosaicView
+                    .aspectRatio(1, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(hovered ? Color.accentColor : Color.clear, lineWidth: 2)
+                    )
+                    .scaleEffect(hovered ? 1.03 : 1.0)
+                    .animation(.easeOut(duration: 0.12), value: hovered)
 
                 VStack(spacing: 2) {
                     Text(album.name)
@@ -108,7 +96,55 @@ private struct AlbumGridCell: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { hovered = $0 }
-        .onAppear { loadCover() }
+        .onAppear { loadCovers() }
+    }
+
+    @ViewBuilder
+    private var mosaicView: some View {
+        if coverImages.isEmpty {
+            ZStack {
+                Color(NSColor.separatorColor).opacity(0.3)
+                Image(systemName: "photo.on.rectangle")
+                    .font(.system(size: 28))
+                    .foregroundColor(.secondary)
+            }
+        } else if coverImages.count == 1 {
+            Image(nsImage: coverImages[0])
+                .resizable()
+                .scaledToFill()
+                .background(Color(NSColor.separatorColor).opacity(0.3))
+        } else {
+            // 2×2 mosaic — Apple Photos style
+            GeometryReader { geo in
+                let half = geo.size.width / 2
+                VStack(spacing: 1) {
+                    HStack(spacing: 1) {
+                        mosaicTile(coverImages[0], size: half)
+                        mosaicTile(coverImages[safe: 1], size: half)
+                    }
+                    HStack(spacing: 1) {
+                        mosaicTile(coverImages[safe: 2], size: half)
+                        mosaicTile(coverImages[safe: 3], size: half)
+                    }
+                }
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
+        }
+    }
+
+    private func mosaicTile(_ image: NSImage?, size: CGFloat) -> some View {
+        Group {
+            if let img = image {
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipped()
+            } else {
+                Color(NSColor.separatorColor).opacity(0.2)
+                    .frame(width: size, height: size)
+            }
+        }
     }
 
     private func selectAlbum() {
@@ -118,17 +154,27 @@ private struct AlbumGridCell: View {
         }
     }
 
-    private func loadCover() {
-        guard let url = album.photoURLs.first else { return }
+    private func loadCovers() {
+        let urls = Array(album.photoURLs.prefix(4))
+        guard !urls.isEmpty else { return }
         DispatchQueue.global(qos: .userInitiated).async {
-            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
-                    kCGImageSourceThumbnailMaxPixelSize: 220,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceCreateThumbnailFromImageAlways: true
-                  ] as CFDictionary) else { return }
-            let img = NSImage(cgImage: cg, size: .zero)
-            DispatchQueue.main.async { self.coverImage = img }
+            var loaded: [NSImage] = []
+            for url in urls {
+                guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+                      let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                        kCGImageSourceThumbnailMaxPixelSize: 220,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceCreateThumbnailFromImageAlways: true
+                      ] as CFDictionary) else { continue }
+                loaded.append(NSImage(cgImage: cg, size: .zero))
+            }
+            DispatchQueue.main.async { self.coverImages = loaded }
         }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

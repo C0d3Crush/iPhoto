@@ -2,6 +2,17 @@
 
 ---
 
+## 1.37.0
+**Feature — Toolbar in nativer Leiste, Album-Mosaik, Seitenleiste konfigurierbar**
+
+- Toolbar-Buttons (Sort, Auge, Drehen, Zoom) sind jetzt Teil der nativen macOS-Titelleiste — keine zweite Zeile mehr
+- Einstellungen → Toolbar: Drag-and-Drop-Liste zum Neuordnen und Ein-/Ausblenden einzelner Buttons
+- Album-Vollbild: Jedes Album zeigt jetzt ein 2×2-Mosaik aus den ersten 4 Fotos (Apple-Photos-Stil)
+- Einstellungen → Seitenleiste: Neue Tab zum Ein-/Ausblenden einzelner Seitenleisten-Bereiche (Bibliothek, Alben, Intelligente Ordner, Wechseldatenträger, Papierkorb, Duplikate, Qualität)
+- SmartFolderSQLGenerator: Grundlage für SQL-basierte Intelligente Ordner (Playlists-Feature, folgt)
+
+---
+
 ## 1.36.0
 **Feature — Discord-Suche, Album-Vollbild, Geeks-Konsole**
 

@@ -15,6 +15,8 @@ struct SettingsView: View {
                 .tabItem { Label("Backup", systemImage: "externaldrive.badge.checkmark") }
             toolbarTab
                 .tabItem { Label("Toolbar", systemImage: "toolbar.horizontal") }
+            sidebarTab
+                .tabItem { Label("Seitenleiste", systemImage: "sidebar.left") }
             featuresTab
                 .tabItem { Label("Funktionen", systemImage: "slider.horizontal.3") }
         }
@@ -103,54 +105,123 @@ struct SettingsView: View {
 
     // MARK: - Toolbar
 
-    @AppStorage("toolbar.sort")   private var showSort   = true
-    @AppStorage("toolbar.eye")    private var showEye    = true
-    @AppStorage("toolbar.rotate") private var showRotate = true
-    @AppStorage("toolbar.zoom")   private var showZoom   = true
+    @AppStorage("actionBar.order") private var actionBarOrderRaw: String = ""
+    @State private var toolbarItems: [ActionBarItem] = ActionBarItem.loadOrder()
+
+    private func visibilityBinding(for item: ActionBarItem) -> Binding<Bool> {
+        let key = "toolbar.item.\(item.rawValue)"
+        return Binding(
+            get: { UserDefaults.standard.object(forKey: key) as? Bool ?? true },
+            set: { UserDefaults.standard.set($0, forKey: key) }
+        )
+    }
 
     private var toolbarTab: some View {
-        Form {
-            Section(header: Text("Sichtbare Buttons").font(.headline)) {
-                toolbarToggle("Sortierung", icon: "arrow.up.arrow.down", isOn: $showSort,
-                    description: "Sortier-Menü (↑↓) zum Wechsel zwischen Dateiname, Datum, Bewertung etc.")
-                toolbarToggle("Original / Anpassungen", icon: "eye", isOn: $showEye,
-                    description: "Augen-Symbol zum schnellen Vergleich zwischen Original und angepasster Version.")
-                toolbarToggle("Rotation", icon: "rotate.left", isOn: $showRotate,
-                    description: "Drehen-Buttons zum Rotieren des aktuellen Bildes um 90° (⌘[ / ⌘]).")
-                toolbarToggle("Zoom", icon: "plus.magnifyingglass", isOn: $showZoom,
-                    description: "Zoom-Buttons: Verkleinern, Einpassen, Originalgröße, Vergrößern (⌘- / ⌘0 / ⌘=).")
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Toolbar-Buttons")
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 8)
+            Text("Reihenfolge per Drag ändern · Haken = sichtbar in der Toolbar")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 10)
+
+            List {
+                ForEach(toolbarItems, id: \.self) { item in
+                    HStack(spacing: 10) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                        Toggle(isOn: visibilityBinding(for: item)) {
+                            HStack(spacing: 10) {
+                                Image(systemName: item.icon)
+                                    .frame(width: 18)
+                                    .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.helpText.components(separatedBy: " (").first ?? item.helpText)
+                                        .font(.system(size: 12))
+                                    if let shortcut = item.helpText.components(separatedBy: "(").dropFirst().first?.replacingOccurrences(of: ")", with: "") {
+                                        Text(shortcut)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .onMove { from, to in
+                    toolbarItems.move(fromOffsets: from, toOffset: to)
+                    ActionBarItem.saveOrder(toolbarItems)
+                    actionBarOrderRaw = toolbarItems.map(\.rawValue).joined(separator: ",")
+                }
             }
+            .listStyle(PlainListStyle())
+            .environment(\.defaultMinListRowHeight, 38)
 
             HStack {
                 Spacer()
                 Button("Alle einblenden") {
-                    showSort = true; showEye = true; showRotate = true; showZoom = true
+                    ActionBarItem.allCases.forEach {
+                        UserDefaults.standard.set(true, forKey: "toolbar.item.\($0.rawValue)")
+                    }
                 }
                 Button("Alle ausblenden") {
-                    showSort = false; showEye = false; showRotate = false; showZoom = false
+                    ActionBarItem.allCases.forEach {
+                        UserDefaults.standard.set(false, forKey: "toolbar.item.\($0.rawValue)")
+                    }
                 }
             }
-            .padding(.top, 8)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
-        .padding(20)
+        .onAppear { toolbarItems = ActionBarItem.loadOrder() }
     }
 
-    @ViewBuilder
-    private func toolbarToggle(_ title: String, icon: String, isOn: Binding<Bool>, description: String) -> some View {
-        Toggle(isOn: isOn) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .frame(width: 20)
-                    .foregroundColor(.secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                    Text(description)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+    // MARK: - Sidebar
+
+    private var sidebarTab: some View {
+        sidebarTabBody
+    }
+
+    private var sidebarTabBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Seitenleisten-Bereiche")
+                .font(.headline)
+                .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 8)
+            Text("Wähle, welche Bereiche in der linken Seitenleiste angezeigt werden.")
+                .font(.caption).foregroundColor(.secondary)
+                .padding(.horizontal, 20).padding(.bottom, 10)
+            sidebarSectionList
+            Spacer()
+        }
+    }
+
+    private var sidebarSectionList: some View {
+        List {
+            ForEach(NavSidebarSection.allCases, id: \.self) { section in
+                sidebarSectionRow(section)
             }
         }
-        .padding(.vertical, 2)
+        .listStyle(PlainListStyle())
+        .environment(\.defaultMinListRowHeight, 36)
+    }
+
+    private func sidebarSectionRow(_ section: NavSidebarSection) -> some View {
+        Toggle(isOn: Binding(
+            get: { NavSidebarSection.isVisible(section) },
+            set: { NavSidebarSection.setVisible(section, $0) }
+        )) {
+            HStack(spacing: 10) {
+                Image(systemName: section.icon).frame(width: 18).foregroundColor(.secondary)
+                Text(section.displayName).font(.system(size: 12))
+            }
+        }
+        .padding(.vertical, 3)
     }
 
     private var featuresTab: some View {
