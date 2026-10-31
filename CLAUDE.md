@@ -19,6 +19,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Built-in speed metrics.** `ImageLoadingOrchestrator` emits `SWITCH <path> <ms>` info-lines per image switch, tagged with the display path (`cache-hit`, `thumbnail-hit`, `preview-hit`, `preview-decoded`, `full-res`) plus `full-res-decode <ms>` for the decoder itself. This is a programmer build — keep these metrics in and read them (`tail -f ~/Library/Logs/iPhoto/iPhoto.log | grep SWITCH`) whenever you touch the load pipeline. If you add a new hot path, add its own SWITCH-style line so regressions cannot hide.
 
+## CLI & Tests sind Pflicht
+
+**Jedes neue Feature bekommt CLI-Support und einen Test — ohne Ausnahme.**
+
+1. **CLI-Befehl**: Jede neue Funktion muss über `iphoto-cli` bedienbar sein. Subcommand-Muster: `iphoto-cli <feature> <subcommand> [flags]`. Neuen Befehl in `Sources/CLI/main.swift` registrieren und in `printUsage()` dokumentieren.
+2. **Test in `Tests/run_plugins.sh`**: Jeden neuen CLI-Pfad mit mindestens einem `pass`/`fail`-Case abdecken. Test läuft mit temporärer Katalog-DB (`IPHOTO_CATALOG_DB`). Neuen Test **vor** dem Summary-Block einfügen.
+3. **Nach jedem Feature**: `./build.sh` + `./Tests/run_plugins.sh` ausführen. Kein Commit ohne grüne Tests.
+
 ## Build & Run
 
 Requires macOS Command Line Tools (`xcode-select --install`). No Xcode project — compiled directly via `swiftc`.
