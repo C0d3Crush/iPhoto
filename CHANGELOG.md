@@ -2,6 +2,14 @@
 
 ---
 
+## 1.39.0
+**Feature — Thumbnail-Symbol-Verwaltung + SmartFolder-Layout-Fix**
+
+- Einstellungen → Thumbnails (neuer Tab): jedes Badge einzeln ein-/ausblendbar (Sterne, Farblabel, Markierung, Unscharf, Belichtung, Augen, Stapel-Krone, Bearbeitungen, HDR)
+- SmartFolder „Farbanteil (%)": Reihenfolge korrigiert — Prozentwert erscheint jetzt vor dem Kanal-Picker statt dahinter
+
+---
+
 ## 1.38.1
 **Bugfix — Seitenleisten-Expand im richtigen Modus**
 

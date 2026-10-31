@@ -13,6 +13,8 @@ struct SettingsView: View {
                 .tabItem { Label("Qualität", systemImage: "wand.and.stars") }
             backupTab
                 .tabItem { Label("Backup", systemImage: "externaldrive.badge.checkmark") }
+            thumbnailsTab
+                .tabItem { Label("Thumbnails", systemImage: "photo.on.rectangle") }
             toolbarTab
                 .tabItem { Label("Toolbar", systemImage: "toolbar.horizontal") }
             sidebarTab
@@ -101,6 +103,53 @@ struct SettingsView: View {
             }
         }
         .padding(20)
+    }
+
+    // MARK: - Thumbnails
+
+    private var thumbnailsTab: some View {
+        Form {
+            Section(header: Text("Angezeigte Symbole").font(.headline)) {
+                badgeToggle("Sternebewertung",       key: "badge.rating",      icon: "star.fill",             color: .yellow)
+                badgeToggle("Farb-Label",             key: "badge.colorLabel",  icon: "circle.fill",           color: .blue)
+                badgeToggle("Markierung / Ablehnung", key: "badge.flag",        icon: "flag.fill",             color: .green)
+                badgeToggle("Unscharf",               key: "badge.blurry",      icon: "drop.triangle.fill",    color: .purple)
+                badgeToggle("Unterbelichtet",         key: "badge.under",       icon: "moon.fill",             color: .blue)
+                badgeToggle("Überbelichtet",          key: "badge.over",        icon: "sun.max.fill",          color: .yellow)
+                badgeToggle("Geschlossene Augen",     key: "badge.eyes",        icon: "eye.slash.fill",        color: .pink)
+                badgeToggle("Bestes im Stapel",       key: "badge.bestInStack", icon: "crown.fill",            color: .yellow)
+                badgeToggle("Bearbeitungen",          key: "badge.adjustments", icon: "triangle.fill",         color: .purple)
+                badgeToggle("HDR",                    key: "badge.hdr",         icon: "sparkles",              color: .orange)
+            }
+
+            HStack {
+                Spacer()
+                Button("Alle einblenden") {
+                    for key in ["badge.rating","badge.colorLabel","badge.flag","badge.blurry",
+                                "badge.under","badge.over","badge.eyes","badge.bestInStack",
+                                "badge.adjustments","badge.hdr"] {
+                        UserDefaults.standard.set(true, forKey: key)
+                    }
+                }
+            }
+            .padding(.top, 8)
+        }
+        .padding(20)
+    }
+
+    private func badgeToggle(_ title: String, key: String, icon: String, color: Color) -> some View {
+        Toggle(isOn: Binding(
+            get: { UserDefaults.standard.object(forKey: key) as? Bool ?? true },
+            set: { UserDefaults.standard.set($0, forKey: key) }
+        )) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                    .frame(width: 18)
+                Text(title).font(.system(size: 12))
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     // MARK: - Toolbar

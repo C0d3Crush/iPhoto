@@ -14,6 +14,17 @@ struct ThumbnailCell: View {
     var isEyesClosed: Bool = false
     var isBestInStack: Bool = false
 
+    @AppStorage("badge.rating")      private var showRating      = true
+    @AppStorage("badge.colorLabel")  private var showColorLabel  = true
+    @AppStorage("badge.flag")        private var showFlag        = true
+    @AppStorage("badge.blurry")      private var showBlurry      = true
+    @AppStorage("badge.under")       private var showUnder       = true
+    @AppStorage("badge.over")        private var showOver        = true
+    @AppStorage("badge.eyes")        private var showEyes        = true
+    @AppStorage("badge.bestInStack") private var showBestInStack = true
+    @AppStorage("badge.adjustments") private var showAdjustments = true
+    @AppStorage("badge.hdr")         private var showHDR         = true
+
     private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
 
     var body: some View {
@@ -36,7 +47,7 @@ struct ThumbnailCell: View {
                 }
 
                 // Color label dot — bottom leading
-                if document.colorLabel != .none {
+                if showColorLabel && document.colorLabel != .none {
                     VStack {
                         Spacer()
                         HStack {
@@ -51,7 +62,7 @@ struct ThumbnailCell: View {
                 }
 
                 // HDR badge — bottom trailing
-                if document.metadata.first(where: { $0.key == "exif.HDR" })?.value == "Ja" {
+                if showHDR && document.metadata.first(where: { $0.key == "exif.HDR" })?.value == "Ja" {
                     VStack {
                         Spacer()
                         HStack {
@@ -104,7 +115,7 @@ struct ThumbnailCell: View {
                 .foregroundColor(isSelected ? .primary : .secondary)
 
             // Star rating
-            if document.rating > 0 {
+            if showRating && document.rating > 0 {
                 HStack(spacing: 1) {
                     ForEach(1...5, id: \.self) { star in
                         Image(systemName: star <= document.rating ? "star.fill" : "star")
@@ -140,13 +151,15 @@ struct ThumbnailCell: View {
     // aufgibt ("unable to type-check this expression in reasonable time").
     @ViewBuilder
     private var flagAndQualityOverlay: some View {
-        let hasAny = document.flagStatus != .none || isBlurry || isUnder || isOver
-                     || isEyesClosed || isBestInStack || document.hasPersistedAdjustments
+        let hasAny = (showFlag && document.flagStatus != .none)
+                     || (showBlurry && isBlurry) || (showUnder && isUnder) || (showOver && isOver)
+                     || (showEyes && isEyesClosed) || (showBestInStack && isBestInStack)
+                     || (showAdjustments && document.hasPersistedAdjustments)
         if hasAny {
             VStack {
                 HStack(spacing: 3) {
                     Spacer()
-                    if isBestInStack {
+                    if showBestInStack && isBestInStack {
                         Image(systemName: "crown.fill")
                             .font(.system(size: 8))
                             .foregroundColor(.yellow)
@@ -154,16 +167,16 @@ struct ThumbnailCell: View {
                             .background(Color.black.opacity(0.55))
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                     }
-                    if document.flagStatus != .none {
+                    if showFlag && document.flagStatus != .none {
                         Image(systemName: document.flagStatus == .pick ? "flag.fill" : "xmark.circle.fill")
                             .font(.system(size: 10))
                             .foregroundColor(document.flagStatus == .pick ? .green : .red)
                     }
-                    if isBlurry     { qualityBadge(system: "drop.triangle.fill", color: .purple) }
-                    if isUnder      { qualityBadge(system: "moon.fill",          color: .blue) }
-                    if isOver       { qualityBadge(system: "sun.max.fill",       color: .yellow) }
-                    if isEyesClosed { qualityBadge(system: "eye.slash.fill",     color: .pink) }
-                    if document.hasPersistedAdjustments {
+                    if showBlurry     && isBlurry     { qualityBadge(system: "drop.triangle.fill", color: .purple) }
+                    if showUnder      && isUnder       { qualityBadge(system: "moon.fill",          color: .blue) }
+                    if showOver       && isOver        { qualityBadge(system: "sun.max.fill",       color: .yellow) }
+                    if showEyes       && isEyesClosed  { qualityBadge(system: "eye.slash.fill",     color: .pink) }
+                    if showAdjustments && document.hasPersistedAdjustments {
                         qualityBadge(system: "triangle.fill", color: .purple)
                     }
                 }
