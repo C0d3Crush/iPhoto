@@ -207,10 +207,6 @@ struct ContentView: View {
             CompareView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.navSelection == .eloChampions {
-            EloChampionsView()
-                .environmentObject(viewModel)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.navSelection == .trash {
             VStack(spacing: 0) {
                 if viewModel.showFullGrid {

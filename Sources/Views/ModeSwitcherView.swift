@@ -22,15 +22,6 @@ struct ModeSwitcherView: View {
                 viewModel.navSelection = .library
                 withAnimation(.easeInOut(duration: 0.18)) { viewModel.showModeSwitcher = false }
             },
-            ModeTile(
-                title: "ELO Champions",
-                subtitle: "Beste & schlechteste Bilder",
-                icon: "trophy.fill",
-                color: Color(red: 0.75, green: 0.5, blue: 0.05)
-            ) {
-                viewModel.navSelection = .eloChampions
-                withAnimation(.easeInOut(duration: 0.18)) { viewModel.showModeSwitcher = false }
-            },
         ]
 
         if viewModel.compareFeatureEnabled {

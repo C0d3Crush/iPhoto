@@ -156,8 +156,6 @@ extension ImageViewModel {
             filtered = docs.filter { ids.contains($0.id) }
         case .eloRange(let lo, let hi):
             filtered = docs.filter { $0.elo >= lo && $0.elo <= hi }
-        case .eloChampions:
-            filtered = docs.filter { $0.eloMatches > 0 }
         }
         return applyStacking(to: applySortCriterion(to: filtered))
     }

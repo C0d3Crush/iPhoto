@@ -57,13 +57,6 @@ struct NavSidebarView: View {
                     ) {
                         viewModel.navSelection = .library
                     }
-                    navRow(
-                        label: "ELO Champions",
-                        icon: "trophy.fill",
-                        isSelected: viewModel.navSelection == .eloChampions
-                    ) {
-                        viewModel.navSelection = .eloChampions
-                    }
                     if viewModel.compareFeatureEnabled {
                         navRow(
                             label: "Bildvergleich",
