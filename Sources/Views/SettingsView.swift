@@ -105,8 +105,34 @@ struct SettingsView: View {
 
     // MARK: - Toolbar
 
-    @AppStorage("actionBar.order") private var actionBarOrderRaw: String = ""
+    @AppStorage("actionBar.order")          private var actionBarOrderRaw: String = ""
+    @AppStorage("navtoolbar.showSidebar")    private var navShowSidebar    = true
+    @AppStorage("navtoolbar.showViewMode")   private var navShowViewMode   = true
+    @AppStorage("navtoolbar.showNavigation") private var navShowNavigation = true
+    @AppStorage("navtoolbar.showInspector")  private var navShowInspector  = true
+    @AppStorage("navtoolbar.showSort")       private var navShowSort       = true
+    @AppStorage("navtoolbar.showSlider")     private var navShowSlider     = true
     @State private var toolbarItems: [ActionBarItem] = ActionBarItem.loadOrder()
+
+    private var navToolbarToggles: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            navToggle("Seitenleiste", icon: "sidebar.left",           isOn: $navShowSidebar)
+            navToggle("Ansichtsmodus", icon: "square.grid.2x2",       isOn: $navShowViewMode)
+            navToggle("Navigation (← →)", icon: "chevron.left",      isOn: $navShowNavigation)
+            navToggle("Inspector", icon: "sidebar.right",             isOn: $navShowInspector)
+            navToggle("Sortierung (Grid)", icon: "arrow.up.arrow.down", isOn: $navShowSort)
+            navToggle("Rastergröße-Slider", icon: "slider.horizontal.3", isOn: $navShowSlider)
+        }
+    }
+
+    private func navToggle(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(spacing: 8) {
+                Image(systemName: icon).frame(width: 16).foregroundColor(.secondary)
+                Text(title).font(.system(size: 12))
+            }
+        }
+    }
 
     private func visibilityBinding(for item: ActionBarItem) -> Binding<Bool> {
         let key = "toolbar.item.\(item.rawValue)"
@@ -118,10 +144,21 @@ struct SettingsView: View {
 
     private var toolbarTab: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Toolbar-Buttons")
+            Text("Navigationsleiste")
                 .font(.headline)
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
+                .padding(.bottom, 6)
+            navToolbarToggles
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+
+            Divider().padding(.horizontal, 20)
+
+            Text("Toolbar-Buttons")
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
                 .padding(.bottom, 8)
             Text("Reihenfolge per Drag ändern · Haken = sichtbar in der Toolbar")
                 .font(.caption)

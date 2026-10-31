@@ -76,19 +76,23 @@ struct LibraryFullGridView: View {
                 .help("Navigation ein-/ausblenden")
             }
             ToolbarItemGroup(placement: .automatic) {
-                SortMenuButton()
-                    .environmentObject(viewModel)
-                HStack(spacing: 6) {
-                    Image(systemName: "square.grid.3x3")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                    Slider(value: $viewModel.gridThumbnailSize, in: 80...400, step: 10)
-                        .frame(width: 120)
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                if UserDefaults.standard.object(forKey: "navtoolbar.showSort") as? Bool ?? true {
+                    SortMenuButton()
+                        .environmentObject(viewModel)
                 }
-                .help("Rastergröße anpassen")
+                if UserDefaults.standard.object(forKey: "navtoolbar.showSlider") as? Bool ?? true {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.grid.3x3")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        Slider(value: $viewModel.gridThumbnailSize, in: 80...400, step: 10)
+                            .frame(width: 120)
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .help("Rastergröße anpassen")
+                }
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: { viewModel.toggleInspector() }) {

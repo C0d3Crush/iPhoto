@@ -7,7 +7,13 @@ struct ContentView: View {
 
     @AppStorage("actionBar.order") private var actionBarOrderRaw: String = ""
 
-    // Per-item visibility
+    // Nav toolbar visibility
+    @AppStorage("navtoolbar.showSidebar")    private var navShowSidebar    = true
+    @AppStorage("navtoolbar.showViewMode")   private var navShowViewMode   = true
+    @AppStorage("navtoolbar.showNavigation") private var navShowNavigation = true
+    @AppStorage("navtoolbar.showInspector")  private var navShowInspector  = true
+
+    // Per-item action bar visibility
     @AppStorage("toolbar.item.sort")        private var showSort        = true
     @AppStorage("toolbar.item.eye")         private var showEye         = true
     @AppStorage("toolbar.item.rotateLeft")  private var showRotateLeft  = true
@@ -74,11 +80,13 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                Button(action: { viewModel.navSidebarVisible.toggle() }) {
-                    Image(systemName: "sidebar.left")
-                        .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
+                if navShowSidebar {
+                    Button(action: { viewModel.navSidebarVisible.toggle() }) {
+                        Image(systemName: "sidebar.left")
+                            .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
+                    }
+                    .help("Navigation ein-/ausblenden")
                 }
-                .help("Navigation ein-/ausblenden")
 
                 if viewModel.modeSwitcherEnabled {
                     Button(action: {
@@ -108,7 +116,7 @@ struct ContentView: View {
                 }
 
                 let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
-                if isLibrary && !viewModel.compare.active {
+                if isLibrary && !viewModel.compare.active && navShowViewMode {
                     Menu {
                         ForEach(LibraryViewMode.allCases, id: \.self) { mode in
                             Button(action: { viewModel.libraryViewMode = mode }) {
@@ -133,7 +141,7 @@ struct ContentView: View {
                     .help(viewModel.showFullGrid ? "Detail-Ansicht" : "Rasteransicht")
                 }
 
-                if !viewModel.compare.active {
+                if !viewModel.compare.active && navShowNavigation {
                     Button(action: { viewModel.previous() }) {
                         Image(systemName: "chevron.left")
                     }
@@ -157,12 +165,14 @@ struct ContentView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: { viewModel.toggleInspector() }) {
-                    Image(systemName: "sidebar.right")
-                        .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
+                if navShowInspector {
+                    Button(action: { viewModel.toggleInspector() }) {
+                        Image(systemName: "sidebar.right")
+                            .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
+                    }
+                    .help("Inspector ein-/ausblenden")
+                    .keyboardShortcut("i", modifiers: .command)
                 }
-                .help("Inspector ein-/ausblenden")
-                .keyboardShortcut("i", modifiers: .command)
             }
         }
         .onChange(of: viewModel.navSelection) { _ in
