@@ -458,6 +458,7 @@ class ImageViewModel: ObservableObject {
         }
         let catalogRatings = CatalogStore.shared.allRatings()
         let catalogElos = CatalogStore.shared.allElos()
+        let modifiedPaths = CatalogStore.shared.allModifiedPaths()
         let trashedPaths = CatalogStore.shared.trashedPaths()
         let qualityRecords = CatalogStore.shared.allQualityRecords()
         let newDocs = newURLs
@@ -465,6 +466,7 @@ class ImageViewModel: ObservableObject {
             .map { url -> ImageDocument in
                 var doc = ImageDocument(url: url)
                 doc.isTrashed = trashedPaths.contains(url.path)
+                doc.hasPersistedAdjustments = modifiedPaths.contains(url.path)
                 if let r = catalogRatings[url.path] {
                     doc.rating = r.rating
                     doc.flagStatus = FlagStatus(rawValue: r.flag) ?? .none

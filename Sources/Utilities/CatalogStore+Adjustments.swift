@@ -34,6 +34,20 @@ extension CatalogStore {
         }
     }
 
+    /// Alle Pfade, für die Anpassungen gespeichert sind — für die Batch-Initialisierung
+    /// des `hasPersistedAdjustments`-Flags beim Startup. Eine SQLite-Abfrage statt N.
+    func allModifiedPaths() -> Set<String> {
+        queue.sync {
+            let stmt = prepare("SELECT image_path FROM adjustments")
+            var out = Set<String>()
+            while step(stmt) == SQLITE_ROW {
+                if let ptr = sqlite3_column_text(stmt, 0) { out.insert(String(cString: ptr)) }
+            }
+            sqlite3_finalize(stmt)
+            return out
+        }
+    }
+
     func deleteAdjustments(path: String) {
         queue.sync {
             let stmt = prepare("DELETE FROM adjustments WHERE image_path=?")

@@ -2,6 +2,14 @@
 
 ---
 
+## 1.27.5
+**Feature — Änderungs-Badge auf Thumbnails**
+
+- Bilder mit gespeicherten Anpassungen zeigen ein lila △-Badge oben rechts auf dem Thumbnail
+- Flag wird beim Startup aus der Datenbank geladen (eine SQL-Abfrage für alle Bilder) und live aktualisiert wenn Anpassungen gespeichert oder zurückgesetzt werden
+
+---
+
 ## 1.27.4
 **Bugfix/Chore — Build-Bereinigung**
 

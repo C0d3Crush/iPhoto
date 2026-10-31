@@ -94,6 +94,23 @@ struct ThumbnailCell: View {
                 .frame(width: thumbnailWidth, height: thumbH)
             }
 
+                // Anpassungs-Badge △ — top trailing, lila (wie im Screenshot)
+                if document.hasPersistedAdjustments {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "triangle.fill")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(4)
+                                .background(Circle().fill(Color.purple))
+                                .padding([.top, .trailing], 4)
+                        }
+                        Spacer()
+                    }
+                    .frame(width: thumbnailWidth, height: thumbH)
+                }
+
                 flagAndQualityOverlay
             }
 
