@@ -417,20 +417,9 @@ private struct CriterionRow: View {
         case .colorRatio:
             HStack(spacing: 6) {
                 if criterion.op == .inRange {
-                    Stepper("", value: $criterion.numericValue, in: 0...100, step: 1)
-                        .labelsHidden().frame(width: 60)
-                    Text(String(format: "%.0f %%", criterion.numericValue))
-                        .font(.caption).foregroundColor(.secondary)
-                    Text("–").font(.caption).foregroundColor(.secondary)
-                    Stepper("", value: $criterion.numericValue2, in: 0...100, step: 1)
-                        .labelsHidden().frame(width: 60)
-                    Text(String(format: "%.0f %%", criterion.numericValue2))
-                        .font(.caption).foregroundColor(.secondary)
+                    numericRangeInput(unit: "%")
                 } else {
-                    Stepper("", value: $criterion.numericValue, in: 0...100, step: 1)
-                        .labelsHidden().frame(width: 60)
-                    Text(String(format: "%.0f %%", criterion.numericValue))
-                        .font(.caption).foregroundColor(.secondary)
+                    numericSingleInput(unit: "%")
                 }
                 Text("–").font(.caption).foregroundColor(.secondary)
                 Picker("", selection: $criterion.textValue) {

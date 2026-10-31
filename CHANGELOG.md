@@ -2,6 +2,13 @@
 
 ---
 
+## 1.39.1
+**Bugfix — SmartFolder Farbanteil: Eingabefeld statt Stepper**
+
+- Prozentwert-Eingabe bei „Farbanteil (%)" nutzt jetzt ein Textfeld (wie ISO, ELO, mm) statt eines unsichtbaren Steppers — Wert ist klar sichtbar und editierbar
+
+---
+
 ## 1.39.0
 **Feature — Thumbnail-Symbol-Verwaltung + SmartFolder-Layout-Fix**
 
