@@ -2,6 +2,13 @@
 
 ---
 
+## 1.27.4
+**Bugfix/Chore — Build-Bereinigung**
+
+- Redundante Archive-Implementierung entfernt (Funktion existierte bereits als „Als JPEG sichern" im Kontextmenü)
+
+---
+
 ## 1.27.3
 **Feature — Histogramme im Bildvergleich einklappbar**
 
