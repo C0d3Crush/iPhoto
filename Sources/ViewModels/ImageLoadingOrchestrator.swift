@@ -57,6 +57,7 @@ final class ImageLoadingOrchestrator {
     var fullResWorkItem: DispatchWorkItem? = nil
     var thumbQueued: Int = 0
     var thumbDone: Int = 0
+    var thumbBatchStart: Date = Date()
     var thumbHideTask: DispatchWorkItem? = nil
     var thumbInFlight: Set<URL> = []
     var hiResInFlight: Set<URL> = []
@@ -402,6 +403,7 @@ final class ImageLoadingOrchestrator {
         thumbHideTask?.cancel()
         thumbHideTask = nil
         for (_, doc) in pending { thumbInFlight.insert(doc.url) }
+        if thumbQueued == 0 { thumbBatchStart = Date() }
         thumbQueued += pending.count
         host.activity.enqueue(id: thumbnailTaskID, label: "Lade Thumbnails",
                               icon: "photo", done: thumbDone, total: thumbQueued)
@@ -439,6 +441,9 @@ final class ImageLoadingOrchestrator {
                         host.activity.update(id: self.thumbnailTaskID,
                                              done: self.thumbDone, total: self.thumbQueued)
                         if self.thumbDone >= self.thumbQueued {
+                            let elapsed = Date().timeIntervalSince(self.thumbBatchStart) * 1000
+                            Log.perf(String(format: "THUMBNAILS %d Bilder %.0f ms (%.1f ms/Bild)",
+                                           self.thumbDone, elapsed, elapsed / Double(max(1, self.thumbDone))))
                             self.thumbDone   = 0
                             self.thumbQueued = 0
                             self.thumbInFlight.removeAll()
@@ -552,6 +557,7 @@ final class ImageLoadingOrchestrator {
 
         DispatchQueue.global(qos: .background).async { [weak self] in
             guard let self = self, let host = self.host else { return }
+            let scanStart = Date()
             let total = paths.count
             var done = 0
             for path in paths {
@@ -599,6 +605,7 @@ final class ImageLoadingOrchestrator {
                 host.invalidateVisibleOrder()
                 host.objectWillChange.send()
                 Log.info("EXIF-Scan abgeschlossen: \(total) Bilder")
+                Log.perf(String(format: "SCAN EXIF %d Bilder %.0f ms", total, Date().timeIntervalSince(scanStart) * 1000))
             }
         }
     }
@@ -623,6 +630,7 @@ final class ImageLoadingOrchestrator {
 
         DispatchQueue.global(qos: .background).async { [weak self] in
             guard let self = self, let host = self.host else { return }
+            let scanStart = Date()
             let total = paths.count
             var done = 0
             var pending: [(String, QualityAssessor.Result)] = []
@@ -691,6 +699,7 @@ final class ImageLoadingOrchestrator {
                 host.refreshQualityLists()
                 host.objectWillChange.send()
                 Log.info("Quality-Scan abgeschlossen: \(total) Bilder")
+                Log.perf(String(format: "SCAN QUALITY %d Bilder %.0f ms", total, Date().timeIntervalSince(scanStart) * 1000))
             }
         }
     }

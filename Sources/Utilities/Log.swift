@@ -26,8 +26,8 @@ final class Log {
             .appendingPathComponent("Logs/iPhoto")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         fileURL = dir.appendingPathComponent("iPhoto.log")
-        // Rotate if over 2 MB
-        if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 2_000_000 {
+        // Rotate if over 10 MB
+        if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 10_000_000 {
             try? FileManager.default.removeItem(at: fileURL)
         }
         // Write session boundary as a RAW line (not through write() so it never appears inside a
@@ -81,6 +81,9 @@ final class Log {
     }
     static func error(_ msg: String, file: String = #file, function: String = #function) {
         shared.write(level: .error, msg, file: file, function: function)
+    }
+    static func perf(_ msg: String, file: String = #file, function: String = #function) {
+        shared.write(level: .info, "PERF \(msg)", file: file, function: function)
     }
 
     private func write(level: LogLevel, _ msg: String, file: String = #file, function: String = #function) {

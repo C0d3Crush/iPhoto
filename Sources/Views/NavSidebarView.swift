@@ -1,6 +1,24 @@
 import SwiftUI
 
 private let kSmartFolderIDType = "com.c0d3cru5h.iphoto.smartfolder-id"
+private let kNavSectionDragType = "com.c0d3cru5h.iphoto.navsection"
+
+enum NavSidebarSection: String, CaseIterable, Hashable {
+    case library, albums, smartFolders, volumes, trash, duplicates, blurry
+
+    static func loadOrder() -> [NavSidebarSection] {
+        guard let raw = UserDefaults.standard.string(forKey: "nav.sectionOrder") else {
+            return NavSidebarSection.allCases
+        }
+        let saved = raw.split(separator: ",").compactMap { NavSidebarSection(rawValue: String($0)) }
+        let missing = NavSidebarSection.allCases.filter { !saved.contains($0) }
+        return saved + missing
+    }
+
+    static func saveOrder(_ order: [NavSidebarSection]) {
+        UserDefaults.standard.set(order.map(\.rawValue).joined(separator: ","), forKey: "nav.sectionOrder")
+    }
+}
 
 struct NavSidebarView: View {
     @EnvironmentObject var viewModel: ImageViewModel
@@ -18,6 +36,13 @@ struct NavSidebarView: View {
     @State private var renameGroupText = ""
     @State private var dropTargetGroups: Set<String> = []
     @State private var dropOnUngrouped: Bool = false
+    @State private var sectionOrder: [NavSidebarSection] = NavSidebarSection.loadOrder()
+    @State private var isJiggling: Bool = false
+    @State private var jiggleLeft: Bool = false
+    @State private var draggingSection: NavSidebarSection?
+
+    private let jiggleTick = Timer.publish(every: 0.13, on: .main, in: .common).autoconnect()
+
     private func loadSmartFolderID(from providers: [NSItemProvider], completion: @escaping (SmartFolder?) -> Void) {
         providers.first?.loadDataRepresentation(forTypeIdentifier: kSmartFolderIDType) { data, _ in
             guard let data = data,
@@ -31,6 +56,17 @@ struct NavSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if isJiggling {
+                Button("Fertig") { stopJiggle() }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(PlainButtonStyle())
+                    .foregroundColor(.accentColor)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(Color.accentColor.opacity(0.1))
+                    .transition(.opacity)
+            }
+
             if viewModel.isStartupLoading {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -50,31 +86,28 @@ struct NavSidebarView: View {
 
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
-                    sectionHeader("Bibliothek")
-                    navRow(
-                        label: "Library",
-                        icon: "photo.stack",
-                        isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil
-                    ) {
-                        viewModel.navSelection = .library
+                    ForEach(sectionOrder, id: \.self) { section in
+                        sectionView(for: section)
+                            .jiggleEffect(active: isJiggling, leftPhase: jiggleLeft)
+                            .onDrag {
+                                DispatchQueue.main.async { self.draggingSection = section }
+                                return NSItemProvider(object: section.rawValue as NSString)
+                            }
+                            .onDrop(of: ["public.text"],
+                                    delegate: NavSectionDropDelegate(
+                                        target: section,
+                                        order: $sectionOrder,
+                                        dragging: $draggingSection))
+                            .opacity(draggingSection == section ? 0.4 : 1.0)
                     }
-                    if pluginStore.isEnabled("com.iphoto.builtin.compare") {
-                        navRow(
-                            label: "Bildvergleich",
-                            icon: "arrow.left.arrow.right",
-                            isSelected: viewModel.compare.active
-                        ) {
-                            viewModel.toggleCompareMode()
-                        }
-                    }
-                    albumsSection
-                    smartFoldersSection
-                    volumesSection
-                    trashSection
-                    duplicatesSection
-                    blurrySection
                 }
                 .padding(.vertical, 8)
+            }
+            .onReceive(jiggleTick) { _ in
+                if isJiggling { jiggleLeft.toggle() }
+            }
+            .onTapGesture {
+                if isJiggling { stopJiggle() }
             }
 
             if !viewModel.activity.loadingQueue.isEmpty {
@@ -100,6 +133,12 @@ struct NavSidebarView: View {
         }
         .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
         .background(Color(NSColor.controlBackgroundColor))
+        .background(
+            Button("") { if isJiggling { stopJiggle() } }
+                .keyboardShortcut(.escape, modifiers: [])
+                .opacity(0)
+                .allowsHitTesting(false)
+        )
         .sheet(item: $smartFolderSheetItem) { item in
             SmartFolderSheet(editing: item.folder)
                 .environmentObject(viewModel)
@@ -144,6 +183,68 @@ struct NavSidebarView: View {
             ) { name in viewModel.renameAlbum(album, to: name) }
         }
     }
+
+    // MARK: - Jiggle control
+
+    private func startJiggle() {
+        isJiggling = true
+        jiggleLeft = false
+    }
+
+    private func stopJiggle() {
+        withAnimation(.easeOut(duration: 0.15)) {
+            isJiggling = false
+        }
+        NavSidebarSection.saveOrder(sectionOrder)
+        draggingSection = nil
+    }
+
+    // MARK: - Section dispatcher
+
+    @ViewBuilder
+    private func sectionView(for section: NavSidebarSection) -> some View {
+        switch section {
+        case .library:
+            Group {
+                jiggleSectionHeader("Bibliothek", section: .library)
+                navRow(label: "Library", icon: "photo.stack",
+                       isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil) {
+                    viewModel.navSelection = .library
+                }
+                if pluginStore.isEnabled("com.iphoto.builtin.compare") {
+                    navRow(label: "Bildvergleich", icon: "arrow.left.arrow.right",
+                           isSelected: viewModel.compare.active) {
+                        viewModel.toggleCompareMode()
+                    }
+                }
+            }
+        case .albums:        albumsSection
+        case .smartFolders:  smartFoldersSection
+        case .volumes:       volumesSection
+        case .trash:         trashSection
+        case .duplicates:    duplicatesSection
+        case .blurry:        blurrySection
+        }
+    }
+
+    // MARK: - Jiggle-aware section header
+
+    @ViewBuilder
+    private func jiggleSectionHeader(_ title: String, section: NavSidebarSection) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onLongPressGesture(minimumDuration: 0.5) {
+                startJiggle()
+            }
+    }
+
+    // MARK: - Smart folder helpers
 
     @ViewBuilder
     private func smartFolderRow(_ sf: SmartFolder, indented: Bool = false) -> some View {
@@ -325,6 +426,10 @@ struct NavSidebarView: View {
         .padding(.horizontal, 10)
         .padding(.top, 12)
         .padding(.bottom, 2)
+        .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.5) {
+            startJiggle()
+        }
     }
 
     @ViewBuilder
@@ -340,6 +445,10 @@ struct NavSidebarView: View {
         .padding(.horizontal, 10)
         .padding(.top, 12)
         .padding(.bottom, 2)
+        .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.5) {
+            startJiggle()
+        }
     }
 
     @ViewBuilder private var trashSection: some View {
@@ -531,6 +640,55 @@ struct NavSidebarView: View {
         .padding(.horizontal, 4)
     }
 }
+
+// MARK: - Jiggle effect modifier
+
+private struct JiggleEffectModifier: ViewModifier {
+    let active: Bool
+    let leftPhase: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(active ? (leftPhase ? -2.0 : 2.0) : 0))
+            .animation(active ? .easeInOut(duration: 0.13) : .spring(response: 0.2), value: leftPhase)
+            .animation(.easeOut(duration: 0.15), value: active)
+    }
+}
+
+private extension View {
+    func jiggleEffect(active: Bool, leftPhase: Bool) -> some View {
+        modifier(JiggleEffectModifier(active: active, leftPhase: leftPhase))
+    }
+}
+
+// MARK: - Drop delegate for section reordering
+
+private struct NavSectionDropDelegate: DropDelegate {
+    let target: NavSidebarSection
+    @Binding var order: [NavSidebarSection]
+    @Binding var dragging: NavSidebarSection?
+
+    func dropEntered(info: DropInfo) {
+        guard let src = dragging, src != target,
+              let from = order.firstIndex(of: src),
+              let to   = order.firstIndex(of: target) else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            order.move(fromOffsets: IndexSet(integer: from),
+                       toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
+    }
+}
+
+// MARK: - AlbumRow
 
 private struct AlbumRow: View {
     let album: Album

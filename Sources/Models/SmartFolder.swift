@@ -68,6 +68,8 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
     case album
     // Referenz auf anderen Intelligenten Ordner (Rule-Tree mit Zykluserkennung)
     case smartFolderRef
+    // Farbkanal-Anteil in % (textValue = "R"|"G"|"B", numericValue = min%, numericValue2 = max%)
+    case colorRatio
 
     var displayName: String {
         switch self {
@@ -90,10 +92,11 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .motif:            return "Motiv (KI)"
         case .album:            return "Album"
         case .smartFolderRef:   return "Intelligenter Ordner"
+        case .colorRatio:       return "Farbanteil (%)"
         }
     }
 
-    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType, motifType, smartFolderRefType }
+    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType, motifType, smartFolderRefType, colorRatioType }
 
     var type: AttributeType {
         switch self {
@@ -105,6 +108,7 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .motif:                                   return .motifType
         case .album:                                   return .albumType
         case .smartFolderRef:                          return .smartFolderRefType
+        case .colorRatio:                              return .colorRatioType
         }
     }
 
@@ -118,6 +122,7 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .motifType:          return .isExact
         case .albumType:          return .isExact
         case .smartFolderRefType: return .isExact
+        case .colorRatioType:     return .greaterThan
         }
     }
 
@@ -131,6 +136,7 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .motifType:          return [.isExact, .isNot]
         case .albumType:          return [.isExact, .isNot]
         case .smartFolderRefType: return [.isExact, .isNot]
+        case .colorRatioType:     return [.greaterThan, .lessThan, .inRange]
         }
     }
 }

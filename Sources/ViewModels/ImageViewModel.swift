@@ -456,6 +456,7 @@ class ImageViewModel: ObservableObject {
     }
 
     func importFiles(_ urls: [URL], selectFirst: Bool = true) {
+        let importStart = Date()
         let supported = urls.filter { isSupportedFormat($0) }
         guard !supported.isEmpty else { return }
 
@@ -535,6 +536,7 @@ class ImageViewModel: ObservableObject {
         activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
         activity.enqueueWork { [weak self] in self?.scanQualityForLibrary() }
         activity.enqueueWork { [weak self] in self?.scanMotifForLibrary() }
+        Log.perf(String(format: "IMPORT %d Dateien %.0f ms", newDocs.count, Date().timeIntervalSince(importStart) * 1000))
     }
 
     // Restores all catalog-known image paths that still exist on disk but are not yet

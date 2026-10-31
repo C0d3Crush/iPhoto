@@ -412,6 +412,9 @@ extension ImageViewModel {
                 }
                 let isInRef = smartFolderMatches(doc, sf: refSf, visiting: visiting.union([refID]))
                 return applyEnumOp(c.op, lhs: isInRef, rhs: true)
+            case .colorRatio:
+                guard let ratio = colorChannelRatio(doc: doc, channel: c.textValue) else { return false }
+                return applyNumericOp(c.op, value: ratio, lo: c.numericValue, hi: c.numericValue2)
             }
         }
         return sf.matchAll ? results.allSatisfy { $0 } : results.contains { $0 }
@@ -531,6 +534,48 @@ extension ImageViewModel {
             loadCurrentImage()
         } else {
             collection.selectedIndices = []
+        }
+    }
+
+    // MARK: - Color ratio helper
+
+    private func colorChannelRatio(doc: ImageDocument, channel: String) -> Double? {
+        guard let thumb = doc.thumbnailImage ?? doc.placeholderThumbnailImage,
+              let cgImg = thumb.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return nil }
+
+        let w = cgImg.width, h = cgImg.height
+        guard w > 0, h > 0 else { return nil }
+
+        let bytesPerPixel = 4
+        let bytesPerRow   = bytesPerPixel * w
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * h)
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: w, height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        ctx.draw(cgImg, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        var rSum: Double = 0, gSum: Double = 0, bSum: Double = 0
+        let pixelCount = w * h
+        var i = 0
+        while i < pixels.count {
+            rSum += Double(pixels[i])
+            gSum += Double(pixels[i + 1])
+            bSum += Double(pixels[i + 2])
+            i += bytesPerPixel
+        }
+        let n = Double(pixelCount)
+        switch channel.uppercased() {
+        case "R": return (rSum / n) / 255.0 * 100.0
+        case "G": return (gSum / n) / 255.0 * 100.0
+        case "B": return (bSum / n) / 255.0 * 100.0
+        default:  return nil
         }
     }
 }

@@ -2,6 +2,15 @@
 
 ---
 
+## 1.33.0
+**Feature — Jiggle-Reorder für Nav-Sektionen + persistente PERF-Metriken**
+
+- Lange auf einen Abschnitts-Header in der Seitenleiste drücken → Wackel-Modus: alle Sektionen oszillieren ±2° (iPhone-Stil); per Drag-and-Drop neu anordnen; „Fertig" oder Escape beendet den Modus und speichert die Reihenfolge dauerhaft
+- `Log.perf()` hinzugefügt; alle Performance-relevanten Operationen werden jetzt als `PERF`-Zeilen ins Log geschrieben: `THUMBNAILS N Bilder X ms`, `SCAN EXIF N Bilder X ms`, `SCAN QUALITY N Bilder X ms`, `IMPORT N Dateien X ms`, `EXPORT N Dateien X ms`
+- Log-Rotationsgrenze von 2 MB auf 10 MB erhöht, damit Langzeit-Metriken nicht vorzeitig verloren gehen
+
+---
+
 ## 1.32.0
 **Feature — Ansichts-Wechsler (Als Symbole / Als Liste / Als Spalten / Als Galerie)**
 
