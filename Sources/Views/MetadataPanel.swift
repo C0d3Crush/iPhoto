@@ -40,6 +40,15 @@ private struct MetadataPanelContent: View {
         var out: [MetadataEntry] = []
         let flags = viewModel.qualityFlags(for: doc)
 
+        if doc.eloMatches > 0 {
+            out.append(MetadataEntry(
+                displayName: "ELO",
+                key: "quality.elo",
+                category: .quality,
+                value: String(format: "%.0f  (%d Duelle)", doc.elo, doc.eloMatches),
+                isEditable: false))
+        }
+
         if let s = doc.blurScore {
             let label: String
             if doc.blurOverride {

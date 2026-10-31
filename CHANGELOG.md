@@ -2,6 +2,13 @@
 
 ---
 
+## 1.27.1
+**Feature — ELO-Score im Metadaten-Panel**
+
+- ELO-Wert und Anzahl der Duelle werden im Inspector unter „Qualität" angezeigt (nur bei Bildern mit mindestens einem Duell)
+
+---
+
 ## 1.27.0
 **Feature — Kachel-Ansichtswähler (Metro-Stil) + ELO Champions + Graph einklappen**
 
