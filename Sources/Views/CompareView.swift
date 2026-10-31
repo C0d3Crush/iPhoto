@@ -9,6 +9,7 @@ struct CompareView: View {
     @State private var leftFit: Bool = false
     @State private var rightFit: Bool = false
     @State private var distributionCollapsed: Bool = false
+    @State private var paneInfoCollapsed: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -76,6 +77,15 @@ struct CompareView: View {
                     .foregroundColor(remaining == 0 ? .red : .secondary)
                     .help("Verbleibende Duelle heute")
             }
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.15)) { paneInfoCollapsed.toggle() }
+            }) {
+                Image(systemName: paneInfoCollapsed ? "info.circle" : "info.circle.fill")
+                    .foregroundColor(.secondary)
+                    .opacity(paneInfoCollapsed ? 0.5 : 0.9)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help(paneInfoCollapsed ? "Bildinfos einblenden" : "Bildinfos ausblenden")
             Button(action: { viewModel.stopCompareMode() }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.secondary)
@@ -114,36 +124,38 @@ struct CompareView: View {
                 hoveredSide = inside ? side : (hoveredSide == side ? nil : hoveredSide)
             }
 
-            HStack(spacing: 8) {
-                Button(action: { viewModel.resolveCompare(side) }) {
-                    Image(systemName: "hand.thumbsup")
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(PlainButtonStyle())
-                .foregroundColor(.accentColor)
-                .help("Dieses Bild ist besser")
+            if !paneInfoCollapsed {
+                HStack(spacing: 8) {
+                    Button(action: { viewModel.resolveCompare(side) }) {
+                        Image(systemName: "hand.thumbsup")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .foregroundColor(.accentColor)
+                    .help("Dieses Bild ist besser")
 
-                Text(doc.filename)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Button(action: { fit.wrappedValue = true }) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 10))
+                    Text(doc.filename)
+                        .font(.caption)
+                        .lineLimit(1)
                         .foregroundColor(.secondary)
+                    Spacer()
+                    Button(action: { fit.wrappedValue = true }) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("An Pane anpassen")
+                    Text("\(Int(zoom.wrappedValue * 100))%")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 38, alignment: .trailing)
                 }
-                .buttonStyle(PlainButtonStyle())
-                .help("An Pane anpassen")
-                Text("\(Int(zoom.wrappedValue * 100))%")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 38, alignment: .trailing)
-            }
-            .padding(.horizontal, 8)
+                .padding(.horizontal, 8)
 
-            eloRow(elo: doc.elo, matches: doc.eloMatches)
-                .padding(.bottom, 8)
+                eloRow(elo: doc.elo, matches: doc.eloMatches)
+                    .padding(.bottom, 8)
+            }
         }
     }
 
