@@ -2,6 +2,13 @@
 
 ---
 
+## 1.29.1
+**Bugfix — Builtin-Panel-Dateien immer sichtbar**
+
+- `builtin-*.json`-Dateien werden bei jedem App-Start in den Plugin-Ordner geschrieben (nicht mehr nur beim ersten Start), sodass sie sofort im Finder sichtbar sind
+
+---
+
 ## 1.29.0
 **Feature — Eingebaute Panels als Dateien im Plugin-Ordner**
 
