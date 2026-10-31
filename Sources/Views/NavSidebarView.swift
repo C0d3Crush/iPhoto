@@ -239,9 +239,9 @@ struct NavSidebarView: View {
             .padding(.bottom, 2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .onLongPressGesture(minimumDuration: 0.5) {
-                startJiggle()
-            }
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.5).onEnded { _ in startJiggle() }
+            )
     }
 
     // MARK: - Smart folder helpers
@@ -427,9 +427,10 @@ struct NavSidebarView: View {
         .padding(.top, 12)
         .padding(.bottom, 2)
         .contentShape(Rectangle())
-        .onLongPressGesture(minimumDuration: 0.5) {
-            startJiggle()
-        }
+        // simultaneousGesture lets the Button's tap AND our long-press coexist.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5).onEnded { _ in startJiggle() }
+        )
     }
 
     @ViewBuilder
@@ -446,9 +447,9 @@ struct NavSidebarView: View {
         .padding(.top, 12)
         .padding(.bottom, 2)
         .contentShape(Rectangle())
-        .onLongPressGesture(minimumDuration: 0.5) {
-            startJiggle()
-        }
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5).onEnded { _ in startJiggle() }
+        )
     }
 
     @ViewBuilder private var trashSection: some View {

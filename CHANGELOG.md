@@ -2,6 +2,16 @@
 
 ---
 
+## 1.34.0
+**Feature — Finder-Listenansicht + Jiggle-Fix**
+
+- Listenansicht (Als Liste) jetzt mit Finder-ähnlichem Spalten-Header: Name (↑↓), Datum (↑↓), Größe, Art, Bewertung, Markierung
+- Rechtsklick auf den Header blendet Spalten ein/aus; Auswahl wird in UserDefaults gespeichert
+- Klick auf sortierbare Spalten-Header toggelt Sortierrichtung mit Pfeilindikator
+- Bugfix: Jiggle-Modus konnte bei Abschnitts-Headern mit Button (Alben, Intelligente Ordner) nicht durch Langer-Druck ausgelöst werden — `.simultaneousGesture` statt `.onLongPressGesture` behebt das
+
+---
+
 ## 1.33.0
 **Feature — Jiggle-Reorder für Nav-Sektionen + persistente PERF-Metriken**
 
