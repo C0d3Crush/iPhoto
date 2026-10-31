@@ -42,6 +42,7 @@ class ImageViewModel: ObservableObject {
     @Published var isStartupLoading: Bool = true                 { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
+    @Published var showModeSwitcher: Bool = false
     /// Qualitätsanalyse-Ergebnisse (Duplikate, Unschärfe, Belichtung) + Schwellenwerte.
     /// Views greifen via `viewModel.quality.blurryDocuments` etc. zu.
     let quality = QualityDetectionState()

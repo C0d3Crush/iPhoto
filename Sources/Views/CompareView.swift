@@ -8,6 +8,7 @@ struct CompareView: View {
     @State private var rightZoom: CGFloat = 1.0
     @State private var leftFit: Bool = false
     @State private var rightFit: Bool = false
+    @State private var distributionCollapsed: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +27,27 @@ struct CompareView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 Divider()
-                distributionPanel
+                HStack(spacing: 0) {
+                    if !distributionCollapsed {
+                        distributionPanel
+                    }
+                    Spacer(minLength: 0)
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            distributionCollapsed.toggle()
+                        }
+                    }) {
+                        Image(systemName: distributionCollapsed ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .frame(width: 28, height: distributionCollapsed ? 20 : nil)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(distributionCollapsed ? "ELO-Verteilung einblenden" : "ELO-Verteilung ausblenden")
+                    .padding(.trailing, 6)
+                    .padding(.vertical, distributionCollapsed ? 4 : 0)
+                }
                 Divider()
                 verdictBar
             } else {

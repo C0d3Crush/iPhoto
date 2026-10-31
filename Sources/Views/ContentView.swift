@@ -6,21 +6,30 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
     var body: some View {
-        HStack(spacing: 0) {
-            if viewModel.navSidebarVisible {
-                NavSidebarView()
-                    .environmentObject(viewModel)
-                Divider()
+        ZStack {
+            HStack(spacing: 0) {
+                if viewModel.navSidebarVisible {
+                    NavSidebarView()
+                        .environmentObject(viewModel)
+                    Divider()
+                }
+
+                ZStack {
+                    mainContent
+                }
+
+                if viewModel.inspectorVisible {
+                    Divider()
+                    InspectorView()
+                        .environmentObject(viewModel)
+                }
             }
 
-            ZStack {
-                mainContent
-            }
-
-            if viewModel.inspectorVisible {
-                Divider()
-                InspectorView()
+            if viewModel.showModeSwitcher {
+                ModeSwitcherView()
                     .environmentObject(viewModel)
+                    .transition(.opacity)
+                    .zIndex(100)
             }
         }
         .toolbar {
@@ -30,6 +39,17 @@ struct ContentView: View {
                         .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
                 }
                 .help("Navigation ein-/ausblenden")
+
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        viewModel.showModeSwitcher.toggle()
+                    }
+                }) {
+                    Image(systemName: "square.grid.2x2")
+                        .opacity(viewModel.showModeSwitcher ? 1.0 : 0.6)
+                }
+                .help("Ansicht wählen (⌘M)")
+                .keyboardShortcut("m", modifiers: .command)
 
                 if viewModel.showingLibraryDetail {
                     Button(action: { viewModel.showingLibraryDetail = false }) {
@@ -185,6 +205,10 @@ struct ContentView: View {
 
         if viewModel.compare.active {
             CompareView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.navSelection == .eloChampions {
+            EloChampionsView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.navSelection == .duplicates {

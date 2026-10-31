@@ -2,6 +2,15 @@
 
 ---
 
+## 1.27.0
+**Feature — Kachel-Ansichtswähler (Metro-Stil) + ELO Champions + Graph einklappen**
+
+- Neuer Kachel-Modus (⌘M): Windows-8-artiges Vollbild-Overlay zeigt alle Ansichten als farbige Kacheln — Bibliothek, ELO Champions, Bildvergleich, Duplikate, Ähnliche Bilder, Qualitätsmodi, Papierkorb
+- Neuer Tab „ELO Champions" in der Sidebar: zeigt die 10 besten und 10 schlechtesten Bilder nach ELO-Score als horizontale Bildleiste mit Medaillen-Badge
+- ELO-Verteilungsgraph im Bildvergleich lässt sich per Chevron-Button ein- und ausklappen
+
+---
+
 ## 1.26.2
 **Feature — Sortierung nach ELO-Score**
 
