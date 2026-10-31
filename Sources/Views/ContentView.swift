@@ -211,6 +211,19 @@ struct ContentView: View {
             EloChampionsView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.navSelection == .trash {
+            VStack(spacing: 0) {
+                if viewModel.showFullGrid {
+                    LibraryFullGridView()
+                        .environmentObject(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    detailWithStrip
+                }
+                TrashSizeBar()
+                    .environmentObject(viewModel)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.navSelection == .duplicates {
             DuplicatesView()
                 .environmentObject(viewModel)

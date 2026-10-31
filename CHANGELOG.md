@@ -2,6 +2,22 @@
 
 ---
 
+## 1.27.3
+**Feature — Histogramme im Bildvergleich einklappbar**
+
+- Histogramm-Panels im Bildvergleich (links/rechts oben) lassen sich per Chevron-Button einzeln ein- und ausklappen
+
+---
+
+## 1.27.2
+**Feature — Archiv-Funktion + Plugin-System + Papierkorb-Speicheranzeige**
+
+- Plugin-System: JSON-Dateien in `~/Library/Application Support/iPhoto/Plugins/` werden automatisch als Inspector-Panels geladen — mit Shell-Befehlen pro Zeile und Action-Buttons
+- Menü „Plugins" → „Externe Plugins neu laden" (⌘⌥R) und „Plugin-Ordner öffnen" hinzugefügt
+- Papierkorb: Speicheranzeige am unteren Rand zeigt, wie viel Speicher beim Leeren freigegeben würde
+
+---
+
 ## 1.27.1
 **Feature — ELO-Score im Metadaten-Panel**
 

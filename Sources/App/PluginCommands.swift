@@ -13,16 +13,28 @@ struct PluginCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Plugins") {
-            Toggle(isOn: $ratingActive)           { Text(InspectorPanel.rating.rawValue) }
-            Toggle(isOn: $metadataActive)         { Text(InspectorPanel.metadata.rawValue) }
-            Toggle(isOn: $adjustmentsActive)      { Text(InspectorPanel.adjustments.rawValue) }
-            Toggle(isOn: $localAdjustmentsActive) { Text(InspectorPanel.localAdjustments.rawValue) }
-            Toggle(isOn: $presetsActive)          { Text(InspectorPanel.presets.rawValue) }
+            Group {
+                Toggle(isOn: $ratingActive)           { Text(InspectorPanel.rating.rawValue) }
+                Toggle(isOn: $metadataActive)         { Text(InspectorPanel.metadata.rawValue) }
+                Toggle(isOn: $adjustmentsActive)      { Text(InspectorPanel.adjustments.rawValue) }
+                Toggle(isOn: $localAdjustmentsActive) { Text(InspectorPanel.localAdjustments.rawValue) }
+                Toggle(isOn: $presetsActive)          { Text(InspectorPanel.presets.rawValue) }
+            }
             Divider()
-            Toggle(isOn: $analyseActive)          { Text(InspectorPanel.analyse.rawValue) }
-            Toggle(isOn: $navigationActive)       { Text(InspectorPanel.navigation.rawValue) }
-            Toggle(isOn: $hotpixelActive)         { Text(InspectorPanel.hotpixel.rawValue) }
-            Toggle(isOn: $inpaintActive)          { Text(InspectorPanel.inpaint.rawValue) }
+            Group {
+                Toggle(isOn: $analyseActive)          { Text(InspectorPanel.analyse.rawValue) }
+                Toggle(isOn: $navigationActive)       { Text(InspectorPanel.navigation.rawValue) }
+                Toggle(isOn: $hotpixelActive)         { Text(InspectorPanel.hotpixel.rawValue) }
+                Toggle(isOn: $inpaintActive)          { Text(InspectorPanel.inpaint.rawValue) }
+            }
+            Divider()
+            Button("Externe Plugins neu laden") {
+                PluginStore.shared.reload()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .option])
+            Button("Plugin-Ordner öffnen") {
+                PluginStore.shared.revealPluginDirectory()
+            }
         }
     }
 }

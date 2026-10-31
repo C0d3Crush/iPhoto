@@ -16,6 +16,8 @@ enum InspectorPanel: String, CaseIterable {
 
 struct InspectorView: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @ObservedObject private var pluginStore = PluginStore.shared
+
     @AppStorage("plugin.bewertung")   var ratingActive:           Bool = true
     @AppStorage("plugin.metadata")    var metadataActive:         Bool = true
     @AppStorage("plugin.anpassungen") var adjustmentsActive:      Bool = false
@@ -28,6 +30,7 @@ struct InspectorView: View {
 
     @State private var panelOrder: [InspectorPanel] = InspectorView.loadOrder()
     @State private var collapsed: Set<InspectorPanel> = Set(InspectorPanel.allCases)
+    @State private var collapsedPlugins: Set<String> = []
     @State private var draggingPanel: InspectorPanel?
 
     private var activePanels: Set<InspectorPanel> {
@@ -50,7 +53,7 @@ struct InspectorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if orderedActive.isEmpty {
+            if orderedActive.isEmpty && pluginStore.plugins.isEmpty {
                 Spacer()
                 Text("Kein Plugin aktiv")
                     .foregroundColor(.secondary)
@@ -72,6 +75,22 @@ struct InspectorView: View {
                                         target: panel,
                                         order: $panelOrder,
                                         dragging: $draggingPanel))
+                            Divider()
+                        }
+
+                        ForEach(pluginStore.plugins) { plugin in
+                            PluginBlock(
+                                plugin: plugin,
+                                isCollapsed: collapsedPlugins.contains(plugin.id),
+                                onToggleCollapse: {
+                                    if collapsedPlugins.contains(plugin.id) {
+                                        collapsedPlugins.remove(plugin.id)
+                                    } else {
+                                        collapsedPlugins.insert(plugin.id)
+                                    }
+                                }
+                            )
+                            .environmentObject(viewModel)
                             Divider()
                         }
                     }
@@ -243,5 +262,50 @@ private struct PanelDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         dragging = nil
         return true
+    }
+}
+
+// MARK: - Plugin Block
+
+private struct PluginBlock: View {
+    @EnvironmentObject var viewModel: ImageViewModel
+    let plugin: Plugin
+    let isCollapsed: Bool
+    let onToggleCollapse: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption)
+                    .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                Image(systemName: plugin.icon)
+                    .font(.caption)
+                    .foregroundColor(.accentColor)
+                Text(plugin.name)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button(action: onToggleCollapse) {
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor))
+            .contentShape(Rectangle())
+            .onTapGesture { onToggleCollapse() }
+
+            if !isCollapsed {
+                PluginPanelView(plugin: plugin)
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(Rectangle())
+            }
+        }
     }
 }
