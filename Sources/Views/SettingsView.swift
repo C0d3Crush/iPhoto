@@ -105,96 +105,51 @@ struct SettingsView: View {
 
     // MARK: - Toolbar
 
-    @AppStorage("actionBar.order")          private var actionBarOrderRaw: String = ""
-    @AppStorage("navtoolbar.showSidebar")    private var navShowSidebar    = true
-    @AppStorage("navtoolbar.showViewMode")   private var navShowViewMode   = true
-    @AppStorage("navtoolbar.showNavigation") private var navShowNavigation = true
-    @AppStorage("navtoolbar.showInspector")  private var navShowInspector  = true
-    @AppStorage("navtoolbar.showSort")       private var navShowSort       = true
-    @AppStorage("navtoolbar.showSlider")     private var navShowSlider     = true
-    @State private var toolbarItems: [ActionBarItem] = ActionBarItem.loadOrder()
+    @AppStorage("actionBar.order") private var actionBarOrderRaw: String = ""
+    @State private var unifiedEntries: [ToolbarEntry] = ToolbarEntry.loadUnified()
 
-    private var navToolbarToggles: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            navToggle("Seitenleiste", icon: "sidebar.left",           isOn: $navShowSidebar)
-            navToggle("Ansichtsmodus", icon: "square.grid.2x2",       isOn: $navShowViewMode)
-            navToggle("Navigation (← →)", icon: "chevron.left",      isOn: $navShowNavigation)
-            navToggle("Inspector", icon: "sidebar.right",             isOn: $navShowInspector)
-            navToggle("Sortierung (Grid)", icon: "arrow.up.arrow.down", isOn: $navShowSort)
-            navToggle("Rastergröße-Slider", icon: "slider.horizontal.3", isOn: $navShowSlider)
-        }
+    private func unifiedVisibilityBinding(for entry: ToolbarEntry) -> Binding<Bool> {
+        Binding(
+            get: { UserDefaults.standard.object(forKey: entry.visibilityKey) as? Bool ?? true },
+            set: { UserDefaults.standard.set($0, forKey: entry.visibilityKey) }
+        )
     }
 
-    private func navToggle(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            HStack(spacing: 8) {
-                Image(systemName: icon).frame(width: 16).foregroundColor(.secondary)
-                Text(title).font(.system(size: 12))
+    private func unifiedRow(for entry: ToolbarEntry) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 12))
+                .foregroundColor(Color(NSColor.tertiaryLabelColor))
+            Toggle(isOn: unifiedVisibilityBinding(for: entry)) {
+                HStack(spacing: 10) {
+                    Image(systemName: entry.icon).frame(width: 18).foregroundColor(.secondary)
+                    Text(entry.label).font(.system(size: 12))
+                }
             }
         }
-    }
-
-    private func visibilityBinding(for item: ActionBarItem) -> Binding<Bool> {
-        let key = "toolbar.item.\(item.rawValue)"
-        return Binding(
-            get: { UserDefaults.standard.object(forKey: key) as? Bool ?? true },
-            set: { UserDefaults.standard.set($0, forKey: key) }
-        )
+        .padding(.vertical, 2)
     }
 
     private var toolbarTab: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Navigationsleiste")
+            Text("Toolbar")
                 .font(.headline)
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 6)
-            navToolbarToggles
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
-
-            Divider().padding(.horizontal, 20)
-
-            Text("Toolbar-Buttons")
-                .font(.headline)
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
             Text("Reihenfolge per Drag ändern · Haken = sichtbar in der Toolbar")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 10)
+                .font(.caption).foregroundColor(.secondary)
+                .padding(.horizontal, 20).padding(.bottom, 10)
 
             List {
-                ForEach(toolbarItems, id: \.self) { item in
-                    HStack(spacing: 10) {
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                        Toggle(isOn: visibilityBinding(for: item)) {
-                            HStack(spacing: 10) {
-                                Image(systemName: item.icon)
-                                    .frame(width: 18)
-                                    .foregroundColor(.secondary)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.helpText.components(separatedBy: " (").first ?? item.helpText)
-                                        .font(.system(size: 12))
-                                    if let shortcut = item.helpText.components(separatedBy: "(").dropFirst().first?.replacingOccurrences(of: ")", with: "") {
-                                        Text(shortcut)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.vertical, 2)
+                ForEach(unifiedEntries) { entry in
+                    unifiedRow(for: entry)
                 }
                 .onMove { from, to in
-                    toolbarItems.move(fromOffsets: from, toOffset: to)
-                    ActionBarItem.saveOrder(toolbarItems)
-                    actionBarOrderRaw = toolbarItems.map(\.rawValue).joined(separator: ",")
+                    unifiedEntries.move(fromOffsets: from, toOffset: to)
+                    ToolbarEntry.saveUnified(unifiedEntries)
+                    actionBarOrderRaw = unifiedEntries
+                        .compactMap { ToolbarEntry.actionBarItem(from: $0) }
+                        .map(\.rawValue)
+                        .joined(separator: ",")
                 }
             }
             .listStyle(PlainListStyle())
@@ -203,20 +158,19 @@ struct SettingsView: View {
             HStack {
                 Spacer()
                 Button("Alle einblenden") {
-                    ActionBarItem.allCases.forEach {
-                        UserDefaults.standard.set(true, forKey: "toolbar.item.\($0.rawValue)")
+                    ToolbarEntry.allItems.forEach {
+                        UserDefaults.standard.set(true, forKey: $0.visibilityKey)
                     }
                 }
                 Button("Alle ausblenden") {
-                    ActionBarItem.allCases.forEach {
-                        UserDefaults.standard.set(false, forKey: "toolbar.item.\($0.rawValue)")
+                    ToolbarEntry.allItems.forEach {
+                        UserDefaults.standard.set(false, forKey: $0.visibilityKey)
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 20).padding(.vertical, 12)
         }
-        .onAppear { toolbarItems = ActionBarItem.loadOrder() }
+        .onAppear { unifiedEntries = ToolbarEntry.loadUnified() }
     }
 
     // MARK: - Sidebar
@@ -462,5 +416,57 @@ struct SettingsView: View {
                 .foregroundColor(.secondary)
                 .padding(.leading, 110)
         }
+    }
+}
+
+// MARK: - ToolbarEntry
+
+private struct ToolbarEntry: Identifiable, Hashable {
+    let id: String
+    let icon: String
+    let label: String
+    let visibilityKey: String
+
+    static let allNavItems: [ToolbarEntry] = [
+        ToolbarEntry(id: "nav.sidebar",    icon: "sidebar.left",          label: "Seitenleiste",        visibilityKey: "navtoolbar.showSidebar"),
+        ToolbarEntry(id: "nav.viewMode",   icon: "square.grid.2x2",       label: "Ansichtsmodus",       visibilityKey: "navtoolbar.showViewMode"),
+        ToolbarEntry(id: "nav.navigation", icon: "chevron.left",          label: "Navigation (← →)",    visibilityKey: "navtoolbar.showNavigation"),
+        ToolbarEntry(id: "nav.inspector",  icon: "sidebar.right",         label: "Inspector",           visibilityKey: "navtoolbar.showInspector"),
+        ToolbarEntry(id: "nav.sort",       icon: "arrow.up.arrow.down",   label: "Sortierung (Grid)",   visibilityKey: "navtoolbar.showSort"),
+        ToolbarEntry(id: "nav.slider",     icon: "slider.horizontal.3",   label: "Rastergröße-Slider",  visibilityKey: "navtoolbar.showSlider"),
+    ]
+
+    static var allActionItems: [ToolbarEntry] {
+        ActionBarItem.allCases.map { item in
+            ToolbarEntry(
+                id: "action.\(item.rawValue)",
+                icon: item.icon,
+                label: item.helpText.components(separatedBy: " (").first ?? item.helpText,
+                visibilityKey: "toolbar.item.\(item.rawValue)"
+            )
+        }
+    }
+
+    static var allItems: [ToolbarEntry] { allNavItems + allActionItems }
+
+    static func loadUnified() -> [ToolbarEntry] {
+        let raw = UserDefaults.standard.string(forKey: "toolbar.unified.order") ?? ""
+        guard !raw.isEmpty else { return allItems }
+        let byId = Dictionary(uniqueKeysWithValues: allItems.map { ($0.id, $0) })
+        let saved = raw.split(separator: ",").compactMap { byId[String($0)] }
+        let missing = allItems.filter { item in !saved.contains(where: { $0.id == item.id }) }
+        return saved + missing
+    }
+
+    static func saveUnified(_ entries: [ToolbarEntry]) {
+        UserDefaults.standard.set(entries.map(\.id).joined(separator: ","), forKey: "toolbar.unified.order")
+        let actionItems = entries.compactMap { actionBarItem(from: $0) }
+        ActionBarItem.saveOrder(actionItems)
+        UserDefaults.standard.set(actionItems.map(\.rawValue).joined(separator: ","), forKey: "actionBar.order")
+    }
+
+    static func actionBarItem(from entry: ToolbarEntry) -> ActionBarItem? {
+        guard entry.id.hasPrefix("action.") else { return nil }
+        return ActionBarItem(rawValue: String(entry.id.dropFirst(7)))
     }
 }

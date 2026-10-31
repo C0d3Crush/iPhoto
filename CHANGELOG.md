@@ -2,6 +2,15 @@
 
 ---
 
+## 1.38.0
+**Feature — Einheitliche Toolbar-Liste + Seitenleiste halb-expandierbar**
+
+- Einstellungen → Toolbar: Navigationsleiste und Toolbar-Buttons jetzt in einer einzigen Drag-and-Drop-Liste zusammengeführt
+- Alle 14 Toolbar-Elemente (6 Nav + 8 Aktions-Buttons) per Drag neuordnen und einzeln ein-/ausblenden
+- Expand-Button in der Seitenleiste zeigt jetzt Album-Raster auf erweiterter Breite — eine Bildspalte bleibt rechts sichtbar (kein Vollbild mehr)
+
+---
+
 ## 1.37.0
 **Feature — Toolbar in nativer Leiste, Album-Mosaik, Seitenleiste konfigurierbar**
 

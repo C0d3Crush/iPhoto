@@ -46,31 +46,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            HStack(spacing: 0) {
-                if viewModel.sidebarAlbumExpanded {
-                    AlbumGridExpandedView()
-                        .environmentObject(viewModel)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                } else {
-                    if viewModel.navSidebarVisible {
-                        NavSidebarView()
-                            .environmentObject(viewModel)
-                        Divider()
-                    }
-
-                    ZStack {
-                        mainContent
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-
-                if viewModel.inspectorVisible {
-                    Divider()
-                    InspectorView()
-                        .environmentObject(viewModel)
-                }
-            }
-
+            layoutArea
             if viewModel.modeSwitcherEnabled && viewModel.showModeSwitcher {
                 ModeSwitcherView()
                     .environmentObject(viewModel)
@@ -247,6 +223,34 @@ struct ContentView: View {
             Button(action: { viewModel.zoomIn() }) { Image(systemName: item.icon) }
                 .help(item.helpText).disabled(viewModel.currentImage == nil)
                 .keyboardShortcut("=", modifiers: .command)
+        }
+    }
+
+    @ViewBuilder private var layoutArea: some View {
+        HStack(spacing: 0) {
+            if viewModel.sidebarAlbumExpanded {
+                AlbumGridExpandedView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                Divider()
+                ZStack { mainContent }
+                    .frame(width: viewModel.gridThumbnailSize + 50)
+                    .frame(maxHeight: .infinity)
+            } else {
+                if viewModel.navSidebarVisible {
+                    NavSidebarView()
+                        .environmentObject(viewModel)
+                    Divider()
+                }
+                ZStack { mainContent }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            if viewModel.inspectorVisible {
+                Divider()
+                InspectorView()
+                    .environmentObject(viewModel)
+            }
         }
     }
 
