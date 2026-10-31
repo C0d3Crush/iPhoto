@@ -234,7 +234,8 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .transition(.move(edge: .leading).combined(with: .opacity))
                 Divider()
-                ZStack { mainContent }
+                LibraryFullGridView()
+                    .environmentObject(viewModel)
                     .frame(width: viewModel.gridThumbnailSize + 50)
                     .frame(maxHeight: .infinity)
             } else {
