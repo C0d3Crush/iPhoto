@@ -229,6 +229,14 @@ class ImageViewModel: ObservableObject {
                 .store(in: &cancellables)
         }
 
+        $searchQuery
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.invalidateVisibleOrder()
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: .importRequested)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.importFileDialog() }
