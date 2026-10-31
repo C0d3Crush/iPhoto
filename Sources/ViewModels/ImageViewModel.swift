@@ -25,6 +25,12 @@ class ImageViewModel: ObservableObject {
     @Published var navSelection: NavSelection? = .library
     @Published var showingLibraryDetail: Bool = false
     @Published var showFullGrid: Bool = false
+    @Published var libraryViewMode: LibraryViewMode = {
+        let raw = UserDefaults.standard.string(forKey: "library.viewMode") ?? "gallery"
+        return LibraryViewMode(rawValue: raw) ?? .gallery
+    }() {
+        didSet { UserDefaults.standard.set(libraryViewMode.rawValue, forKey: "library.viewMode") }
+    }
     // Detail-Ansicht aus Qualitäts-Views (Unscharf/Belichtung) heraus: gleiche
     // Logik wie showingLibraryDetail, aber für navSelection = .blurry/.under-/.overexposed.
     @Published var qualityDetailActive: Bool = false

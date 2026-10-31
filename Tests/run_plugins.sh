@@ -215,6 +215,39 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# viewmode — get/set
+# ---------------------------------------------------------------------------
+echo "--- ViewMode ---"
+
+# viewmode set grid — exit 0
+VIEWMODE_SET=$("$BIN" viewmode set grid 2>&1)
+VIEWMODE_EXIT=$?
+if [ $VIEWMODE_EXIT -eq 0 ]; then
+    pass "viewmode set grid (Exitcode 0)"
+else
+    fail "viewmode set grid" "Exitcode $VIEWMODE_EXIT: $VIEWMODE_SET"
+fi
+
+# viewmode get — returns one of the valid modes
+VIEWMODE_GET=$("$BIN" viewmode get 2>&1)
+if echo "$VIEWMODE_GET" | grep -qE '^(grid|list|columns|gallery)$'; then
+    pass "viewmode get (gibt gültigen Modus zurück: $VIEWMODE_GET)"
+else
+    fail "viewmode get" "Unerwartete Ausgabe: $VIEWMODE_GET"
+fi
+
+# viewmode set invalid — exit != 0
+VIEWMODE_BAD_EXIT=0
+"$BIN" viewmode set bogusmode > /dev/null 2>&1 || VIEWMODE_BAD_EXIT=$?
+if [ $VIEWMODE_BAD_EXIT -ne 0 ]; then
+    pass "viewmode set <ungültig> (Exitcode != 0)"
+else
+    fail "viewmode set bogusmode" "Hätte fehlschlagen sollen (Exitcode 0 zurückgegeben)"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

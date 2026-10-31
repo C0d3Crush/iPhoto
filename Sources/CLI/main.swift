@@ -24,6 +24,8 @@ private func printUsage() {
       iphoto-cli inpaint <datei> --output <ziel> [--python /usr/bin/python3] [--cmt ~/cmt] [--checkpoint ~/cmt/checkpoints]
       iphoto-cli plugins list [--json]
       iphoto-cli plugins dir
+      iphoto-cli viewmode get
+      iphoto-cli viewmode set <grid|list|columns|gallery>
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -1087,6 +1089,41 @@ private func runPlugins(_ subArgs: [String]) -> Int32 {
     }
 }
 
+// MARK: - ViewMode Command
+
+private let viewModeKey = "library.viewMode"
+private let validViewModes = ["grid", "list", "columns", "gallery"]
+
+private func runViewMode(_ subArgs: [String]) -> Int32 {
+    let sub = subArgs.first ?? ""
+    switch sub {
+    case "get":
+        let defaults = UserDefaults.standard
+        // UserDefaults.standard in CLI reads from the app's domain if IPHOTO_CATALOG_DB is set,
+        // but for a headless CLI we use a shared suite. Fall back to "gallery" when unset.
+        let current = defaults.string(forKey: viewModeKey) ?? "gallery"
+        print(current)
+        return 0
+    case "set":
+        guard subArgs.count >= 2 else {
+            fputs("Fehler: 'viewmode set' benötigt einen Modus: grid|list|columns|gallery\n", stderr)
+            return 1
+        }
+        let mode = subArgs[1].lowercased()
+        guard validViewModes.contains(mode) else {
+            fputs("Fehler: Unbekannter Modus '\(mode)'. Erlaubt: grid, list, columns, gallery\n", stderr)
+            return 1
+        }
+        UserDefaults.standard.set(mode, forKey: viewModeKey)
+        UserDefaults.standard.synchronize()
+        print("Ansicht gesetzt: \(mode)")
+        return 0
+    default:
+        fputs("Fehler: Unbekannter viewmode-Unterbefehl '\(sub)'. Erlaubt: get, set <modus>\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -1101,6 +1138,10 @@ if firstArg == "preset" {
 if firstArg == "plugins" {
     let subArgs = Array(rawArgs.dropFirst(2))
     exit(runPlugins(subArgs))
+}
+if firstArg == "viewmode" {
+    let subArgs = Array(rawArgs.dropFirst(2))
+    exit(runViewMode(subArgs))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

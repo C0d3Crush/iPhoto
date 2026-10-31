@@ -2,6 +2,20 @@
 
 ---
 
+## 1.32.0
+**Feature — Ansichts-Wechsler (Als Symbole / Als Liste / Als Spalten / Als Galerie)**
+
+- Neues `LibraryViewMode`-Enum (`grid`, `list`, `columns`, `gallery`) mit Persistenz in UserDefaults (`library.viewMode`)
+- Toolbar zeigt im Bibliothek-Modus ein Menü mit allen vier Ansichten; aktive Ansicht wird per Häkchen markiert
+- „Als Symbole" (`square.grid.2x2`): bestehende `LibraryFullGridView`
+- „Als Liste" (`list.bullet`): neue `LibraryListView` — kompakte Tabellenzeilen mit Thumbnail, Dateiname, Bewertung und Flag
+- „Als Spalten" (`rectangle.split.2x1.fill`): neue `LibraryColumnsView` — schmale Thumbnail-Liste links, Detailansicht rechts (HSplitView)
+- „Als Galerie" (`photo`): bestehende Detail- + Filmstreifen-Ansicht
+- `iphoto-cli viewmode get` und `iphoto-cli viewmode set <modus>` zum Lesen/Setzen der Ansicht
+- `Tests/run_plugins.sh` um drei viewmode-CLI-Tests erweitert
+
+---
+
 ## 1.31.0
 **Feature — SmartFolder Farbanteil-Filter + Panel-Bug behoben + Toolbar-Trenner entfernt**
 

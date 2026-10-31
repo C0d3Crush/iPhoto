@@ -73,6 +73,23 @@ struct ContentView: View {
                 }
 
                 let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
+                if isLibrary && !viewModel.compare.active {
+                    Menu {
+                        ForEach(LibraryViewMode.allCases, id: \.self) { mode in
+                            Button(action: { viewModel.libraryViewMode = mode }) {
+                                Label(
+                                    mode.displayName,
+                                    systemImage: viewModel.libraryViewMode == mode ? "checkmark" : mode.icon
+                                )
+                            }
+                        }
+                    } label: {
+                        Image(systemName: viewModel.libraryViewMode.icon)
+                    }
+                    .help("Ansicht wählen")
+                    .menuStyle(BorderlessButtonMenuStyle())
+                    .fixedSize()
+                }
                 if !isLibrary && !viewModel.compare.active {
                     Button(action: { viewModel.showFullGrid.toggle() }) {
                         Image(systemName: viewModel.showFullGrid ? "rectangle.split.2x1" : "square.grid.3x3")
@@ -204,7 +221,6 @@ struct ContentView: View {
 
     @ViewBuilder private var mainContent: some View {
         let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
-        let showGrid = (isLibrary && !viewModel.showingLibraryDetail) || (!isLibrary && viewModel.showFullGrid)
         let inQualityOverview = !viewModel.qualityDetailActive
             && (viewModel.navSelection == .blurry
                 || viewModel.navSelection == .underexposed
@@ -248,7 +264,24 @@ struct ContentView: View {
             ExposureView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if showGrid {
+        } else if isLibrary && !viewModel.showingLibraryDetail {
+            switch viewModel.libraryViewMode {
+            case .grid:
+                LibraryFullGridView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .list:
+                LibraryListView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .columns:
+                LibraryColumnsView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .gallery:
+                detailWithStrip
+            }
+        } else if !isLibrary && viewModel.showFullGrid {
             LibraryFullGridView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
