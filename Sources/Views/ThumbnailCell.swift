@@ -94,23 +94,6 @@ struct ThumbnailCell: View {
                 .frame(width: thumbnailWidth, height: thumbH)
             }
 
-                // Anpassungs-Badge △ — top trailing, lila (wie im Screenshot)
-                if document.hasPersistedAdjustments {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Image(systemName: "triangle.fill")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(4)
-                                .background(Circle().fill(Color.purple))
-                                .padding([.top, .trailing], 4)
-                        }
-                        Spacer()
-                    }
-                    .frame(width: thumbnailWidth, height: thumbH)
-                }
-
                 flagAndQualityOverlay
             }
 
@@ -157,7 +140,9 @@ struct ThumbnailCell: View {
     // aufgibt ("unable to type-check this expression in reasonable time").
     @ViewBuilder
     private var flagAndQualityOverlay: some View {
-        if document.flagStatus != .none || isBlurry || isUnder || isOver || isEyesClosed || isBestInStack {
+        let hasAny = document.flagStatus != .none || isBlurry || isUnder || isOver
+                     || isEyesClosed || isBestInStack || document.hasPersistedAdjustments
+        if hasAny {
             VStack {
                 HStack(spacing: 3) {
                     Spacer()
@@ -178,6 +163,9 @@ struct ThumbnailCell: View {
                     if isUnder      { qualityBadge(system: "moon.fill",          color: .blue) }
                     if isOver       { qualityBadge(system: "sun.max.fill",       color: .yellow) }
                     if isEyesClosed { qualityBadge(system: "eye.slash.fill",     color: .pink) }
+                    if document.hasPersistedAdjustments {
+                        qualityBadge(system: "triangle.fill", color: .purple)
+                    }
                 }
                 .padding([.top, .trailing], 4)
                 Spacer()
