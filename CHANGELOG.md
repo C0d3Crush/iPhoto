@@ -2,6 +2,13 @@
 
 ---
 
+## 1.35.1
+**Bugfix — Suche aktualisiert Bildliste**
+
+- Sucheingabe hat die sichtbare Bildliste nicht aktualisiert, da der visibleDocuments-Cache nie invalidiert wurde — behoben
+
+---
+
 ## 1.35.0
 **Feature — Toolbar-Jiggle, Suche, Werkzeuge-Panel + „Für Geeks"-Log**
 
