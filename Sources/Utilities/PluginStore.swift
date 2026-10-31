@@ -15,7 +15,7 @@ final class PluginStore: ObservableObject {
 
     init() {
         createDirectoryIfNeeded()
-        writeBuiltinsIfNeeded()
+        writeBuiltins()
         writeExampleIfNeeded()
         reload()
     }
@@ -212,10 +212,9 @@ final class PluginStore: ObservableObject {
         """),
     ]
 
-    private func writeBuiltinsIfNeeded() {
+    private func writeBuiltins() {
         for (filename, json) in PluginStore.builtins {
             let url = pluginDirectory.appendingPathComponent(filename)
-            guard !FileManager.default.fileExists(atPath: url.path) else { continue }
             try? json.write(to: url, atomically: true, encoding: .utf8)
         }
     }
