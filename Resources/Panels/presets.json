@@ -1,0 +1,1 @@
+{ "id": "presets", "name": "Rezepte", "icon": "wand.and.stars", "defaultEnabled": false, "order": 5, "storageKey": "plugin.rezepte" }

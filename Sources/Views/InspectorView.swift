@@ -1,73 +1,37 @@
 import SwiftUI
 
-enum InspectorPanel: String, CaseIterable {
-    case rating           = "Bewertung"
-    case metadata         = "Metadaten"
-    case adjustments      = "Anpassungen"
-    case localAdjustments = "Lokal"
-    case presets          = "Rezepte"
-    case analyse          = "Analyse"
-    case navigation       = "Navigation"
-    case hotpixel         = "Hotpixel"
-    case inpaint          = "Inpaint"
-
-    var storageKey: String { "plugin.\(rawValue.lowercased())" }
-}
-
 struct InspectorView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @ObservedObject private var pluginStore = PluginStore.shared
+    @ObservedObject private var panelStore  = PanelStore.shared
 
-    @AppStorage("plugin.bewertung")   var ratingActive:           Bool = true
-    @AppStorage("plugin.metadata")    var metadataActive:         Bool = true
-    @AppStorage("plugin.anpassungen") var adjustmentsActive:      Bool = false
-    @AppStorage("plugin.lokal")       var localAdjustmentsActive: Bool = false
-    @AppStorage("plugin.rezepte")     var presetsActive:          Bool = false
-    @AppStorage("plugin.analyse")     var analyseActive:          Bool = false
-    @AppStorage("plugin.navigation")  var navigationActive:       Bool = false
-    @AppStorage("plugin.hotpixel")    var hotpixelActive:         Bool = false
-    @AppStorage("plugin.inpaint")     var inpaintActive:          Bool = false
-
-    @State private var panelOrder: [InspectorPanel] = InspectorView.loadOrder()
-    @State private var collapsed: Set<InspectorPanel> = Set(InspectorPanel.allCases)
+    @State private var panelOrder: [PanelDescriptor] =
+        PanelStore.loadDisplayOrder(from: PanelStore.shared.panels)
+    @State private var collapsed: Set<String> = Set(PanelStore.shared.panels.map(\.id))
     @State private var collapsedPlugins: Set<String> = []
-    @State private var draggingPanel: InspectorPanel?
+    @State private var draggingPanel: PanelDescriptor?
 
-    private var activePanels: Set<InspectorPanel> {
-        var s = Set<InspectorPanel>()
-        if ratingActive           { s.insert(.rating) }
-        if metadataActive         { s.insert(.metadata) }
-        if adjustmentsActive      { s.insert(.adjustments) }
-        if localAdjustmentsActive { s.insert(.localAdjustments) }
-        if presetsActive          { s.insert(.presets) }
-        if analyseActive          { s.insert(.analyse) }
-        if navigationActive       { s.insert(.navigation) }
-        if hotpixelActive         { s.insert(.hotpixel) }
-        if inpaintActive          { s.insert(.inpaint) }
-        return s
-    }
-
-    private var orderedActive: [InspectorPanel] {
-        panelOrder.filter { activePanels.contains($0) }
+    private var orderedActive: [PanelDescriptor] {
+        panelOrder.filter { panelStore.isEnabled($0.id) }
     }
 
     var body: some View {
         VStack(spacing: 0) {
             if orderedActive.isEmpty && pluginStore.plugins.isEmpty {
                 Spacer()
-                Text("Kein Plugin aktiv")
+                Text("Kein Panel aktiv")
                     .foregroundColor(.secondary)
                     .font(.callout)
                 Spacer()
             } else {
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(spacing: 0) {
-                        ForEach(orderedActive, id: \.self) { panel in
+                        ForEach(orderedActive, id: \.id) { panel in
                             InspectorBlock(
                                 panel: panel,
-                                isCollapsed: collapsed.contains(panel),
+                                isCollapsed: collapsed.contains(panel.id),
                                 draggingPanel: $draggingPanel,
-                                onToggleCollapse: { toggle(panel) }
+                                onToggleCollapse: { toggleCollapsed(panel.id) }
                             )
                             .opacity(draggingPanel == panel ? 0.4 : 1.0)
                             .onDrop(of: ["public.text"],
@@ -143,46 +107,34 @@ struct InspectorView: View {
             VersionHistorySheet(isPresented: $viewModel.versions.showHistory)
                 .environmentObject(viewModel)
         }
-        .onChange(of: panelOrder) { InspectorView.saveOrder($0) }
+        .onChange(of: panelOrder) { PanelStore.saveDisplayOrder($0) }
+        .onChange(of: panelStore.panels) { newPanels in
+            // Sync order when panels change (e.g. after bundle reload)
+            panelOrder = PanelStore.loadDisplayOrder(from: newPanels)
+        }
     }
 
-
-    private func toggle(_ panel: InspectorPanel) {
-        if collapsed.contains(panel) { collapsed.remove(panel) }
-        else { collapsed.insert(panel) }
-    }
-
-    // MARK: - Order persistence
-
-    private static func loadOrder() -> [InspectorPanel] {
-        let raw = UserDefaults.standard.string(forKey: "inspector.panelOrder") ?? ""
-        let saved = raw.split(separator: ",").compactMap { InspectorPanel(rawValue: String($0)) }
-        return Set(saved) == Set(InspectorPanel.allCases) ? saved : InspectorPanel.allCases
-    }
-
-    private static func saveOrder(_ order: [InspectorPanel]) {
-        UserDefaults.standard.set(order.map(\.rawValue).joined(separator: ","),
-                                  forKey: "inspector.panelOrder")
+    private func toggleCollapsed(_ id: String) {
+        if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
     }
 }
 
 // MARK: - Block
 
 private struct InspectorBlock: View {
-    let panel: InspectorPanel
+    let panel: PanelDescriptor
     let isCollapsed: Bool
-    @Binding var draggingPanel: InspectorPanel?
+    @Binding var draggingPanel: PanelDescriptor?
     let onToggleCollapse: () -> Void
     @EnvironmentObject var viewModel: ImageViewModel
 
     var body: some View {
         VStack(spacing: 0) {
-            // Draggable header
             HStack(spacing: 6) {
                 Image(systemName: "line.3.horizontal")
                     .font(.caption)
                     .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                Text(panel.rawValue)
+                Text(panel.name)
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(.secondary)
@@ -201,10 +153,9 @@ private struct InspectorBlock: View {
             .onTapGesture { onToggleCollapse() }
             .onDrag {
                 DispatchQueue.main.async { draggingPanel = panel }
-                return NSItemProvider(object: panel.rawValue as NSString)
+                return NSItemProvider(object: panel.id as NSString)
             }
 
-            // Content
             if !isCollapsed {
                 panelContent
                     .frame(maxWidth: .infinity)
@@ -215,25 +166,17 @@ private struct InspectorBlock: View {
 
     @ViewBuilder
     private var panelContent: some View {
-        switch panel {
-        case .rating:
-            RatingPanel()
-        case .metadata:
-            MetadataPanel()
-        case .adjustments:
-            AdjustmentsPanel()
-        case .localAdjustments:
-            LocalAdjustmentsPanel()
-        case .presets:
-            PresetsPanel()
-        case .analyse:
-            AnalysePanel()
-        case .navigation:
-            NavigationPanel()
-        case .hotpixel:
-            HotPixelPanel()
-        case .inpaint:
-            InpaintPanel()
+        switch panel.id {
+        case "rating":      RatingPanel()
+        case "metadata":    MetadataPanel()
+        case "adjustments": AdjustmentsPanel()
+        case "local":       LocalAdjustmentsPanel()
+        case "presets":     PresetsPanel()
+        case "analyse":     AnalysePanel()
+        case "navigation":  NavigationPanel()
+        case "hotpixel":    HotPixelPanel()
+        case "inpaint":     InpaintPanel()
+        default:            EmptyView()
         }
     }
 }
@@ -241,9 +184,9 @@ private struct InspectorBlock: View {
 // MARK: - Drop delegate
 
 private struct PanelDropDelegate: DropDelegate {
-    let target: InspectorPanel
-    @Binding var order: [InspectorPanel]
-    @Binding var dragging: InspectorPanel?
+    let target: PanelDescriptor
+    @Binding var order: [PanelDescriptor]
+    @Binding var dragging: PanelDescriptor?
 
     func dropEntered(info: DropInfo) {
         guard let src = dragging, src != target,

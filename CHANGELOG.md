@@ -2,6 +2,16 @@
 
 ---
 
+## 1.28.0
+**Feature — Dateibasierte Inspector-Panels**
+
+- Eingebaute Inspector-Panels (Bewertung, Metadaten, Anpassungen, Lokal, Rezepte, Analyse, Navigation, Hotpixel, Inpaint) sind jetzt als JSON-Dateien in `Resources/Panels/` definiert
+- `PanelStore` lädt Panel-Metadaten (Name, Icon, Standard-Aktivierung, Reihenfolge) dynamisch aus dem App-Bundle
+- Reihenfolge, Aktivierung und Einklapp-Zustand bleiben wie bisher per UserDefaults erhalten; bestehende Einstellungen bleiben durch identische Storage-Keys kompatibel
+- Menü „Panels" zeigt die Panels direkt aus der Dateiliste — keine hardcodierten Einträge mehr im Swift-Code
+
+---
+
 ## 1.27.5
 **Feature — Änderungs-Badge auf Thumbnails**
 

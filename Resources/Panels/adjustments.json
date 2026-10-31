@@ -1,0 +1,1 @@
+{ "id": "adjustments", "name": "Anpassungen", "icon": "slider.horizontal.3", "defaultEnabled": false, "order": 3, "storageKey": "plugin.anpassungen" }

@@ -145,6 +145,7 @@ echo "==> Linke…"
 echo "==> Kopiere Ressourcen…"
 cp "$ROOT/Resources/Info.plist" "$CONTENTS/Info.plist"
 printf 'APPL????' > "$CONTENTS/PkgInfo"
+cp -r "$ROOT/Resources/Panels" "$CONTENTS/Resources/Panels"
 
 echo "==> Signiere App (ad-hoc)…"
 CODESIGN_ALLOCATE="${CODESIGN_ALLOCATE}" \

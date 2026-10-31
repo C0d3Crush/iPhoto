@@ -1,0 +1,1 @@
+{ "id": "inpaint", "name": "Inpaint", "icon": "wand.and.rays", "defaultEnabled": false, "order": 9, "storageKey": "plugin.inpaint" }
