@@ -109,11 +109,6 @@ struct ContentView: View {
                         .help("Original / Anpassungen")
                         .disabled(viewModel.currentImage == nil)
                     }
-                }
-            }
-
-            ToolbarItemGroup(placement: .automatic) {
-                if !viewModel.compare.active {
                     if showRotate {
                         Button(action: { viewModel.rotateLeft() }) {
                             Image(systemName: "rotate.left")

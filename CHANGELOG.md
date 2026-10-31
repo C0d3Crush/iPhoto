@@ -2,6 +2,15 @@
 
 ---
 
+## 1.31.0
+**Feature — SmartFolder Farbanteil-Filter + Panel-Bug behoben + Toolbar-Trenner entfernt**
+
+- Neues SmartFolder-Kriterium „Farbanteil (%)" (R/G/B-Kanal): filtert Bilder nach dem durchschnittlichen Anteil eines Farbkanals (Operatoren: größer als, kleiner als, im Bereich)
+- Bugfix: `Plugin.Codable` nutzte Swift-Standardwerte nicht für fehlende JSON-Felder — alle Panels wurden lautlos verworfen, sodass der Inspector immer „Kein Panel aktiv" zeigte; eigener `init(from decoder:)` mit `decodeIfPresent` behebt das
+- Bugfix: Zwei getrennte `ToolbarItemGroup(placement: .automatic)` erzeugten einen überzähligen Trenner in der Toolbar; zu einer Gruppe zusammengeführt
+
+---
+
 ## 1.30.0
 **Feature — Bildvergleich als Plugin + iphoto-cli plugins-Befehl + PluginStore-Initialisierung repariert**
 

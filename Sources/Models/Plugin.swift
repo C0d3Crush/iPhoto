@@ -17,6 +17,21 @@ struct Plugin: Identifiable, Codable, Equatable {
 
     var isBuiltin: Bool { builtin != nil }
 
+    // Synthesized Codable doesn't use Swift default values for missing keys,
+    // so we handle optional fields manually to stay compatible with all JSON variants.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id             = try c.decode(String.self,        forKey: .id)
+        name           = try c.decode(String.self,        forKey: .name)
+        icon           = try c.decodeIfPresent(String.self,     forKey: .icon)          ?? "puzzlepiece.extension"
+        builtin        = try c.decodeIfPresent(String.self,     forKey: .builtin)
+        order          = try c.decodeIfPresent(Int.self,        forKey: .order)         ?? 99
+        defaultEnabled = try c.decodeIfPresent(Bool.self,       forKey: .defaultEnabled) ?? true
+        storageKey     = try c.decodeIfPresent(String.self,     forKey: .storageKey)    ?? ""
+        rows           = try c.decodeIfPresent([PluginRow].self,    forKey: .rows)      ?? []
+        actions        = try c.decodeIfPresent([PluginAction].self, forKey: .actions)   ?? []
+    }
+
     struct PluginRow: Codable, Equatable {
         let label: String
         var command: String?

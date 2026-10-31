@@ -413,6 +413,37 @@ private struct CriterionRow: View {
                 }
             }
 
+        // --- Farbanteil ---
+        case .colorRatio:
+            HStack(spacing: 6) {
+                Picker("", selection: $criterion.textValue) {
+                    Text("Rot (R)").tag("R")
+                    Text("Grün (G)").tag("G")
+                    Text("Blau (B)").tag("B")
+                }
+                .labelsHidden()
+                .pickerStyle(MenuPickerStyle())
+                .frame(width: 90)
+                .onAppear { if criterion.textValue.isEmpty { criterion.textValue = "R" } }
+
+                if criterion.op == .inRange {
+                    Stepper("", value: $criterion.numericValue, in: 0...100, step: 1)
+                        .labelsHidden().frame(width: 60)
+                    Text(String(format: "%.0f", criterion.numericValue) + " %")
+                        .font(.caption).foregroundColor(.secondary)
+                    Text("–").font(.caption).foregroundColor(.secondary)
+                    Stepper("", value: $criterion.numericValue2, in: 0...100, step: 1)
+                        .labelsHidden().frame(width: 60)
+                    Text(String(format: "%.0f", criterion.numericValue2) + " %")
+                        .font(.caption).foregroundColor(.secondary)
+                } else {
+                    Stepper("", value: $criterion.numericValue, in: 0...100, step: 1)
+                        .labelsHidden().frame(width: 60)
+                    Text(String(format: "%.0f %%", criterion.numericValue))
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+
         // --- Intelligenter Ordner (Rule-Tree) ---
         case .smartFolderRef:
             let available = viewModel.library.smartFolders.filter { $0.id != excludingSmartFolderID }
