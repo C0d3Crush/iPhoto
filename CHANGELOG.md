@@ -2,6 +2,13 @@
 
 ---
 
+## 1.38.1
+**Bugfix — Seitenleisten-Expand im richtigen Modus**
+
+- Der schmale Bild-Streifen beim Expand zeigt jetzt immer die Rasteransicht (eine Spalte), egal welcher Darstellungsmodus aktiv ist — Liste/Spalten/Galerie hätten dort keinen Platz
+
+---
+
 ## 1.38.0
 **Feature — Einheitliche Toolbar-Liste + Seitenleiste halb-expandierbar**
 
