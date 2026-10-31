@@ -17,11 +17,21 @@ final class PluginStore: ObservableObject {
         createDirectoryIfNeeded()
         writeBuiltins()
         writeExampleIfNeeded()
-        reload()
+        let (loaded, enabled) = Self.loadFromDisk(at: pluginDirectory)
+        plugins = loaded
+        enabledIDs = enabled
     }
 
     func reload() {
         let dir = pluginDirectory
+        let (loaded, enabled) = Self.loadFromDisk(at: dir)
+        DispatchQueue.main.async {
+            self.plugins = loaded
+            self.enabledIDs = enabled
+        }
+    }
+
+    private static func loadFromDisk(at dir: URL) -> ([Plugin], Set<String>) {
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
         ).filter { $0.pathExtension == "json" }) ?? []
@@ -36,11 +46,7 @@ final class PluginStore: ObservableObject {
             let stored = UserDefaults.standard.object(forKey: plugin.resolvedStorageKey) as? Bool
             if stored ?? plugin.defaultEnabled { enabled.insert(plugin.id) }
         }
-
-        DispatchQueue.main.async {
-            self.plugins = loaded
-            self.enabledIDs = enabled
-        }
+        return (loaded, enabled)
     }
 
     func revealPluginDirectory() {
@@ -111,6 +117,17 @@ final class PluginStore: ObservableObject {
     }
 
     private static let builtins: [(filename: String, json: String)] = [
+        ("builtin-compare.json", """
+        {
+          "id": "com.iphoto.builtin.compare",
+          "name": "Bildvergleich",
+          "icon": "arrow.left.arrow.right",
+          "builtin": "compare",
+          "order": 0,
+          "defaultEnabled": true,
+          "storageKey": "feature.compareEnabled"
+        }
+        """),
         ("builtin-rating.json", """
         {
           "id": "com.iphoto.builtin.rating",

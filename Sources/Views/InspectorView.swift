@@ -161,6 +161,7 @@ private struct PluginBlock: View {
     @ViewBuilder
     private func builtinView(for key: String) -> some View {
         switch key {
+        case "compare":     ComparePanel()
         case "rating":      RatingPanel()
         case "metadata":    MetadataPanel()
         case "adjustments": AdjustmentsPanel()

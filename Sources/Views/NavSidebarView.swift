@@ -4,6 +4,7 @@ private let kSmartFolderIDType = "com.c0d3cru5h.iphoto.smartfolder-id"
 
 struct NavSidebarView: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @ObservedObject private var pluginStore = PluginStore.shared
     @State private var showCreateAlbum = false
     @State private var newAlbumName = ""
     @State private var renamingAlbum: Album? = nil
@@ -57,7 +58,7 @@ struct NavSidebarView: View {
                     ) {
                         viewModel.navSelection = .library
                     }
-                    if viewModel.compareFeatureEnabled {
+                    if pluginStore.isEnabled("com.iphoto.builtin.compare") {
                         navRow(
                             label: "Bildvergleich",
                             icon: "arrow.left.arrow.right",

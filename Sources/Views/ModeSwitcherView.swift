@@ -10,6 +10,7 @@ private struct ModeTile {
 
 struct ModeSwitcherView: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @ObservedObject private var pluginStore = PluginStore.shared
 
     private func makeTiles() -> [ModeTile] {
         var tiles: [ModeTile] = [
@@ -24,7 +25,7 @@ struct ModeSwitcherView: View {
             },
         ]
 
-        if viewModel.compareFeatureEnabled {
+        if pluginStore.isEnabled("com.iphoto.builtin.compare") {
             tiles.append(ModeTile(
                 title: "Bildvergleich",
                 subtitle: "ELO-Duelle starten",

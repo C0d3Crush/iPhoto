@@ -22,6 +22,8 @@ private func printUsage() {
       iphoto-cli preset apply <datei> --name <name> --output <ziel> [--format jpeg] [--quality 0.9]
       iphoto-cli analyse <datei|ordner> [--json] [--blur-threshold N] [--shadow N] [--highlight N]
       iphoto-cli inpaint <datei> --output <ziel> [--python /usr/bin/python3] [--cmt ~/cmt] [--checkpoint ~/cmt/checkpoints]
+      iphoto-cli plugins list [--json]
+      iphoto-cli plugins dir
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -32,6 +34,7 @@ private func printUsage() {
     preset:   Zeigt Built-in-Presets oder wendet einen an
     analyse:  Analysiert Schärfe und Belichtung (Blur + Exposure)
     inpaint:  KI-basiertes Inpainting via CMT (benötigt Python + CMT-Installation)
+    plugins:  Listet installierte Plugins/Panels auf oder zeigt den Plugin-Ordner
     """)
 }
 
@@ -1013,16 +1016,91 @@ private func runHDR(_ args: CLIArgs) -> Int32 {
     return failed == 0 ? 0 : 1
 }
 
+// MARK: - Plugins Command
+
+private func runPlugins(_ subArgs: [String]) -> Int32 {
+    let pluginDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("iPhoto/Plugins")
+
+    let sub = subArgs.first ?? "list"
+    let jsonOutput = subArgs.contains("--json")
+
+    switch sub {
+    case "dir":
+        print(pluginDir.path)
+        return 0
+    case "list":
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: pluginDir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
+        ).filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }) ?? []
+
+        struct PluginInfo: Codable {
+            let id: String
+            let name: String
+            let icon: String
+            let builtin: String?
+            let order: Int
+            let defaultEnabled: Bool
+        }
+
+        var infos: [PluginInfo] = []
+        for url in urls {
+            guard let data = try? Data(contentsOf: url),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let id = obj["id"] as? String,
+                  let name = obj["name"] as? String else { continue }
+            infos.append(PluginInfo(
+                id: id,
+                name: name,
+                icon: obj["icon"] as? String ?? "puzzlepiece.extension",
+                builtin: obj["builtin"] as? String,
+                order: obj["order"] as? Int ?? 99,
+                defaultEnabled: obj["defaultEnabled"] as? Bool ?? true
+            ))
+        }
+        infos.sort { $0.order < $1.order }
+
+        if jsonOutput {
+            if let data = try? JSONEncoder().encode(infos),
+               let str = String(data: data, encoding: .utf8) {
+                print(str)
+            }
+        } else {
+            func padRight(_ s: String, _ w: Int) -> String {
+                s.count >= w ? s : s + String(repeating: " ", count: w - s.count)
+            }
+            print("Plugin-Ordner: \(pluginDir.path)")
+            print("─────────────────────────────────────")
+            for p in infos {
+                let kind = p.builtin != nil ? "[builtin:\(p.builtin!)]" : "[extern]"
+                let orderStr = padRight(String(p.order), 4)
+                let nameStr  = padRight(p.name, 30)
+                print("  \(orderStr)  \(nameStr)  \(kind)  \(p.id)")
+            }
+            print("─────────────────────────────────────")
+            print("  \(infos.count) Plugins/Panels")
+        }
+        return 0
+    default:
+        fputs("Fehler: Unbekannter plugins-Unterbefehl '\(sub)'. Erlaubt: list, dir\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
 guard rawArgs.count >= 2 else { printUsage(); exit(0) }
 
-// Special case: "preset" command needs its sub-args forwarded differently
+// Special case: "preset" and "plugins" commands need their sub-args forwarded differently
 let firstArg = rawArgs[1]
 if firstArg == "preset" {
     let subArgs = Array(rawArgs.dropFirst(2))
     exit(runPreset(subArgs))
+}
+if firstArg == "plugins" {
+    let subArgs = Array(rawArgs.dropFirst(2))
+    exit(runPlugins(subArgs))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

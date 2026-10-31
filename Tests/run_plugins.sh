@@ -185,6 +185,36 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# plugins list — at least 9 panels (builtins) are listed
+# ---------------------------------------------------------------------------
+echo "--- Plugins ---"
+PLUGIN_LIST=$("$BIN" plugins list 2>&1)
+PLUGIN_COUNT=$(echo "$PLUGIN_LIST" | grep -c "\[builtin:" || true)
+if [ "$PLUGIN_COUNT" -ge 9 ]; then
+    pass "plugins list (mindestens 9 Builtin-Panels gefunden)"
+else
+    fail "plugins list" "Weniger als 9 Builtin-Panels: $PLUGIN_COUNT gefunden. Output: $PLUGIN_LIST"
+fi
+
+# plugins list --json — valid JSON array with at least 9 items
+PLUGIN_JSON=$("$BIN" plugins list --json 2>&1)
+if echo "$PLUGIN_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list) and len(lst)>=9, f'nur {len(lst)} Einträge'" 2>/dev/null; then
+    pass "plugins list --json (valides JSON-Array mit ≥9 Einträgen)"
+else
+    fail "plugins list --json" "Kein valides JSON-Array oder <9 Einträge: $PLUGIN_JSON"
+fi
+
+# plugins dir — prints an existing path
+PLUGIN_DIR=$("$BIN" plugins dir 2>&1)
+if [ -d "$PLUGIN_DIR" ]; then
+    pass "plugins dir (Verzeichnis existiert: $PLUGIN_DIR)"
+else
+    fail "plugins dir" "Verzeichnis existiert nicht: $PLUGIN_DIR"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

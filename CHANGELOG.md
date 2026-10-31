@@ -2,6 +2,18 @@
 
 ---
 
+## 1.30.0
+**Feature — Bildvergleich als Plugin + iphoto-cli plugins-Befehl + PluginStore-Initialisierung repariert**
+
+- `PluginStore.init()` lädt Plugins jetzt synchron, sodass `InspectorView` beim ersten Rendern nie mehr „Kein Panel aktiv" zeigt
+- Bildvergleich als eingebautes Plugin `com.iphoto.builtin.compare` (order: 0) hinzugefügt — mit eigenem `ComparePanel` im Inspector
+- `NavSidebarView` und `ModeSwitcherView` prüfen die Bildvergleich-Anzeige jetzt über `PluginStore.isEnabled(...)` statt `viewModel.compareFeatureEnabled`
+- `iphoto-cli plugins list [--json]` zeigt alle installierten Plugins/Panels
+- `iphoto-cli plugins dir` gibt den Plugin-Ordner-Pfad aus
+- `Tests/run_plugins.sh` um drei neue CLI-Tests für den `plugins`-Befehl erweitert
+
+---
+
 ## 1.29.1
 **Bugfix — Builtin-Panel-Dateien immer sichtbar**
 
