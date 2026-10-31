@@ -2,6 +2,17 @@
 
 ---
 
+## 1.29.0
+**Feature — Eingebaute Panels als Dateien im Plugin-Ordner**
+
+- Alle neun eingebauten Inspector-Panels (Bewertung, Metadaten, Anpassungen, Lokal, Rezepte, Analyse, Navigation, Hotpixel, Inpaint) werden beim ersten Start als `builtin-*.json`-Dateien in `~/Library/Application Support/iPhoto/Plugins/` angelegt
+- Externes Plugin-System und eingebaute Panels sind jetzt vollständig vereint — ein einziger `PluginStore` verwaltet beides
+- Panels können in den JSON-Dateien umbenannt, umsortiert oder deaktiviert werden ohne Neucompilierung
+- `PanelStore` / `PanelDescriptor` entfernt; `Resources/Panels/` entfernt
+- Menü heißt jetzt „Panels" und zeigt alle Einträge dynamisch aus der Dateiliste
+
+---
+
 ## 1.28.0
 **Feature — Dateibasierte Inspector-Panels**
 

@@ -1,1 +1,0 @@
-{ "id": "navigation", "name": "Navigation", "icon": "map", "defaultEnabled": false, "order": 7, "storageKey": "plugin.navigation" }

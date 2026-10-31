@@ -1,10 +1,12 @@
 import Foundation
 import AppKit
+import SwiftUI
 
 final class PluginStore: ObservableObject {
     static let shared = PluginStore()
 
     @Published private(set) var plugins: [Plugin] = []
+    @Published var enabledIDs: Set<String> = []
 
     var pluginDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -13,6 +15,7 @@ final class PluginStore: ObservableObject {
 
     init() {
         createDirectoryIfNeeded()
+        writeBuiltinsIfNeeded()
         writeExampleIfNeeded()
         reload()
     }
@@ -26,16 +29,57 @@ final class PluginStore: ObservableObject {
         let loaded = urls.compactMap { url -> Plugin? in
             guard let data = try? Data(contentsOf: url) else { return nil }
             return try? JSONDecoder().decode(Plugin.self, from: data)
-        }.sorted { $0.name < $1.name }
+        }.sorted { $0.order != $1.order ? $0.order < $1.order : $0.name < $1.name }
 
-        DispatchQueue.main.async { self.plugins = loaded }
+        var enabled = Set<String>()
+        for plugin in loaded {
+            let stored = UserDefaults.standard.object(forKey: plugin.resolvedStorageKey) as? Bool
+            if stored ?? plugin.defaultEnabled { enabled.insert(plugin.id) }
+        }
+
+        DispatchQueue.main.async {
+            self.plugins = loaded
+            self.enabledIDs = enabled
+        }
     }
 
     func revealPluginDirectory() {
         NSWorkspace.shared.open(pluginDirectory)
     }
 
-    // Runs a plugin shell command, substituting {path} and exposing IPHOTO_PATH env var.
+    // MARK: - Enabled state
+
+    func isEnabled(_ id: String) -> Bool { enabledIDs.contains(id) }
+
+    func setEnabled(_ id: String, _ value: Bool) {
+        if value { enabledIDs.insert(id) } else { enabledIDs.remove(id) }
+        let key = plugins.first(where: { $0.id == id })?.resolvedStorageKey ?? "plugin.\(id)"
+        UserDefaults.standard.set(value, forKey: key)
+    }
+
+    func enabledBinding(for id: String) -> Binding<Bool> {
+        Binding(get: { self.isEnabled(id) }, set: { self.setEnabled(id, $0) })
+    }
+
+    // MARK: - Display order
+
+    static func loadDisplayOrder(from plugins: [Plugin]) -> [Plugin] {
+        let raw = UserDefaults.standard.string(forKey: "inspector.panelOrder") ?? ""
+        let ids = raw.split(separator: ",").map(String.init)
+        let byID = Dictionary(uniqueKeysWithValues: plugins.map { ($0.id, $0) })
+        let saved = ids.compactMap { byID[$0] }
+        return Set(saved.map(\.id)) == Set(plugins.map(\.id))
+            ? saved
+            : plugins  // already sorted by order from reload()
+    }
+
+    static func saveDisplayOrder(_ plugins: [Plugin]) {
+        UserDefaults.standard.set(plugins.map(\.id).joined(separator: ","),
+                                  forKey: "inspector.panelOrder")
+    }
+
+    // MARK: - Shell command runner
+
     // Blocking — must be called from a background thread.
     func run(command: String, imageURL: URL) -> String {
         let escaped = imageURL.path.replacingOccurrences(of: "'", with: "'\\''")
@@ -66,6 +110,116 @@ final class PluginStore: ObservableObject {
             at: pluginDirectory, withIntermediateDirectories: true, attributes: nil)
     }
 
+    private static let builtins: [(filename: String, json: String)] = [
+        ("builtin-rating.json", """
+        {
+          "id": "com.iphoto.builtin.rating",
+          "name": "Bewertung",
+          "icon": "star.fill",
+          "builtin": "rating",
+          "order": 1,
+          "defaultEnabled": true,
+          "storageKey": "plugin.bewertung"
+        }
+        """),
+        ("builtin-metadata.json", """
+        {
+          "id": "com.iphoto.builtin.metadata",
+          "name": "Metadaten",
+          "icon": "info.circle",
+          "builtin": "metadata",
+          "order": 2,
+          "defaultEnabled": true,
+          "storageKey": "plugin.metadata"
+        }
+        """),
+        ("builtin-adjustments.json", """
+        {
+          "id": "com.iphoto.builtin.adjustments",
+          "name": "Anpassungen",
+          "icon": "slider.horizontal.3",
+          "builtin": "adjustments",
+          "order": 3,
+          "defaultEnabled": false,
+          "storageKey": "plugin.anpassungen"
+        }
+        """),
+        ("builtin-local.json", """
+        {
+          "id": "com.iphoto.builtin.local",
+          "name": "Lokal",
+          "icon": "paintbrush",
+          "builtin": "local",
+          "order": 4,
+          "defaultEnabled": false,
+          "storageKey": "plugin.lokal"
+        }
+        """),
+        ("builtin-presets.json", """
+        {
+          "id": "com.iphoto.builtin.presets",
+          "name": "Rezepte",
+          "icon": "wand.and.stars",
+          "builtin": "presets",
+          "order": 5,
+          "defaultEnabled": false,
+          "storageKey": "plugin.rezepte"
+        }
+        """),
+        ("builtin-analyse.json", """
+        {
+          "id": "com.iphoto.builtin.analyse",
+          "name": "Analyse",
+          "icon": "chart.bar.xaxis",
+          "builtin": "analyse",
+          "order": 6,
+          "defaultEnabled": false,
+          "storageKey": "plugin.analyse"
+        }
+        """),
+        ("builtin-navigation.json", """
+        {
+          "id": "com.iphoto.builtin.navigation",
+          "name": "Navigation",
+          "icon": "map",
+          "builtin": "navigation",
+          "order": 7,
+          "defaultEnabled": false,
+          "storageKey": "plugin.navigation"
+        }
+        """),
+        ("builtin-hotpixel.json", """
+        {
+          "id": "com.iphoto.builtin.hotpixel",
+          "name": "Hotpixel",
+          "icon": "dot.radiowaves.right",
+          "builtin": "hotpixel",
+          "order": 8,
+          "defaultEnabled": false,
+          "storageKey": "plugin.hotpixel"
+        }
+        """),
+        ("builtin-inpaint.json", """
+        {
+          "id": "com.iphoto.builtin.inpaint",
+          "name": "Inpaint",
+          "icon": "wand.and.rays",
+          "builtin": "inpaint",
+          "order": 9,
+          "defaultEnabled": false,
+          "storageKey": "plugin.inpaint"
+        }
+        """),
+    ]
+
+    private func writeBuiltinsIfNeeded() {
+        for (filename, json) in PluginStore.builtins {
+            let url = pluginDirectory.appendingPathComponent(filename)
+            guard !FileManager.default.fileExists(atPath: url.path) else { continue }
+            try? json.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
     private func writeExampleIfNeeded() {
         let exampleURL = pluginDirectory.appendingPathComponent("example-exif.json")
         guard !FileManager.default.fileExists(atPath: exampleURL.path) else { return }
@@ -74,6 +228,7 @@ final class PluginStore: ObservableObject {
           "id": "com.iphoto.example-exif",
           "name": "EXIF Extended",
           "icon": "info.circle",
+          "order": 50,
           "rows": [
             { "label": "Objektiv",   "command": "exiftool -LensModel -s3 {path}" },
             { "label": "Blende",     "command": "exiftool -Aperture -s3 {path}" },

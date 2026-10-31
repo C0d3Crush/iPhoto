@@ -1,15 +1,15 @@
 import SwiftUI
 
 struct PluginCommands: Commands {
-    @ObservedObject var panelStore = PanelStore.shared
+    @ObservedObject var pluginStore = PluginStore.shared
 
     var body: some Commands {
         CommandMenu("Panels") {
-            ForEach(panelStore.panels) { panel in
-                Toggle(panel.name, isOn: panelStore.enabledBinding(for: panel.id))
+            ForEach(pluginStore.plugins) { plugin in
+                Toggle(plugin.name, isOn: pluginStore.enabledBinding(for: plugin.id))
             }
             Divider()
-            Button("Externe Plugins neu laden") {
+            Button("Plugins neu laden") {
                 PluginStore.shared.reload()
             }
             .keyboardShortcut("r", modifiers: [.command, .option])

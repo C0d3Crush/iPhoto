@@ -3,21 +3,19 @@ import SwiftUI
 struct InspectorView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @ObservedObject private var pluginStore = PluginStore.shared
-    @ObservedObject private var panelStore  = PanelStore.shared
 
-    @State private var panelOrder: [PanelDescriptor] =
-        PanelStore.loadDisplayOrder(from: PanelStore.shared.panels)
-    @State private var collapsed: Set<String> = Set(PanelStore.shared.panels.map(\.id))
-    @State private var collapsedPlugins: Set<String> = []
-    @State private var draggingPanel: PanelDescriptor?
+    @State private var pluginOrder: [Plugin] =
+        PluginStore.loadDisplayOrder(from: PluginStore.shared.plugins)
+    @State private var collapsed: Set<String> = Set(PluginStore.shared.plugins.map(\.id))
+    @State private var draggingPlugin: Plugin?
 
-    private var orderedActive: [PanelDescriptor] {
-        panelOrder.filter { panelStore.isEnabled($0.id) }
+    private var orderedActive: [Plugin] {
+        pluginOrder.filter { pluginStore.isEnabled($0.id) }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            if orderedActive.isEmpty && pluginStore.plugins.isEmpty {
+            if orderedActive.isEmpty {
                 Spacer()
                 Text("Kein Panel aktiv")
                     .foregroundColor(.secondary)
@@ -26,35 +24,19 @@ struct InspectorView: View {
             } else {
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(spacing: 0) {
-                        ForEach(orderedActive, id: \.id) { panel in
-                            InspectorBlock(
-                                panel: panel,
-                                isCollapsed: collapsed.contains(panel.id),
-                                draggingPanel: $draggingPanel,
-                                onToggleCollapse: { toggleCollapsed(panel.id) }
-                            )
-                            .opacity(draggingPanel == panel ? 0.4 : 1.0)
-                            .onDrop(of: ["public.text"],
-                                    delegate: PanelDropDelegate(
-                                        target: panel,
-                                        order: $panelOrder,
-                                        dragging: $draggingPanel))
-                            Divider()
-                        }
-
-                        ForEach(pluginStore.plugins) { plugin in
+                        ForEach(orderedActive, id: \.id) { plugin in
                             PluginBlock(
                                 plugin: plugin,
-                                isCollapsed: collapsedPlugins.contains(plugin.id),
-                                onToggleCollapse: {
-                                    if collapsedPlugins.contains(plugin.id) {
-                                        collapsedPlugins.remove(plugin.id)
-                                    } else {
-                                        collapsedPlugins.insert(plugin.id)
-                                    }
-                                }
+                                isCollapsed: collapsed.contains(plugin.id),
+                                draggingPlugin: $draggingPlugin,
+                                onToggleCollapse: { toggleCollapsed(plugin.id) }
                             )
-                            .environmentObject(viewModel)
+                            .opacity(draggingPlugin == plugin ? 0.4 : 1.0)
+                            .onDrop(of: ["public.text"],
+                                    delegate: PluginDropDelegate(
+                                        target: plugin,
+                                        order: $pluginOrder,
+                                        dragging: $draggingPlugin))
                             Divider()
                         }
                     }
@@ -107,10 +89,9 @@ struct InspectorView: View {
             VersionHistorySheet(isPresented: $viewModel.versions.showHistory)
                 .environmentObject(viewModel)
         }
-        .onChange(of: panelOrder) { PanelStore.saveDisplayOrder($0) }
-        .onChange(of: panelStore.panels) { newPanels in
-            // Sync order when panels change (e.g. after bundle reload)
-            panelOrder = PanelStore.loadDisplayOrder(from: newPanels)
+        .onChange(of: pluginOrder) { PluginStore.saveDisplayOrder($0) }
+        .onChange(of: pluginStore.plugins) { newPlugins in
+            pluginOrder = PluginStore.loadDisplayOrder(from: newPlugins)
         }
     }
 
@@ -119,101 +100,13 @@ struct InspectorView: View {
     }
 }
 
-// MARK: - Block
-
-private struct InspectorBlock: View {
-    let panel: PanelDescriptor
-    let isCollapsed: Bool
-    @Binding var draggingPanel: PanelDescriptor?
-    let onToggleCollapse: () -> Void
-    @EnvironmentObject var viewModel: ImageViewModel
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "line.3.horizontal")
-                    .font(.caption)
-                    .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                Text(panel.name)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Button(action: onToggleCollapse) {
-                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(Color(NSColor.controlBackgroundColor))
-            .contentShape(Rectangle())
-            .onTapGesture { onToggleCollapse() }
-            .onDrag {
-                DispatchQueue.main.async { draggingPanel = panel }
-                return NSItemProvider(object: panel.id as NSString)
-            }
-
-            if !isCollapsed {
-                panelContent
-                    .frame(maxWidth: .infinity)
-                    .clipShape(Rectangle())
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var panelContent: some View {
-        switch panel.id {
-        case "rating":      RatingPanel()
-        case "metadata":    MetadataPanel()
-        case "adjustments": AdjustmentsPanel()
-        case "local":       LocalAdjustmentsPanel()
-        case "presets":     PresetsPanel()
-        case "analyse":     AnalysePanel()
-        case "navigation":  NavigationPanel()
-        case "hotpixel":    HotPixelPanel()
-        case "inpaint":     InpaintPanel()
-        default:            EmptyView()
-        }
-    }
-}
-
-// MARK: - Drop delegate
-
-private struct PanelDropDelegate: DropDelegate {
-    let target: PanelDescriptor
-    @Binding var order: [PanelDescriptor]
-    @Binding var dragging: PanelDescriptor?
-
-    func dropEntered(info: DropInfo) {
-        guard let src = dragging, src != target,
-              let from = order.firstIndex(of: src),
-              let to   = order.firstIndex(of: target) else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            order.move(fromOffsets: IndexSet(integer: from),
-                       toOffset: to > from ? to + 1 : to)
-        }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        dragging = nil
-        return true
-    }
-}
-
-// MARK: - Plugin Block
+// MARK: - Unified Plugin Block
 
 private struct PluginBlock: View {
     @EnvironmentObject var viewModel: ImageViewModel
     let plugin: Plugin
     let isCollapsed: Bool
+    @Binding var draggingPlugin: Plugin?
     let onToggleCollapse: () -> Void
 
     var body: some View {
@@ -224,7 +117,7 @@ private struct PluginBlock: View {
                     .foregroundColor(Color(NSColor.tertiaryLabelColor))
                 Image(systemName: plugin.icon)
                     .font(.caption)
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(plugin.isBuiltin ? .secondary : .accentColor)
                 Text(plugin.name)
                     .font(.caption)
                     .fontWeight(.semibold)
@@ -242,13 +135,69 @@ private struct PluginBlock: View {
             .background(Color(NSColor.controlBackgroundColor))
             .contentShape(Rectangle())
             .onTapGesture { onToggleCollapse() }
+            .onDrag {
+                DispatchQueue.main.async { draggingPlugin = plugin }
+                return NSItemProvider(object: plugin.id as NSString)
+            }
 
             if !isCollapsed {
-                PluginPanelView(plugin: plugin)
-                    .environmentObject(viewModel)
+                pluginContent
                     .frame(maxWidth: .infinity)
                     .clipShape(Rectangle())
             }
         }
+    }
+
+    @ViewBuilder
+    private var pluginContent: some View {
+        if let key = plugin.builtin {
+            builtinView(for: key)
+        } else {
+            PluginPanelView(plugin: plugin)
+                .environmentObject(viewModel)
+        }
+    }
+
+    @ViewBuilder
+    private func builtinView(for key: String) -> some View {
+        switch key {
+        case "rating":      RatingPanel()
+        case "metadata":    MetadataPanel()
+        case "adjustments": AdjustmentsPanel()
+        case "local":       LocalAdjustmentsPanel()
+        case "presets":     PresetsPanel()
+        case "analyse":     AnalysePanel()
+        case "navigation":  NavigationPanel()
+        case "hotpixel":    HotPixelPanel()
+        case "inpaint":     InpaintPanel()
+        default:            EmptyView()
+        }
+    }
+}
+
+// MARK: - Drop delegate
+
+private struct PluginDropDelegate: DropDelegate {
+    let target: Plugin
+    @Binding var order: [Plugin]
+    @Binding var dragging: Plugin?
+
+    func dropEntered(info: DropInfo) {
+        guard let src = dragging, src.id != target.id,
+              let from = order.firstIndex(where: { $0.id == src.id }),
+              let to   = order.firstIndex(where: { $0.id == target.id }) else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            order.move(fromOffsets: IndexSet(integer: from),
+                       toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }

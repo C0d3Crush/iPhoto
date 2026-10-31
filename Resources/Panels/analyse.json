@@ -1,1 +1,0 @@
-{ "id": "analyse", "name": "Analyse", "icon": "chart.bar.xaxis", "defaultEnabled": false, "order": 6, "storageKey": "plugin.analyse" }
