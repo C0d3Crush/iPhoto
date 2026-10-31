@@ -2,6 +2,17 @@
 
 ---
 
+## 1.35.0
+**Feature — Toolbar-Jiggle, Suche, Werkzeuge-Panel + „Für Geeks"-Log**
+
+- Toolbar-Buttons (Sort, Auge, Drehen, Zoom) wackeln jetzt im iPhone-Stil bei langem Druck; Reihenfolge per Drag-and-Drop veränderbar; „Fertig" oder Escape beendet den Modus
+- Suchfeld oben in der Seitenleiste: Suche nach Dateinamen und Metadaten-Werten mit Autocomplete-Vorschlägen (min. 2 Zeichen, bis zu 8 Treffer)
+- Neues Inspector-Plugin „Werkzeuge" (Photoshop-Stil): 2-spaltiges Tool-Raster mit Bewegen, Zuschneiden, Zoom, Drehen, Inpaint und lokalem Pinsel; per Einstellungen → Funktionen aktivierbar
+- Einstellung „Für Geeks": aktiviert einen ausklappbaren Live-Log-Bereich am unteren Rand der Seitenleiste — zeigt die letzten 50 Log-Zeilen mit Farb-Kodierung (PERF = grün, WARN = orange, ERROR = rot), aktualisiert sich alle 1,5 s automatisch
+- `SortMenuButton` in der Toolbar wird nicht mehr zu breit gerendert (`.fixedSize()`)
+
+---
+
 ## 1.34.0
 **Feature — Finder-Listenansicht + Jiggle-Fix**
 

@@ -19,8 +19,15 @@ struct ContentView: View {
                     Divider()
                 }
 
-                ZStack {
-                    mainContent
+                VStack(spacing: 0) {
+                    if !viewModel.compare.active {
+                        CustomActionBar()
+                            .environmentObject(viewModel)
+                    }
+                    ZStack {
+                        mainContent
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
                 if viewModel.inspectorVisible {
@@ -110,65 +117,6 @@ struct ContentView: View {
                     }
                     .disabled(!viewModel.collection.hasNext)
                     .help("Nächstes Bild")
-                }
-            }
-
-            ToolbarItemGroup(placement: .automatic) {
-                if !viewModel.compare.active {
-                    if showSort {
-                        SortMenuButton()
-                            .environmentObject(viewModel)
-                    }
-                    if showEye {
-                        Button(action: { viewModel.adj.showOriginal.toggle() }) {
-                            Image(systemName: viewModel.adj.showOriginal ? "eye.slash" : "eye")
-                        }
-                        .help("Original / Anpassungen")
-                        .disabled(viewModel.currentImage == nil)
-                    }
-                    if showRotate {
-                        Button(action: { viewModel.rotateLeft() }) {
-                            Image(systemName: "rotate.left")
-                        }
-                        .help("90° links drehen (⌘[)")
-                        .keyboardShortcut("[", modifiers: .command)
-                        .disabled(viewModel.currentImage == nil)
-
-                        Button(action: { viewModel.rotateRight() }) {
-                            Image(systemName: "rotate.right")
-                        }
-                        .help("90° rechts drehen (⌘])")
-                        .keyboardShortcut("]", modifiers: .command)
-                        .disabled(viewModel.currentImage == nil)
-                    }
-                    if showZoom {
-                        Button(action: { viewModel.zoomOut() }) {
-                            Image(systemName: "minus.magnifyingglass")
-                        }
-                        .help("Verkleinern")
-                        .keyboardShortcut("-", modifiers: .command)
-                        .disabled(viewModel.currentImage == nil)
-
-                        Button(action: { viewModel.fitToWindow() }) {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        }
-                        .help("An Fenster anpassen")
-                        .disabled(viewModel.currentImage == nil)
-
-                        Button(action: { viewModel.actualSize() }) {
-                            Image(systemName: "1.magnifyingglass")
-                        }
-                        .help("Originalgröße")
-                        .keyboardShortcut("0", modifiers: .command)
-                        .disabled(viewModel.currentImage == nil)
-
-                        Button(action: { viewModel.zoomIn() }) {
-                            Image(systemName: "plus.magnifyingglass")
-                        }
-                        .help("Vergrößern")
-                        .keyboardShortcut("=", modifiers: .command)
-                        .disabled(viewModel.currentImage == nil)
-                    }
                 }
             }
 

@@ -219,6 +219,19 @@ struct SettingsView: View {
 
             Divider().padding(.vertical, 4)
 
+            Section(header: Text("Entwickler").font(.headline)) {
+                expToggle(
+                    title: "Für Geeks",
+                    description: "Zeigt am unteren Rand der Seitenleiste einen ausklappbaren Live-Log mit Lade- und Performance-Daten (PERF, INFO, WARN).",
+                    isOn: Binding(
+                        get: { UserDefaults.standard.bool(forKey: "settings.geekMode") },
+                        set: { UserDefaults.standard.set($0, forKey: "settings.geekMode") }
+                    )
+                )
+            }
+
+            Divider().padding(.vertical, 4)
+
             Section(header: Text("ELO-Konvergenz").font(.headline)) {
                 let factor = viewModel.eloConvergenceFactor
                 HStack {

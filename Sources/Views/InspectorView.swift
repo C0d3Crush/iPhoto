@@ -171,6 +171,7 @@ private struct PluginBlock: View {
         case "navigation":  NavigationPanel()
         case "hotpixel":    HotPixelPanel()
         case "inpaint":     InpaintPanel()
+        case "toolbox":     ToolboxPanel()
         default:            EmptyView()
         }
     }

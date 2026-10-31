@@ -23,6 +23,7 @@ class ImageViewModel: ObservableObject {
     @Published var isSavingMetadata: Bool = false                { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var navSidebarVisible: Bool = true
     @Published var navSelection: NavSelection? = .library
+    @Published var searchQuery: String = ""
     @Published var showingLibraryDetail: Bool = false
     @Published var showFullGrid: Bool = false
     @Published var libraryViewMode: LibraryViewMode = {
@@ -121,6 +122,7 @@ class ImageViewModel: ObservableObject {
         let shuffle: [UUID]
         let version: Int
         let expanded: Set<String>
+        let search: String
     }
     var visibleOrderCache: [UUID]? = nil
     var visibleOrderCacheKey: VisibleOrderKey? = nil

@@ -128,6 +128,17 @@ final class PluginStore: ObservableObject {
           "storageKey": "feature.compareEnabled"
         }
         """),
+        ("builtin-toolbox.json", """
+        {
+          "id": "com.iphoto.builtin.toolbox",
+          "name": "Werkzeuge",
+          "icon": "hammer",
+          "builtin": "toolbox",
+          "order": 1,
+          "defaultEnabled": false,
+          "storageKey": "plugin.werkzeuge"
+        }
+        """),
         ("builtin-rating.json", """
         {
           "id": "com.iphoto.builtin.rating",

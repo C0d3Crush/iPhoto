@@ -50,7 +50,8 @@ extension ImageViewModel {
         dispatchPrecondition(condition: .onQueue(.main))
         let key = VisibleOrderKey(count: collection.documents.count, nav: navSelection,
                                   sort: sortCriterion, shuffle: shuffledOrder,
-                                  version: visibleOrderVersion, expanded: expandedStacks)
+                                  version: visibleOrderVersion, expanded: expandedStacks,
+                                  search: searchQuery)
         if key == visibleOrderCacheKey, let order = visibleOrderCache {
             if let resolved = visibleResolvedCache,
                visibleResolvedRevision == collection.documentsRevision {
@@ -157,7 +158,13 @@ extension ImageViewModel {
         case .eloRange(let lo, let hi):
             filtered = docs.filter { $0.elo >= lo && $0.elo <= hi }
         }
-        return applyStacking(to: applySortCriterion(to: filtered))
+        let sorted = applyStacking(to: applySortCriterion(to: filtered))
+        guard !searchQuery.isEmpty else { return sorted }
+        let q = searchQuery.lowercased()
+        return sorted.filter { doc in
+            doc.url.lastPathComponent.lowercased().contains(q)
+            || doc.metadata.contains { $0.value.lowercased().contains(q) }
+        }
     }
 
     // MARK: - Serienbild-/Bracketing-Stapel

@@ -37,11 +37,7 @@ struct NavSidebarView: View {
     @State private var dropTargetGroups: Set<String> = []
     @State private var dropOnUngrouped: Bool = false
     @State private var sectionOrder: [NavSidebarSection] = NavSidebarSection.loadOrder()
-    @State private var isJiggling: Bool = false
-    @State private var jiggleLeft: Bool = false
     @State private var draggingSection: NavSidebarSection?
-
-    private let jiggleTick = Timer.publish(every: 0.13, on: .main, in: .common).autoconnect()
 
     private func loadSmartFolderID(from providers: [NSItemProvider], completion: @escaping (SmartFolder?) -> Void) {
         providers.first?.loadDataRepresentation(forTypeIdentifier: kSmartFolderIDType) { data, _ in
@@ -56,16 +52,8 @@ struct NavSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if isJiggling {
-                Button("Fertig") { stopJiggle() }
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(PlainButtonStyle())
-                    .foregroundColor(.accentColor)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .background(Color.accentColor.opacity(0.1))
-                    .transition(.opacity)
-            }
+            SearchBarView(query: $viewModel.searchQuery)
+                .environmentObject(viewModel)
 
             if viewModel.isStartupLoading {
                 HStack(spacing: 8) {
@@ -88,7 +76,6 @@ struct NavSidebarView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(sectionOrder, id: \.self) { section in
                         sectionView(for: section)
-                            .jiggleEffect(active: isJiggling, leftPhase: jiggleLeft)
                             .onDrag {
                                 DispatchQueue.main.async { self.draggingSection = section }
                                 return NSItemProvider(object: section.rawValue as NSString)
@@ -102,12 +89,6 @@ struct NavSidebarView: View {
                     }
                 }
                 .padding(.vertical, 8)
-            }
-            .onReceive(jiggleTick) { _ in
-                if isJiggling { jiggleLeft.toggle() }
-            }
-            .onTapGesture {
-                if isJiggling { stopJiggle() }
             }
 
             if !viewModel.activity.loadingQueue.isEmpty {
@@ -130,15 +111,11 @@ struct NavSidebarView: View {
                 .background(Color(NSColor.windowBackgroundColor))
                 .transition(.opacity)
             }
+
+            VerboseLogView()
         }
         .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
         .background(Color(NSColor.controlBackgroundColor))
-        .background(
-            Button("") { if isJiggling { stopJiggle() } }
-                .keyboardShortcut(.escape, modifiers: [])
-                .opacity(0)
-                .allowsHitTesting(false)
-        )
         .sheet(item: $smartFolderSheetItem) { item in
             SmartFolderSheet(editing: item.folder)
                 .environmentObject(viewModel)
@@ -184,20 +161,6 @@ struct NavSidebarView: View {
         }
     }
 
-    // MARK: - Jiggle control
-
-    private func startJiggle() {
-        isJiggling = true
-        jiggleLeft = false
-    }
-
-    private func stopJiggle() {
-        withAnimation(.easeOut(duration: 0.15)) {
-            isJiggling = false
-        }
-        NavSidebarSection.saveOrder(sectionOrder)
-        draggingSection = nil
-    }
 
     // MARK: - Section dispatcher
 
@@ -206,7 +169,7 @@ struct NavSidebarView: View {
         switch section {
         case .library:
             Group {
-                jiggleSectionHeader("Bibliothek", section: .library)
+                sectionHeader("Bibliothek")
                 navRow(label: "Library", icon: "photo.stack",
                        isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil) {
                     viewModel.navSelection = .library
@@ -225,23 +188,6 @@ struct NavSidebarView: View {
         case .duplicates:    duplicatesSection
         case .blurry:        blurrySection
         }
-    }
-
-    // MARK: - Jiggle-aware section header
-
-    @ViewBuilder
-    private func jiggleSectionHeader(_ title: String, section: NavSidebarSection) -> some View {
-        Text(title.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-            .padding(.bottom, 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.5).onEnded { _ in startJiggle() }
-            )
     }
 
     // MARK: - Smart folder helpers
@@ -427,10 +373,6 @@ struct NavSidebarView: View {
         .padding(.top, 12)
         .padding(.bottom, 2)
         .contentShape(Rectangle())
-        // simultaneousGesture lets the Button's tap AND our long-press coexist.
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5).onEnded { _ in startJiggle() }
-        )
     }
 
     @ViewBuilder
@@ -447,9 +389,6 @@ struct NavSidebarView: View {
         .padding(.top, 12)
         .padding(.bottom, 2)
         .contentShape(Rectangle())
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5).onEnded { _ in startJiggle() }
-        )
     }
 
     @ViewBuilder private var trashSection: some View {
@@ -642,23 +581,86 @@ struct NavSidebarView: View {
     }
 }
 
-// MARK: - Jiggle effect modifier
+// MARK: - Search Bar
 
-private struct JiggleEffectModifier: ViewModifier {
-    let active: Bool
-    let leftPhase: Bool
+private struct SearchBarView: View {
+    @Binding var query: String
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var showSuggestions = false
 
-    func body(content: Content) -> some View {
-        content
-            .rotationEffect(.degrees(active ? (leftPhase ? -2.0 : 2.0) : 0))
-            .animation(active ? .easeInOut(duration: 0.13) : .spring(response: 0.2), value: leftPhase)
-            .animation(.easeOut(duration: 0.15), value: active)
+    private var suggestions: [String] {
+        guard query.count >= 2 else { return [] }
+        let q = query.lowercased()
+        var results = Set<String>()
+        for doc in viewModel.collection.documents.prefix(500) {
+            let name = doc.url.lastPathComponent
+            if name.lowercased().contains(q) { results.insert(name) }
+            for entry in doc.metadata {
+                if entry.value.lowercased().contains(q) { results.insert(entry.value) }
+            }
+        }
+        return Array(results.sorted()).prefix(8).map { $0 }
     }
-}
 
-private extension View {
-    func jiggleEffect(active: Bool, leftPhase: Bool) -> some View {
-        modifier(JiggleEffectModifier(active: active, leftPhase: leftPhase))
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                TextField("Suchen…", text: $query)
+                    .font(.system(size: 12))
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .onChange(of: query) { _ in showSuggestions = !query.isEmpty }
+                if !query.isEmpty {
+                    Button(action: { query = ""; showSuggestions = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.clear, lineWidth: 1)
+            )
+            .padding(.horizontal, 8)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+
+            if showSuggestions && !suggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(suggestions, id: \.self) { suggestion in
+                        Button(action: { query = suggestion; showSuggestions = false }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                                Text(suggestion)
+                                    .font(.system(size: 11))
+                                    .lineLimit(1)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        Divider()
+                    }
+                }
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(4)
+                .shadow(radius: 4)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+            }
+        }
     }
 }
 
@@ -1040,5 +1042,99 @@ private struct GroupRenameSheet: View {
             }
         }
         .padding(24)
+    }
+}
+
+// MARK: - Verbose Log View (Für Geeks)
+
+private struct VerboseLogView: View {
+    @AppStorage("settings.geekMode") private var geekMode = false
+    @State private var lines: [String] = []
+    @State private var isExpanded = false
+
+    private let ticker = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        if geekMode {
+            VStack(spacing: 0) {
+                Divider()
+                Button(action: { withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() } }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.secondary)
+                        Image(systemName: "ant")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                        Text("Log")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        if !lines.isEmpty {
+                            Text("\(lines.count) Zeilen")
+                                .font(.system(size: 9))
+                                .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .background(Color(NSColor.windowBackgroundColor))
+
+                if isExpanded {
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: true) {
+                            LazyVStack(alignment: .leading, spacing: 1) {
+                                ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
+                                    Text(line)
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundColor(lineColor(line))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 1)
+                                        .id(idx)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .frame(height: 120)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .onChange(of: lines) { newLines in
+                            withAnimation { proxy.scrollTo(newLines.count - 1, anchor: .bottom) }
+                        }
+                    }
+                }
+            }
+            .onReceive(ticker) { _ in reloadLines() }
+            .onAppear { reloadLines() }
+        }
+    }
+
+    private func lineColor(_ line: String) -> Color {
+        if line.contains("[ERROR]") { return Color(NSColor.systemRed) }
+        if line.contains("[WARN ]") { return Color(NSColor.systemOrange) }
+        if line.contains("PERF")   { return Color(NSColor.systemGreen) }
+        return Color(NSColor.secondaryLabelColor)
+    }
+
+    private func reloadLines() {
+        let url = Log.shared.fileURL
+        DispatchQueue.global(qos: .utility).async {
+            guard let handle = try? FileHandle(forReadingFrom: url) else { return }
+            let size = handle.seekToEndOfFile()
+            let readBytes: UInt64 = min(size, 8192)
+            handle.seek(toFileOffset: size - readBytes)
+            let data = handle.readDataToEndOfFile()
+            handle.closeFile()
+            let text = String(data: data, encoding: .utf8) ?? ""
+            let parsed = text
+                .components(separatedBy: "\n")
+                .filter { !$0.isEmpty && !$0.contains(Log.sessionMarker) }
+                .suffix(50)
+                .map { String($0) }
+            DispatchQueue.main.async { self.lines = parsed }
+        }
     }
 }
