@@ -5,6 +5,7 @@ import SwiftUI
 // und via Combine-Subscription in ImageViewModel automatisch auf die Listen angewendet.
 struct SettingsView: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @ObservedObject private var pluginStore = PluginStore.shared
 
     var body: some View {
         TabView {
@@ -101,19 +102,28 @@ struct SettingsView: View {
     private var featuresTab: some View {
         Form {
             Section(header: Text("Experimentelle Funktionen").font(.headline)) {
-                Toggle(isOn: Binding(
-                    get: { viewModel.compareFeatureEnabled },
-                    set: { viewModel.compareFeatureEnabled = $0
-                           if !$0 && viewModel.compare.active { viewModel.stopCompareMode() }
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Bildvergleich (ELO-Rating)")
-                        Text("Aktiviert den Duell-Modus in der Seitenleiste: zwei Bilder werden nebeneinander verglichen und ein ELO-Score ermittelt.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
+                expToggle(
+                    title: "Ansicht wählen (Kachelansicht)",
+                    description: "Zeigt den ⌘M-Button in der Toolbar und ermöglicht das Windows-8-ähnliche Kachelmenü zum schnellen Wechsel zwischen Modi.",
+                    isOn: Binding(
+                        get: { viewModel.modeSwitcherEnabled },
+                        set: { viewModel.modeSwitcherEnabled = $0 }
+                    )
+                )
+
+                Divider().padding(.vertical, 2)
+
+                expToggle(
+                    title: "Bildvergleich (ELO-Rating)",
+                    description: "Duell-Modus in Seitenleiste und Inspector: zwei Bilder nebeneinander vergleichen, ELO-Score wird automatisch berechnet.",
+                    isOn: Binding(
+                        get: { pluginStore.isEnabled("com.iphoto.builtin.compare") },
+                        set: {
+                            pluginStore.setEnabled("com.iphoto.builtin.compare", $0)
+                            if !$0 && viewModel.compare.active { viewModel.stopCompareMode() }
+                        }
+                    )
+                )
             }
 
             Divider().padding(.vertical, 4)
@@ -125,7 +135,7 @@ struct SettingsView: View {
                 )) {
                     Text("Tägliches Duell-Limit")
                 }
-                .disabled(!viewModel.compareFeatureEnabled)
+                .disabled(!pluginStore.isEnabled("com.iphoto.builtin.compare"))
 
                 if viewModel.compareDailyLimit > 0 {
                     HStack {
@@ -242,6 +252,19 @@ struct SettingsView: View {
             .padding(.top, 10)
         }
         .padding(20)
+    }
+
+    @ViewBuilder
+    private func expToggle(title: String, description: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     @ViewBuilder

@@ -43,6 +43,12 @@ class ImageViewModel: ObservableObject {
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
     @Published var showModeSwitcher: Bool = false
+    @Published var modeSwitcherEnabled: Bool = UserDefaults.standard.object(forKey: "feature.modeSwitcherEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(modeSwitcherEnabled, forKey: "feature.modeSwitcherEnabled")
+            if !modeSwitcherEnabled { showModeSwitcher = false }
+        }
+    }
     /// Qualitätsanalyse-Ergebnisse (Duplikate, Unschärfe, Belichtung) + Schwellenwerte.
     /// Views greifen via `viewModel.quality.blurryDocuments` etc. zu.
     let quality = QualityDetectionState()

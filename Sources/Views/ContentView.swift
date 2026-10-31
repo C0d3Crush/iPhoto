@@ -25,7 +25,7 @@ struct ContentView: View {
                 }
             }
 
-            if viewModel.showModeSwitcher {
+            if viewModel.modeSwitcherEnabled && viewModel.showModeSwitcher {
                 ModeSwitcherView()
                     .environmentObject(viewModel)
                     .transition(.opacity)
@@ -40,16 +40,18 @@ struct ContentView: View {
                 }
                 .help("Navigation ein-/ausblenden")
 
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        viewModel.showModeSwitcher.toggle()
+                if viewModel.modeSwitcherEnabled {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            viewModel.showModeSwitcher.toggle()
+                        }
+                    }) {
+                        Image(systemName: "square.grid.2x2")
+                            .opacity(viewModel.showModeSwitcher ? 1.0 : 0.6)
                     }
-                }) {
-                    Image(systemName: "square.grid.2x2")
-                        .opacity(viewModel.showModeSwitcher ? 1.0 : 0.6)
+                    .help("Ansicht wählen (⌘M)")
+                    .keyboardShortcut("m", modifiers: .command)
                 }
-                .help("Ansicht wählen (⌘M)")
-                .keyboardShortcut("m", modifiers: .command)
 
                 if viewModel.showingLibraryDetail {
                     Button(action: { viewModel.showingLibraryDetail = false }) {
