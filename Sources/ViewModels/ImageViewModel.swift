@@ -22,6 +22,7 @@ class ImageViewModel: ObservableObject {
     @Published var inspectorVisible: Bool = false
     @Published var isSavingMetadata: Bool = false                { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var navSidebarVisible: Bool = true
+    @Published var sidebarAlbumExpanded: Bool = false
     @Published var navSelection: NavSelection? = .library
     @Published var searchQuery: String = ""
     @Published var showingLibraryDetail: Bool = false

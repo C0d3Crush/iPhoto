@@ -13,21 +13,27 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
-                if viewModel.navSidebarVisible {
-                    NavSidebarView()
+                if viewModel.sidebarAlbumExpanded {
+                    AlbumGridExpandedView()
                         .environmentObject(viewModel)
-                    Divider()
-                }
-
-                VStack(spacing: 0) {
-                    if !viewModel.compare.active {
-                        CustomActionBar()
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                } else {
+                    if viewModel.navSidebarVisible {
+                        NavSidebarView()
                             .environmentObject(viewModel)
+                        Divider()
                     }
-                    ZStack {
-                        mainContent
+
+                    VStack(spacing: 0) {
+                        if !viewModel.compare.active {
+                            CustomActionBar()
+                                .environmentObject(viewModel)
+                        }
+                        ZStack {
+                            mainContent
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
                 if viewModel.inspectorVisible {

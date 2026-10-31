@@ -160,11 +160,74 @@ extension ImageViewModel {
         }
         let sorted = applyStacking(to: applySortCriterion(to: filtered))
         guard !searchQuery.isEmpty else { return sorted }
-        let q = searchQuery.lowercased()
-        return sorted.filter { doc in
-            doc.url.lastPathComponent.lowercased().contains(q)
-            || doc.metadata.contains { $0.value.lowercased().contains(q) }
+        let parsed = SearchQuery.parse(searchQuery)
+        var result = sorted
+
+        if !parsed.freeText.isEmpty {
+            let q = parsed.freeText.lowercased()
+            result = result.filter { doc in
+                doc.url.lastPathComponent.lowercased().contains(q)
+                || doc.metadata.contains { $0.value.lowercased().contains(q) }
+            }
         }
+
+        let rawExts: Set<String> = ["cr2","cr3","nef","nrw","arw","srf","sr2","dng","orf","rw2","raf","pef","srw","erf","kdc","dcr","raw","rwl","mrw","3fr","mef","iiq","x3f"]
+
+        for filter in parsed.filters {
+            let val = filter.value.lowercased()
+            switch filter.key {
+            case "bewertung":
+                if let r = Int(val) { result = result.filter { $0.rating == r } }
+            case "typ":
+                if val == "raw" {
+                    result = result.filter { rawExts.contains($0.url.pathExtension.lowercased()) }
+                } else {
+                    result = result.filter { $0.url.pathExtension.lowercased() == val }
+                }
+            case "vor":
+                if let date = searchDateParse(val) {
+                    result = result.filter { searchDateKey($0) < date }
+                }
+            case "nach":
+                if let date = searchDateParse(val) {
+                    result = result.filter { searchDateKey($0) > date }
+                }
+            case "kamera":
+                result = result.filter { doc in doc.metadata.contains { $0.category == .camera && $0.value.lowercased().contains(val) } }
+            case "album":
+                result = result.filter { doc in
+                    library.albums.contains { alb in alb.name.lowercased().contains(val) && alb.photoURLs.contains(doc.url) }
+                }
+            case "markiert":
+                switch val {
+                case "pick":   result = result.filter { $0.flagStatus == .pick }
+                case "reject": result = result.filter { $0.flagStatus == .reject }
+                case "ja":     result = result.filter { $0.flagStatus != .none }
+                case "nein":   result = result.filter { $0.flagStatus == .none }
+                default: break
+                }
+            case "unscharf":
+                let ids = Set(quality.blurryDocuments.map { $0.id })
+                if val == "ja"   { result = result.filter {  ids.contains($0.id) } }
+                if val == "nein" { result = result.filter { !ids.contains($0.id) } }
+            case "motiv":
+                result = result.filter { doc in doc.motifTags?.contains { $0.lowercased().contains(val) } ?? false }
+            case "elo":
+                if let threshold = Double(val) { result = result.filter { $0.elo >= threshold } }
+            case "farbe":
+                let colorOpt: ColorLabel?
+                switch val {
+                case "rot":   colorOpt = .red
+                case "gelb":  colorOpt = .yellow
+                case "grün":  colorOpt = .green
+                case "blau":  colorOpt = .blue
+                default:      colorOpt = nil
+                }
+                if let color = colorOpt { result = result.filter { $0.colorLabel == color } }
+            default: break
+            }
+        }
+        return result
     }
 
     // MARK: - Serienbild-/Bracketing-Stapel
@@ -277,6 +340,22 @@ extension ImageViewModel {
                 (orderMap[$0.id] ?? Int.max) < (orderMap[$1.id] ?? Int.max)
             }
         }
+    }
+
+    private func searchDateParse(_ s: String) -> Date? {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        if s.count == 4  { fmt.dateFormat = "yyyy";       return fmt.date(from: s) }
+        if s.count == 7  { fmt.dateFormat = "yyyy-MM";    return fmt.date(from: s) }
+        fmt.dateFormat = "yyyy-MM-dd"; return fmt.date(from: s)
+    }
+
+    private func searchDateKey(_ doc: ImageDocument) -> Date {
+        let raw = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value ?? ""
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        return fmt.date(from: raw) ?? Date.distantPast
     }
 
     private func dateSortKey(_ doc: ImageDocument) -> String {

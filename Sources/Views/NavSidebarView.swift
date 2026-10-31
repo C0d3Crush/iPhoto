@@ -52,8 +52,25 @@ struct NavSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SearchBarView(query: $viewModel.searchQuery)
-                .environmentObject(viewModel)
+            // Search + expand button row
+            HStack(spacing: 0) {
+                SearchBarView(query: $viewModel.searchQuery)
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity)
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.sidebarAlbumExpanded.toggle()
+                    }
+                }) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .padding(.trailing, 10)
+                        .padding(.top, 14)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Alben als Symbolraster")
+            }
 
             if viewModel.isStartupLoading {
                 HStack(spacing: 8) {
@@ -586,21 +603,10 @@ struct NavSidebarView: View {
 private struct SearchBarView: View {
     @Binding var query: String
     @EnvironmentObject var viewModel: ImageViewModel
-    @State private var showSuggestions = false
+    @State private var isEditing = false
 
-    private var suggestions: [String] {
-        guard query.count >= 2 else { return [] }
-        let q = query.lowercased()
-        var results = Set<String>()
-        for doc in viewModel.collection.documents.prefix(500) {
-            let name = doc.url.lastPathComponent
-            if name.lowercased().contains(q) { results.insert(name) }
-            for entry in doc.metadata {
-                if entry.value.lowercased().contains(q) { results.insert(entry.value) }
-            }
-        }
-        return Array(results.sorted()).prefix(8).map { $0 }
-    }
+    private var currentWord: String { query.components(separatedBy: " ").last ?? "" }
+    private var activeFilters: [SearchToken] { SearchQuery.parse(query).filters }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -608,12 +614,13 @@ private struct SearchBarView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
-                TextField("Suchen…", text: $query)
-                    .font(.system(size: 12))
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .onChange(of: query) { _ in showSuggestions = !query.isEmpty }
+                TextField("Suchen…", text: $query, onEditingChanged: { editing in
+                    withAnimation(.easeInOut(duration: 0.1)) { isEditing = editing }
+                })
+                .font(.system(size: 12))
+                .textFieldStyle(PlainTextFieldStyle())
                 if !query.isEmpty {
-                    Button(action: { query = ""; showSuggestions = false }) {
+                    Button(action: { query = ""; isEditing = false }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
@@ -625,41 +632,191 @@ private struct SearchBarView: View {
             .padding(.vertical, 5)
             .background(Color(NSColor.controlBackgroundColor))
             .cornerRadius(6)
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.clear, lineWidth: 1)
-            )
+            .overlay(RoundedRectangle(cornerRadius: 6)
+                .stroke(isEditing ? Color.accentColor.opacity(0.6) : Color.clear, lineWidth: 1))
             .padding(.horizontal, 8)
             .padding(.top, 8)
             .padding(.bottom, 4)
 
-            if showSuggestions && !suggestions.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(suggestions, id: \.self) { suggestion in
-                        Button(action: { query = suggestion; showSuggestions = false }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                                Text(suggestion)
-                                    .font(.system(size: 11))
-                                    .lineLimit(1)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        Divider()
+            if !activeFilters.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(activeFilters, id: \.key) { filterChip($0) }
+                    }
+                    .padding(.horizontal, 10)
+                }
+                .padding(.bottom, 4)
+            }
+
+            if isEditing { dropdownView }
+        }
+    }
+
+    @ViewBuilder
+    private var dropdownView: some View {
+        let word = currentWord
+        if let ci = word.firstIndex(of: ":"), ci != word.startIndex {
+            let key = String(word[..<ci]).lowercased()
+            let partial = String(word[word.index(after: ci)...]).lowercased()
+            if let def = FilterDefinition.all.first(where: { $0.key == key }) {
+                let staticVals = def.valueSuggestions.filter { partial.isEmpty || $0.hasPrefix(partial) }
+                let dynVals = dynamicValues(key: key, partial: partial)
+                let allVals = Array((staticVals + dynVals).prefix(8))
+                if !allVals.isEmpty {
+                    valueDropdown(def: def, values: allVals, key: key)
+                }
+            }
+        } else {
+            let matchDefs: [FilterDefinition] = word.isEmpty
+                ? FilterDefinition.all
+                : FilterDefinition.all.filter { $0.key.hasPrefix(word.lowercased()) || $0.label.lowercased().hasPrefix(word.lowercased()) }
+            let textSuggs = textSuggestions
+            if !matchDefs.isEmpty || !textSuggs.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(matchDefs.prefix(6)), id: \.key) { def in
+                        filterKeyRow(def)
+                        if def.key != matchDefs.prefix(6).last?.key { Divider() }
+                    }
+                    if !textSuggs.isEmpty && !word.isEmpty {
+                        if !matchDefs.isEmpty { Divider() }
+                        ForEach(textSuggs.prefix(4), id: \.self) { textSuggRow($0) }
                     }
                 }
                 .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(4)
-                .shadow(radius: 4)
+                .cornerRadius(6)
+                .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
                 .padding(.horizontal, 8)
                 .padding(.bottom, 4)
             }
+        }
+    }
+
+    private func filterKeyRow(_ def: FilterDefinition) -> some View {
+        Button(action: {
+            var parts = query.components(separatedBy: " ")
+            if let li = parts.indices.last, !parts[li].contains(":") {
+                parts[li] = def.key + ":"
+            } else {
+                parts.append(def.key + ":")
+            }
+            query = parts.joined(separator: " ")
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: def.icon)
+                    .font(.system(size: 11))
+                    .foregroundColor(.accentColor)
+                    .frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(def.key + ":")
+                        .font(.system(size: 11, weight: .medium))
+                    Text(def.hint)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    @ViewBuilder
+    private func valueDropdown(def: FilterDefinition, values: [String], key: String) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: def.icon).font(.system(size: 10)).foregroundColor(.accentColor)
+                Text(key + ":").font(.system(size: 10, weight: .semibold)).foregroundColor(.accentColor)
+                Text(def.hint).font(.system(size: 10)).foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            Divider()
+            ForEach(values, id: \.self) { value in
+                Button(action: {
+                    var parts = query.components(separatedBy: " ")
+                    if let li = parts.indices.last { parts[li] = key + ":" + value }
+                    query = parts.joined(separator: " ") + " "
+                }) {
+                    HStack {
+                        Text(value).font(.system(size: 11))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 4).contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(6)
+        .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
+        .padding(.horizontal, 8).padding(.bottom, 4)
+    }
+
+    private func textSuggRow(_ s: String) -> some View {
+        Button(action: {
+            let filters = query.components(separatedBy: " ").filter { $0.contains(":") }
+            query = (filters + [s]).joined(separator: " ")
+            isEditing = false
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundColor(.secondary).frame(width: 16)
+                Text(s).font(.system(size: 11)).lineLimit(1)
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4).contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func filterChip(_ token: SearchToken) -> some View {
+        HStack(spacing: 3) {
+            Text(token.key + ":").font(.system(size: 10, weight: .semibold)).foregroundColor(.accentColor)
+            Text(token.value).font(.system(size: 10))
+            Button(action: {
+                let parts = query.components(separatedBy: " ").filter { !$0.hasPrefix(token.key + ":") }
+                query = parts.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            }) {
+                Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundColor(.secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 6).padding(.vertical, 3)
+        .background(Color.accentColor.opacity(0.12))
+        .cornerRadius(4)
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.accentColor.opacity(0.25), lineWidth: 0.5))
+    }
+
+    private var textSuggestions: [String] {
+        let q = SearchQuery.parse(query).freeText.lowercased()
+        guard q.count >= 2 else { return [] }
+        var results = Set<String>()
+        for doc in viewModel.collection.documents.prefix(500) {
+            let name = doc.url.lastPathComponent
+            if name.lowercased().contains(q) { results.insert(name) }
+        }
+        return Array(results.sorted()).prefix(6).map { $0 }
+    }
+
+    private func dynamicValues(key: String, partial: String) -> [String] {
+        switch key {
+        case "kamera":
+            var set = Set<String>()
+            for doc in viewModel.collection.documents.prefix(300) {
+                for e in doc.metadata where e.category == .camera && !e.value.isEmpty { set.insert(e.value) }
+            }
+            return set.filter { partial.isEmpty || $0.lowercased().hasPrefix(partial) }.sorted().prefix(6).map { $0 }
+        case "album":
+            return viewModel.library.albums.map { $0.name }
+                .filter { partial.isEmpty || $0.lowercased().hasPrefix(partial) }.sorted().prefix(6).map { $0 }
+        case "motiv":
+            var set = Set<String>()
+            for doc in viewModel.collection.documents.prefix(300) {
+                for t in doc.motifTags ?? [] { set.insert(t) }
+            }
+            return set.filter { partial.isEmpty || $0.lowercased().hasPrefix(partial) }.sorted().prefix(6).map { $0 }
+        default: return []
         }
     }
 }
@@ -1045,71 +1202,87 @@ private struct GroupRenameSheet: View {
     }
 }
 
-// MARK: - Verbose Log View (Für Geeks)
+// MARK: - Verbose Log + Console (Für Geeks)
+
+private enum GeekTab { case log, console }
 
 private struct VerboseLogView: View {
     @AppStorage("settings.geekMode") private var geekMode = false
-    @State private var lines: [String] = []
+    @State private var activeTab: GeekTab = .log
     @State private var isExpanded = false
-
-    private let ticker = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
         if geekMode {
             VStack(spacing: 0) {
                 Divider()
-                Button(action: { withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() } }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.secondary)
-                        Image(systemName: "ant")
-                            .font(.system(size: 9))
-                            .foregroundColor(.secondary)
-                        Text("Log")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        if !lines.isEmpty {
-                            Text("\(lines.count) Zeilen")
-                                .font(.system(size: 9))
-                                .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .contentShape(Rectangle())
+                // Tab header row
+                HStack(spacing: 0) {
+                    geekTabButton(tab: .log,     icon: "ant",      label: "Log")
+                    geekTabButton(tab: .console, icon: "terminal", label: "Konsole")
+                    Spacer()
                 }
-                .buttonStyle(PlainButtonStyle())
                 .background(Color(NSColor.windowBackgroundColor))
 
                 if isExpanded {
-                    ScrollViewReader { proxy in
-                        ScrollView(.vertical, showsIndicators: true) {
-                            LazyVStack(alignment: .leading, spacing: 1) {
-                                ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
-                                    Text(line)
-                                        .font(.system(size: 9, design: .monospaced))
-                                        .foregroundColor(lineColor(line))
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 1)
-                                        .id(idx)
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .frame(height: 120)
-                        .background(Color(NSColor.textBackgroundColor))
-                        .onChange(of: lines) { newLines in
-                            withAnimation { proxy.scrollTo(newLines.count - 1, anchor: .bottom) }
-                        }
+                    Group {
+                        if activeTab == .log     { LogPanelView() }
+                        else                     { ConsolePanelView() }
                     }
+                    .frame(height: 140)
                 }
             }
-            .onReceive(ticker) { _ in reloadLines() }
-            .onAppear { reloadLines() }
         }
+    }
+
+    private func geekTabButton(tab: GeekTab, icon: String, label: String) -> some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                if activeTab == tab { isExpanded.toggle() }
+                else { activeTab = tab; isExpanded = true }
+            }
+        }) {
+            HStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 9))
+                Text(label).font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(activeTab == tab && isExpanded ? .accentColor : .secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Log panel
+
+private struct LogPanelView: View {
+    @State private var lines: [String] = []
+    private let ticker = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
+                        Text(line)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(lineColor(line))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 1)
+                            .id(idx)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .background(Color(NSColor.textBackgroundColor))
+            .onChange(of: lines) { newLines in
+                withAnimation { proxy.scrollTo(newLines.count - 1, anchor: .bottom) }
+            }
+        }
+        .onReceive(ticker) { _ in reload() }
+        .onAppear { reload() }
     }
 
     private func lineColor(_ line: String) -> Color {
@@ -1119,7 +1292,7 @@ private struct VerboseLogView: View {
         return Color(NSColor.secondaryLabelColor)
     }
 
-    private func reloadLines() {
+    private func reload() {
         let url = Log.shared.fileURL
         DispatchQueue.global(qos: .utility).async {
             guard let handle = try? FileHandle(forReadingFrom: url) else { return }
@@ -1128,13 +1301,122 @@ private struct VerboseLogView: View {
             handle.seek(toFileOffset: size - readBytes)
             let data = handle.readDataToEndOfFile()
             handle.closeFile()
-            let text = String(data: data, encoding: .utf8) ?? ""
-            let parsed = text
+            let parsed = (String(data: data, encoding: .utf8) ?? "")
                 .components(separatedBy: "\n")
                 .filter { !$0.isEmpty && !$0.contains(Log.sessionMarker) }
-                .suffix(50)
-                .map { String($0) }
+                .suffix(50).map { String($0) }
             DispatchQueue.main.async { self.lines = parsed }
+        }
+    }
+}
+
+// MARK: - Console panel
+
+private struct ConsoleLine: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+    let kind: Kind
+    enum Kind: Equatable { case command, output, error }
+}
+
+private struct ConsolePanelView: View {
+    @State private var input: String = ""
+    @State private var output: [ConsoleLine] = [
+        ConsoleLine(text: "iphoto-cli Konsole — Befehle ohne 'iphoto-cli' eingeben", kind: .output)
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(output) { line in
+                            Text(line.text)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(lineColor(line))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 1)
+                                .id(line.id)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .background(Color(NSColor.textBackgroundColor))
+                .onChange(of: output) { lines in
+                    if let last = lines.last {
+                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
+                }
+            }
+
+            Divider()
+            HStack(spacing: 6) {
+                Text(">").font(.system(size: 10, design: .monospaced)).foregroundColor(.accentColor)
+                TextField("Befehl…", text: $input, onCommit: runInput)
+                    .font(.system(size: 10, design: .monospaced))
+                    .textFieldStyle(PlainTextFieldStyle())
+                Button(action: runInput) {
+                    Image(systemName: "return").font(.system(size: 9))
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color(NSColor.windowBackgroundColor))
+        }
+    }
+
+    private func lineColor(_ line: ConsoleLine) -> Color {
+        switch line.kind {
+        case .command: return Color.accentColor
+        case .error:   return Color(NSColor.systemRed)
+        case .output:  return Color(NSColor.secondaryLabelColor)
+        }
+    }
+
+    private func runInput() {
+        let cmd = input.trimmingCharacters(in: .whitespaces)
+        guard !cmd.isEmpty else { return }
+        output.append(ConsoleLine(text: "> " + cmd, kind: .command))
+        input = ""
+
+        let args = cmd.components(separatedBy: " ").filter { !$0.isEmpty }
+        // Look for iphoto-cli next to the .app bundle
+        let cliURL = Bundle.main.bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("iphoto-cli")
+
+        guard FileManager.default.fileExists(atPath: cliURL.path) else {
+            output.append(ConsoleLine(text: "Fehler: iphoto-cli nicht gefunden bei \(cliURL.path)", kind: .error))
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let proc = Process()
+            proc.executableURL = cliURL
+            proc.arguments = args
+            let outPipe = Pipe(); proc.standardOutput = outPipe
+            let errPipe = Pipe(); proc.standardError  = errPipe
+            do {
+                try proc.run(); proc.waitUntilExit()
+                let outStr = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let errStr = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                DispatchQueue.main.async {
+                    for line in outStr.components(separatedBy: "\n") where !line.isEmpty {
+                        self.output.append(ConsoleLine(text: line, kind: .output))
+                    }
+                    for line in errStr.components(separatedBy: "\n") where !line.isEmpty {
+                        self.output.append(ConsoleLine(text: line, kind: .error))
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.output.append(ConsoleLine(text: "Fehler: \(error.localizedDescription)", kind: .error))
+                }
+            }
         }
     }
 }

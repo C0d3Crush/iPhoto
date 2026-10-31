@@ -2,6 +2,17 @@
 
 ---
 
+## 1.36.0
+**Feature — Discord-Suche, Album-Vollbild, Geeks-Konsole**
+
+- Suche unterstützt jetzt Filter wie Discord: `bewertung:5`, `typ:raw`, `vor:2024`, `nach:2023`, `kamera:canon`, `album:urlaub`, `markiert:pick`, `unscharf:ja`, `motiv:hund`, `elo:1700`, `farbe:rot` — kombinierbar mit freiem Text
+- Dropdown zeigt verfügbare Filter mit Icon + Hinweistext; nach `key:` erscheinen Wertvorschläge aus echten Daten (Alben, Kameramodelle, Motive)
+- Aktive Filter werden als entfernbare Chips unterhalb des Suchfelds angezeigt
+- Vollbild-Symbol in der Seitenleiste: klappt die Alben als Symbolraster auf und nimmt dabei Seitenleiste + Mittelbereich ein; Klick auf ein Album navigiert direkt dorthin
+- Geeks-Konsole: zweiter Tab neben „Log" — Befehle wie `viewmode get`, `catalog stats` etc. direkt in der App eingeben; Ausgabe erscheint farbkodiert; iphoto-cli wird automatisch neben der .app gesucht
+
+---
+
 ## 1.35.1
 **Bugfix — Suche aktualisiert Bildliste**
 
