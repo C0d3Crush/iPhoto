@@ -5,6 +5,11 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
+    @AppStorage("toolbar.sort")   private var showSort   = true
+    @AppStorage("toolbar.eye")    private var showEye    = true
+    @AppStorage("toolbar.rotate") private var showRotate = true
+    @AppStorage("toolbar.zoom")   private var showZoom   = true
+
     var body: some View {
         ZStack {
             HStack(spacing: 0) {
@@ -93,59 +98,65 @@ struct ContentView: View {
 
             ToolbarItemGroup(placement: .automatic) {
                 if !viewModel.compare.active {
-                    SortMenuButton()
-                        .environmentObject(viewModel)
-
-                    Button(action: { viewModel.adj.showOriginal.toggle() }) {
-                        Image(systemName: viewModel.adj.showOriginal ? "eye.slash" : "eye")
+                    if showSort {
+                        SortMenuButton()
+                            .environmentObject(viewModel)
                     }
-                    .help("Original / Anpassungen")
-                    .disabled(viewModel.currentImage == nil)
+                    if showEye {
+                        Button(action: { viewModel.adj.showOriginal.toggle() }) {
+                            Image(systemName: viewModel.adj.showOriginal ? "eye.slash" : "eye")
+                        }
+                        .help("Original / Anpassungen")
+                        .disabled(viewModel.currentImage == nil)
+                    }
                 }
             }
 
             ToolbarItemGroup(placement: .automatic) {
                 if !viewModel.compare.active {
-                    Button(action: { viewModel.rotateLeft() }) {
-                        Image(systemName: "rotate.left")
-                    }
-                    .help("90° links drehen (⌘[)")
-                    .keyboardShortcut("[", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
+                    if showRotate {
+                        Button(action: { viewModel.rotateLeft() }) {
+                            Image(systemName: "rotate.left")
+                        }
+                        .help("90° links drehen (⌘[)")
+                        .keyboardShortcut("[", modifiers: .command)
+                        .disabled(viewModel.currentImage == nil)
 
-                    Button(action: { viewModel.rotateRight() }) {
-                        Image(systemName: "rotate.right")
+                        Button(action: { viewModel.rotateRight() }) {
+                            Image(systemName: "rotate.right")
+                        }
+                        .help("90° rechts drehen (⌘])")
+                        .keyboardShortcut("]", modifiers: .command)
+                        .disabled(viewModel.currentImage == nil)
                     }
-                    .help("90° rechts drehen (⌘])")
-                    .keyboardShortcut("]", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
+                    if showZoom {
+                        Button(action: { viewModel.zoomOut() }) {
+                            Image(systemName: "minus.magnifyingglass")
+                        }
+                        .help("Verkleinern")
+                        .keyboardShortcut("-", modifiers: .command)
+                        .disabled(viewModel.currentImage == nil)
 
-                    Button(action: { viewModel.zoomOut() }) {
-                        Image(systemName: "minus.magnifyingglass")
-                    }
-                    .help("Verkleinern")
-                    .keyboardShortcut("-", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
+                        Button(action: { viewModel.fitToWindow() }) {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        }
+                        .help("An Fenster anpassen")
+                        .disabled(viewModel.currentImage == nil)
 
-                    Button(action: { viewModel.fitToWindow() }) {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    }
-                    .help("An Fenster anpassen")
-                    .disabled(viewModel.currentImage == nil)
+                        Button(action: { viewModel.actualSize() }) {
+                            Image(systemName: "1.magnifyingglass")
+                        }
+                        .help("Originalgröße")
+                        .keyboardShortcut("0", modifiers: .command)
+                        .disabled(viewModel.currentImage == nil)
 
-                    Button(action: { viewModel.actualSize() }) {
-                        Image(systemName: "1.magnifyingglass")
+                        Button(action: { viewModel.zoomIn() }) {
+                            Image(systemName: "plus.magnifyingglass")
+                        }
+                        .help("Vergrößern")
+                        .keyboardShortcut("=", modifiers: .command)
+                        .disabled(viewModel.currentImage == nil)
                     }
-                    .help("Originalgröße")
-                    .keyboardShortcut("0", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
-
-                    Button(action: { viewModel.zoomIn() }) {
-                        Image(systemName: "plus.magnifyingglass")
-                    }
-                    .help("Vergrößern")
-                    .keyboardShortcut("=", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
                 }
             }
 

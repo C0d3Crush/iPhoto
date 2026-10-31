@@ -13,6 +13,8 @@ struct SettingsView: View {
                 .tabItem { Label("Qualität", systemImage: "wand.and.stars") }
             backupTab
                 .tabItem { Label("Backup", systemImage: "externaldrive.badge.checkmark") }
+            toolbarTab
+                .tabItem { Label("Toolbar", systemImage: "toolbar.horizontal") }
             featuresTab
                 .tabItem { Label("Funktionen", systemImage: "slider.horizontal.3") }
         }
@@ -97,6 +99,58 @@ struct SettingsView: View {
             }
         }
         .padding(20)
+    }
+
+    // MARK: - Toolbar
+
+    @AppStorage("toolbar.sort")   private var showSort   = true
+    @AppStorage("toolbar.eye")    private var showEye    = true
+    @AppStorage("toolbar.rotate") private var showRotate = true
+    @AppStorage("toolbar.zoom")   private var showZoom   = true
+
+    private var toolbarTab: some View {
+        Form {
+            Section(header: Text("Sichtbare Buttons").font(.headline)) {
+                toolbarToggle("Sortierung", icon: "arrow.up.arrow.down", isOn: $showSort,
+                    description: "Sortier-Menü (↑↓) zum Wechsel zwischen Dateiname, Datum, Bewertung etc.")
+                toolbarToggle("Original / Anpassungen", icon: "eye", isOn: $showEye,
+                    description: "Augen-Symbol zum schnellen Vergleich zwischen Original und angepasster Version.")
+                toolbarToggle("Rotation", icon: "rotate.left", isOn: $showRotate,
+                    description: "Drehen-Buttons zum Rotieren des aktuellen Bildes um 90° (⌘[ / ⌘]).")
+                toolbarToggle("Zoom", icon: "plus.magnifyingglass", isOn: $showZoom,
+                    description: "Zoom-Buttons: Verkleinern, Einpassen, Originalgröße, Vergrößern (⌘- / ⌘0 / ⌘=).")
+            }
+
+            HStack {
+                Spacer()
+                Button("Alle einblenden") {
+                    showSort = true; showEye = true; showRotate = true; showZoom = true
+                }
+                Button("Alle ausblenden") {
+                    showSort = false; showEye = false; showRotate = false; showZoom = false
+                }
+            }
+            .padding(.top, 8)
+        }
+        .padding(20)
+    }
+
+    @ViewBuilder
+    private func toolbarToggle(_ title: String, icon: String, isOn: Binding<Bool>, description: String) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .frame(width: 20)
+                    .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    Text(description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     private var featuresTab: some View {
