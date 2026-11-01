@@ -71,6 +71,19 @@ extension ImageViewModel {
         library.saveAlbums()
     }
 
+    func updateAlbum(_ album: Album, name: String, description: String?) {
+        guard let idx = library.albums.firstIndex(where: { $0.id == album.id }) else { return }
+        let nameChanged = library.albums[idx].name != name
+        let oldDir = nameChanged ? albumSystemPath(for: library.albums[idx]) : nil
+        library.albums[idx].name = name
+        library.albums[idx].albumDescription = description?.isEmpty == false ? description : nil
+        library.saveAlbums()
+        if nameChanged {
+            CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: name)
+            syncAlbumToFilesystem(library.albums[idx], removingOldAt: oldDir)
+        }
+    }
+
     func addToAlbum(_ document: ImageDocument, albumID: UUID) {
         guard let idx = library.albums.firstIndex(where: { $0.id == albumID }) else { return }
         guard !library.albums[idx].photoURLs.contains(document.url) else { return }

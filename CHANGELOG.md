@@ -2,6 +2,17 @@
 
 ---
 
+## 1.42.0
+**Feature — Album-Detailansicht & iAlbum-Kontextmenü**
+
+- Rechtsklick auf Album im Raster → „Informationen…" öffnet Detail-Sheet (iTunes-Stil)
+  - Tab „Details": Name und Beschreibung bearbeiten, Fotoanzahl
+  - Tab „Cover": Titelbild aus Album-Fotos auswählen
+- Rechtsklick auf iAlbum → „iAlbum bearbeiten…" öffnet Kriterien-Editor, „iAlbum löschen"
+- Neues Feld `albumDescription` im Album-Modell (rückwärtskompatibel)
+
+---
+
 ## 1.41.2
 **Feature — ELO-Suchoperatoren**
 

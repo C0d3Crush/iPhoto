@@ -150,6 +150,7 @@ private struct SmartFolderGridCell: View {
     @EnvironmentObject var viewModel: ImageViewModel
     let smartFolder: SmartFolder
     @State private var hovered = false
+    @State private var showEdit = false
 
     private var coverDocs: [ImageDocument] {
         var result: [ImageDocument] = []
@@ -188,6 +189,15 @@ private struct SmartFolderGridCell: View {
         .buttonStyle(PlainButtonStyle())
         .onHover { hovered = $0 }
         .onAppear { requestThumbnails() }
+        .contextMenu {
+            Button("iAlbum bearbeiten…") { showEdit = true }
+            Divider()
+            Button("iAlbum löschen") { viewModel.deleteSmartFolder(smartFolder) }
+        }
+        .sheet(isPresented: $showEdit) {
+            SmartFolderSheet(editing: smartFolder)
+                .environmentObject(viewModel)
+        }
     }
 
     @ViewBuilder
@@ -251,9 +261,7 @@ private struct AlbumGridCell: View {
     @EnvironmentObject var viewModel: ImageViewModel
     let album: Album
     @State private var hovered = false
-    @State private var isRenaming = false
-    @State private var renameText = ""
-    @State private var showCoverPicker = false
+    @State private var showDetail = false
 
     // First 4 docs from the collection whose URL is in this album.
     // If a coverPhotoURL is set, that doc is placed first.
@@ -309,31 +317,12 @@ private struct AlbumGridCell: View {
         .onHover { hovered = $0 }
         .onAppear { requestThumbnails() }
         .contextMenu {
-            Button("Album umbenennen") {
-                renameText = album.name
-                isRenaming = true
-            }
-            Button("Titelbild festlegen…") {
-                showCoverPicker = true
-            }
+            Button("Informationen…") { showDetail = true }
             Divider()
-            Button("Album löschen") {
-                viewModel.deleteAlbum(album)
-            }
+            Button("Album löschen") { viewModel.deleteAlbum(album) }
         }
-        .alert(isPresented: $isRenaming) {
-            Alert(
-                title: Text("Album umbenennen"),
-                message: nil,
-                primaryButton: .default(Text("Speichern"), action: {
-                    let trimmed = renameText.trimmingCharacters(in: .whitespaces)
-                    if !trimmed.isEmpty { viewModel.renameAlbum(album, to: trimmed) }
-                }),
-                secondaryButton: .cancel(Text("Abbrechen"))
-            )
-        }
-        .sheet(isPresented: $showCoverPicker) {
-            CoverPickerSheet(album: album, isPresented: $showCoverPicker)
+        .sheet(isPresented: $showDetail) {
+            AlbumDetailSheet(album: album, isPresented: $showDetail)
                 .environmentObject(viewModel)
         }
     }
@@ -398,6 +387,170 @@ private struct AlbumGridCell: View {
         for doc in coverDocs {
             if let idx = viewModel.collectionIndex(for: doc) {
                 viewModel.requestVisibleThumbnail(at: idx)
+            }
+        }
+    }
+}
+
+// MARK: - Album Detail Sheet
+
+private struct AlbumDetailSheet: View {
+    @EnvironmentObject var viewModel: ImageViewModel
+    let album: Album
+    @Binding var isPresented: Bool
+
+    private enum Tab: String, CaseIterable {
+        case details = "Details"
+        case cover   = "Cover"
+    }
+
+    @State private var selectedTab: Tab = .details
+    @State private var nameText: String
+    @State private var descText: String
+
+    init(album: Album, isPresented: Binding<Bool>) {
+        self.album = album
+        self._isPresented = isPresented
+        self._nameText = State(initialValue: album.name)
+        self._descText = State(initialValue: album.albumDescription ?? "")
+    }
+
+    private var currentAlbum: Album {
+        viewModel.library.albums.first(where: { $0.id == album.id }) ?? album
+    }
+
+    private var headerImage: NSImage? {
+        let a = currentAlbum
+        let urlSet = Set(a.photoURLs)
+        let docs = viewModel.collection.documents
+        if let coverURL = a.coverPhotoURL,
+           let doc = docs.first(where: { $0.url == coverURL }) {
+            return doc.thumbnailImage ?? doc.placeholderThumbnailImage
+        }
+        for doc in docs where urlSet.contains(doc.url) {
+            if let img = doc.thumbnailImage ?? doc.placeholderThumbnailImage { return img }
+        }
+        return nil
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack(spacing: 14) {
+                ZStack {
+                    Color(NSColor.separatorColor).opacity(0.3)
+                    if let img = headerImage {
+                        Image(nsImage: img).resizable().scaledToFill()
+                    } else {
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 20)).foregroundColor(.secondary)
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(nameText.isEmpty ? album.name : nameText)
+                        .font(.headline).lineLimit(1)
+                    Text("\(album.photoURLs.count) Fotos")
+                        .font(.caption).foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16).padding(.vertical, 14)
+
+            Divider()
+
+            Picker("", selection: $selectedTab) {
+                ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .padding(.horizontal, 16).padding(.vertical, 8)
+
+            Divider()
+
+            if selectedTab == .details { detailsTab } else { coverTab }
+
+            Divider()
+
+            HStack {
+                Button("Abbrechen") { isPresented = false }
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("OK") {
+                    let trimmed = nameText.trimmingCharacters(in: .whitespaces)
+                    viewModel.updateAlbum(album,
+                                         name: trimmed.isEmpty ? album.name : trimmed,
+                                         description: descText)
+                    isPresented = false
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+        }
+        .frame(width: 460, height: 400)
+    }
+
+    @ViewBuilder
+    private var detailsTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text("Name")
+                    .frame(width: 100, alignment: .trailing)
+                    .foregroundColor(.secondary).font(.callout)
+                TextField("", text: $nameText)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+            }
+            HStack(spacing: 8) {
+                Text("Beschreibung")
+                    .frame(width: 100, alignment: .trailing)
+                    .foregroundColor(.secondary).font(.callout)
+                TextField("", text: $descText)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+            }
+            HStack(spacing: 8) {
+                Text("Fotos")
+                    .frame(width: 100, alignment: .trailing)
+                    .foregroundColor(.secondary).font(.callout)
+                Text("\(album.photoURLs.count)")
+                    .font(.callout)
+            }
+            Spacer()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private let coverColumns = [GridItem(.adaptive(minimum: 80, maximum: 110), spacing: 8)]
+
+    private var candidateDocs: [ImageDocument] {
+        let urlSet = Set(currentAlbum.photoURLs)
+        var result: [ImageDocument] = []
+        for doc in viewModel.collection.documents {
+            if urlSet.contains(doc.url) {
+                result.append(doc)
+                if result.count == 24 { break }
+            }
+        }
+        return result
+    }
+
+    @ViewBuilder
+    private var coverTab: some View {
+        if candidateDocs.isEmpty {
+            Text("Keine Fotos im Album")
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVGrid(columns: coverColumns, spacing: 8) {
+                    ForEach(candidateDocs) { doc in
+                        CoverPickerTile(doc: doc, isCover: doc.url == currentAlbum.coverPhotoURL) {
+                            viewModel.setCoverPhoto(doc.url, forAlbum: album)
+                        }
+                    }
+                }
+                .padding(12)
             }
         }
     }
