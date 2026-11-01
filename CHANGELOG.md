@@ -2,6 +2,13 @@
 
 ---
 
+## 1.45.2
+**Bugfix — Album-Banner auch in der Spaltenansicht (LibraryColumnsView)**
+
+- AlbumBannerView wird nun auch in der Spaltenansicht (HSplitView-Modus) als festes Element oberhalb des Split-Bereichs gerendert
+
+---
+
 ## 1.45.1
 **Bugfix — Album-Banner in Listenansicht oberhalb der Spalten-Header**
 

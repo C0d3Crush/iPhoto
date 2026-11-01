@@ -4,42 +4,56 @@ import AppKit
 struct LibraryColumnsView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
-    var body: some View {
-        HSplitView {
-            // Left: narrow thumbnail column
-            ZStack {
-                if viewModel.collection.documents.isEmpty {
-                    Color(NSColor.controlBackgroundColor)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 2) {
-                            ForEach(viewModel.visibleDocuments, id: \.id) { doc in
-                                let actualIndex = viewModel.collectionIndex(for: doc) ?? 0
-                                let isSelected = viewModel.collection.selectedIndices.contains(actualIndex)
-                                ColumnsThumbnailRow(doc: doc, isSelected: isSelected)
-                                    .onTapGesture {
-                                        viewModel.selectDocument(at: actualIndex)
-                                    }
-                                    .contextMenu {
-                                        ThumbnailContextMenu(doc: doc)
-                                            .environmentObject(viewModel)
-                                    }
-                                    .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-                DropTargetView()
-                    .environmentObject(viewModel)
-            }
-            .frame(minWidth: 160, idealWidth: 200, maxWidth: 280)
-            .background(Color(NSColor.controlBackgroundColor))
+    private var isAlbumContext: Bool {
+        switch viewModel.navSelection {
+        case .album, .smartFolder, .albumFolder: return true
+        default: return false
+        }
+    }
 
-            // Right: detail
-            DetailView()
-                .environmentObject(viewModel)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+    var body: some View {
+        VStack(spacing: 0) {
+            if isAlbumContext {
+                AlbumBannerView()
+                    .environmentObject(viewModel)
+                Divider()
+            }
+            HSplitView {
+                // Left: narrow thumbnail column
+                ZStack {
+                    if viewModel.collection.documents.isEmpty {
+                        Color(NSColor.controlBackgroundColor)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 2) {
+                                ForEach(viewModel.visibleDocuments, id: \.id) { doc in
+                                    let actualIndex = viewModel.collectionIndex(for: doc) ?? 0
+                                    let isSelected = viewModel.collection.selectedIndices.contains(actualIndex)
+                                    ColumnsThumbnailRow(doc: doc, isSelected: isSelected)
+                                        .onTapGesture {
+                                            viewModel.selectDocument(at: actualIndex)
+                                        }
+                                        .contextMenu {
+                                            ThumbnailContextMenu(doc: doc)
+                                                .environmentObject(viewModel)
+                                        }
+                                        .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    DropTargetView()
+                        .environmentObject(viewModel)
+                }
+                .frame(minWidth: 160, idealWidth: 200, maxWidth: 280)
+                .background(Color(NSColor.controlBackgroundColor))
+
+                // Right: detail
+                DetailView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 }
