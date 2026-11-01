@@ -232,15 +232,22 @@ struct ContentView: View {
     @ViewBuilder private var layoutArea: some View {
         GeometryReader { geo in
             HStack(spacing: 0) {
-                if viewModel.sidebarAlbumExpanded {
+                if viewModel.navSidebarVisible {
                     let maxW = max(albumPanelMin, geo.size.width - 250)
                     let panelW = max(albumPanelMin, min(albumPanelLive, maxW))
 
-                    AlbumGridExpandedView()
-                        .environmentObject(viewModel)
-                        .frame(width: panelW)
-                        .frame(maxHeight: .infinity)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    Group {
+                        if viewModel.sidebarAlbumExpanded {
+                            AlbumGridExpandedView()
+                                .environmentObject(viewModel)
+                        } else {
+                            NavSidebarView()
+                                .environmentObject(viewModel)
+                        }
+                    }
+                    .frame(width: panelW)
+                    .frame(maxHeight: .infinity)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
 
                     AlbumPanelDivider(
                         currentWidth: panelW,
@@ -252,29 +259,17 @@ struct ContentView: View {
                         },
                         onRelease: { finalW in
                             albumPanelWidthStored = Double(albumPanelLive)
-                            if finalW < albumPanelSnapClose {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    viewModel.sidebarAlbumExpanded = false
-                                }
-                            }
                         }
                     )
+                }
 
-                    ZStack { mainContent }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    if viewModel.navSidebarVisible {
-                        NavSidebarView()
-                            .environmentObject(viewModel)
-                        Divider()
-                    }
-                    ZStack { mainContent }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    if viewModel.inspectorVisible {
-                        Divider()
-                        InspectorView()
-                            .environmentObject(viewModel)
-                    }
+                ZStack { mainContent }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if viewModel.inspectorVisible {
+                    Divider()
+                    InspectorView()
+                        .environmentObject(viewModel)
                 }
             }
         }

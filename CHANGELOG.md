@@ -2,6 +2,19 @@
 
 ---
 
+## 1.44.0
+**Feature — Einheitliche Seitenleiste mit Listen- und Symbolmodus**
+
+- Seitenleiste zeigt immer Suche + Bibliothek-Sektion + Alben, egal ob Listen- oder Symbole-Modus
+- Umschalter: `⊞`-Icon wechselt zu Symbolen, `≡`-Icon zurück zur Liste
+- Symbole-Ansicht (AlbumGridExpandedView) hat jetzt Suche und Bibliothek-Einträge (Library, Bildvergleich)
+- Seitenleiste ist in beiden Modi per Drag in der Breite anpassbar
+- Inspector bleibt in beiden Modi sichtbar
+- Album-Banner passt Layout automatisch an: unter 320 px Breite wechselt er zu gestapeltem Layout (Bild oben, Titel darunter)
+- Gelöschte Bilder werden sofort aus allen Album-Referenzen entfernt
+
+---
+
 ## 1.43.2
 **Bugfix — Album-Panel Resize sofort sichtbar**
 

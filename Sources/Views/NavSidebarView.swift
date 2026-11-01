@@ -95,14 +95,14 @@ struct NavSidebarView: View {
                         viewModel.sidebarAlbumExpanded.toggle()
                     }
                 }) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    Image(systemName: "square.grid.2x2")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                         .padding(.trailing, 10)
                         .padding(.top, 14)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Alben als Symbolraster")
+                .help("Alben als Symbole anzeigen")
             }
 
             if viewModel.isStartupLoading {
@@ -164,7 +164,7 @@ struct NavSidebarView: View {
 
             VerboseLogView()
         }
-        .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
+        .frame(maxWidth: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
         .sheet(item: $smartFolderSheetItem) { item in
             SmartFolderSheet(editing: item.folder)
@@ -633,7 +633,7 @@ struct NavSidebarView: View {
 
 // MARK: - Search Bar
 
-private struct SearchBarView: View {
+struct SearchBarView: View {
     @Binding var query: String
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var isEditing = false

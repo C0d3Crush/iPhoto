@@ -10,51 +10,49 @@ struct AlbumGridExpandedView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header bar
-            HStack(spacing: 8) {
+            // Search + toggle row
+            HStack(spacing: 0) {
+                SearchBarView(query: $viewModel.searchQuery)
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity)
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.sidebarAlbumExpanded = false
                     }
                 }) {
-                    Image(systemName: "arrow.down.right.and.arrow.up.left")
-                        .font(.system(size: 13))
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 11))
                         .foregroundColor(.secondary)
+                        .padding(.trailing, 10)
+                        .padding(.top, 14)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Zurück zur normalen Ansicht")
-
-                Text("Alben")
-                    .font(.system(size: 13, weight: .semibold))
-                Spacer()
-                Text("\(viewModel.library.albums.count) Alben")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                .help("Alben als Liste anzeigen")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color(NSColor.windowBackgroundColor))
 
-            Divider()
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Bibliothek section
+                    gridSectionHeader("Bibliothek")
+                    gridNavRow(label: "Library", icon: "photo.stack",
+                               isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil) {
+                        viewModel.navSelection = .library
+                    }
+                    if PluginStore.shared.isEnabled("com.iphoto.builtin.compare") {
+                        gridNavRow(label: "Bildvergleich", icon: "arrow.left.arrow.right",
+                                   isSelected: viewModel.compare.active) {
+                            viewModel.toggleCompareMode()
+                        }
+                    }
 
-            let hasContent = !viewModel.library.albums.isEmpty
-                || !viewModel.library.albumFolders.isEmpty
-                || !viewModel.library.smartFolders.isEmpty
-            if !hasContent {
-                VStack(spacing: 12) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 36))
-                        .foregroundColor(.secondary)
-                    Text("Keine Alben vorhanden")
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 0) {
+                    let hasAlbumContent = !viewModel.library.albums.isEmpty
+                        || !viewModel.library.albumFolders.isEmpty
+                        || !viewModel.library.smartFolders.isEmpty
+
+                    if hasAlbumContent {
                         // Album folders
                         if !viewModel.library.albumFolders.isEmpty {
-                            sectionHeader("Ordner", icon: "folder")
+                            gridSectionHeader("Ordner", icon: "folder")
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(viewModel.library.albumFolders) { folder in
                                     FolderGridCell(folder: folder)
@@ -66,7 +64,7 @@ struct AlbumGridExpandedView: View {
 
                         // Regular albums
                         if !viewModel.library.albums.isEmpty {
-                            sectionHeader("Alben", icon: "rectangle.stack")
+                            gridSectionHeader("Alben", icon: "rectangle.stack")
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(viewModel.library.albums) { album in
                                     AlbumGridCell(album: album)
@@ -76,9 +74,9 @@ struct AlbumGridExpandedView: View {
                             .padding(.horizontal, 16).padding(.bottom, 20)
                         }
 
-                        // Smart folders / playlists
+                        // Smart folders
                         if !viewModel.library.smartFolders.isEmpty {
-                            sectionHeader("iAlben", icon: "folder.badge.gearshape")
+                            gridSectionHeader("iAlben", icon: "folder.badge.gearshape")
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(viewModel.library.smartFolders) { sf in
                                     SmartFolderGridCell(smartFolder: sf)
@@ -87,25 +85,51 @@ struct AlbumGridExpandedView: View {
                             }
                             .padding(.horizontal, 16).padding(.bottom, 20)
                         }
+                    } else {
+                        VStack(spacing: 12) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 36))
+                                .foregroundColor(.secondary)
+                            Text("Keine Alben vorhanden")
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
                     }
-                    .padding(.top, 16)
                 }
-                .background(Color(NSColor.controlBackgroundColor))
+                .padding(.vertical, 8)
             }
+            .background(Color(NSColor.controlBackgroundColor))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
     }
 }
 
-// MARK: - Section Header helper (free func on AlbumGridExpandedView)
+// MARK: - Section Header / Nav Row helpers
 
-private func sectionHeader(_ title: String, icon: String) -> some View {
+private func gridSectionHeader(_ title: String, icon: String? = nil) -> some View {
     HStack(spacing: 6) {
-        Image(systemName: icon).font(.caption).foregroundColor(.secondary)
+        if let icon = icon {
+            Image(systemName: icon).font(.caption).foregroundColor(.secondary)
+        }
         Text(title).font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary)
     }
-    .padding(.horizontal, 16).padding(.bottom, 8)
+    .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
+}
+
+private func gridNavRow(label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        Label(label, systemImage: icon)
+            .font(.system(size: 13))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+    }
+    .buttonStyle(PlainButtonStyle())
+    .padding(.horizontal, 6)
 }
 
 // MARK: - Folder cell
