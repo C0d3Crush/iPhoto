@@ -96,6 +96,30 @@ struct AlbumGridExpandedView: View {
                 .padding(.vertical, 8)
             }
             .background(Color(NSColor.controlBackgroundColor))
+
+            // Loading bar + Log — spiegelt NavSidebarView-Footer
+            if !viewModel.activity.loadingQueue.isEmpty {
+                Divider()
+                LoadingBar(activity: viewModel.activity)
+            } else if let summary = viewModel.activity.loadingSummary {
+                Divider()
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 10))
+                        .foregroundColor(.green)
+                    Text(summary)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color(NSColor.windowBackgroundColor))
+                .transition(.opacity)
+            }
+
+            VerboseLogView()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.controlBackgroundColor))

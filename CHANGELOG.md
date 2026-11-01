@@ -2,6 +2,13 @@
 
 ---
 
+## 1.44.5
+**Bugfix — Ladebalken und Log auch im Symbole-Modus sichtbar**
+
+- AlbumGridExpandedView zeigt jetzt denselben Footer wie NavSidebarView: Ladebalken, Abschluss-Zusammenfassung und Log/Konsole-Tabs
+
+---
+
 ## 1.44.4
 **Bugfix — Alle 5 Sterne immer in einer Reihe**
 

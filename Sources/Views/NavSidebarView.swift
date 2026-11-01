@@ -1305,7 +1305,7 @@ private struct GroupRenameSheet: View {
 
 private enum GeekTab { case log, console }
 
-private struct VerboseLogView: View {
+struct VerboseLogView: View {
     @AppStorage("settings.geekMode") private var geekMode = false
     @State private var activeTab: GeekTab = .log
     @State private var isExpanded = false
