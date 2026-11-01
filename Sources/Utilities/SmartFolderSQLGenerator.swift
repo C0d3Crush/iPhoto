@@ -119,6 +119,10 @@ enum SmartFolderSQLGenerator {
             )
             """
 
+        // ── Nicht in Album ───────────────────────────────────────────────────
+        case .notInAlbum:
+            return "i.path NOT IN (SELECT ai.image_path FROM album_images ai)"
+
         // ── Runtime-only ─────────────────────────────────────────────────────
         case .colorRatio, .smartFolderRef:
             return nil

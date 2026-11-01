@@ -32,7 +32,7 @@ enum NavSidebarSection: String, CaseIterable, Hashable {
         switch self {
         case .library:      return "Bibliothek"
         case .albums:       return "Alben"
-        case .smartFolders: return "Intelligente Ordner"
+        case .smartFolders: return "iAlben"
         case .volumes:      return "Wechseldatenträger"
         case .trash:        return "Papierkorb"
         case .duplicates:   return "Duplikate"
@@ -306,7 +306,7 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var smartFoldersSection: some View {
-        collapsibleSectionHeader("Intelligente Ordner", isCollapsed: smartFoldersCollapsed,
+        collapsibleSectionHeader("iAlben", isCollapsed: smartFoldersCollapsed,
             onToggle: { withAnimation(.easeInOut(duration: 0.18)) { smartFoldersCollapsed.toggle() } },
             trailing: AnyView(
                 Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {

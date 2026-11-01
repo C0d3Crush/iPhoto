@@ -65,6 +65,12 @@ extension ImageViewModel {
         syncAlbumToFilesystem(library.albums[idx], removingOldAt: oldDir)
     }
 
+    func setCoverPhoto(_ url: URL, forAlbum album: Album) {
+        guard let idx = library.albums.firstIndex(where: { $0.id == album.id }) else { return }
+        library.albums[idx].coverPhotoURL = url
+        library.saveAlbums()
+    }
+
     func addToAlbum(_ document: ImageDocument, albumID: UUID) {
         guard let idx = library.albums.firstIndex(where: { $0.id == albumID }) else { return }
         guard !library.albums[idx].photoURLs.contains(document.url) else { return }

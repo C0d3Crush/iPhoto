@@ -2,6 +2,16 @@
 
 ---
 
+## 1.41.0
+**Feature — iAlbum, Nicht-in-Album-Filter, Album-Eigenschaften**
+
+- Intelligente Ordner heißen jetzt **iAlbum** / iAlben in der gesamten UI
+- Neues SmartFolder-Kriterium „Nicht in Album": findet Fotos die keinem Album zugeordnet sind
+- Albumraster: Rechtsklick → Umbenennen / Titelbild festlegen / Löschen
+- Album-Titelbild: beliebiges Foto aus dem Album als Cover festlegbar
+
+---
+
 ## 1.40.0
 **Feature — Inspector erweiterbar (rechte Seite)**
 

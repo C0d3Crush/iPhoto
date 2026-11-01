@@ -32,7 +32,7 @@ struct SmartFolderSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(editing == nil ? "Intelligenter Ordner" : "Ordner bearbeiten")
+            Text(editing == nil ? "iAlbum" : "iAlbum bearbeiten")
                 .font(.headline)
 
             TextField("Name", text: $name)
@@ -432,6 +432,11 @@ private struct CriterionRow: View {
                 .frame(width: 90)
                 .onAppear { if criterion.textValue.isEmpty { criterion.textValue = "R" } }
             }
+
+        // --- Nicht in Album ---
+        case .notInAlbum:
+            Text("Keinem Album zugeordnet")
+                .font(.caption).foregroundColor(.secondary)
 
         // --- Intelligenter Ordner (Rule-Tree) ---
         case .smartFolderRef:

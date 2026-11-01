@@ -70,6 +70,8 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
     case smartFolderRef
     // Farbkanal-Anteil in % (textValue = "R"|"G"|"B", numericValue = min%, numericValue2 = max%)
     case colorRatio
+    // Fotos die keinem Album zugeordnet sind
+    case notInAlbum
 
     var displayName: String {
         switch self {
@@ -91,12 +93,13 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .filmSimulation:   return "Filmsimulation"
         case .motif:            return "Motiv (KI)"
         case .album:            return "Album"
-        case .smartFolderRef:   return "Intelligenter Ordner"
+        case .smartFolderRef:   return "iAlbum"
         case .colorRatio:       return "Farbanteil (%)"
+        case .notInAlbum:       return "Nicht in Album"
         }
     }
 
-    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType, motifType, smartFolderRefType, colorRatioType }
+    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType, motifType, smartFolderRefType, colorRatioType, noneType }
 
     var type: AttributeType {
         switch self {
@@ -109,6 +112,7 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .album:                                   return .albumType
         case .smartFolderRef:                          return .smartFolderRefType
         case .colorRatio:                              return .colorRatioType
+        case .notInAlbum:                              return .noneType
         }
     }
 
@@ -123,6 +127,7 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .albumType:          return .isExact
         case .smartFolderRefType: return .isExact
         case .colorRatioType:     return .greaterThan
+        case .noneType:           return .isExact
         }
     }
 
@@ -137,6 +142,7 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .albumType:          return [.isExact, .isNot]
         case .smartFolderRefType: return [.isExact, .isNot]
         case .colorRatioType:     return [.greaterThan, .lessThan, .inRange]
+        case .noneType:           return [.isExact]
         }
     }
 }

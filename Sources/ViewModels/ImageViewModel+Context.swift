@@ -485,6 +485,9 @@ extension ImageViewModel {
                 case .isNot:   return !hasMotif
                 default:       return hasMotif
                 }
+            case .notInAlbum:
+                let allAlbumURLs = Set(library.albums.flatMap { $0.photoURLs })
+                return !allAlbumURLs.contains(doc.url)
             case .album:
                 guard let albumID = UUID(uuidString: c.textValue),
                       let album = library.albums.first(where: { $0.id == albumID }) else { return false }
