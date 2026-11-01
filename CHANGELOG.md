@@ -2,6 +2,18 @@
 
 ---
 
+## 1.43.1
+**Feature — Album-Panel resizable + Banner-Aktionen**
+
+- Album-Panel (expandierte Seitenleiste) ist per Drag frei in der Breite verschiebbar
+- Breite wird gespeichert und beim nächsten Start wiederhergestellt
+- Zu schmal gezogen → Panel schließt automatisch
+- Banner: Titel direkt anklicken zum Inline-Bearbeiten
+- Banner: „…"-Menü für Informationen / Bearbeiten / Löschen
+- Resizable Divider hebt sich blau hervor und zeigt Resize-Cursor
+
+---
+
 ## 1.43.0
 **Feature — Listenansicht & Album-Banner überarbeitet**
 

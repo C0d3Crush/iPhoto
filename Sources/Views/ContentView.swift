@@ -5,7 +5,8 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
-    @AppStorage("actionBar.order") private var actionBarOrderRaw: String = ""
+    @AppStorage("actionBar.order")       private var actionBarOrderRaw: String = ""
+    @AppStorage("albumPanel.width")      private var albumPanelWidthStored: Double = 320
 
     // Nav toolbar visibility
     @AppStorage("navtoolbar.showSidebar")    private var navShowSidebar    = true
@@ -221,30 +222,56 @@ struct ContentView: View {
         }
     }
 
+    // Minimum album-panel width; below the snap threshold we close the expanded view.
+    private let albumPanelMin: CGFloat = 200
+    private let albumPanelSnapClose: CGFloat = 160
+
     @ViewBuilder private var layoutArea: some View {
-        HStack(spacing: 0) {
-            if viewModel.sidebarAlbumExpanded {
-                AlbumGridExpandedView()
-                    .environmentObject(viewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                Divider()
-                LibraryFullGridView()
-                    .environmentObject(viewModel)
-                    .frame(width: viewModel.gridThumbnailSize + 50)
-                    .frame(maxHeight: .infinity)
-            } else {
-                if viewModel.navSidebarVisible {
-                    NavSidebarView()
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                if viewModel.sidebarAlbumExpanded {
+                    let maxW = max(albumPanelMin, geo.size.width - 250)
+                    let panelW = max(albumPanelMin, min(CGFloat(albumPanelWidthStored), maxW))
+
+                    AlbumGridExpandedView()
                         .environmentObject(viewModel)
-                    Divider()
-                }
-                ZStack { mainContent }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                if viewModel.inspectorVisible {
-                    Divider()
-                    InspectorView()
-                        .environmentObject(viewModel)
+                        .frame(width: panelW)
+                        .frame(maxHeight: .infinity)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+
+                    AlbumPanelDivider(
+                        currentWidth: panelW,
+                        minWidth: albumPanelMin,
+                        maxWidth: maxW,
+                        snapClose: albumPanelSnapClose,
+                        onDrag: { delta in
+                            let newW = max(albumPanelMin, min(CGFloat(albumPanelWidthStored) + delta, maxW))
+                            albumPanelWidthStored = Double(newW)
+                        },
+                        onRelease: { finalW in
+                            if finalW < albumPanelSnapClose {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    viewModel.sidebarAlbumExpanded = false
+                                }
+                            }
+                        }
+                    )
+
+                    ZStack { mainContent }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    if viewModel.navSidebarVisible {
+                        NavSidebarView()
+                            .environmentObject(viewModel)
+                        Divider()
+                    }
+                    ZStack { mainContent }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if viewModel.inspectorVisible {
+                        Divider()
+                        InspectorView()
+                            .environmentObject(viewModel)
+                    }
                 }
             }
         }
@@ -587,10 +614,60 @@ struct QueuePopover: View {
     }
 }
 
+// MARK: - Resizable album-panel divider
+
+private struct AlbumPanelDivider: View {
+    let currentWidth: CGFloat
+    let minWidth: CGFloat
+    let maxWidth: CGFloat
+    let snapClose: CGFloat
+    let onDrag: (CGFloat) -> Void
+    let onRelease: (CGFloat) -> Void
+
+    @State private var hovered = false
+    @State private var dragStart: CGFloat = 0
+
+    var body: some View {
+        Rectangle()
+            .fill(hovered
+                  ? Color.accentColor.opacity(0.6)
+                  : Color(NSColor.separatorColor))
+            .frame(width: 4)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onHover { hovered = $0 }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { v in
+                        let delta = v.translation.width - dragStart
+                        dragStart = v.translation.width
+                        onDrag(delta)
+                    }
+                    .onEnded { _ in
+                        dragStart = 0
+                        onRelease(currentWidth)
+                    }
+            )
+            .cursor(.resizeLeftRight)
+    }
+}
+
+private extension View {
+    func cursor(_ cursor: NSCursor) -> some View {
+        self.onHover { inside in
+            if inside { cursor.push() } else { NSCursor.pop() }
+        }
+    }
+}
+
 // MARK: - Album Banner
 
 struct AlbumBannerView: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isEditingTitle = false
+    @State private var titleDraft = ""
+    @State private var showAlbumDetail = false
+    @State private var showSmartFolderSheet = false
 
     var body: some View {
         switch viewModel.navSelection {
@@ -601,8 +678,18 @@ struct AlbumBannerView: View {
                     subtitle: "\(album.photoURLs.count) Fotos",
                     description: album.albumDescription,
                     isSmartFolder: false,
-                    docs: albumCoverDocs(album)
+                    docs: albumCoverDocs(album),
+                    saveTitle: { viewModel.updateAlbum(album, name: $0, description: album.albumDescription) },
+                    menu: { AnyView(Group {
+                        Button("Informationen…") { showAlbumDetail = true }
+                        Divider()
+                        Button("Album löschen") { viewModel.deleteAlbum(album) }
+                    }) }
                 )
+                .sheet(isPresented: $showAlbumDetail) {
+                    AlbumDetailSheet(album: album, isPresented: $showAlbumDetail)
+                        .environmentObject(viewModel)
+                }
             }
         case .smartFolder(let id):
             if let sf = viewModel.library.smartFolders.first(where: { $0.id == id }) {
@@ -612,8 +699,20 @@ struct AlbumBannerView: View {
                     subtitle: "\(count) Fotos",
                     description: nil,
                     isSmartFolder: true,
-                    docs: smartFolderCoverDocs(sf)
+                    docs: smartFolderCoverDocs(sf),
+                    saveTitle: { newName in
+                        var updated = sf; updated.name = newName
+                        viewModel.updateSmartFolder(updated)
+                    },
+                    menu: { AnyView(Group {
+                        Button("iAlbum bearbeiten…") { showSmartFolderSheet = true }
+                        Divider()
+                        Button("iAlbum löschen") { viewModel.deleteSmartFolder(sf) }
+                    }) }
                 )
+                .sheet(isPresented: $showSmartFolderSheet) {
+                    SmartFolderSheet(editing: sf).environmentObject(viewModel)
+                }
             }
         case .albumFolder(let id):
             if let folder = viewModel.library.albumFolders.first(where: { $0.id == id }) {
@@ -622,7 +721,9 @@ struct AlbumBannerView: View {
                     subtitle: "Ordner",
                     description: nil,
                     isSmartFolder: false,
-                    docs: []
+                    docs: [],
+                    saveTitle: { viewModel.renameAlbumFolder(folder, to: $0) },
+                    menu: { AnyView(EmptyView()) }
                 )
             }
         default:
@@ -632,7 +733,9 @@ struct AlbumBannerView: View {
 
     @ViewBuilder
     private func bannerContent(name: String, subtitle: String, description: String?,
-                               isSmartFolder: Bool, docs: [ImageDocument]) -> some View {
+                               isSmartFolder: Bool, docs: [ImageDocument],
+                               saveTitle: @escaping (String) -> Void,
+                               menu: @escaping () -> AnyView) -> some View {
         HStack(spacing: 20) {
             mosaicView(docs: docs, isSmartFolder: isSmartFolder)
                 .frame(width: 110, height: 110)
@@ -640,9 +743,35 @@ struct AlbumBannerView: View {
                 .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(name)
-                    .font(.system(size: 22, weight: .bold))
-                    .lineLimit(2)
+                HStack(spacing: 8) {
+                    if isEditingTitle {
+                        TextField("", text: $titleDraft, onCommit: {
+                            let t = titleDraft.trimmingCharacters(in: .whitespaces)
+                            if !t.isEmpty { saveTitle(t) }
+                            isEditingTitle = false
+                        })
+                        .font(.system(size: 22, weight: .bold))
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .onExitCommand { isEditingTitle = false }
+                    } else {
+                        Text(name)
+                            .font(.system(size: 22, weight: .bold))
+                            .lineLimit(2)
+                            .onTapGesture {
+                                titleDraft = name
+                                isEditingTitle = true
+                            }
+                    }
+                    Menu {
+                        menu()
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary)
+                    }
+                    .menuStyle(BorderlessButtonMenuStyle())
+                    .fixedSize()
+                }
                 Text(subtitle)
                     .font(.callout)
                     .foregroundColor(.secondary)
@@ -661,6 +790,7 @@ struct AlbumBannerView: View {
         .frame(maxWidth: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
+            isEditingTitle = false
             for doc in docs {
                 if let idx = viewModel.collectionIndex(for: doc) {
                     viewModel.requestVisibleThumbnail(at: idx)

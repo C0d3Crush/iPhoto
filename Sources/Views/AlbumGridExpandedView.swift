@@ -394,7 +394,7 @@ private struct AlbumGridCell: View {
 
 // MARK: - Album Detail Sheet
 
-private struct AlbumDetailSheet: View {
+struct AlbumDetailSheet: View {
     @EnvironmentObject var viewModel: ImageViewModel
     let album: Album
     @Binding var isPresented: Bool
