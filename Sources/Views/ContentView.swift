@@ -238,6 +238,16 @@ struct ContentView: View {
                     .environmentObject(viewModel)
                     .frame(width: viewModel.gridThumbnailSize + 50)
                     .frame(maxHeight: .infinity)
+            } else if viewModel.inspectorVisible && viewModel.inspectorExpanded {
+                LibraryFullGridView()
+                    .environmentObject(viewModel)
+                    .frame(width: viewModel.gridThumbnailSize + 50)
+                    .frame(maxHeight: .infinity)
+                Divider()
+                InspectorView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 if viewModel.navSidebarVisible {
                     NavSidebarView()
@@ -246,11 +256,11 @@ struct ContentView: View {
                 }
                 ZStack { mainContent }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            if viewModel.inspectorVisible {
-                Divider()
-                InspectorView()
-                    .environmentObject(viewModel)
+                if viewModel.inspectorVisible {
+                    Divider()
+                    InspectorView()
+                        .environmentObject(viewModel)
+                }
             }
         }
     }

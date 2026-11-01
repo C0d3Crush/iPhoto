@@ -15,6 +15,28 @@ struct InspectorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header with expand toggle
+            HStack(spacing: 0) {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.inspectorExpanded.toggle()
+                    }
+                }) {
+                    Image(systemName: viewModel.inspectorExpanded
+                          ? "arrow.down.right.and.arrow.up.left"
+                          : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .padding(.leading, 10)
+                        .padding(.top, 14)
+                        .padding(.bottom, 10)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(viewModel.inspectorExpanded ? "Inspector verkleinern" : "Inspector vergrößern")
+                Spacer()
+            }
+            Divider()
+
             if orderedActive.isEmpty {
                 Spacer()
                 Text("Kein Panel aktiv")
@@ -82,7 +104,7 @@ struct InspectorView: View {
                 .background(Color(NSColor.windowBackgroundColor))
             }
         }
-        .frame(width: 280)
+        .frame(minWidth: 280, maxWidth: viewModel.inspectorExpanded ? .infinity : 280)
         .clipped()
         .background(Color(NSColor.windowBackgroundColor))
         .sheet(isPresented: $viewModel.versions.showHistory) {

@@ -2,6 +2,15 @@
 
 ---
 
+## 1.40.0
+**Feature — Inspector erweiterbar (rechte Seite)**
+
+- Inspector-Header zeigt Expand-Button (↗) analog zum Sidebar-Expand links
+- Beim Expandieren nimmt der Inspector die volle Breite ein — eine Bildspalte bleibt links sichtbar
+- Collapse-Button (↙) verkleinert den Inspector zurück auf normale Breite (280 px)
+
+---
+
 ## 1.39.2
 **Bugfix — Album-Mosaik zeigt Thumbnails für alle Alben**
 
