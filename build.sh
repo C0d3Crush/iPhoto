@@ -195,6 +195,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/CatalogStore+Quality.swift \
     $ROOT/Sources/Utilities/CatalogStore+Ratings.swift \
     $ROOT/Sources/Utilities/SmartFolderFileSync.swift \
+    $ROOT/Sources/Utilities/SmartFolderSQLGenerator.swift \
     $ROOT/Sources/Utilities/VersionStore.swift \
     $ROOT/Sources/Utilities/EloRating.swift \
     $ROOT/Sources/CLI/main.swift"

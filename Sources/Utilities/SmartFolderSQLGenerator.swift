@@ -5,6 +5,27 @@ import Foundation
 // colorRatio and smartFolderRef are left as comments — they require runtime analysis.
 enum SmartFolderSQLGenerator {
 
+    /// True when at least one criterion cannot be expressed in SQL and requires runtime evaluation.
+    static func hasRuntimeOnlyCriteria(_ sf: SmartFolder) -> Bool {
+        sf.criteria.contains { whereClause(for: $0) == nil }
+    }
+
+    /// COUNT query without ORDER BY / LIMIT — for sidebar counts.
+    static func generateCount(for sf: SmartFolder) -> String {
+        var clauses: [String] = []
+        for c in sf.criteria {
+            if let clause = whereClause(for: c) { clauses.append(clause) }
+        }
+        let joiner = sf.matchAll ? "\n  AND " : "\n  OR "
+        let where_ = clauses.isEmpty ? "1=1" : clauses.joined(separator: joiner)
+        return """
+        SELECT COUNT(DISTINCT i.path)
+        FROM images i
+        LEFT JOIN ratings r ON r.image_path = i.path
+        WHERE \(where_);
+        """
+    }
+
     static func generate(for sf: SmartFolder, version: String = "?") -> String {
         let dateStr = ISO8601DateFormatter().string(from: Date())
         var header = """

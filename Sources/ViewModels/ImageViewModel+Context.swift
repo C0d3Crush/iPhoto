@@ -123,8 +123,20 @@ extension ImageViewModel {
             filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
         case .smartFolder(let id):
             guard let sf = library.smartFolders.first(where: { $0.id == id }) else { return [] }
-            let matched = docs.filter { smartFolderMatches($0, sf: sf) }
-            filtered = applySmartFolderLimit(matched, sf: sf)
+            if let orderedPaths = CatalogStore.shared.orderedPathsForSmartFolder(sf) {
+                // SQL fast path — ORDER BY and LIMIT already applied by the DB
+                let pathSet = Set(orderedPaths)
+                let byPath = Dictionary(uniqueKeysWithValues:
+                    docs.compactMap { doc -> (String, ImageDocument)? in
+                        guard pathSet.contains(doc.url.path) else { return nil }
+                        return (doc.url.path, doc)
+                    })
+                filtered = orderedPaths.compactMap { byPath[$0] }
+            } else {
+                // Runtime-only criteria (colorRatio, smartFolderRef) → in-memory fallback
+                let matched = docs.filter { smartFolderMatches($0, sf: sf) }
+                filtered = applySmartFolderLimit(matched, sf: sf)
+            }
         case .volume(let id):
             guard let volume = library.detectedVolumes.first(where: { $0.id == id }) else { return [] }
             let prefix = volume.url.standardized.path
@@ -393,7 +405,11 @@ extension ImageViewModel {
                 guard let self = self else { return }
                 var counts: [UUID: Int] = [:]
                 for sf in folders {
-                    counts[sf.id] = docs.reduce(0) { $0 + (self.smartFolderMatches($1, sf: sf) ? 1 : 0) }
+                    if let sqlCount = CatalogStore.shared.countForSmartFolder(sf) {
+                        counts[sf.id] = sqlCount
+                    } else {
+                        counts[sf.id] = docs.reduce(0) { $0 + (self.smartFolderMatches($1, sf: sf) ? 1 : 0) }
+                    }
                 }
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, counts != self.smartFolderCounts else { return }

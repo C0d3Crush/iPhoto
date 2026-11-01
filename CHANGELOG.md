@@ -2,6 +2,16 @@
 
 ---
 
+## 1.42.2
+**Perf — iAlbum-Filterung via SQL**
+
+- iAlbum-Filterung nutzt jetzt SQLite statt In-Memory-Loop über alle Dokumente
+- Sidebar-Zähler ebenfalls per SQL (`COUNT(DISTINCT path)`) — kein O(n × m)-Scan mehr
+- Fallback auf In-Memory bleibt für Kriterien die Runtime-Daten brauchen (Farbanteil, iAlbum-Referenz)
+- `SmartFolderSQLGenerator` in CLI-Build aufgenommen
+
+---
+
 ## 1.42.1
 **Feature — Album-Banner + Ansichtsmodi im Album-Kontext**
 

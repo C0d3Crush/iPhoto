@@ -537,6 +537,38 @@ final class CatalogStore {
             importedAt: str(10)
         )
     }
+
+    // MARK: - SmartFolder SQL queries
+
+    /// Executes the SmartFolder SQL and returns matching paths in ORDER BY order.
+    /// Returns nil when the SmartFolder contains runtime-only criteria (colorRatio, smartFolderRef)
+    /// that cannot be expressed in SQL — caller should fall back to in-memory filtering.
+    func orderedPathsForSmartFolder(_ sf: SmartFolder) -> [String]? {
+        guard !SmartFolderSQLGenerator.hasRuntimeOnlyCriteria(sf) else { return nil }
+        let sql = SmartFolderSQLGenerator.generate(for: sf)
+        return queue.sync {
+            guard let stmt = prepare(sql) else { return [] }
+            var paths: [String] = []
+            while step(stmt) == SQLITE_ROW {
+                if let cstr = sqlite3_column_text(stmt, 0) {
+                    paths.append(String(cString: cstr))
+                }
+            }
+            sqlite3_finalize(stmt)
+            return paths
+        }
+    }
+
+    /// COUNT(*) query for sidebar badge — no LIMIT/ORDER BY, returns nil on runtime-only criteria.
+    func countForSmartFolder(_ sf: SmartFolder) -> Int? {
+        guard !SmartFolderSQLGenerator.hasRuntimeOnlyCriteria(sf) else { return nil }
+        let sql = SmartFolderSQLGenerator.generateCount(for: sf)
+        return queue.sync {
+            guard let stmt = prepare(sql) else { return nil }
+            defer { sqlite3_finalize(stmt) }
+            return step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : nil
+        }
+    }
 }
 
 // Used only for JSON migration
