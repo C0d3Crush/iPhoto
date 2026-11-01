@@ -7,6 +7,8 @@ struct ContentView: View {
 
     @AppStorage("actionBar.order")       private var actionBarOrderRaw: String = ""
     @AppStorage("albumPanel.width")      private var albumPanelWidthStored: Double = 320
+    // Live width drives the frame; AppStorage is only written on drag end to avoid UserDefaults latency.
+    @State private var albumPanelLive: CGFloat = 320
 
     // Nav toolbar visibility
     @AppStorage("navtoolbar.showSidebar")    private var navShowSidebar    = true
@@ -157,6 +159,7 @@ struct ContentView: View {
         }
         .onAppear {
             NSApp.mainWindow?.title = viewModel.windowTitle
+            albumPanelLive = CGFloat(albumPanelWidthStored)
         }
         .sheet(isPresented: $viewModel.hdr.showSheet, onDismiss: {
             viewModel.hdr.error = nil
@@ -231,7 +234,7 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 if viewModel.sidebarAlbumExpanded {
                     let maxW = max(albumPanelMin, geo.size.width - 250)
-                    let panelW = max(albumPanelMin, min(CGFloat(albumPanelWidthStored), maxW))
+                    let panelW = max(albumPanelMin, min(albumPanelLive, maxW))
 
                     AlbumGridExpandedView()
                         .environmentObject(viewModel)
@@ -245,10 +248,10 @@ struct ContentView: View {
                         maxWidth: maxW,
                         snapClose: albumPanelSnapClose,
                         onDrag: { delta in
-                            let newW = max(albumPanelMin, min(CGFloat(albumPanelWidthStored) + delta, maxW))
-                            albumPanelWidthStored = Double(newW)
+                            albumPanelLive = max(albumPanelMin, min(albumPanelLive + delta, maxW))
                         },
                         onRelease: { finalW in
+                            albumPanelWidthStored = Double(albumPanelLive)
                             if finalW < albumPanelSnapClose {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     viewModel.sidebarAlbumExpanded = false

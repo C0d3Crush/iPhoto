@@ -2,6 +2,14 @@
 
 ---
 
+## 1.43.2
+**Bugfix — Album-Panel Resize sofort sichtbar**
+
+- Live-Breite per `@State` getrennt von `@AppStorage` — Panel aktualisiert sich jetzt sofort beim Ziehen
+- Breite wird erst beim Loslassen persistiert (kein UserDefaults-Lag mehr)
+
+---
+
 ## 1.43.1
 **Feature — Album-Panel resizable + Banner-Aktionen**
 
