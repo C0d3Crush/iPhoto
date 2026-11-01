@@ -32,18 +32,14 @@ struct AlbumGridExpandedView: View {
 
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Bibliothek section
+                    // Bibliothek section — Library as thumbnail cell
                     gridSectionHeader("Bibliothek")
-                    gridNavRow(label: "Library", icon: "photo.stack",
-                               isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil) {
-                        viewModel.navSelection = .library
+                    let libraryColumns = [GridItem(.adaptive(minimum: 110, maximum: 160), spacing: 12)]
+                    LazyVGrid(columns: libraryColumns, spacing: 16) {
+                        LibraryGridCell()
+                            .environmentObject(viewModel)
                     }
-                    if PluginStore.shared.isEnabled("com.iphoto.builtin.compare") {
-                        gridNavRow(label: "Bildvergleich", icon: "arrow.left.arrow.right",
-                                   isSelected: viewModel.compare.active) {
-                            viewModel.toggleCompareMode()
-                        }
-                    }
+                    .padding(.horizontal, 16).padding(.bottom, 4)
 
                     let hasAlbumContent = !viewModel.library.albums.isEmpty
                         || !viewModel.library.albumFolders.isEmpty
@@ -118,18 +114,107 @@ private func gridSectionHeader(_ title: String, icon: String? = nil) -> some Vie
     .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
 }
 
-private func gridNavRow(label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-    Button(action: action) {
-        Label(label, systemImage: icon)
-            .font(.system(size: 13))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
+// MARK: - Library cell
+
+struct LibraryGridCell: View {
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var hovered = false
+
+    private var isSelected: Bool {
+        viewModel.navSelection == .library || viewModel.navSelection == nil
     }
-    .buttonStyle(PlainButtonStyle())
-    .padding(.horizontal, 6)
+
+    private var coverDocs: [ImageDocument] {
+        Array(viewModel.collection.documents.prefix(4))
+    }
+
+    private var coverImages: [NSImage] {
+        coverDocs.compactMap { $0.thumbnailImage ?? $0.placeholderThumbnailImage }
+    }
+
+    var body: some View {
+        Button(action: { viewModel.navSelection = .library }) {
+            VStack(spacing: 6) {
+                mosaicView
+                    .aspectRatio(1, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isSelected ? Color.accentColor : (hovered ? Color.accentColor.opacity(0.5) : Color.clear), lineWidth: 2)
+                    )
+                    .scaleEffect(hovered ? 1.03 : 1.0)
+                    .animation(.easeOut(duration: 0.12), value: hovered)
+
+                VStack(spacing: 2) {
+                    Text("Library")
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .multilineTextAlignment(.center)
+                    Text("\(viewModel.collection.documents.count) Fotos")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onHover { hovered = $0 }
+        .onAppear {
+            for (i, doc) in coverDocs.enumerated() {
+                if let idx = viewModel.collectionIndex(for: doc) {
+                    viewModel.requestVisibleThumbnail(at: idx)
+                } else {
+                    viewModel.requestVisibleThumbnail(at: i)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var mosaicView: some View {
+        if coverImages.isEmpty {
+            ZStack {
+                Color(NSColor.separatorColor).opacity(0.3)
+                Image(systemName: "photo.stack")
+                    .font(.system(size: 28))
+                    .foregroundColor(.secondary)
+            }
+        } else if coverImages.count == 1 {
+            Image(nsImage: coverImages[0])
+                .resizable()
+                .scaledToFill()
+                .background(Color(NSColor.separatorColor).opacity(0.3))
+        } else {
+            GeometryReader { geo in
+                let half = geo.size.width / 2
+                VStack(spacing: 1) {
+                    HStack(spacing: 1) {
+                        mosaicTile(coverImages[safe: 0], size: half)
+                        mosaicTile(coverImages[safe: 1], size: half)
+                    }
+                    HStack(spacing: 1) {
+                        mosaicTile(coverImages[safe: 2], size: half)
+                        mosaicTile(coverImages[safe: 3], size: half)
+                    }
+                }
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
+        }
+    }
+
+    private func mosaicTile(_ image: NSImage?, size: CGFloat) -> some View {
+        Group {
+            if let img = image {
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipped()
+            } else {
+                Color(NSColor.separatorColor).opacity(0.2)
+                    .frame(width: size, height: size)
+            }
+        }
+    }
 }
 
 // MARK: - Folder cell
@@ -142,7 +227,6 @@ private struct FolderGridCell: View {
     var body: some View {
         Button(action: {
             viewModel.navSelection = .albumFolder(folder.id)
-            withAnimation(.easeInOut(duration: 0.2)) { viewModel.sidebarAlbumExpanded = false }
         }) {
             VStack(spacing: 6) {
                 ZStack {
@@ -194,7 +278,6 @@ private struct SmartFolderGridCell: View {
     var body: some View {
         Button(action: {
             viewModel.navSelection = .smartFolder(smartFolder.id)
-            withAnimation(.easeInOut(duration: 0.2)) { viewModel.sidebarAlbumExpanded = false }
         }) {
             VStack(spacing: 6) {
                 mosaicView
@@ -400,9 +483,6 @@ private struct AlbumGridCell: View {
 
     private func selectAlbum() {
         viewModel.navSelection = .album(album.id)
-        withAnimation(.easeInOut(duration: 0.2)) {
-            viewModel.sidebarAlbumExpanded = false
-        }
     }
 
     // Trigger the standard thumbnail pipeline for the first 4 album docs.

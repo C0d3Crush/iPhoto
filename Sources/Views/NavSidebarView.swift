@@ -220,16 +220,7 @@ struct NavSidebarView: View {
         case .library:
             Group {
                 sectionHeader("Bibliothek")
-                navRow(label: "Library", icon: "photo.stack",
-                       isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil) {
-                    viewModel.navSelection = .library
-                }
-                if pluginStore.isEnabled("com.iphoto.builtin.compare") {
-                    navRow(label: "Bildvergleich", icon: "arrow.left.arrow.right",
-                           isSelected: viewModel.compare.active) {
-                        viewModel.toggleCompareMode()
-                    }
-                }
+                libraryCompactRow
             }
         case .albums:        albumsSection
         case .smartFolders:  smartFoldersSection
@@ -615,6 +606,81 @@ struct NavSidebarView: View {
         }
         .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
         .contextMenu { Button("Neu scannen") { viewModel.detectClosedEyes() } }
+    }
+
+    private var libraryCompactRow: some View {
+        let isSelected = viewModel.navSelection == .library || viewModel.navSelection == nil
+        let docs = Array(viewModel.collection.documents.prefix(4))
+        let images = docs.compactMap { $0.thumbnailImage ?? $0.placeholderThumbnailImage }
+        return Button(action: { viewModel.navSelection = .library }) {
+            HStack(spacing: 8) {
+                libraryMiniMosaic(images: images)
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Library")
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+                    Text("\(viewModel.collection.documents.count) Fotos")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .onAppear {
+            for (i, _) in docs.enumerated() {
+                viewModel.requestVisibleThumbnail(at: i)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func libraryMiniMosaic(images: [NSImage]) -> some View {
+        if images.isEmpty {
+            ZStack {
+                Color(NSColor.separatorColor).opacity(0.3)
+                Image(systemName: "photo.stack")
+                    .font(.system(size: 16))
+                    .foregroundColor(.secondary)
+            }
+        } else if images.count == 1 {
+            Image(nsImage: images[0]).resizable().scaledToFill()
+                .background(Color(NSColor.separatorColor).opacity(0.3))
+        } else {
+            GeometryReader { geo in
+                let half = geo.size.width / 2
+                VStack(spacing: 0.5) {
+                    HStack(spacing: 0.5) {
+                        miniTile(images.count > 0 ? images[0] : nil, size: half)
+                        miniTile(images.count > 1 ? images[1] : nil, size: half)
+                    }
+                    HStack(spacing: 0.5) {
+                        miniTile(images.count > 2 ? images[2] : nil, size: half)
+                        miniTile(images.count > 3 ? images[3] : nil, size: half)
+                    }
+                }
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
+        }
+    }
+
+    private func miniTile(_ image: NSImage?, size: CGFloat) -> some View {
+        Group {
+            if let img = image {
+                Image(nsImage: img).resizable().scaledToFill()
+                    .frame(width: size, height: size).clipped()
+            } else {
+                Color(NSColor.separatorColor).opacity(0.2)
+                    .frame(width: size, height: size)
+            }
+        }
     }
 
     private func navRow(label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {

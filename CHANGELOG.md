@@ -2,6 +2,15 @@
 
 ---
 
+## 1.44.1
+**Bugfix + Feature — Library-Zelle mit Vorschau, kein Bildvergleich in Seitenleiste**
+
+- Library wird jetzt wie ein Album mit Foto-Mosaik angezeigt (Liste: kompakter Thumbnail-Row, Symbole: volle Grid-Zelle)
+- Bildvergleich aus der Seitenleiste entfernt
+- Ansichtsmodus (Liste/Symbole) wird beim Anklicken eines Albums nicht mehr zurückgesetzt — nur der Toggle-Button wechselt den Modus
+
+---
+
 ## 1.44.0
 **Feature — Einheitliche Seitenleiste mit Listen- und Symbolmodus**
 
