@@ -2,7 +2,6 @@ import SwiftUI
 
 struct LibraryGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
-    var thumbnailWidth: CGFloat = 156
 
     @StateObject private var scroller = AppKitScroller()
 
@@ -25,14 +24,13 @@ struct LibraryGridView: View {
                             let isSelected = viewModel.collection.selectedIndices.contains(actualIndex)
                             let q = viewModel.qualityFlags(for: doc)
                             ThumbnailCell(document: doc, isSelected: isSelected,
-                                          thumbnailWidth: thumbnailWidth,
                                           stackCount: viewModel.stackCounts[doc.id] ?? 0,
                                           isStackExpanded: viewModel.isStackExpanded(doc),
                                           isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
                                           onStackToggle: { viewModel.toggleStack(leader: doc) },
                                           isBlurry: q.blur, isUnder: q.under, isOver: q.over,
                                           isEyesClosed: q.eyes)
-                                .frame(width: thumbnailWidth)
+                                .frame(width: 156)
                                 .contentShape(Rectangle())
                                 .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }
                                 .onTapGesture { handleTap(at: actualIndex) }
@@ -59,7 +57,7 @@ struct LibraryGridView: View {
     private func scrollToCurrent() {
         guard let cur = viewModel.collection.currentDocument,
               let pos = viewModel.visiblePosition(for: cur.id) else { return }
-        scroller.centerHorizontally(position: pos, cellWidth: thumbnailWidth, spacing: 12, padding: 8)
+        scroller.centerHorizontally(position: pos, cellWidth: 156, spacing: 12, padding: 8)
     }
 
     private func handleTap(at index: Int) {

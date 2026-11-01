@@ -2,6 +2,14 @@
 
 ---
 
+## 1.46.2
+**Bugfix — Thumbnail-Skalierung rückgängig, nur Drag-Richtung korrigiert**
+
+- Thumbnail-Breite wieder fest auf 156 px (Skalierung hatte Drag blockiert)
+- Drag-Richtung bleibt korrigiert: runter = größer, hoch = kleiner
+
+---
+
 ## 1.46.1
 **Bugfix — Drag-Richtung korrigiert + Thumbnails skalieren mit Leistenhöhe**
 

@@ -371,7 +371,7 @@ struct ContentView: View {
                         stripHeightStored = Double(stripHeightLive)
                     }
                 )
-                LibraryGridView(thumbnailWidth: max(80, stripHeightLive * (156.0 / 138.0)))
+                LibraryGridView()
                     .environmentObject(viewModel)
                     .frame(height: stripHeightLive)
             }
