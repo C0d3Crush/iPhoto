@@ -2,6 +2,14 @@
 
 ---
 
+## 1.42.3
+**Bugfix — Ansichtsmodi im Album-Kontext**
+
+- Toolbar zeigt das Ansichtsmenü (Raster / Liste / Spalten / Galerie) jetzt auch wenn ein Album oder iAlbum geöffnet ist
+- Der gewählte Modus gilt global — wechselt man zurück zur Bibliothek bleibt er erhalten
+
+---
+
 ## 1.42.2
 **Perf — iAlbum-Filterung via SQL**
 

@@ -92,7 +92,9 @@ struct ContentView: View {
                 }
 
                 let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
-                if isLibrary && !viewModel.compare.active && navShowViewMode {
+                let showModePicker = !viewModel.compare.active
+                    && (isLibrary ? navShowViewMode : true)
+                if showModePicker {
                     Menu {
                         ForEach(LibraryViewMode.allCases, id: \.self) { mode in
                             Button(action: { viewModel.libraryViewMode = mode }) {
@@ -108,13 +110,6 @@ struct ContentView: View {
                     .help("Ansicht wählen")
                     .menuStyle(BorderlessButtonMenuStyle())
                     .fixedSize()
-                }
-                if !isLibrary && !viewModel.compare.active {
-                    Button(action: { viewModel.showFullGrid.toggle() }) {
-                        Image(systemName: viewModel.showFullGrid ? "rectangle.split.2x1" : "square.grid.3x3")
-                            .opacity(viewModel.showFullGrid ? 1.0 : 0.6)
-                    }
-                    .help(viewModel.showFullGrid ? "Detail-Ansicht" : "Rasteransicht")
                 }
 
                 if !viewModel.compare.active && navShowNavigation {
@@ -317,31 +312,36 @@ struct ContentView: View {
             case .gallery:
                 detailWithStrip
             }
-        } else if !isLibrary && viewModel.showFullGrid {
-            VStack(spacing: 0) {
-                AlbumBannerView()
-                    .environmentObject(viewModel)
-                Divider()
-                switch viewModel.libraryViewMode {
-                case .grid:
-                    LibraryFullGridView()
+        } else if !isLibrary {
+            switch viewModel.libraryViewMode {
+            case .gallery:
+                detailWithStrip
+            default:
+                VStack(spacing: 0) {
+                    AlbumBannerView()
                         .environmentObject(viewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .list:
-                    LibraryListView()
-                        .environmentObject(viewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .columns:
-                    LibraryColumnsView()
-                        .environmentObject(viewModel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .gallery:
-                    detailWithStrip
+                    Divider()
+                    switch viewModel.libraryViewMode {
+                    case .grid:
+                        LibraryFullGridView()
+                            .environmentObject(viewModel)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    case .list:
+                        LibraryListView()
+                            .environmentObject(viewModel)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    case .columns:
+                        LibraryColumnsView()
+                            .environmentObject(viewModel)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    default:
+                        LibraryFullGridView()
+                            .environmentObject(viewModel)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            detailWithStrip
         }
     }
 
