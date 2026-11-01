@@ -394,26 +394,22 @@ private struct AlbumGridCell: View {
     @State private var hovered = false
     @State private var showDetail = false
 
-    // First 4 docs from the collection whose URL is in this album.
-    // If a coverPhotoURL is set, that doc is placed first.
+    // Wenn ein Cover explizit gesetzt ist, nur dieses eine Bild zeigen.
+    // Sonst: erste 4 Bilder des Albums als Mosaik.
     private var coverDocs: [ImageDocument] {
+        if let coverURL = album.coverPhotoURL,
+           let doc = viewModel.collection.documents.first(where: { $0.url == coverURL }) {
+            return [doc]
+        }
         let urlSet = Set(album.photoURLs)
         var pool: [ImageDocument] = []
         for doc in viewModel.collection.documents {
             if urlSet.contains(doc.url) {
                 pool.append(doc)
+                if pool.count == 4 { break }
             }
         }
-        if let coverURL = album.coverPhotoURL,
-           let coverDoc = pool.first(where: { $0.url == coverURL }) {
-            var result = [coverDoc]
-            for doc in pool where doc.url != coverURL {
-                result.append(doc)
-                if result.count == 4 { break }
-            }
-            return result
-        }
-        return Array(pool.prefix(4))
+        return pool
     }
 
     // map (not compactMap) preserves index positions — cover photo stays at [0]

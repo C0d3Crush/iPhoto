@@ -2,6 +2,13 @@
 
 ---
 
+## 1.47.1
+**Bugfix — Cover-Foto als einziges Hauptbild**
+
+- Wenn ein Cover-Foto für ein Album gesetzt ist, wird nur dieses Bild angezeigt (kein 4-Bild-Mosaik mehr) — gilt für AlbumBannerView und AlbumGridCell
+
+---
+
 ## 1.47.0
 **Feature — Suchergebnis-Zusammenfassung wie Google**
 

@@ -976,15 +976,16 @@ struct AlbumBannerView: View {
     }
 
     private func albumCoverDocs(_ album: Album) -> [ImageDocument] {
+        // Wenn ein Cover explizit gesetzt wurde, nur dieses eine Bild zeigen.
+        if let coverURL = album.coverPhotoURL,
+           let doc = viewModel.collection.documents.first(where: { $0.url == coverURL }) {
+            return [doc]
+        }
         let urlSet = Set(album.photoURLs)
         var pool: [ImageDocument] = []
         for doc in viewModel.collection.documents {
             if urlSet.contains(doc.url) { pool.append(doc) }
             if pool.count == 4 { break }
-        }
-        if let coverURL = album.coverPhotoURL,
-           let idx = pool.firstIndex(where: { $0.url == coverURL }) {
-            let cover = pool.remove(at: idx); pool.insert(cover, at: 0)
         }
         return pool
     }
