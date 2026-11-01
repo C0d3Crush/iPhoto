@@ -665,12 +665,18 @@ private extension View {
 
 // MARK: - Album Banner
 
+private struct BannerWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 400
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 struct AlbumBannerView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var isEditingTitle = false
     @State private var titleDraft = ""
     @State private var showAlbumDetail = false
     @State private var showSmartFolderSheet = false
+    @State private var bannerWidth: CGFloat = 400
 
     var body: some View {
         switch viewModel.navSelection {
@@ -739,65 +745,102 @@ struct AlbumBannerView: View {
                                isSmartFolder: Bool, docs: [ImageDocument],
                                saveTitle: @escaping (String) -> Void,
                                menu: @escaping () -> AnyView) -> some View {
-        HStack(spacing: 20) {
-            mosaicView(docs: docs, isSmartFolder: isSmartFolder)
-                .frame(width: 110, height: 110)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    if isEditingTitle {
-                        TextField("", text: $titleDraft, onCommit: {
-                            let t = titleDraft.trimmingCharacters(in: .whitespaces)
-                            if !t.isEmpty { saveTitle(t) }
-                            isEditingTitle = false
-                        })
-                        .font(.system(size: 22, weight: .bold))
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .onExitCommand { isEditingTitle = false }
-                    } else {
-                        Text(name)
-                            .font(.system(size: 22, weight: .bold))
-                            .lineLimit(2)
-                            .onTapGesture {
-                                titleDraft = name
-                                isEditingTitle = true
-                            }
-                    }
-                    Menu {
-                        menu()
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 15))
-                            .foregroundColor(.secondary)
-                    }
-                    .menuStyle(BorderlessButtonMenuStyle())
-                    .fixedSize()
+        let compact = bannerWidth < 320
+        let thumbSize: CGFloat = compact ? 80 : 110
+        Group {
+            if compact {
+                VStack(alignment: .center, spacing: 8) {
+                    mosaicView(docs: docs, isSmartFolder: isSmartFolder)
+                        .frame(width: thumbSize, height: thumbSize)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
+                    bannerTextBlock(name: name, subtitle: subtitle, description: description,
+                                    saveTitle: saveTitle, menu: menu, alignment: .center)
                 }
-                Text(subtitle)
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-                if let desc = description, !desc.isEmpty {
-                    Text(desc)
-                        .font(.caption)
-                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                        .lineLimit(2)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+            } else {
+                HStack(spacing: 20) {
+                    mosaicView(docs: docs, isSmartFolder: isSmartFolder)
+                        .frame(width: thumbSize, height: thumbSize)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
+                    bannerTextBlock(name: name, subtitle: subtitle, description: description,
+                                    saveTitle: saveTitle, menu: menu, alignment: .leading)
+                    Spacer()
                 }
-                Spacer(minLength: 0)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
             }
-            Spacer()
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
         .frame(maxWidth: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(
+            GeometryReader { geo in
+                Color(NSColor.windowBackgroundColor)
+                    .preference(key: BannerWidthKey.self, value: geo.size.width)
+            }
+        )
+        .onPreferenceChange(BannerWidthKey.self) { bannerWidth = $0 }
         .onAppear {
             isEditingTitle = false
             for doc in docs {
                 if let idx = viewModel.collectionIndex(for: doc) {
                     viewModel.requestVisibleThumbnail(at: idx)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func bannerTextBlock(name: String, subtitle: String, description: String?,
+                                 saveTitle: @escaping (String) -> Void,
+                                 menu: @escaping () -> AnyView,
+                                 alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 4) {
+            HStack(spacing: 6) {
+                if alignment == .center { Spacer() }
+                if isEditingTitle {
+                    TextField("", text: $titleDraft, onCommit: {
+                        let t = titleDraft.trimmingCharacters(in: .whitespaces)
+                        if !t.isEmpty { saveTitle(t) }
+                        isEditingTitle = false
+                    })
+                    .font(.system(size: alignment == .center ? 14 : 22, weight: .bold))
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .multilineTextAlignment(alignment == .center ? .center : .leading)
+                    .onExitCommand { isEditingTitle = false }
+                } else {
+                    Text(name)
+                        .font(.system(size: alignment == .center ? 14 : 22, weight: .bold))
+                        .lineLimit(2)
+                        .multilineTextAlignment(alignment == .center ? .center : .leading)
+                        .onTapGesture {
+                            titleDraft = name
+                            isEditingTitle = true
+                        }
+                }
+                Menu {
+                    menu()
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: alignment == .center ? 12 : 15))
+                        .foregroundColor(.secondary)
+                }
+                .menuStyle(BorderlessButtonMenuStyle())
+                .fixedSize()
+                if alignment == .center { Spacer() }
+            }
+            Text(subtitle)
+                .font(alignment == .center ? .caption : .callout)
+                .foregroundColor(.secondary)
+            if let desc = description, !desc.isEmpty {
+                Text(desc)
+                    .font(.caption)
+                    .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                    .lineLimit(2)
+                    .multilineTextAlignment(alignment == .center ? .center : .leading)
             }
         }
     }
