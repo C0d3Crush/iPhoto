@@ -10,6 +10,13 @@ struct LibraryFullGridView: View {
     private var cellWidth: CGFloat { viewModel.gridThumbnailSize }
     @StateObject private var scroller = AppKitScroller()
 
+    private var isAlbumContext: Bool {
+        switch viewModel.navSelection {
+        case .album, .smartFolder, .albumFolder: return true
+        default: return false
+        }
+    }
+
     var body: some View {
         ZStack {
           Group {
@@ -31,6 +38,11 @@ struct LibraryFullGridView: View {
                     ScrollView {
                         if case .eloRange(let lo, let hi) = viewModel.navSelection {
                             eloRangeBanner(lo: lo, hi: hi)
+                        }
+                        if isAlbumContext {
+                            AlbumBannerView()
+                                .environmentObject(viewModel)
+                            Divider()
                         }
                         LazyVGrid(columns: columns, spacing: 8) {
                             ForEach(viewModel.visibleDocuments, id: \.id) { doc in

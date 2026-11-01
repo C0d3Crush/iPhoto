@@ -2,6 +2,16 @@
 
 ---
 
+## 1.43.0
+**Feature — Listenansicht & Album-Banner überarbeitet**
+
+- Listenansicht: Qualitätsbadges (Unscharf, Unter-/Überbelichtet, Augen, Stapel, Anpassungen, HDR) in der Markierung-Spalte
+- Listenansicht: abwechselnde Graustufen für Zeilen wie in iTunes
+- Album-Banner jetzt auch in der Rasteransicht (scrollbar als erster Eintrag)
+- Album-Banner in der Listenansicht scrollt mit den Einträgen mit
+
+---
+
 ## 1.42.3
 **Bugfix — Ansichtsmodi im Album-Kontext**
 

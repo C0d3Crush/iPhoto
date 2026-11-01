@@ -94,16 +94,15 @@ struct LibraryListView: View {
                                     .environmentObject(viewModel)
                                 Divider()
                             }
-                            ForEach(viewModel.visibleDocuments, id: \.id) { doc in
+                            ForEach(Array(viewModel.visibleDocuments.enumerated()), id: \.element.id) { rowIdx, doc in
                                 let idx = viewModel.collectionIndex(for: doc) ?? 0
                                 let sel = viewModel.collection.selectedIndices.contains(idx)
-                                ListRow(doc: doc, isSelected: sel, columns: orderedVisible)
+                                ListRow(doc: doc, isSelected: sel, rowIndex: rowIdx, columns: orderedVisible)
                                     .onTapGesture { viewModel.selectDocument(at: idx) }
                                     .contextMenu {
                                         ThumbnailContextMenu(doc: doc).environmentObject(viewModel)
                                     }
                                     .onAppear { viewModel.requestVisibleThumbnail(at: idx) }
-                                Divider().padding(.leading, 56)
                             }
                         }
                     }
@@ -209,12 +208,26 @@ private struct ListHeader: View {
 // MARK: - Row
 
 private struct ListRow: View {
+    @EnvironmentObject var viewModel: ImageViewModel
     let doc: ImageDocument
     let isSelected: Bool
+    let rowIndex: Int
     let columns: [ListColumn]
 
     @State private var fileSize: String = ""
     @State private var fileDate: Date? = nil
+
+    // Badge visibility — mirrors ThumbnailCell AppStorage keys
+    @AppStorage("badge.rating")      private var showRating      = true
+    @AppStorage("badge.colorLabel")  private var showColorLabel  = true
+    @AppStorage("badge.flag")        private var showFlag        = true
+    @AppStorage("badge.blurry")      private var showBlurry      = true
+    @AppStorage("badge.under")       private var showUnder       = true
+    @AppStorage("badge.over")        private var showOver        = true
+    @AppStorage("badge.eyes")        private var showEyes        = true
+    @AppStorage("badge.bestInStack") private var showBestInStack = true
+    @AppStorage("badge.adjustments") private var showAdjustments = true
+    @AppStorage("badge.hdr")         private var showHDR         = true
 
     var body: some View {
         HStack(spacing: 0) {
@@ -225,9 +238,8 @@ private struct ListRow: View {
                 }
             }
         }
-        .frame(height: 34)
-        .padding(.vertical, 2)
-        .background(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+        .frame(height: 32)
+        .background(rowBackground)
         .contentShape(Rectangle())
         .onAppear { loadFileAttributes() }
     }
@@ -282,13 +294,24 @@ private struct ListRow: View {
             .frame(width: col.fixedWidth)
 
         case .flag:
-            HStack(spacing: 4) {
-                flagIcon
-                if doc.colorLabel != .none {
+            HStack(spacing: 3) {
+                if showFlag { flagIcon }
+                if showColorLabel && doc.colorLabel != .none {
                     Circle()
                         .fill(Color(doc.colorLabel.displayColor))
-                        .frame(width: 8, height: 8)
+                        .frame(width: 7, height: 7)
                 }
+                let q = viewModel.qualityFlags(for: doc)
+                let isHDR = doc.metadata.first(where: { $0.key == "exif.HDR" })?.value == "Ja"
+                if showBestInStack && viewModel.bestInStackIDs.contains(doc.id) {
+                    listBadge("crown.fill", .yellow)
+                }
+                if showBlurry     && q.blur  { listBadge("drop.triangle.fill", .purple) }
+                if showUnder      && q.under  { listBadge("moon.fill",          .blue)   }
+                if showOver       && q.over   { listBadge("sun.max.fill",       .yellow) }
+                if showEyes       && q.eyes   { listBadge("eye.slash.fill",     .pink)   }
+                if showAdjustments && doc.hasPersistedAdjustments { listBadge("wand.and.stars", .accentColor) }
+                if showHDR        && isHDR    { listBadge("sparkles",           Color(NSColor.systemTeal)) }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8)
@@ -321,6 +344,19 @@ private struct ListRow: View {
         case .none:
             EmptyView()
         }
+    }
+
+    private var rowBackground: Color {
+        if isSelected { return Color.accentColor.opacity(0.18) }
+        return rowIndex % 2 == 0
+            ? Color(NSColor.windowBackgroundColor)
+            : Color(NSColor.controlBackgroundColor)
+    }
+
+    private func listBadge(_ system: String, _ color: Color) -> some View {
+        Image(systemName: system)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundColor(color)
     }
 
     private var dateString: String {
