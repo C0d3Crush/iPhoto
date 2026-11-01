@@ -2,6 +2,15 @@
 
 ---
 
+## 1.44.3
+**Feature + Bugfix — Panel-Toggles im Toolbar + breitere Seitenleiste**
+
+- Linke und rechte Seitenleiste können jetzt über zwei nebeneinander liegende Buttons (Xcode-Stil) ein-/ausgeblendet werden — beide Buttons links im Toolbar
+- Doppelter Sidebar-Toggle in LibraryFullGridView entfernt
+- Seitenleiste kann jetzt bis auf Fensterbreite minus 120 px gezogen werden (vorher 250 px Mindestbreite für Hauptinhalt)
+
+---
+
 ## 1.44.2
 **Bugfix — Cover-Foto des Albums wird korrekt als erstes Bild angezeigt**
 

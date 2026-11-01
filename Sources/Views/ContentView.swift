@@ -59,12 +59,23 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                if navShowSidebar {
-                    Button(action: { viewModel.navSidebarVisible.toggle() }) {
-                        Image(systemName: "sidebar.left")
-                            .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
+                // Panel-Toggles nebeneinander (Xcode-Stil)
+                HStack(spacing: 1) {
+                    if navShowSidebar {
+                        Button(action: { viewModel.navSidebarVisible.toggle() }) {
+                            Image(systemName: "sidebar.left")
+                                .opacity(viewModel.navSidebarVisible ? 1.0 : 0.4)
+                        }
+                        .help("Navigation ein-/ausblenden")
                     }
-                    .help("Navigation ein-/ausblenden")
+                    if navShowInspector {
+                        Button(action: { viewModel.toggleInspector() }) {
+                            Image(systemName: "sidebar.right")
+                                .opacity(viewModel.inspectorVisible ? 1.0 : 0.4)
+                        }
+                        .help("Inspector ein-/ausblenden")
+                        .keyboardShortcut("i", modifiers: .command)
+                    }
                 }
 
                 if viewModel.modeSwitcherEnabled {
@@ -138,16 +149,7 @@ struct ContentView: View {
                 }
             }
 
-            ToolbarItemGroup(placement: .primaryAction) {
-                if navShowInspector {
-                    Button(action: { viewModel.toggleInspector() }) {
-                        Image(systemName: "sidebar.right")
-                            .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
-                    }
-                    .help("Inspector ein-/ausblenden")
-                    .keyboardShortcut("i", modifiers: .command)
-                }
-            }
+            ToolbarItemGroup(placement: .primaryAction) { EmptyView() }
         }
         .onChange(of: viewModel.navSelection) { _ in
             viewModel.showingLibraryDetail = false
@@ -233,7 +235,7 @@ struct ContentView: View {
         GeometryReader { geo in
             HStack(spacing: 0) {
                 if viewModel.navSidebarVisible {
-                    let maxW = max(albumPanelMin, geo.size.width - 250)
+                    let maxW = max(albumPanelMin, geo.size.width - 120)
                     let panelW = max(albumPanelMin, min(albumPanelLive, maxW))
 
                     Group {

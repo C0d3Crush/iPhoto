@@ -80,13 +80,6 @@ struct LibraryFullGridView: View {
               .environmentObject(viewModel)
         }
         .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
-                Button(action: { viewModel.navSidebarVisible.toggle() }) {
-                    Image(systemName: "sidebar.left")
-                        .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
-                }
-                .help("Navigation ein-/ausblenden")
-            }
             ToolbarItemGroup(placement: .automatic) {
                 if UserDefaults.standard.object(forKey: "navtoolbar.showSort") as? Bool ?? true {
                     SortMenuButton()
@@ -105,14 +98,6 @@ struct LibraryFullGridView: View {
                     }
                     .help("Rastergröße anpassen")
                 }
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: { viewModel.toggleInspector() }) {
-                    Image(systemName: "sidebar.right")
-                        .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
-                }
-                .help("Inspector ein-/ausblenden")
-                .keyboardShortcut("i", modifiers: .command)
             }
         }
     }
