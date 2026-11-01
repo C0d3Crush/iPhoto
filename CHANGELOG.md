@@ -2,6 +2,15 @@
 
 ---
 
+## 1.46.0
+**Feature — Galerieansicht: Thumbnail-Leiste vertikal verschiebbar**
+
+- Die untere Thumbnail-Leiste in der Galerieansicht lässt sich per Drag am Trennbalken nach oben/unten ziehen (80–600 px)
+- Höhe wird persistent gespeichert (`gallery.stripHeight`)
+- Trennbalken färbt sich beim Hovern blau (wie Seitenleisten-Divider)
+
+---
+
 ## 1.45.3
 **Bugfix — Album-Banner in allen drei Ansichten fest verankert**
 

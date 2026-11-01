@@ -10,6 +10,9 @@ struct ContentView: View {
     // Live width drives the frame; AppStorage is only written on drag end to avoid UserDefaults latency.
     @State private var albumPanelLive: CGFloat = 320
 
+    @AppStorage("gallery.stripHeight")   private var stripHeightStored: Double = 138
+    @State private var stripHeightLive: CGFloat = 138
+
     // Nav toolbar visibility
     @AppStorage("navtoolbar.showSidebar")    private var navShowSidebar    = true
     @AppStorage("navtoolbar.showViewMode")   private var navShowViewMode   = true
@@ -152,6 +155,7 @@ struct ContentView: View {
         .onAppear {
             NSApp.mainWindow?.title = viewModel.windowTitle
             albumPanelLive = CGFloat(albumPanelWidthStored)
+            stripHeightLive = CGFloat(stripHeightStored)
         }
         .sheet(isPresented: $viewModel.hdr.showSheet, onDismiss: {
             viewModel.hdr.error = nil
@@ -349,6 +353,9 @@ struct ContentView: View {
         }
     }
 
+    private let stripMin: CGFloat = 80
+    private let stripMax: CGFloat = 600
+
     @ViewBuilder private var detailWithStrip: some View {
         VStack(spacing: 0) {
             DetailView()
@@ -356,10 +363,17 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if !viewModel.collection.documents.isEmpty {
-                Divider()
+                StripDivider(
+                    onDrag: { delta in
+                        stripHeightLive = max(stripMin, min(stripHeightLive - delta, stripMax))
+                    },
+                    onRelease: {
+                        stripHeightStored = Double(stripHeightLive)
+                    }
+                )
                 LibraryGridView()
                     .environmentObject(viewModel)
-                    .frame(height: 138)
+                    .frame(height: stripHeightLive)
             }
         }
 
@@ -655,6 +669,40 @@ private struct PanelToggleGroup: View {
                 )
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Resizable gallery strip divider
+
+private struct StripDivider: View {
+    let onDrag: (CGFloat) -> Void
+    let onRelease: () -> Void
+
+    @State private var hovered = false
+    @State private var dragStart: CGFloat = 0
+
+    var body: some View {
+        Rectangle()
+            .fill(hovered
+                  ? Color.accentColor.opacity(0.6)
+                  : Color(NSColor.separatorColor))
+            .frame(height: 4)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .onHover { hovered = $0 }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { v in
+                        let delta = v.translation.height - dragStart
+                        dragStart = v.translation.height
+                        onDrag(delta)
+                    }
+                    .onEnded { _ in
+                        dragStart = 0
+                        onRelease()
+                    }
+            )
+            .cursor(.resizeUpDown)
     }
 }
 
