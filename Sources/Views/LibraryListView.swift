@@ -83,17 +83,17 @@ struct LibraryListView: View {
                 }
             } else {
                 VStack(spacing: 0) {
+                    if isAlbumContext {
+                        AlbumBannerView()
+                            .environmentObject(viewModel)
+                        Divider()
+                    }
                     ListHeader(columns: orderedVisible,
                                visibleColumns: $visibleColumns,
                                sortCriterion: $viewModel.sortCriterion)
                     Divider()
                     ScrollView(.vertical, showsIndicators: true) {
                         LazyVStack(spacing: 0) {
-                            if isAlbumContext {
-                                AlbumBannerView()
-                                    .environmentObject(viewModel)
-                                Divider()
-                            }
                             ForEach(Array(viewModel.visibleDocuments.enumerated()), id: \.element.id) { rowIdx, doc in
                                 let idx = viewModel.collectionIndex(for: doc) ?? 0
                                 let sel = viewModel.collection.selectedIndices.contains(idx)

@@ -2,6 +2,13 @@
 
 ---
 
+## 1.45.1
+**Bugfix — Album-Banner in Listenansicht oberhalb der Spalten-Header**
+
+- AlbumBannerView wird nun als festes Element vor dem Spalten-Header (`Name / Datum / Größe / Art / ...`) gerendert, nicht mehr als Teil des scrollbaren Inhalts
+
+---
+
 ## 1.45.0
 **Feature — Panel-Toggle-Gruppe + einklappbare Metadaten-Sektionen**
 
