@@ -64,6 +64,13 @@ struct LibraryListView: View {
         ListColumn.allCases.filter { visibleColumns.contains($0) }
     }
 
+    private var isAlbumContext: Bool {
+        switch viewModel.navSelection {
+        case .album, .smartFolder, .albumFolder: return true
+        default: return false
+        }
+    }
+
     var body: some View {
         ZStack {
             if viewModel.collection.documents.isEmpty {
@@ -82,6 +89,11 @@ struct LibraryListView: View {
                     Divider()
                     ScrollView(.vertical, showsIndicators: true) {
                         LazyVStack(spacing: 0) {
+                            if isAlbumContext {
+                                AlbumBannerView()
+                                    .environmentObject(viewModel)
+                                Divider()
+                            }
                             ForEach(viewModel.visibleDocuments, id: \.id) { doc in
                                 let idx = viewModel.collectionIndex(for: doc) ?? 0
                                 let sel = viewModel.collection.selectedIndices.contains(idx)

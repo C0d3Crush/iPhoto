@@ -316,31 +316,18 @@ struct ContentView: View {
             switch viewModel.libraryViewMode {
             case .gallery:
                 detailWithStrip
-            default:
-                VStack(spacing: 0) {
-                    AlbumBannerView()
-                        .environmentObject(viewModel)
-                    Divider()
-                    switch viewModel.libraryViewMode {
-                    case .grid:
-                        LibraryFullGridView()
-                            .environmentObject(viewModel)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    case .list:
-                        LibraryListView()
-                            .environmentObject(viewModel)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    case .columns:
-                        LibraryColumnsView()
-                            .environmentObject(viewModel)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    default:
-                        LibraryFullGridView()
-                            .environmentObject(viewModel)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .grid:
+                LibraryFullGridView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .list:
+                LibraryListView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .columns:
+                LibraryColumnsView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
@@ -602,7 +589,7 @@ struct QueuePopover: View {
 
 // MARK: - Album Banner
 
-private struct AlbumBannerView: View {
+struct AlbumBannerView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
     var body: some View {
