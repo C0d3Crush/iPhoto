@@ -2,6 +2,15 @@
 
 ---
 
+## 1.42.1
+**Feature — Album-Banner + Ansichtsmodi im Album-Kontext**
+
+- Beim Öffnen eines Albums oder iAlbums erscheint oben ein Banner mit Mosaik, Name und Fotoanzahl
+- Ansichtsmodi (Raster, Liste, Spalten, Galerie) funktionieren jetzt auch im Album-Kontext
+- Beschreibung aus den Album-Details wird im Banner angezeigt
+
+---
+
 ## 1.42.0
 **Feature — Album-Detailansicht & iAlbum-Kontextmenü**
 

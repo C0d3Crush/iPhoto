@@ -238,16 +238,6 @@ struct ContentView: View {
                     .environmentObject(viewModel)
                     .frame(width: viewModel.gridThumbnailSize + 50)
                     .frame(maxHeight: .infinity)
-            } else if viewModel.inspectorVisible && viewModel.inspectorExpanded {
-                LibraryFullGridView()
-                    .environmentObject(viewModel)
-                    .frame(width: viewModel.gridThumbnailSize + 50)
-                    .frame(maxHeight: .infinity)
-                Divider()
-                InspectorView()
-                    .environmentObject(viewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
             } else {
                 if viewModel.navSidebarVisible {
                     NavSidebarView()
@@ -328,9 +318,28 @@ struct ContentView: View {
                 detailWithStrip
             }
         } else if !isLibrary && viewModel.showFullGrid {
-            LibraryFullGridView()
-                .environmentObject(viewModel)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 0) {
+                AlbumBannerView()
+                    .environmentObject(viewModel)
+                Divider()
+                switch viewModel.libraryViewMode {
+                case .grid:
+                    LibraryFullGridView()
+                        .environmentObject(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .list:
+                    LibraryListView()
+                        .environmentObject(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .columns:
+                    LibraryColumnsView()
+                        .environmentObject(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .gallery:
+                    detailWithStrip
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             detailWithStrip
         }
@@ -588,5 +597,160 @@ struct QueuePopover: View {
         }
         .padding(.bottom, 10)
         .frame(minWidth: 280)
+    }
+}
+
+// MARK: - Album Banner
+
+private struct AlbumBannerView: View {
+    @EnvironmentObject var viewModel: ImageViewModel
+
+    var body: some View {
+        switch viewModel.navSelection {
+        case .album(let id):
+            if let album = viewModel.library.albums.first(where: { $0.id == id }) {
+                bannerContent(
+                    name: album.name,
+                    subtitle: "\(album.photoURLs.count) Fotos",
+                    description: album.albumDescription,
+                    isSmartFolder: false,
+                    docs: albumCoverDocs(album)
+                )
+            }
+        case .smartFolder(let id):
+            if let sf = viewModel.library.smartFolders.first(where: { $0.id == id }) {
+                let count = viewModel.smartFolderCounts[id] ?? 0
+                bannerContent(
+                    name: sf.name,
+                    subtitle: "\(count) Fotos",
+                    description: nil,
+                    isSmartFolder: true,
+                    docs: smartFolderCoverDocs(sf)
+                )
+            }
+        case .albumFolder(let id):
+            if let folder = viewModel.library.albumFolders.first(where: { $0.id == id }) {
+                bannerContent(
+                    name: folder.name,
+                    subtitle: "Ordner",
+                    description: nil,
+                    isSmartFolder: false,
+                    docs: []
+                )
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func bannerContent(name: String, subtitle: String, description: String?,
+                               isSmartFolder: Bool, docs: [ImageDocument]) -> some View {
+        HStack(spacing: 20) {
+            mosaicView(docs: docs, isSmartFolder: isSmartFolder)
+                .frame(width: 110, height: 110)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(name)
+                    .font(.system(size: 22, weight: .bold))
+                    .lineLimit(2)
+                Text(subtitle)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                if let desc = description, !desc.isEmpty {
+                    Text(desc)
+                        .font(.caption)
+                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .background(Color(NSColor.windowBackgroundColor))
+        .onAppear {
+            for doc in docs {
+                if let idx = viewModel.collectionIndex(for: doc) {
+                    viewModel.requestVisibleThumbnail(at: idx)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mosaicView(docs: [ImageDocument], isSmartFolder: Bool) -> some View {
+        let images = docs.compactMap { $0.thumbnailImage ?? $0.placeholderThumbnailImage }
+        if images.isEmpty {
+            ZStack {
+                Color(NSColor.separatorColor).opacity(0.3)
+                Image(systemName: isSmartFolder ? "folder.badge.gearshape" : "photo.on.rectangle")
+                    .font(.system(size: 32)).foregroundColor(.secondary)
+            }
+        } else if images.count == 1 {
+            Image(nsImage: images[0]).resizable().scaledToFill()
+                .background(Color(NSColor.separatorColor).opacity(0.3))
+        } else {
+            GeometryReader { geo in
+                let half = geo.size.width / 2
+                VStack(spacing: 1) {
+                    HStack(spacing: 1) {
+                        bannerTile(images[safe: 0], size: half)
+                        bannerTile(images[safe: 1], size: half)
+                    }
+                    HStack(spacing: 1) {
+                        bannerTile(images[safe: 2], size: half)
+                        bannerTile(images[safe: 3], size: half)
+                    }
+                }
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
+        }
+    }
+
+    private func bannerTile(_ image: NSImage?, size: CGFloat) -> some View {
+        Group {
+            if let img = image {
+                Image(nsImage: img).resizable().scaledToFill()
+                    .frame(width: size, height: size).clipped()
+            } else {
+                Color(NSColor.separatorColor).opacity(0.2).frame(width: size, height: size)
+            }
+        }
+    }
+
+    private func albumCoverDocs(_ album: Album) -> [ImageDocument] {
+        let urlSet = Set(album.photoURLs)
+        var pool: [ImageDocument] = []
+        for doc in viewModel.collection.documents {
+            if urlSet.contains(doc.url) { pool.append(doc) }
+            if pool.count == 4 { break }
+        }
+        if let coverURL = album.coverPhotoURL,
+           let idx = pool.firstIndex(where: { $0.url == coverURL }) {
+            let cover = pool.remove(at: idx); pool.insert(cover, at: 0)
+        }
+        return pool
+    }
+
+    private func smartFolderCoverDocs(_ sf: SmartFolder) -> [ImageDocument] {
+        var result: [ImageDocument] = []
+        for doc in viewModel.collection.documents {
+            if viewModel.smartFolderMatches(doc, sf: sf) {
+                result.append(doc)
+                if result.count == 4 { break }
+            }
+        }
+        return result
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
