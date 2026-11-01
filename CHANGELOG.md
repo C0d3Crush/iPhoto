@@ -2,6 +2,14 @@
 
 ---
 
+## 1.46.1
+**Bugfix — Drag-Richtung korrigiert + Thumbnails skalieren mit Leistenhöhe**
+
+- Drag nach unten vergrößert die Leiste (war invertiert)
+- Thumbnail-Breite skaliert proportional zur Leistenhöhe — mehr Platz = größere Vorschaubilder
+
+---
+
 ## 1.46.0
 **Feature — Galerieansicht: Thumbnail-Leiste vertikal verschiebbar**
 

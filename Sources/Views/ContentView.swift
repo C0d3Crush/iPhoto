@@ -365,13 +365,13 @@ struct ContentView: View {
             if !viewModel.collection.documents.isEmpty {
                 StripDivider(
                     onDrag: { delta in
-                        stripHeightLive = max(stripMin, min(stripHeightLive - delta, stripMax))
+                        stripHeightLive = max(stripMin, min(stripHeightLive + delta, stripMax))
                     },
                     onRelease: {
                         stripHeightStored = Double(stripHeightLive)
                     }
                 )
-                LibraryGridView()
+                LibraryGridView(thumbnailWidth: max(80, stripHeightLive * (156.0 / 138.0)))
                     .environmentObject(viewModel)
                     .frame(height: stripHeightLive)
             }
