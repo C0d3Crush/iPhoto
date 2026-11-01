@@ -353,7 +353,7 @@ struct ContentView: View {
         }
     }
 
-    private let stripMin: CGFloat = 80
+    private let stripMin: CGFloat = 138
     private let stripMax: CGFloat = 600
 
     @ViewBuilder private var detailWithStrip: some View {

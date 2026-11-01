@@ -2,6 +2,14 @@
 
 ---
 
+## 1.47.2
+**Feature — Thumbnail-Leiste skaliert mit Höhe, Minimum = 138 px**
+
+- Thumbnails wachsen proportional mit der Leistenhöhe (GeometryReader, kein Parameter-Passing)
+- Mindesthöhe ist 138 px (Standard) — kleiner ziehen nicht möglich
+
+---
+
 ## 1.47.1
 **Bugfix — Cover-Foto als einziges Hauptbild**
 
