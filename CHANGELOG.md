@@ -2,6 +2,14 @@
 
 ---
 
+## 1.41.2
+**Feature — ELO-Suchoperatoren**
+
+- Suche unterstützt jetzt `elo:>=1600`, `elo:<=1800`, `elo:>1500`, `elo:<2000`
+- Vorschläge in der Suchleiste zeigen Beispiele für alle Operatoren
+
+---
+
 ## 1.41.1
 **Bugfix — iAlben-Mosaik-Thumbnails**
 

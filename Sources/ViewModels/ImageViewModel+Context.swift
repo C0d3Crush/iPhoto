@@ -213,7 +213,17 @@ extension ImageViewModel {
             case "motiv":
                 result = result.filter { doc in doc.motifTags?.contains { $0.lowercased().contains(val) } ?? false }
             case "elo":
-                if let threshold = Double(val) { result = result.filter { $0.elo >= threshold } }
+                if val.hasPrefix(">="), let t = Double(val.dropFirst(2)) {
+                    result = result.filter { $0.elo >= t }
+                } else if val.hasPrefix("<="), let t = Double(val.dropFirst(2)) {
+                    result = result.filter { $0.elo <= t }
+                } else if val.hasPrefix(">"), let t = Double(val.dropFirst(1)) {
+                    result = result.filter { $0.elo > t }
+                } else if val.hasPrefix("<"), let t = Double(val.dropFirst(1)) {
+                    result = result.filter { $0.elo < t }
+                } else if let t = Double(val) {
+                    result = result.filter { $0.elo >= t }
+                }
             case "farbe":
                 let colorOpt: ColorLabel?
                 switch val {

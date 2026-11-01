@@ -49,7 +49,7 @@ struct FilterDefinition {
         .init(key: "markiert",   icon: "flag",                              label: "Markiert",        hint: "pick, reject",           valueSuggestions: ["pick","reject"]),
         .init(key: "unscharf",   icon: "eye.trianglebadge.exclamationmark", label: "Unscharf",        hint: "ja / nein",              valueSuggestions: ["ja","nein"]),
         .init(key: "motiv",      icon: "tag",                               label: "Motiv",           hint: "erkanntes Motiv",        valueSuggestions: []),
-        .init(key: "elo",        icon: "chart.line.uptrend.xyaxis",         label: "ELO",             hint: ">= Wert (z. B. 1600)",   valueSuggestions: ["1600","1700","1800"]),
+        .init(key: "elo",        icon: "chart.line.uptrend.xyaxis",         label: "ELO",             hint: ">=1600  <=1800  >1500  <2000",   valueSuggestions: [">=1600",">=1700",">=1800","<=1600","<=1500","<1500"]),
         .init(key: "farbe",      icon: "circle.fill",                       label: "Farbmarkierung",  hint: "rot, gelb, grün, blau",  valueSuggestions: ["rot","gelb","grün","blau"]),
     ]
 }
