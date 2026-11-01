@@ -35,14 +35,15 @@ struct LibraryFullGridView: View {
                     }
                 }
             } else {
+                VStack(spacing: 0) {
+                    if isAlbumContext {
+                        AlbumBannerView()
+                            .environmentObject(viewModel)
+                        Divider()
+                    }
                     ScrollView {
                         if case .eloRange(let lo, let hi) = viewModel.navSelection {
                             eloRangeBanner(lo: lo, hi: hi)
-                        }
-                        if isAlbumContext {
-                            AlbumBannerView()
-                                .environmentObject(viewModel)
-                            Divider()
                         }
                         LazyVGrid(columns: columns, spacing: 8) {
                             ForEach(viewModel.visibleDocuments, id: \.id) { doc in
@@ -74,6 +75,7 @@ struct LibraryFullGridView: View {
                     .onChange(of: viewModel.collection.currentIndex) { _ in
                         scrollToCurrent()
                     }
+                }
             }
           }
           DropTargetView()

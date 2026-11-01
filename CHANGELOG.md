@@ -2,6 +2,13 @@
 
 ---
 
+## 1.45.3
+**Bugfix — Album-Banner in allen drei Ansichten fest verankert**
+
+- Symbole (Grid), Liste und Spalten: AlbumBannerView erscheint jetzt als fixes Element oberhalb des scrollbaren Inhalts, scrollt nicht mehr mit
+
+---
+
 ## 1.45.2
 **Bugfix — Album-Banner auch in der Spaltenansicht (LibraryColumnsView)**
 
