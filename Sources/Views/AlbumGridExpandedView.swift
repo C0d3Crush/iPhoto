@@ -67,8 +67,24 @@ struct AlbumGridExpandedView: View {
 private struct AlbumGridCell: View {
     @EnvironmentObject var viewModel: ImageViewModel
     let album: Album
-    @State private var coverImages: [NSImage] = []
     @State private var hovered = false
+
+    // First 4 docs from the collection whose URL is in this album
+    private var coverDocs: [ImageDocument] {
+        let urlSet = Set(album.photoURLs)
+        var result: [ImageDocument] = []
+        for doc in viewModel.collection.documents {
+            if urlSet.contains(doc.url) {
+                result.append(doc)
+                if result.count == 4 { break }
+            }
+        }
+        return result
+    }
+
+    private var coverImages: [NSImage] {
+        coverDocs.compactMap { $0.thumbnailImage ?? $0.placeholderThumbnailImage }
+    }
 
     var body: some View {
         Button(action: { selectAlbum() }) {
@@ -96,7 +112,7 @@ private struct AlbumGridCell: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { hovered = $0 }
-        .onAppear { loadCovers() }
+        .onAppear { requestThumbnails() }
     }
 
     @ViewBuilder
@@ -114,12 +130,11 @@ private struct AlbumGridCell: View {
                 .scaledToFill()
                 .background(Color(NSColor.separatorColor).opacity(0.3))
         } else {
-            // 2×2 mosaic — Apple Photos style
             GeometryReader { geo in
                 let half = geo.size.width / 2
                 VStack(spacing: 1) {
                     HStack(spacing: 1) {
-                        mosaicTile(coverImages[0], size: half)
+                        mosaicTile(coverImages[safe: 0], size: half)
                         mosaicTile(coverImages[safe: 1], size: half)
                     }
                     HStack(spacing: 1) {
@@ -154,21 +169,13 @@ private struct AlbumGridCell: View {
         }
     }
 
-    private func loadCovers() {
-        let urls = Array(album.photoURLs.prefix(4))
-        guard !urls.isEmpty else { return }
-        DispatchQueue.global(qos: .userInitiated).async {
-            var loaded: [NSImage] = []
-            for url in urls {
-                guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-                      let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
-                        kCGImageSourceThumbnailMaxPixelSize: 220,
-                        kCGImageSourceCreateThumbnailWithTransform: true,
-                        kCGImageSourceCreateThumbnailFromImageAlways: true
-                      ] as CFDictionary) else { continue }
-                loaded.append(NSImage(cgImage: cg, size: .zero))
+    // Trigger the standard thumbnail pipeline for the first 4 album docs.
+    // Uses the thread-safe orchestrator path instead of raw CGImageSource calls.
+    private func requestThumbnails() {
+        for doc in coverDocs {
+            if let idx = viewModel.collectionIndex(for: doc) {
+                viewModel.requestVisibleThumbnail(at: idx)
             }
-            DispatchQueue.main.async { self.coverImages = loaded }
         }
     }
 }

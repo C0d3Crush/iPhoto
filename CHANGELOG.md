@@ -2,6 +2,14 @@
 
 ---
 
+## 1.39.2
+**Bugfix — Album-Mosaik zeigt Thumbnails für alle Alben**
+
+- `CGImageSourceCreateThumbnailAtIndex` ist auf macOS 11 nicht thread-safe → hat für die meisten Alben lautlos versagt
+- Album-Cover nutzen jetzt die bereits geladenen Thumbnails aus dem Collection-Cache via `requestVisibleThumbnail` — kein direkter Disk-Zugriff auf Background-Thread mehr
+
+---
+
 ## 1.39.1
 **Bugfix — SmartFolder Farbanteil: Eingabefeld statt Stepper**
 
