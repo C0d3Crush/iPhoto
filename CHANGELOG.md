@@ -2,6 +2,14 @@
 
 ---
 
+## 1.44.4
+**Bugfix — Alle 5 Sterne immer in einer Reihe**
+
+- RatingPanel: Sterne bekommen feste 32×32 px Tappfläche, `fixedSize()` verhindert Kompression durch schmalen Inspector
+- ThumbnailCell: `fixedSize()` statt `.frame(width:)` — keine Kompression bei kleinen Thumbnails
+
+---
+
 ## 1.44.3
 **Feature + Bugfix — Panel-Toggles im Toolbar + breitere Seitenleiste**
 

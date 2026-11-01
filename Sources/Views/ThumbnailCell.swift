@@ -116,14 +116,14 @@ struct ThumbnailCell: View {
 
             // Star rating
             if showRating && document.rating > 0 {
-                HStack(spacing: 1) {
+                HStack(spacing: 2) {
                     ForEach(1...5, id: \.self) { star in
                         Image(systemName: star <= document.rating ? "star.fill" : "star")
                             .font(.system(size: 7))
                             .foregroundColor(star <= document.rating ? .yellow : Color(NSColor.tertiaryLabelColor))
                     }
                 }
-                .frame(width: thumbnailWidth)
+                .fixedSize()
             }
         }
         .padding(2)
