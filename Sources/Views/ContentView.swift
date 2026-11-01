@@ -59,24 +59,14 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                // Panel-Toggles nebeneinander (Xcode-Stil)
-                HStack(spacing: 1) {
-                    if navShowSidebar {
-                        Button(action: { viewModel.navSidebarVisible.toggle() }) {
-                            Image(systemName: "sidebar.left")
-                                .opacity(viewModel.navSidebarVisible ? 1.0 : 0.4)
-                        }
-                        .help("Navigation ein-/ausblenden")
-                    }
-                    if navShowInspector {
-                        Button(action: { viewModel.toggleInspector() }) {
-                            Image(systemName: "sidebar.right")
-                                .opacity(viewModel.inspectorVisible ? 1.0 : 0.4)
-                        }
-                        .help("Inspector ein-/ausblenden")
-                        .keyboardShortcut("i", modifiers: .command)
-                    }
-                }
+                PanelToggleGroup(
+                    showSidebar: navShowSidebar,
+                    showInspector: navShowInspector,
+                    sidebarActive: viewModel.navSidebarVisible,
+                    inspectorActive: viewModel.inspectorVisible,
+                    onToggleSidebar: { viewModel.navSidebarVisible.toggle() },
+                    onToggleInspector: { viewModel.toggleInspector() }
+                )
 
                 if viewModel.modeSwitcherEnabled {
                     Button(action: {
@@ -611,6 +601,60 @@ struct QueuePopover: View {
         }
         .padding(.bottom, 10)
         .frame(minWidth: 280)
+    }
+}
+
+// MARK: - Panel toggle group (Xcode-style)
+
+private struct PanelToggleGroup: View {
+    let showSidebar: Bool
+    let showInspector: Bool
+    let sidebarActive: Bool
+    let inspectorActive: Bool
+    let onToggleSidebar: () -> Void
+    let onToggleInspector: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if showSidebar {
+                panelButton(icon: "sidebar.left", active: sidebarActive, isFirst: true,
+                            isLast: !showInspector, action: onToggleSidebar)
+                    .help("Navigation ein-/ausblenden")
+            }
+            if showInspector {
+                panelButton(icon: "sidebar.right", active: inspectorActive,
+                            isFirst: !showSidebar, isLast: true, action: onToggleInspector)
+                    .help("Inspector ein-/ausblenden")
+                    .keyboardShortcut("i", modifiers: .command)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(NSColor.controlColor))
+                .shadow(color: .black.opacity(0.12), radius: 1, x: 0, y: 1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Color(NSColor.separatorColor), lineWidth: 0.5)
+        )
+    }
+
+    private func panelButton(icon: String, active: Bool,
+                              isFirst: Bool, isLast: Bool,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: active ? .medium : .regular))
+                .foregroundColor(active ? Color.primary : Color.secondary)
+                .frame(width: 28, height: 22)
+                .background(
+                    active
+                        ? RoundedRectangle(cornerRadius: isFirst && isLast ? 6 : (isFirst ? 6 : (isLast ? 6 : 0)))
+                            .fill(Color(NSColor.selectedControlColor).opacity(0.35))
+                        : nil
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

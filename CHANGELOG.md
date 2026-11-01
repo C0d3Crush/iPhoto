@@ -2,6 +2,14 @@
 
 ---
 
+## 1.45.0
+**Feature — Panel-Toggle-Gruppe + einklappbare Metadaten-Sektionen**
+
+- Toolbar: `sidebar.left` + `sidebar.right` als visuell gruppierten Button-Cluster (Xcode-Stil) mit geteiltem Hintergrund und Rahmen
+- Metadaten-Inspector: Sektionen „Kamera" und „Qualität" sind per Klick auf den Header ein- und ausklappbar (Chevron-Indikator)
+
+---
+
 ## 1.44.5
 **Bugfix — Ladebalken und Log auch im Symbole-Modus sichtbar**
 

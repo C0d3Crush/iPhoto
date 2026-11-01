@@ -13,6 +13,11 @@ struct MetadataPanel: View {
 private struct MetadataPanelContent: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var editedEntries: [MetadataEntry] = []
+    @State private var collapsedCategories: Set<MetadataCategory> = []
+
+    private func isCollapsible(_ category: MetadataCategory) -> Bool {
+        category == .camera || category == .quality
+    }
 
     private var sourceEntries: [MetadataEntry] {
         let base: [MetadataEntry]
@@ -118,6 +123,8 @@ private struct MetadataPanelContent: View {
         editedEntries.filter { $0.isEditable }.map { "\($0.key)=\($0.value)" }.joined(separator: "|")
     }
 
+    private var wideLayout: Bool { viewModel.inspectorExpanded }
+
     var body: some View {
         VStack(spacing: 0) {
             if viewModel.currentImage == nil {
@@ -131,17 +138,48 @@ private struct MetadataPanelContent: View {
                     ForEach(MetadataCategory.allCases, id: \.self) { category in
                         let indices = editedEntries.indices.filter { editedEntries[$0].category == category }
                         if !indices.isEmpty {
-                            Text(category.rawValue)
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.secondary)
+                            let collapsed = collapsedCategories.contains(category)
+                            let collapsible = isCollapsible(category)
+
+                            Button(action: {
+                                if collapsible {
+                                    if collapsed { collapsedCategories.remove(category) }
+                                    else { collapsedCategories.insert(category) }
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Text(category.rawValue)
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    if collapsible {
+                                        Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                                            .font(.system(size: 9, weight: .semibold))
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(NSColor.controlBackgroundColor))
+                            }
+                            .buttonStyle(PlainButtonStyle())
 
-                            ForEach(indices, id: \.self) { idx in
-                                MetadataRowView(entry: $editedEntries[idx])
-                                Divider().padding(.leading, 8)
+                            if !collapsed {
+                                if wideLayout {
+                                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 1) {
+                                        ForEach(indices, id: \.self) { idx in
+                                            MetadataCardView(entry: $editedEntries[idx])
+                                        }
+                                    }
+                                    .padding(.bottom, 1)
+                                } else {
+                                    ForEach(indices, id: \.self) { idx in
+                                        MetadataRowView(entry: $editedEntries[idx])
+                                        Divider().padding(.leading, 8)
+                                    }
+                                }
                             }
                         }
                     }
@@ -163,6 +201,32 @@ private struct MetadataPanelContent: View {
                 editedEntries = sourceEntries
             }
         }
+    }
+}
+
+private struct MetadataCardView: View {
+    @Binding var entry: MetadataEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(entry.displayName)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+            if entry.isEditable {
+                TextField("", text: $entry.value)
+                    .font(.caption)
+                    .textFieldStyle(PlainTextFieldStyle())
+            } else {
+                Text(entry.value.isEmpty ? "–" : entry.value)
+                    .font(.caption)
+                    .foregroundColor(entry.value.isEmpty ? Color(NSColor.tertiaryLabelColor) : .primary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 }
 
