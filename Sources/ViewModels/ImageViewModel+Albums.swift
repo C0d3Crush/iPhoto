@@ -116,6 +116,26 @@ extension ImageViewModel {
         syncAlbumToFilesystem(library.albums[idx])
     }
 
+    func removeURLsFromAllAlbums(_ urls: Set<URL>) {
+        var changed = false
+        for idx in library.albums.indices {
+            let before = library.albums[idx].photoURLs.count
+            library.albums[idx].photoURLs.removeAll { urls.contains($0) }
+            if library.albums[idx].photoURLs.count != before { changed = true }
+        }
+        if changed { library.saveAlbums() }
+    }
+
+    func purgeStaleAlbumReferences() {
+        var changed = false
+        for idx in library.albums.indices {
+            let before = library.albums[idx].photoURLs.count
+            library.albums[idx].photoURLs.removeAll { !FileManager.default.fileExists(atPath: $0.path) }
+            if library.albums[idx].photoURLs.count != before { changed = true }
+        }
+        if changed { library.saveAlbums() }
+    }
+
     // MARK: - Album Filesystem Sync
 
     static let albumsSystemFolderName = "Alben"

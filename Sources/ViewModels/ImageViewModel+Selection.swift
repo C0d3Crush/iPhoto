@@ -157,9 +157,11 @@ extension ImageViewModel {
                 DispatchQueue.main.async { self?.activity.update(id: taskID, done: done, total: docs.count) }
             }
             CatalogStore.shared.setTrashed(paths: docs.map { $0.url.path }, false)
+            let deletedURLs = Set(docs.map { $0.url })
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.collection.documents.removeAll { trashedIDs.contains($0.id) }
+                self.removeURLsFromAllAlbums(deletedURLs)
                 self.collection.selectedIndices = []
                 if !self.collection.documents.isEmpty {
                     let newIdx = min(self.collection.currentIndex, self.collection.documents.count - 1)

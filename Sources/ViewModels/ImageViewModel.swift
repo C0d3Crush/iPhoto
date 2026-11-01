@@ -174,6 +174,10 @@ class ImageViewModel: ObservableObject {
         library.loadWatchedFolders()
         // Backward compat: Filesystem-Verzeichnisse für bestehende Alben anlegen
         for album in library.albums { syncAlbumToFilesystem(album) }
+        // Verweise auf gelöschte Dateien beim Start bereinigen
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.purgeStaleAlbumReferences()
+        }
         setupWatchedFolders()
 
         // CatalogStore.init() opens SQLite, runs schema migrations, and loads the full EXIF
