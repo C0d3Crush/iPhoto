@@ -392,8 +392,10 @@ private struct AlbumGridCell: View {
         return Array(pool.prefix(4))
     }
 
-    private var coverImages: [NSImage] {
-        coverDocs.compactMap { $0.thumbnailImage ?? $0.placeholderThumbnailImage }
+    // map (not compactMap) preserves index positions — cover photo stays at [0]
+    // even if its thumbnail isn't loaded yet; mosaicTile handles nil gracefully.
+    private var coverImages: [NSImage?] {
+        coverDocs.map { $0.thumbnailImage ?? $0.placeholderThumbnailImage }
     }
 
     var body: some View {
@@ -436,7 +438,8 @@ private struct AlbumGridCell: View {
 
     @ViewBuilder
     private var mosaicView: some View {
-        if coverImages.isEmpty {
+        let hasAny = coverImages.contains(where: { $0 != nil })
+        if coverImages.isEmpty || !hasAny {
             ZStack {
                 Color(NSColor.separatorColor).opacity(0.3)
                 Image(systemName: "photo.on.rectangle")
@@ -444,21 +447,25 @@ private struct AlbumGridCell: View {
                     .foregroundColor(.secondary)
             }
         } else if coverImages.count == 1 {
-            Image(nsImage: coverImages[0])
-                .resizable()
-                .scaledToFill()
-                .background(Color(NSColor.separatorColor).opacity(0.3))
+            Group {
+                if let img = coverImages[0] {
+                    Image(nsImage: img).resizable().scaledToFill()
+                } else {
+                    Color(NSColor.separatorColor).opacity(0.3)
+                }
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
         } else {
             GeometryReader { geo in
                 let half = geo.size.width / 2
                 VStack(spacing: 1) {
                     HStack(spacing: 1) {
-                        mosaicTile(coverImages[safe: 0], size: half)
-                        mosaicTile(coverImages[safe: 1], size: half)
+                        mosaicTile(coverImages.count > 0 ? coverImages[0] : nil, size: half)
+                        mosaicTile(coverImages.count > 1 ? coverImages[1] : nil, size: half)
                     }
                     HStack(spacing: 1) {
-                        mosaicTile(coverImages[safe: 2], size: half)
-                        mosaicTile(coverImages[safe: 3], size: half)
+                        mosaicTile(coverImages.count > 2 ? coverImages[2] : nil, size: half)
+                        mosaicTile(coverImages.count > 3 ? coverImages[3] : nil, size: half)
                     }
                 }
             }

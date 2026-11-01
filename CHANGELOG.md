@@ -2,6 +2,14 @@
 
 ---
 
+## 1.44.2
+**Bugfix — Cover-Foto des Albums wird korrekt als erstes Bild angezeigt**
+
+- `coverImages` verwendet jetzt `map` statt `compactMap` — Bilder ohne geladenes Thumbnail werden nicht mehr übersprungen und verschieben die Reihenfolge
+- Das ausgewählte Cover-Foto bleibt immer an Position 0 des Mosaics, auch wenn sein Thumbnail noch nicht im Cache ist
+
+---
+
 ## 1.44.1
 **Bugfix + Feature — Library-Zelle mit Vorschau, kein Bildvergleich in Seitenleiste**
 
