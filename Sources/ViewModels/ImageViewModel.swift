@@ -26,6 +26,8 @@ class ImageViewModel: ObservableObject {
     @Published var sidebarAlbumExpanded: Bool = false
     @Published var navSelection: NavSelection? = .library
     @Published var searchQuery: String = ""
+    @Published var searchResultSummary: String? = nil
+    var searchStartTime: Date? = nil
     @Published var showingLibraryDetail: Bool = false
     @Published var showFullGrid: Bool = false
     @Published var libraryViewMode: LibraryViewMode = {
@@ -237,7 +239,9 @@ class ImageViewModel: ObservableObject {
 
         $searchQuery
             .dropFirst()
-            .sink { [weak self] _ in
+            .sink { [weak self] query in
+                self?.searchResultSummary = nil
+                self?.searchStartTime = query.isEmpty ? nil : Date()
                 self?.invalidateVisibleOrder()
                 self?.objectWillChange.send()
             }

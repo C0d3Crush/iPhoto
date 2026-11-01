@@ -2,6 +2,14 @@
 
 ---
 
+## 1.47.0
+**Feature — Suchergebnis-Zusammenfassung wie Google**
+
+- Nach einer gefilterten Suche erscheint unterhalb der Filter-Chips: „X Bilder in 0,03 Sek."
+- Zeigt sich nur wenn aktive Filter vorhanden sind; verschwindet beim Leeren der Suche
+
+---
+
 ## 1.46.2
 **Bugfix — Thumbnail-Skalierung rückgängig, nur Drag-Richtung korrigiert**
 

@@ -71,6 +71,15 @@ extension ImageViewModel {
         visibleResolvedCache = result
         visibleResolvedRevision = collection.documentsRevision
         visiblePositionCache = Self.buildPositions(result)
+        if !searchQuery.isEmpty, let start = searchStartTime {
+            let elapsed = Date().timeIntervalSince(start)
+            let count = result.count
+            searchStartTime = nil
+            DispatchQueue.main.async { [weak self] in
+                let secs = String(format: "%.2f", elapsed).replacingOccurrences(of: ".", with: ",")
+                self?.searchResultSummary = "\(count) Bilder in \(secs) Sek."
+            }
+        }
         return result
     }
 

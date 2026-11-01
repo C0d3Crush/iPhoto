@@ -744,7 +744,14 @@ struct SearchBarView: View {
                     }
                     .padding(.horizontal, 10)
                 }
-                .padding(.bottom, 4)
+                .padding(.bottom, 2)
+                if let summary = viewModel.searchResultSummary {
+                    Text(summary)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 4)
+                }
             }
 
             if isEditing { dropdownView }
