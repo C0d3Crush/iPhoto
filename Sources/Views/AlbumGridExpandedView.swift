@@ -151,23 +151,34 @@ private struct SmartFolderGridCell: View {
     let smartFolder: SmartFolder
     @State private var hovered = false
 
+    private var coverDocs: [ImageDocument] {
+        var result: [ImageDocument] = []
+        for doc in viewModel.collection.documents {
+            if viewModel.smartFolderMatches(doc, sf: smartFolder) {
+                result.append(doc)
+                if result.count == 4 { break }
+            }
+        }
+        return result
+    }
+
+    private var coverImages: [NSImage] {
+        coverDocs.compactMap { $0.thumbnailImage ?? $0.placeholderThumbnailImage }
+    }
+
     var body: some View {
         Button(action: {
             viewModel.navSelection = .smartFolder(smartFolder.id)
             withAnimation(.easeInOut(duration: 0.2)) { viewModel.sidebarAlbumExpanded = false }
         }) {
             VStack(spacing: 6) {
-                ZStack {
-                    Color(NSColor.separatorColor).opacity(0.3)
-                    Image(systemName: "folder.badge.gearshape")
-                        .font(.system(size: 32)).foregroundColor(.secondary)
-                }
-                .aspectRatio(1, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8)
-                    .stroke(hovered ? Color.accentColor : Color.clear, lineWidth: 2))
-                .scaleEffect(hovered ? 1.03 : 1.0)
-                .animation(.easeOut(duration: 0.12), value: hovered)
+                mosaicView
+                    .aspectRatio(1, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .stroke(hovered ? Color.accentColor : Color.clear, lineWidth: 2))
+                    .scaleEffect(hovered ? 1.03 : 1.0)
+                    .animation(.easeOut(duration: 0.12), value: hovered)
 
                 Text(smartFolder.name)
                     .font(.system(size: 11, weight: .medium))
@@ -176,6 +187,61 @@ private struct SmartFolderGridCell: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onHover { hovered = $0 }
+        .onAppear { requestThumbnails() }
+    }
+
+    @ViewBuilder
+    private var mosaicView: some View {
+        if coverImages.isEmpty {
+            ZStack {
+                Color(NSColor.separatorColor).opacity(0.3)
+                Image(systemName: "folder.badge.gearshape")
+                    .font(.system(size: 28)).foregroundColor(.secondary)
+            }
+        } else if coverImages.count == 1 {
+            Image(nsImage: coverImages[0])
+                .resizable()
+                .scaledToFill()
+                .background(Color(NSColor.separatorColor).opacity(0.3))
+        } else {
+            GeometryReader { geo in
+                let half = geo.size.width / 2
+                VStack(spacing: 1) {
+                    HStack(spacing: 1) {
+                        mosaicTile(coverImages[safe: 0], size: half)
+                        mosaicTile(coverImages[safe: 1], size: half)
+                    }
+                    HStack(spacing: 1) {
+                        mosaicTile(coverImages[safe: 2], size: half)
+                        mosaicTile(coverImages[safe: 3], size: half)
+                    }
+                }
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
+        }
+    }
+
+    private func mosaicTile(_ image: NSImage?, size: CGFloat) -> some View {
+        Group {
+            if let img = image {
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipped()
+            } else {
+                Color(NSColor.separatorColor).opacity(0.2)
+                    .frame(width: size, height: size)
+            }
+        }
+    }
+
+    private func requestThumbnails() {
+        for doc in coverDocs {
+            if let idx = viewModel.collectionIndex(for: doc) {
+                viewModel.requestVisibleThumbnail(at: idx)
+            }
+        }
     }
 }
 

@@ -2,6 +2,13 @@
 
 ---
 
+## 1.41.1
+**Bugfix — iAlben-Mosaik-Thumbnails**
+
+- iAlben im erweiterten Albumraster zeigen jetzt Foto-Mosaike statt Platzhalter-Icons
+
+---
+
 ## 1.41.0
 **Feature — iAlbum, Nicht-in-Album-Filter, Album-Eigenschaften**
 
