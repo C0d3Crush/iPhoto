@@ -2,6 +2,16 @@
 
 ---
 
+## 1.48.0
+**Feature — Pfeil­tasten­navigation + Shift-Mehrfachauswahl in Grid-Views**
+
+- ↑/↓-Pfeiltasten navigieren im 2D-Raster zeilenweise (überspringen `gridColumnCount` Einträge)
+- Im horizontalen Filmstreifen navigieren ↑/↓ wie ←/→
+- Shift+↑/↓ erweitert die Mehrfachauswahl zeilenweise; Shift+←/→ war bereits vorhanden
+- `LibraryFullGridView` meldet die aktuelle Spaltenanzahl ans ViewModel
+
+---
+
 ## 1.47.2
 **Feature — Thumbnail-Leiste skaliert mit Höhe, Minimum = 138 px**
 

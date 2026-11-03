@@ -50,6 +50,8 @@ class ImageViewModel: ObservableObject {
         didSet { UserDefaults.standard.set(compareDailyLimit, forKey: "compare.dailyLimit") }
     }
     @Published var gridThumbnailSize: CGFloat = 160
+    /// Aktuelle Spaltenanzahl des 2D-Grids; wird von LibraryFullGridView aktualisiert.
+    var gridColumnCount: Int = 1
     @Published var isStartupLoading: Bool = true                 { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
@@ -384,18 +386,32 @@ class ImageViewModel: ObservableObject {
                 }
             }
             switch event.keyCode {
-            case 123:
+            case 123: // ←
                 if mods.contains(.shift) {
                     DispatchQueue.main.async { self.extendSelectionToPrevious() }
                 } else {
                     DispatchQueue.main.async { self.previous() }
                 }
                 return nil
-            case 124:
+            case 124: // →
                 if mods.contains(.shift) {
                     DispatchQueue.main.async { self.extendSelectionToNext() }
                 } else {
                     DispatchQueue.main.async { self.next() }
+                }
+                return nil
+            case 126: // ↑
+                if mods.contains(.shift) {
+                    DispatchQueue.main.async { self.extendSelectionByRow(forward: false) }
+                } else {
+                    DispatchQueue.main.async { self.navigateByRow(forward: false) }
+                }
+                return nil
+            case 125: // ↓
+                if mods.contains(.shift) {
+                    DispatchQueue.main.async { self.extendSelectionByRow(forward: true) }
+                } else {
+                    DispatchQueue.main.async { self.navigateByRow(forward: true) }
                 }
                 return nil
             case 0 where onlyCmdDown:  DispatchQueue.main.async { self.selectAll()     }; return nil

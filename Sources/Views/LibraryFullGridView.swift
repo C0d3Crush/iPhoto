@@ -114,6 +114,7 @@ struct LibraryFullGridView: View {
         let itemWidth = cellWidth + 8
         let colSpacing: CGFloat = 8
         let cols = max(1, Int((clipWidth - 24 + colSpacing) / (itemWidth + colSpacing)))
+        viewModel.gridColumnCount = cols
         scroller.centerRow(position: pos, count: count, columns: cols, verticalPadding: 12)
     }
 

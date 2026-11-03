@@ -242,6 +242,28 @@ extension ImageViewModel {
         extendSelection(to: nextIdx)
     }
 
+    func navigateByRow(forward: Bool) {
+        let cols = max(1, gridColumnCount)
+        let visible = visibleDocuments
+        guard let cur = collection.currentDocument,
+              let visPos = visiblePosition(for: cur.id) else { return }
+        let target = forward ? visPos + cols : visPos - cols
+        guard target >= 0 && target < visible.count,
+              let idx = collectionIndex(for: visible[target]) else { return }
+        selectDocument(at: idx)
+    }
+
+    func extendSelectionByRow(forward: Bool) {
+        let cols = max(1, gridColumnCount)
+        let visible = visibleDocuments
+        guard let cur = collection.currentDocument,
+              let visPos = visiblePosition(for: cur.id) else { return }
+        let target = forward ? visPos + cols : visPos - cols
+        guard target >= 0 && target < visible.count,
+              let idx = collectionIndex(for: visible[target]) else { return }
+        extendSelection(to: idx)
+    }
+
     func extendSelectionToPrevious() {
         let visible = visibleDocuments
         guard let cur = collection.currentDocument,

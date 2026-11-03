@@ -104,7 +104,7 @@ struct InspectorView: View {
                 .background(Color(NSColor.windowBackgroundColor))
             }
         }
-        .frame(minWidth: 280, maxWidth: viewModel.inspectorExpanded ? .infinity : 280)
+        .frame(width: viewModel.inspectorExpanded ? 480 : 280)
         .clipped()
         .background(Color(NSColor.windowBackgroundColor))
         .sheet(isPresented: $viewModel.versions.showHistory) {
