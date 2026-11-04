@@ -2,6 +2,13 @@
 
 ---
 
+## 1.50.1
+**Bugfix — Scrollleiste verdeckt nicht mehr den +-Knopf in der Sidebar**
+
+- Sidebar-ScrollView bekommt 12 px Padding rechts, damit die Scrollleiste den Alben/iAlben-+-Button freilässt
+
+---
+
 ## 1.50.0
 **Feature — Qualitätsmerkmale als iAlbum-Kriterium**
 

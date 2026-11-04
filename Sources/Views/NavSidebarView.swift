@@ -139,6 +139,7 @@ struct NavSidebarView: View {
                     }
                 }
                 .padding(.vertical, 8)
+                .padding(.trailing, 12)
             }
 
             if !viewModel.activity.loadingQueue.isEmpty {
