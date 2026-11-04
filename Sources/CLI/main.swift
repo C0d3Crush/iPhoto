@@ -38,6 +38,7 @@ private func printUsage() {
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color red|yellow|green|blue|none] [--json]
       iphoto-cli catalog stats|path|vacuum [--json]
       iphoto-cli motif get <bildpfad> [--json]
+      iphoto-cli motif list [--json]
       iphoto-cli duplicate list|similar [--json]
       iphoto-cli smartfolder list [--json]
       iphoto-cli smartfolder query <name> [--json]
@@ -46,8 +47,9 @@ private func printUsage() {
       iphoto-cli stack list [--json]
       iphoto-cli stack query <bildpfad> [--json]
       iphoto-cli trash list [--json]
-      iphoto-cli trash mark <bildpfad>
-      iphoto-cli trash restore <bildpfad>|--all
+      iphoto-cli trash mark <bildpfad> [--json]
+      iphoto-cli trash restore <bildpfad>|--all [--json]
+      iphoto-cli trash empty [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -1635,7 +1637,13 @@ private func runTrash(_ args: [String]) -> Int32 {
             return 1
         }
         catalog.setTrashed(paths: paths, true)
-        print("\(paths.count) Bild(er) in den Papierkorb verschoben")
+        if jsonMode {
+            let obj: [String: Any] = ["count": paths.count, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("\(paths.count) Bild(er) in den Papierkorb verschoben")
+        }
         return 0
 
     case "restore":
@@ -1643,19 +1651,42 @@ private func runTrash(_ args: [String]) -> Int32 {
         if subArgs.first == "--all" || args.contains("--all") {
             let all = Array(catalog.trashedPaths())
             catalog.setTrashed(paths: all, false)
-            print("\(all.count) Bild(er) aus dem Papierkorb wiederhergestellt")
+            if jsonMode {
+                let obj: [String: Any] = ["count": all.count, "ok": true]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                print("\(all.count) Bild(er) aus dem Papierkorb wiederhergestellt")
+            }
         } else {
             guard !subArgs.isEmpty else {
                 fputs("Verwendung: iphoto-cli trash restore <bildpfad>|--all\n", stderr)
                 return 1
             }
             catalog.setTrashed(paths: subArgs, false)
-            print("\(subArgs.count) Bild(er) wiederhergestellt")
+            if jsonMode {
+                let obj: [String: Any] = ["count": subArgs.count, "ok": true]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                print("\(subArgs.count) Bild(er) wiederhergestellt")
+            }
+        }
+        return 0
+
+    case "empty":
+        let count = catalog.emptyTrash()
+        if jsonMode {
+            let obj: [String: Any] = ["count": count, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Papierkorb geleert: \(count) Einträge entfernt")
         }
         return 0
 
     default:
-        fputs("Verwendung: iphoto-cli trash list|mark|restore [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli trash list|mark|restore|empty [opts]\n", stderr)
         return 1
     }
 }
@@ -2099,8 +2130,20 @@ private func runMotif(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "list":
+        let all = catalog.allMotifs()
+        if jsonMode {
+            let arr = all.map { ["path": $0.path, "motifs": $0.tags] as [String: Any] }
+            if let d = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if all.isEmpty { print("(keine Motiv-Tags im Katalog)") }
+            else { all.forEach { print("\($0.path)  \($0.tags.joined(separator: ","))") } }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli motif get <bildpfad> [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli motif get|list [--json]\n", stderr)
         return 1
     }
 }

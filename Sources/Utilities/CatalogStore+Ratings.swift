@@ -123,4 +123,18 @@ extension CatalogStore {
             sqlite3_finalize(stmt); return out
         }
     }
+
+    func emptyTrash() -> Int {
+        queue.sync {
+            let count = trashedPathsUnsafe()
+            exec("DELETE FROM trash")
+            return count
+        }
+    }
+
+    private func trashedPathsUnsafe() -> Int {
+        let stmt = prepare("SELECT COUNT(*) FROM trash")
+        let n = step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : 0
+        sqlite3_finalize(stmt); return n
+    }
 }

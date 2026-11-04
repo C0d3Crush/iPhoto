@@ -2,6 +2,19 @@
 
 ---
 
+## 1.63.0
+**Feature — motif list, trash empty, trash --json, duplicate similar --json (139 CLI-Tests)**
+
+- `iphoto-cli motif list [--json]` — listet alle Bilder mit Motiv-Tags aus dem Katalog
+- `iphoto-cli trash empty [--json]` — leert den Papierkorb-Index (entfernt alle Einträge)
+- `trash mark/restore --json` — gibt jetzt `{"count": N, "ok": true}` zurück
+- `duplicate similar --json` war bereits implementiert — Test hinzugefügt
+- `CatalogStore.allMotifs()` — neue Hilfsfunktion liefert alle gescannten Motiv-Tags
+- `CatalogStore.emptyTrash()` — neue Hilfsfunktion leert die trash-Tabelle
+- 139 CLI-Tests (vorher 131), alle grün
+
+---
+
 ## 1.62.0
 **Feature — album reorder, hotpixel/hdr/inpaint Fehlerpfad-Tests, 53 Perf-Tests**
 

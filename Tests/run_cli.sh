@@ -307,6 +307,16 @@ MGET_JSON=$("$BIN" motif get "$INPUT" --json 2>&1)
 if echo "$MGET_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'motifs' in d" 2>/dev/null; then
     pass "motif get --json (valides JSON mit 'motifs')"; else fail "motif get --json" "$MGET_JSON"; fi
 
+MLIST=$("$BIN" motif list 2>&1); MLIST_EC=$?
+if [ $MLIST_EC -eq 0 ]; then pass "motif list (Exitcode 0)"; else fail "motif list" "$MLIST"; fi
+
+MLIST_JSON=$("$BIN" motif list --json 2>&1)
+if echo "$MLIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "motif list --json (JSON-Array)"; else fail "motif list --json" "$MLIST_JSON"; fi
+
+MOTIF_ERR=0; "$BIN" motif > /dev/null 2>&1 || MOTIF_ERR=$?
+if [ $MOTIF_ERR -ne 0 ]; then pass "motif ohne Unterbefehl (Fehler korrekt)"; else fail "motif ohne Unterbefehl" "Exitcode 0"; fi
+
 echo ""
 
 # ===========================================================================
@@ -323,6 +333,10 @@ if echo "$DLIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); a
 
 DSIM=$("$BIN" duplicate similar 2>&1)
 if [ $? -eq 0 ]; then pass "duplicate similar (Exitcode 0)"; else fail "duplicate similar" "$DSIM"; fi
+
+DSIM_JSON=$("$BIN" duplicate similar --json 2>&1)
+if echo "$DSIM_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "duplicate similar --json (valides JSON-Array)"; else fail "duplicate similar --json" "$DSIM_JSON"; fi
 
 echo ""
 
@@ -431,6 +445,26 @@ if echo "$TR_LIST3" | grep -q "$INPUT"; then fail "trash list nach restore" "Bil
 
 TR_RESTORE_ALL=$("$BIN" trash restore --all 2>&1)
 if [ $? -eq 0 ]; then pass "trash restore --all (Exitcode 0)"; else fail "trash restore --all" "$TR_RESTORE_ALL"; fi
+
+# trash mark --json
+"$BIN" rating "$INPUT" --set 0 > /dev/null 2>&1 || true
+OUT=$("$BIN" trash mark "$INPUT" --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "trash mark --json (ok=true)"; else fail "trash mark --json" "$OUT"; fi
+
+# trash restore --json
+OUT=$("$BIN" trash restore "$INPUT" --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "trash restore --json (ok=true)"; else fail "trash restore --json" "$OUT"; fi
+
+# trash empty
+"$BIN" trash mark "$INPUT" > /dev/null 2>&1 || true
+TR_EMPTY=$("$BIN" trash empty 2>&1)
+if echo "$TR_EMPTY" | grep -q "geleert"; then pass "trash empty (Meldung)"; else fail "trash empty" "$TR_EMPTY"; fi
+
+OUT=$("$BIN" trash mark "$INPUT" > /dev/null 2>&1 || true; "$BIN" trash empty --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "trash empty --json (ok=true)"; else fail "trash empty --json" "$OUT"; fi
 
 echo ""
 

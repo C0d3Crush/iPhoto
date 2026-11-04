@@ -76,6 +76,20 @@ extension CatalogStore {
         }
     }
 
+    func allMotifs() -> [(path: String, tags: [String])] {
+        queue.sync {
+            let stmt = prepare("SELECT path, motif_tags FROM images WHERE motif_scanned=1 AND motif_tags IS NOT NULL ORDER BY path")
+            var out: [(String, [String])] = []
+            while step(stmt) == SQLITE_ROW {
+                let path = String(cString: sqlite3_column_text(stmt, 0))
+                let raw = sqlite3_column_type(stmt, 1) == SQLITE_NULL ? "" : String(cString: sqlite3_column_text(stmt, 1))
+                let tags = raw.isEmpty ? [] : raw.split(separator: ",").map(String.init)
+                if !tags.isEmpty { out.append((path, tags)) }
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
     func pathsNeedingMotifScan() -> [String] {
         queue.sync {
             let stmt = prepare("SELECT path FROM images WHERE motif_scanned=0 ORDER BY filename")
