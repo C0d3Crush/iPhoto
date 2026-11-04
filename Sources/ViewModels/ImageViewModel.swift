@@ -50,7 +50,7 @@ class ImageViewModel: ObservableObject {
     }() {
         didSet { UserDefaults.standard.set(compareDailyLimit, forKey: "compare.dailyLimit") }
     }
-    @Published var gridThumbnailSize: CGFloat = 160
+    @Published var gridThumbnailSize: CGFloat = 120
     /// Aktuelle Spaltenanzahl des 2D-Grids; wird von LibraryFullGridView aktualisiert.
     var gridColumnCount: Int = 1
     // Sidebar-Mehrfachauswahl (Alben / iAlben)

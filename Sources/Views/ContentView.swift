@@ -48,6 +48,15 @@ struct ContentView: View {
         return viewModel.libraryViewMode == .grid
     }
 
+    private static let gridSteps: [CGFloat] = [22, 50, 80, 120, 180, 280, 400]
+
+    private func snapGridSize(_ raw: CGFloat) {
+        let snapped = Self.gridSteps.min(by: { abs($0 - raw) < abs($1 - raw) }) ?? raw
+        if snapped != viewModel.gridThumbnailSize {
+            viewModel.gridThumbnailSize = snapped
+        }
+    }
+
     private func toolbarItemVisible(_ item: ActionBarItem) -> Bool {
         switch item {
         case .sort:        return showSort
@@ -162,8 +171,9 @@ struct ContentView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "square.grid.3x3")
                                     .font(.system(size: 10)).foregroundColor(.secondary)
-                                Slider(value: $viewModel.gridThumbnailSize, in: 22...400, step: 2)
+                                Slider(value: $viewModel.gridThumbnailSize, in: 22...400)
                                     .frame(width: 120)
+                                    .onChange(of: viewModel.gridThumbnailSize) { snapGridSize($0) }
                                 Image(systemName: "square.grid.2x2")
                                     .font(.system(size: 10)).foregroundColor(.secondary)
                             }
