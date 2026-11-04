@@ -2,6 +2,23 @@
 
 ---
 
+## 1.58.0
+**Feature — Vollständige CLI-Abdeckung (≥75%) + Leistungstests**
+
+- `iphoto-cli album`: `create`, `list`, `delete`, `add`, `remove`, `images` — vollständige Album-Verwaltung über CLI
+- `iphoto-cli quality`: `scan`, `list`, `get` — Qualitätsanalyse (Blur, Belichtung) über CLI abrufbar
+- `iphoto-cli version`: `list`, `backup`, `restore`, `delete` — Versionsverwaltung per CLI
+- `iphoto-cli search`: Text, `--rating`, `--flag` — Suche im Katalog per CLI
+- `iphoto-cli catalog`: `stats`, `path` — Katalog-Statistiken und Pfad
+- `iphoto-cli motif`: `get` — Motiverkennung per CLI
+- `iphoto-cli duplicate`: `list`, `similar` — Duplikat- und Ähnlichkeitserkennung per CLI
+- Bugfix `VersionStore`: `hashValue` durch deterministischen djb2-Hash ersetzt — Versionen werden jetzt über mehrere Prozesse hinweg korrekt gefunden
+- Bugfix `quality scan` CLI: `upsertImage` wird jetzt vor `upsertQuality` aufgerufen — Qualitätsdaten werden korrekt gespeichert
+- `Tests/run_cli.sh`: 35 Tests für alle neuen CLI-Befehle
+- `Tests/run_perf.sh`: 15 Leistungstests — Catalog, Quality, Album, Suche, Version, Duplikat
+
+---
+
 ## 1.57.1
 **Bugfix — Gesichtserkennung: fehlende Gesichter durch EXIF-Thumbnail-Problem behoben**
 

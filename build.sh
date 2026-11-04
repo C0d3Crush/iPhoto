@@ -186,6 +186,8 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/MetadataService.swift \
     $ROOT/Sources/Utilities/BlurDetector.swift \
     $ROOT/Sources/Utilities/ExposureDetector.swift \
+    $ROOT/Sources/Utilities/ClosedEyeDetector.swift \
+    $ROOT/Sources/Utilities/QualityAssessor.swift \
     $ROOT/Sources/Utilities/InpaintProcessor.swift \
     $ROOT/Sources/Utilities/CatalogStore.swift \
     $ROOT/Sources/Utilities/CatalogStore+Adjustments.swift \

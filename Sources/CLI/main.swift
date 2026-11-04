@@ -29,7 +29,14 @@ private func printUsage() {
       iphoto-cli people scan <bild1> [<bild2> ...] [--json]
       iphoto-cli people list [--json]
       iphoto-cli people faces [--path <bildpfad>] [--json]
-      iphoto-cli people cluster [--epsilon 0.40] [--json]
+      iphoto-cli people cluster [--epsilon 0.12] [--json]
+      iphoto-cli album list|create|delete|add|remove|images [--json]
+      iphoto-cli quality scan|list|get [--json]
+      iphoto-cli version list|backup|restore|delete [--json]
+      iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--json]
+      iphoto-cli catalog stats|path [--json]
+      iphoto-cli motif get <bildpfad> [--json]
+      iphoto-cli duplicate list|similar [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -41,6 +48,13 @@ private func printUsage() {
     analyse:  Analysiert Schärfe und Belichtung (Blur + Exposure)
     inpaint:  KI-basiertes Inpainting via CMT (benötigt Python + CMT-Installation)
     plugins:  Listet installierte Plugins/Panels auf oder zeigt den Plugin-Ordner
+    album:    Alben erstellen, bearbeiten, Bilder hinzufügen/entfernen
+    quality:  Qualitätsanalyse (Blur, Belichtung, Closed-Eye) scannen und lesen
+    version:  Versionshistorie eines Bildes sichern, anzeigen oder wiederherstellen
+    search:   Bilder im Katalog nach Text, Flag oder Rating suchen
+    catalog:  Katalog-Statistiken und Pfad anzeigen
+    motif:    Motiv-Tags eines Bildes anzeigen
+    duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
     """)
 }
 
@@ -1287,28 +1301,470 @@ private func runPeople(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - Album
+
+private func runAlbum(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+
+    switch sub {
+    case "list":
+        let albums = catalog.allAlbums()
+        if jsonMode {
+            let arr = albums.map { ["id": $0.id, "name": $0.name] }
+            if let d = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if albums.isEmpty { print("(keine Alben)") }
+            else { albums.forEach { print("\($0.id)  \($0.name)") } }
+        }
+        return 0
+
+    case "create":
+        guard let name = args.dropFirst().first(where: { !$0.hasPrefix("-") }), !name.isEmpty else {
+            fputs("Verwendung: iphoto-cli album create <name>\n", stderr); return 1
+        }
+        let id = UUID().uuidString
+        catalog.saveAlbum(id: id, name: name)
+        if jsonMode {
+            if let d = try? JSONSerialization.data(withJSONObject: ["id": id, "name": name]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Album erstellt: \(id)  \(name)")
+        }
+        return 0
+
+    case "delete":
+        guard let id = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli album delete <id>\n", stderr); return 1
+        }
+        catalog.deleteAlbum(id: id)
+        print("Album gelöscht: \(id)")
+        return 0
+
+    case "add":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli album add <album-id> <bild1> [<bild2>...]\n", stderr); return 1
+        }
+        let albumID = positional[0]
+        let paths = Array(positional.dropFirst())
+        for (i, p) in paths.enumerated() { catalog.addImage(path: p, toAlbum: albumID, order: i) }
+        print("\(paths.count) Bild(er) zu Album \(albumID) hinzugefügt")
+        return 0
+
+    case "remove":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli album remove <album-id> <bild1> [<bild2>...]\n", stderr); return 1
+        }
+        let albumID = positional[0]
+        let paths = Array(positional.dropFirst())
+        for p in paths { catalog.removeImage(path: p, fromAlbum: albumID) }
+        print("\(paths.count) Bild(er) aus Album \(albumID) entfernt")
+        return 0
+
+    case "images":
+        guard let id = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli album images <album-id> [--json]\n", stderr); return 1
+        }
+        let paths = catalog.images(inAlbum: id)
+        if jsonMode {
+            if let d = try? JSONSerialization.data(withJSONObject: paths, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if paths.isEmpty { print("(leer)") }
+            else { paths.forEach { print($0) } }
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Quality
+
+private func runQuality(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+
+    switch sub {
+    case "scan":
+        let paths = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard !paths.isEmpty else {
+            fputs("Verwendung: iphoto-cli quality scan <bild1> [<bild2>...]\n", stderr); return 1
+        }
+        var results: [[String: Any]] = []
+        for path in paths {
+            let url = URL(fileURLWithPath: path)
+            guard let r = QualityAssessor.assess(url: url) else {
+                fputs("Warnung: Konnte \(path) nicht laden\n", stderr); continue
+            }
+            catalog.upsertImage(path: path, filename: url.lastPathComponent, isRAW: false)
+            catalog.upsertQuality(path: path, blurScore: r.blurScore,
+                                  underRatio: r.underRatio, overRatio: r.overRatio,
+                                  phash: r.phash, phashV: r.phashV, eyeOpenness: r.eyeOpenness)
+            results.append(["path": path, "blur": r.blurScore,
+                            "under": r.underRatio, "over": r.overRatio])
+        }
+        if jsonMode {
+            if let d = try? JSONSerialization.data(withJSONObject: results, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            for r in results {
+                print(String(format: "blur=%.1f  under=%.2f  over=%.2f  %@",
+                             r["blur"] as! Double, r["under"] as! Double,
+                             r["over"] as! Double, r["path"] as! String))
+            }
+            print("Gesamt: \(results.count) Bild(er) analysiert")
+        }
+        return 0
+
+    case "list":
+        let all = catalog.allQualityRecords()
+        let sorted = all.sorted { $0.key < $1.key }
+        if jsonMode {
+            let arr = sorted.map { (path, q) -> [String: Any] in
+                var d: [String: Any] = ["path": path, "blur": q.blurScore ?? 0,
+                                        "under": q.underRatio ?? 0, "over": q.overRatio ?? 0]
+                if let e = q.eyeOpenness { d["eye_openness"] = e }
+                return d
+            }
+            if let d = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if sorted.isEmpty { print("(keine Quality-Daten)") }
+            for (path, q) in sorted {
+                print(String(format: "blur=%.1f  under=%.2f  over=%.2f  %@",
+                             q.blurScore ?? 0, q.underRatio ?? 0, q.overRatio ?? 0, path))
+            }
+        }
+        return 0
+
+    case "get":
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli quality get <bildpfad> [--json]\n", stderr); return 1
+        }
+        guard let q = catalog.quality(forPath: path) else {
+            fputs("Keine Quality-Daten für \(path)\n", stderr); return 1
+        }
+        if jsonMode {
+            var d: [String: Any] = ["path": path, "blur": q.blurScore ?? 0,
+                                    "under": q.underRatio ?? 0, "over": q.overRatio ?? 0]
+            if let e = q.eyeOpenness { d["eye_openness"] = e }
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print(String(format: "blur=%.1f  under=%.2f  over=%.2f  %@",
+                         q.blurScore ?? 0, q.underRatio ?? 0, q.overRatio ?? 0, path))
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli quality scan|list|get\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Version
+
+private func runVersion(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let jsonMode = args.contains("--json")
+    let store = VersionStore.shared
+
+    switch sub {
+    case "list":
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli version list <bildpfad> [--json]\n", stderr); return 1
+        }
+        let url = URL(fileURLWithPath: path)
+        let versions = store.loadVersions(for: url)
+        if jsonMode {
+            let isoFormatter = ISO8601DateFormatter()
+            let arr = versions.map { v -> [String: Any] in
+                var d: [String: Any] = ["id": v.id.uuidString,
+                                        "date": isoFormatter.string(from: v.date),
+                                        "ext": v.ext]
+                if let lbl = v.label { d["label"] = lbl }
+                return d
+            }
+            if let d = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if versions.isEmpty { print("(keine Versionen)") }
+            for v in versions {
+                let lbl = v.label.map { "  [\($0)]" } ?? ""
+                print("\(v.id.uuidString)  \(v.date)\(lbl)")
+            }
+        }
+        return 0
+
+    case "backup":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard let path = positional.first else {
+            fputs("Verwendung: iphoto-cli version backup <bildpfad> [--label <text>]\n", stderr); return 1
+        }
+        var label: String? = nil
+        if let li = args.firstIndex(of: "--label"), li + 1 < args.count {
+            label = args[li + 1]
+        }
+        let url = URL(fileURLWithPath: path)
+        do {
+            let meta = try store.backupFile(at: url, label: label)
+            print("Version gesichert: \(meta.id.uuidString)")
+        } catch {
+            fputs("Fehler beim Backup: \(error)\n", stderr); return 1
+        }
+        return 0
+
+    case "restore":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli version restore <bildpfad> <version-id>\n", stderr); return 1
+        }
+        let path = positional[0]
+        let versionIDStr = positional[1]
+        let url = URL(fileURLWithPath: path)
+        let versions = store.loadVersions(for: url)
+        guard let meta = versions.first(where: { $0.id.uuidString == versionIDStr }) else {
+            fputs("Version nicht gefunden: \(versionIDStr)\n", stderr); return 1
+        }
+        do {
+            try store.restoreVersion(meta, to: url)
+            print("Version \(versionIDStr) wiederhergestellt: \(path)")
+        } catch {
+            fputs("Fehler bei Wiederherstellung: \(error)\n", stderr); return 1
+        }
+        return 0
+
+    case "delete":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli version delete <bildpfad> <version-id>\n", stderr); return 1
+        }
+        let path = positional[0]
+        let versionIDStr = positional[1]
+        let url = URL(fileURLWithPath: path)
+        let versions = store.loadVersions(for: url)
+        guard let meta = versions.first(where: { $0.id.uuidString == versionIDStr }) else {
+            fputs("Version nicht gefunden: \(versionIDStr)\n", stderr); return 1
+        }
+        store.deleteVersion(meta, for: url)
+        print("Version \(versionIDStr) gelöscht")
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli version list|backup|restore|delete\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Search
+
+private func runSearch(_ args: [String]) -> Int32 {
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+
+    // --flag pick|reject|none
+    if let fi = args.firstIndex(of: "--flag"), fi + 1 < args.count {
+        let flag = args[fi + 1]
+        let images = catalog.images(flaggedAs: flag)
+        return printCatalogImages(images, jsonMode: jsonMode)
+    }
+
+    // --rating N
+    if let ri = args.firstIndex(of: "--rating"), ri + 1 < args.count,
+       let n = Int(args[ri + 1]) {
+        let images = catalog.images(ratedAtLeast: n)
+        return printCatalogImages(images, jsonMode: jsonMode)
+    }
+
+    // Freitext-Suche
+    let query = args.filter { !$0.hasPrefix("-") }.joined(separator: " ")
+    guard !query.isEmpty else {
+        fputs("Verwendung: iphoto-cli search <text> [--json]\n" +
+              "           iphoto-cli search --flag pick|reject|none [--json]\n" +
+              "           iphoto-cli search --rating <1-5> [--json]\n", stderr)
+        return 1
+    }
+    let images = catalog.search(query: query)
+    return printCatalogImages(images, jsonMode: jsonMode)
+}
+
+private func printCatalogImages(_ images: [CatalogImage], jsonMode: Bool) -> Int32 {
+    if jsonMode {
+        let arr = images.map { img -> [String: Any] in
+            var d: [String: Any] = ["path": img.path, "filename": img.filename,
+                                    "width": img.width, "height": img.height]
+            if let dt = img.dateTaken { d["date_taken"] = dt }
+            if let cm = img.cameraModel { d["camera"] = cm }
+            return d
+        }
+        if let d = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+           let s = String(data: d, encoding: .utf8) { print(s) }
+    } else {
+        if images.isEmpty { print("(keine Ergebnisse)") }
+        else { images.forEach { print($0.path) } }
+        print("Gesamt: \(images.count) Bild(er)")
+    }
+    return 0
+}
+
+// MARK: - Catalog
+
+private func runCatalog(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "stats"
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+
+    switch sub {
+    case "stats":
+        let dbPath = envDBPath() ?? "(Standard: ~/Library/Application Support/iPhoto/catalog.db)"
+        let imageCount = catalog.allImages().count
+        let albumCount = catalog.allAlbums().count
+        let faceCount  = catalog.allFaces().count
+        let peopleCount = catalog.allPeople().count
+
+        if jsonMode {
+            let d: [String: Any] = ["db_path": dbPath, "images": imageCount,
+                                    "albums": albumCount, "faces": faceCount,
+                                    "people": peopleCount]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print("Katalog:  \(dbPath)")
+            print("Bilder:   \(imageCount)")
+            print("Alben:    \(albumCount)")
+            print("Gesichter:\(faceCount)")
+            print("Personen: \(peopleCount)")
+        }
+        return 0
+
+    case "path":
+        let dbPath = envDBPath() ?? "(Standard: ~/Library/Application Support/iPhoto/catalog.db)"
+        print(dbPath)
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli catalog stats|path [--json]\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Motif
+
+private func runMotif(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+
+    switch sub {
+    case "get":
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli motif get <bildpfad> [--json]\n", stderr); return 1
+        }
+        let tags = catalog.motifs(forPath: path) ?? []
+        if jsonMode {
+            let d: [String: Any] = ["path": path, "motifs": tags]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            if tags.isEmpty { print("(keine Motiv-Tags)") }
+            else { print(tags.joined(separator: ", ")) }
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli motif get <bildpfad> [--json]\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Duplicate
+
+private func runDuplicate(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "list"
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+
+    switch sub {
+    case "list":
+        let groups = catalog.loadDuplicateGroups()
+        if jsonMode {
+            if let d = try? JSONSerialization.data(withJSONObject: groups, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if groups.isEmpty { print("(keine Duplikate)") }
+            for (i, g) in groups.enumerated() {
+                print("Gruppe \(i+1):")
+                g.forEach { print("  \($0)") }
+            }
+        }
+        return 0
+
+    case "similar":
+        let groups = catalog.loadSimilarGroups()
+        if jsonMode {
+            if let d = try? JSONSerialization.data(withJSONObject: groups, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if groups.isEmpty { print("(keine ähnlichen Bilder)") }
+            for (i, g) in groups.enumerated() {
+                print("Gruppe \(i+1):")
+                g.forEach { print("  \($0)") }
+            }
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli duplicate list|similar [--json]\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
 guard rawArgs.count >= 2 else { printUsage(); exit(0) }
 
-// Special case: "preset" and "plugins" commands need their sub-args forwarded differently
 let firstArg = rawArgs[1]
 if firstArg == "preset" {
-    let subArgs = Array(rawArgs.dropFirst(2))
-    exit(runPreset(subArgs))
+    exit(runPreset(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "plugins" {
-    let subArgs = Array(rawArgs.dropFirst(2))
-    exit(runPlugins(subArgs))
+    exit(runPlugins(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "viewmode" {
-    let subArgs = Array(rawArgs.dropFirst(2))
-    exit(runViewMode(subArgs))
+    exit(runViewMode(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "people" {
-    let subArgs = Array(rawArgs.dropFirst(2))
-    exit(runPeople(subArgs))
+    exit(runPeople(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "album" {
+    exit(runAlbum(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "quality" {
+    exit(runQuality(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "version" {
+    exit(runVersion(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "search" {
+    exit(runSearch(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "catalog" {
+    exit(runCatalog(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "motif" {
+    exit(runMotif(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "duplicate" {
+    exit(runDuplicate(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }
