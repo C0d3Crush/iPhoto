@@ -19,14 +19,14 @@ private func printUsage() {
                         [--warmth N] [--tint N] [--vibrance N] [--hue N]
                         [--clarity N] [--sharpen N] [--preset <name>]
       iphoto-cli preset list [--json]
-      iphoto-cli preset apply <datei> --name <name> --output <ziel> [--format jpeg] [--quality 0.9]
+      iphoto-cli preset apply <datei> --name <name> --output <ziel> [--format jpeg] [--quality 0.9] [--json]
       iphoto-cli preset delete <name>
       iphoto-cli analyse <datei|ordner> [--json] [--blur-threshold N] [--shadow N] [--highlight N]
       iphoto-cli inpaint <datei> --output <ziel> [--python /usr/bin/python3] [--cmt ~/cmt] [--checkpoint ~/cmt/checkpoints]
       iphoto-cli plugins list [--json]
       iphoto-cli plugins dir
-      iphoto-cli viewmode get
-      iphoto-cli viewmode set <grid|list|columns|gallery>
+      iphoto-cli viewmode get [--json]
+      iphoto-cli viewmode set <grid|list|columns|gallery> [--json]
       iphoto-cli people scan <bild1> [<bild2> ...] [--json]
       iphoto-cli people list [--json]
       iphoto-cli people faces [--path <bildpfad>] [--json]
@@ -743,6 +743,7 @@ private func runPreset(_ subArgs: [String]) -> Int32 {
             return 1
         }
 
+        let jsonModeApply = subArgs.contains("--json")
         do {
             let cg = try RAWImageDecoder.decode(url: input)
             let ci = CIImage(cgImage: cg)
@@ -752,7 +753,14 @@ private func runPreset(_ subArgs: [String]) -> Int32 {
                 return 1
             }
             try ImageExporter.exportSingle(image: outCG, to: output, format: format, quality: quality)
-            print("OK  \(output.path)")
+            if jsonModeApply {
+                let obj: [String: Any] = ["input": input.lastPathComponent, "output": output.path,
+                                          "preset": name, "ok": true]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                print("OK  \(output.path)")
+            }
             return 0
         } catch {
             fputs("FAIL \(input.lastPathComponent): \(error.localizedDescription)\n", stderr)
@@ -1187,27 +1195,38 @@ private let validViewModes = ["grid", "list", "columns", "gallery"]
 
 private func runViewMode(_ subArgs: [String]) -> Int32 {
     let sub = subArgs.first ?? ""
+    let jsonMode = subArgs.contains("--json")
     switch sub {
     case "get":
-        let defaults = UserDefaults.standard
-        // UserDefaults.standard in CLI reads from the app's domain if IPHOTO_CATALOG_DB is set,
-        // but for a headless CLI we use a shared suite. Fall back to "gallery" when unset.
-        let current = defaults.string(forKey: viewModeKey) ?? "gallery"
-        print(current)
+        let current = UserDefaults.standard.string(forKey: viewModeKey) ?? "gallery"
+        if jsonMode {
+            let obj: [String: Any] = ["mode": current]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: []),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print(current)
+        }
         return 0
     case "set":
-        guard subArgs.count >= 2 else {
+        let positional = subArgs.dropFirst().filter { !$0.hasPrefix("--") }
+        guard let mode = positional.first else {
             fputs("Fehler: 'viewmode set' benötigt einen Modus: grid|list|columns|gallery\n", stderr)
             return 1
         }
-        let mode = subArgs[1].lowercased()
-        guard validViewModes.contains(mode) else {
-            fputs("Fehler: Unbekannter Modus '\(mode)'. Erlaubt: grid, list, columns, gallery\n", stderr)
+        let lowMode = mode.lowercased()
+        guard validViewModes.contains(lowMode) else {
+            fputs("Fehler: Unbekannter Modus '\(lowMode)'. Erlaubt: grid, list, columns, gallery\n", stderr)
             return 1
         }
-        UserDefaults.standard.set(mode, forKey: viewModeKey)
+        UserDefaults.standard.set(lowMode, forKey: viewModeKey)
         UserDefaults.standard.synchronize()
-        print("Ansicht gesetzt: \(mode)")
+        if jsonMode {
+            let obj: [String: Any] = ["mode": lowMode, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: []),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Ansicht gesetzt: \(lowMode)")
+        }
         return 0
     default:
         fputs("Fehler: Unbekannter viewmode-Unterbefehl '\(sub)'. Erlaubt: get, set <modus>\n", stderr)

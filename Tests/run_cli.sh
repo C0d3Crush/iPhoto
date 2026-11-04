@@ -378,6 +378,12 @@ if [ $? -eq 0 ]; then pass "smartfolder list leer (Exitcode 0)"; else fail "smar
 SF_CREATE=$("$BIN" smartfolder create "TestOrdner" --rating-min 3 2>&1)
 if echo "$SF_CREATE" | grep -q "TestOrdner"; then pass "smartfolder create (Name in Ausgabe)"; else fail "smartfolder create" "$SF_CREATE"; fi
 
+# smartfolder create --json
+SF_CREATE_JSON=$("$BIN" smartfolder create "JsonOrdner" --json 2>&1)
+if echo "$SF_CREATE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'id' in d or 'name' in d" 2>/dev/null; then
+    pass "smartfolder create --json (valides JSON mit id/name)"; else fail "smartfolder create --json" "$SF_CREATE_JSON"; fi
+"$BIN" smartfolder delete "JsonOrdner" > /dev/null 2>&1 || true
+
 SF_LIST2=$("$BIN" smartfolder list 2>&1)
 if echo "$SF_LIST2" | grep -q "TestOrdner"; then pass "smartfolder list zeigt neuen Ordner"; else fail "smartfolder list nach create" "$SF_LIST2"; fi
 
@@ -442,6 +448,15 @@ fi
 
 PR_ERR_EXIT=0; "$BIN" people rename "NICHT-VORHANDEN-UUID" "Name" > /dev/null 2>&1 || PR_ERR_EXIT=$?
 if [ $PR_ERR_EXIT -ne 0 ]; then pass "people rename fehlende ID schlägt fehl"; else fail "people rename fehlende ID" "Sollte fehlschlagen"; fi
+
+# people rename --json (wenn Person vorhanden)
+if [ -n "$PR_ID" ]; then
+    OUT=$("$BIN" people rename "$PR_ID" "TestPerson2" --json 2>&1)
+    if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'id' in d and 'name' in d" 2>/dev/null; then
+        pass "people rename --json (JSON mit id+name)"; else fail "people rename --json" "$OUT"; fi
+else
+    pass "people rename --json übersprungen (kein Person)"
+fi
 
 echo ""
 
@@ -682,6 +697,28 @@ else
     fail "adjust --json" "Kein JSON oder ok!=true: $OUT"
 fi
 
+# adjust alle Parameter-Flags
+ADJ_MULTI="$TMPDIR_BASE/adj_multi.jpeg"
+OUT=$("$BIN" adjust "$INPUT" --output "$ADJ_MULTI" --format jpeg \
+    --saturation 0.5 --tint 10 --vibrance 0.3 --hue 15 --clarity 0.2 --sharpen 0.4 2>&1)
+if [ -f "$ADJ_MULTI" ]; then pass "adjust --saturation/tint/vibrance/hue/clarity/sharpen (Datei vorhanden)"; else fail "adjust alle Flags" "$OUT"; fi
+
+ADJ_MULTI_JSON="$TMPDIR_BASE/adj_multi_json.jpeg"
+OUT=$("$BIN" adjust "$INPUT" --output "$ADJ_MULTI_JSON" --format jpeg \
+    --saturation 0.5 --tint 10 --vibrance 0.3 --hue 15 --clarity 0.2 --sharpen 0.4 --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "adjust alle Flags --json (ok=true)"; else fail "adjust alle Flags --json" "$OUT"; fi
+
+# preset apply --json
+if [ -n "$PRESET_NAME" ]; then
+    PRESET_JSON_OUT="$TMPDIR_BASE/preset_apply_json.jpeg"
+    OUT=$("$BIN" preset apply "$INPUT" --name "$PRESET_NAME" --output "$PRESET_JSON_OUT" --format jpeg --json 2>&1)
+    if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+        pass "preset apply --json (ok=true)"; else fail "preset apply --json" "$OUT"; fi
+else
+    pass "preset apply --json übersprungen (keine Presets)"
+fi
+
 echo ""
 
 # ===========================================================================
@@ -729,6 +766,16 @@ if [ $VM_EXIT -ne 0 ]; then pass "viewmode set ungültig (Fehler korrekt)"; else
 
 VM_EXIT2=0; "$BIN" viewmode > /dev/null 2>&1 || VM_EXIT2=$?
 if [ $VM_EXIT2 -ne 0 ]; then pass "viewmode ohne Unterbefehl (Fehler korrekt)"; else fail "viewmode ohne Unterbefehl" "Exitcode 0"; fi
+
+# viewmode --json
+OUT=$("$BIN" viewmode get --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'mode' in d" 2>/dev/null; then
+    pass "viewmode get --json (JSON mit 'mode')"; else fail "viewmode get --json" "$OUT"; fi
+
+OUT=$("$BIN" viewmode set grid --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "viewmode set --json (ok=true)"; else fail "viewmode set --json" "$OUT"; fi
+"$BIN" viewmode set gallery > /dev/null 2>&1 || true
 
 echo ""
 

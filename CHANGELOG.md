@@ -2,6 +2,18 @@
 
 ---
 
+## 1.66.0
+**Feature — viewmode --json, preset apply --json, adjust vollständige Flag-Tests, Perf-Section 24**
+
+- `viewmode get/set [--json]` — JSON-Ausgabe für beide Unterbefehle
+- `preset apply --json` — gibt `{"input", "output", "preset", "ok": true}` zurück
+- Adjust-Tests: alle 6 Parameterflags (--saturation/tint/vibrance/hue/clarity/sharpen) jetzt abgedeckt
+- `smartfolder create --json` und `people rename --json` Tests ergänzt
+- Perf-Section 24: ViewMode get/set/--json + preset apply Latenz-Benchmarks
+- 155 CLI-Tests, 65 Perf-Tests — alle grün
+
+---
+
 ## 1.65.0
 **Bugfix + Feature — analyse Exit-Code-Korrektur, search --json, Export-Perf-Tests**
 

@@ -613,6 +613,37 @@ if [ $ELAPSED -le $THRESHOLD ]; then pass "export --output-dir (512×512)" "$ELA
 echo ""
 
 # ===========================================================================
+# 24. ViewMode + Preset-Latenz
+# ===========================================================================
+echo "=== 24. ViewMode + Preset-Latenz ==="
+
+THRESHOLD=500
+T0=$(ms); "$BIN" viewmode get > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "viewmode get" "$ELAPSED"; else fail "viewmode get" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms); "$BIN" viewmode set grid > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "viewmode set" "$ELAPSED"; else fail "viewmode set" "$ELAPSED" "$THRESHOLD"; fi
+"$BIN" viewmode set gallery > /dev/null 2>&1 || true
+
+T0=$(ms); "$BIN" viewmode get --json > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "viewmode get --json" "$ELAPSED"; else fail "viewmode get --json" "$ELAPSED" "$THRESHOLD"; fi
+
+PRESET_NAME_PERF=$("$BIN" preset list --json 2>/dev/null | python3 -c "import sys,json; a=json.load(sys.stdin); print(a[0]['name'] if a else '')" 2>/dev/null) || PRESET_NAME_PERF=""
+if [ -n "$PRESET_NAME_PERF" ]; then
+    THRESHOLD=2000
+    PRESET_PERF_OUT="$TMPDIR_BASE/perf_preset.jpeg"
+    T0=$(ms); "$BIN" preset apply "$SMALL" --name "$PRESET_NAME_PERF" --output "$PRESET_PERF_OUT" --format jpeg > /dev/null 2>&1 || true; T1=$(ms)
+    ELAPSED=$((T1-T0))
+    if [ $ELAPSED -le $THRESHOLD ]; then pass "preset apply '$PRESET_NAME_PERF' (64×64)" "$ELAPSED"; else fail "preset apply latenz" "$ELAPSED" "$THRESHOLD"; fi
+else
+    pass "preset apply übersprungen (keine Presets)" "0"
+fi
+echo ""
+
+# ===========================================================================
 echo "=============================="
 echo "Leistungstest: $PASS bestanden, $FAIL fehlgeschlagen"
 echo "=============================="
