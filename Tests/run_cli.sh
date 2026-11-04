@@ -356,6 +356,238 @@ if [ $? -eq 0 ]; then pass "trash restore --all (Exitcode 0)"; else fail "trash 
 echo ""
 
 # ===========================================================================
+# export
+# ===========================================================================
+echo "=== export ==="
+
+EXPORT_JPEG="$TMPDIR_BASE/exported.jpeg"
+OUT=$("$BIN" export "$INPUT" --format jpeg --output "$EXPORT_JPEG" 2>&1)
+if [ -f "$EXPORT_JPEG" ]; then pass "export PNG→JPEG (Datei vorhanden)"; else fail "export PNG→JPEG" "Datei fehlt: $OUT"; fi
+
+EXPORT_PNG2="$TMPDIR_BASE/exported2.png"
+OUT=$("$BIN" export "$INPUT" --format png --output "$EXPORT_PNG2" 2>&1)
+if [ -f "$EXPORT_PNG2" ]; then pass "export PNG→PNG (Datei vorhanden)"; else fail "export PNG→PNG" "Datei fehlt: $OUT"; fi
+
+EXPORT_DIR="$TMPDIR_BASE/batch_export"
+mkdir -p "$EXPORT_DIR"
+"$BIN" export "$INPUT" --format jpeg --output-dir "$EXPORT_DIR" > /dev/null 2>&1 || true
+if ls "$EXPORT_DIR"/ 2>/dev/null | grep -qiE '\.(jpg|jpeg)$'; then pass "export --output-dir (Batch)"; else fail "export --output-dir" "Keine JPEG in $EXPORT_DIR: $(ls $EXPORT_DIR/ 2>/dev/null)"; fi
+
+EXPORT_EXIT=0; "$BIN" export "/nicht/vorhanden.png" --format jpeg --output "$TMPDIR_BASE/x.jpeg" > /dev/null 2>&1 || EXPORT_EXIT=$?
+if [ $EXPORT_EXIT -ne 0 ]; then pass "export nicht-existente Datei (Fehler korrekt)"; else fail "export nicht-existente Datei" "Exitcode 0"; fi
+
+EXPORT_EXIT2=0; "$BIN" export --format jpeg > /dev/null 2>&1 || EXPORT_EXIT2=$?
+if [ $EXPORT_EXIT2 -ne 0 ]; then pass "export ohne Eingabe (Fehler korrekt)"; else fail "export ohne Eingabe" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# info
+# ===========================================================================
+echo "=== info ==="
+
+OUT=$("$BIN" info "$INPUT" 2>&1)
+if echo "$OUT" | grep -q "test.png"; then pass "info (Dateiname in Ausgabe)"; else fail "info" "test.png fehlt: $OUT"; fi
+
+OUT=$("$BIN" info "$INPUT" --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'file' in d" 2>/dev/null; then
+    pass "info --json (JSON mit 'file')"
+else
+    fail "info --json" "Kein JSON oder 'file' fehlt: $OUT"
+fi
+
+INFO_EXIT=0; "$BIN" info "/nicht/vorhanden.png" > /dev/null 2>&1 || INFO_EXIT=$?
+if [ $INFO_EXIT -ne 0 ]; then pass "info nicht-existente Datei (Fehler korrekt)"; else fail "info nicht-existente Datei" "Exitcode 0"; fi
+
+INFO_EXIT2=0; "$BIN" info > /dev/null 2>&1 || INFO_EXIT2=$?
+if [ $INFO_EXIT2 -ne 0 ]; then pass "info ohne Argumente (Fehler korrekt)"; else fail "info ohne Argumente" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# rating (dedizierter Block)
+# ===========================================================================
+echo "=== rating ==="
+
+OUT=$("$BIN" rating "$INPUT" --set 4 2>&1)
+if echo "$OUT" | grep -q "Gespeichert"; then pass "rating --set 4"; else fail "rating --set 4" "$OUT"; fi
+
+OUT=$("$BIN" rating "$INPUT" 2>&1)
+if echo "$OUT" | grep -q "Rating : 4"; then pass "rating read-back (4 vorhanden)"; else fail "rating read-back" "$OUT"; fi
+
+OUT=$("$BIN" rating "$INPUT" --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('rating')==4" 2>/dev/null; then
+    pass "rating --json (rating=4)"
+else
+    fail "rating --json" "Kein JSON oder rating!=4: $OUT"
+fi
+
+OUT=$("$BIN" rating "$INPUT" --flag pick 2>&1)
+if echo "$OUT" | grep -q "Gespeichert"; then pass "rating --flag pick"; else fail "rating --flag pick" "$OUT"; fi
+
+OUT=$("$BIN" rating "$INPUT" --color red 2>&1)
+if echo "$OUT" | grep -q "Gespeichert"; then pass "rating --color red"; else fail "rating --color red" "$OUT"; fi
+
+OUT=$("$BIN" rating "$INPUT" --remove 2>&1)
+if echo "$OUT" | grep -q "entfernt"; then pass "rating --remove (Meldung)"; else fail "rating --remove" "$OUT"; fi
+
+OUT=$("$BIN" rating "$INPUT" 2>&1)
+if echo "$OUT" | grep -q "Rating : 0"; then pass "rating nach --remove (0)"; else fail "rating nach --remove" "$OUT"; fi
+
+RATING_EXIT=0; "$BIN" rating "$INPUT" --flag ungueltig > /dev/null 2>&1 || RATING_EXIT=$?
+if [ $RATING_EXIT -ne 0 ]; then pass "rating --flag ungültig (Fehler korrekt)"; else fail "rating --flag ungültig" "Exitcode 0"; fi
+
+RATING_EXIT2=0; "$BIN" rating "/nicht/vorhanden.png" > /dev/null 2>&1 || RATING_EXIT2=$?
+if [ $RATING_EXIT2 -ne 0 ]; then pass "rating nicht-existente Datei (Fehler korrekt)"; else fail "rating nicht-existente Datei" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# analyse
+# ===========================================================================
+echo "=== analyse ==="
+
+OUT=$("$BIN" analyse "$INPUT" 2>&1)
+if echo "$OUT" | grep -q "Gesamt:"; then pass "analyse (Ausgabe enthält 'Gesamt:')"; else fail "analyse" "$OUT"; fi
+
+OUT=$("$BIN" analyse "$INPUT" --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; a=json.load(sys.stdin); assert isinstance(a,list) and 'blur_score' in a[0]" 2>/dev/null; then
+    pass "analyse --json (JSON mit 'blur_score')"
+else
+    fail "analyse --json" "Kein JSON oder blur_score fehlt: $OUT"
+fi
+
+OUT=$("$BIN" analyse "$INPUT" --blur-threshold 100 2>&1)
+if echo "$OUT" | grep -q "Gesamt:"; then pass "analyse --blur-threshold (Exitcode 0)"; else fail "analyse --blur-threshold" "$OUT"; fi
+
+ANALYSE_EXIT=0; "$BIN" analyse "/nicht/vorhanden.png" > /dev/null 2>&1 || ANALYSE_EXIT=$?
+if [ $ANALYSE_EXIT -ne 0 ]; then pass "analyse nicht-existente Datei (Fehler korrekt)"; else fail "analyse nicht-existente Datei" "Exitcode 0"; fi
+
+ANALYSE_EXIT2=0; "$BIN" analyse > /dev/null 2>&1 || ANALYSE_EXIT2=$?
+if [ $ANALYSE_EXIT2 -ne 0 ]; then pass "analyse ohne Argumente (Fehler korrekt)"; else fail "analyse ohne Argumente" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# preset
+# ===========================================================================
+echo "=== preset ==="
+
+OUT=$("$BIN" preset list 2>&1)
+if echo "$OUT" | grep -q "Presets"; then pass "preset list (Presets aufgelistet)"; else fail "preset list" "$OUT"; fi
+
+OUT=$("$BIN" preset list --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; a=json.load(sys.stdin); assert isinstance(a,list)" 2>/dev/null; then
+    pass "preset list --json (JSON-Array)"
+else
+    fail "preset list --json" "Kein JSON-Array: $OUT"
+fi
+
+PRESET_OUT="$TMPDIR_BASE/preset_out.jpeg"
+PRESET_NAME=$("$BIN" preset list --json 2>/dev/null | python3 -c "import sys,json; a=json.load(sys.stdin); print(a[0]['name'] if a else '')" 2>/dev/null) || PRESET_NAME=""
+if [ -n "$PRESET_NAME" ]; then
+    OUT=$("$BIN" preset apply "$INPUT" --name "$PRESET_NAME" --output "$PRESET_OUT" --format jpeg 2>&1)
+    if [ -f "$PRESET_OUT" ]; then pass "preset apply '$PRESET_NAME' (Datei vorhanden)"; else fail "preset apply" "Datei fehlt: $OUT"; fi
+else
+    pass "preset apply übersprungen (keine Presets)"
+fi
+
+PRESET_EXIT=0; "$BIN" preset apply "$INPUT" --name "__NichtExistent__" --output "$TMPDIR_BASE/x.jpeg" > /dev/null 2>&1 || PRESET_EXIT=$?
+if [ $PRESET_EXIT -ne 0 ]; then pass "preset apply unbekannter Name (Fehler korrekt)"; else fail "preset apply unbekannter Name" "Exitcode 0"; fi
+
+PRESET_EXIT2=0; "$BIN" preset delete "__NichtExistent__" > /dev/null 2>&1 || PRESET_EXIT2=$?
+if [ $PRESET_EXIT2 -ne 0 ]; then pass "preset delete unbekannt (Fehler korrekt)"; else fail "preset delete unbekannt" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# plugins
+# ===========================================================================
+echo "=== plugins ==="
+
+OUT=$("$BIN" plugins list 2>&1); EC=$?
+if [ $EC -eq 0 ]; then pass "plugins list (Exitcode 0)"; else fail "plugins list" "$OUT"; fi
+
+OUT=$("$BIN" plugins list --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+    pass "plugins list --json (gültiges JSON)"
+else
+    fail "plugins list --json" "Kein gültiges JSON: $OUT"
+fi
+
+OUT=$("$BIN" plugins dir 2>&1)
+if [ -n "$OUT" ]; then pass "plugins dir (Pfad ausgegeben)"; else fail "plugins dir" "Leere Ausgabe"; fi
+
+PLUGINS_EXIT=0; "$BIN" plugins invalid_sub > /dev/null 2>&1 || PLUGINS_EXIT=$?
+if [ $PLUGINS_EXIT -ne 0 ]; then pass "plugins unbekannter Unterbefehl (Fehler korrekt)"; else fail "plugins unbekannter Unterbefehl" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# viewmode
+# ===========================================================================
+echo "=== viewmode ==="
+
+OUT=$("$BIN" viewmode get 2>&1); EC=$?
+if [ $EC -eq 0 ] && [ -n "$OUT" ]; then pass "viewmode get (Modus ausgegeben: $OUT)"; else fail "viewmode get" "Exitcode=$EC oder leer"; fi
+
+OUT=$("$BIN" viewmode set grid 2>&1)
+if echo "$OUT" | grep -q "grid"; then pass "viewmode set grid"; else fail "viewmode set grid" "$OUT"; fi
+
+OUT=$("$BIN" viewmode get 2>&1)
+if echo "$OUT" | grep -q "grid"; then pass "viewmode get nach set grid"; else fail "viewmode get nach set grid" "$OUT"; fi
+
+OUT=$("$BIN" viewmode set gallery 2>&1)
+if echo "$OUT" | grep -q "gallery"; then pass "viewmode set gallery (zurücksetzen)"; else fail "viewmode set gallery" "$OUT"; fi
+
+VM_EXIT=0; "$BIN" viewmode set ungueltig > /dev/null 2>&1 || VM_EXIT=$?
+if [ $VM_EXIT -ne 0 ]; then pass "viewmode set ungültig (Fehler korrekt)"; else fail "viewmode set ungültig" "Exitcode 0"; fi
+
+VM_EXIT2=0; "$BIN" viewmode > /dev/null 2>&1 || VM_EXIT2=$?
+if [ $VM_EXIT2 -ne 0 ]; then pass "viewmode ohne Unterbefehl (Fehler korrekt)"; else fail "viewmode ohne Unterbefehl" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# people
+# ===========================================================================
+echo "=== people ==="
+
+OUT=$("$BIN" people list 2>&1); EC=$?
+if [ $EC -eq 0 ]; then pass "people list (Exitcode 0)"; else fail "people list" "$OUT"; fi
+
+OUT=$("$BIN" people list --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+    pass "people list --json (gültiges JSON)"
+else
+    fail "people list --json" "Kein gültiges JSON: $OUT"
+fi
+
+OUT=$("$BIN" people scan "$INPUT" 2>&1)
+if echo "$OUT" | grep -q "Gesamt:"; then pass "people scan (Ausgabe enthält 'Gesamt:')"; else fail "people scan" "$OUT"; fi
+
+OUT=$("$BIN" people scan "$INPUT" --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; a=json.load(sys.stdin); assert isinstance(a,list)" 2>/dev/null; then
+    pass "people scan --json (JSON-Array)"
+else
+    fail "people scan --json" "Kein JSON-Array: $OUT"
+fi
+
+OUT=$("$BIN" people faces 2>&1); EC=$?
+if [ $EC -eq 0 ]; then pass "people faces (Exitcode 0)"; else fail "people faces" "$OUT"; fi
+
+OUT=$("$BIN" people cluster 2>&1); EC=$?
+if [ $EC -eq 0 ]; then pass "people cluster ohne Daten (Exitcode 0)"; else fail "people cluster" "$OUT"; fi
+
+PEOPLE_EXIT=0; "$BIN" people scan > /dev/null 2>&1 || PEOPLE_EXIT=$?
+if [ $PEOPLE_EXIT -ne 0 ]; then pass "people scan ohne Argumente (Fehler korrekt)"; else fail "people scan ohne Argumente" "Exitcode 0"; fi
+
+PEOPLE_EXIT2=0; "$BIN" people unbekannt > /dev/null 2>&1 || PEOPLE_EXIT2=$?
+if [ $PEOPLE_EXIT2 -ne 0 ]; then pass "people unbekannter Unterbefehl (Fehler korrekt)"; else fail "people unbekannter Unterbefehl" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
 # Zusammenfassung
 # ===========================================================================
 echo "=============================="

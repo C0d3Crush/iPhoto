@@ -13,13 +13,14 @@ private func printUsage() {
       iphoto-cli hdr <ordner> --output-dir <ziel>
       iphoto-cli info <eingabe> [--json]
       iphoto-cli hotpixel <ordner>
-      iphoto-cli rating <datei> [--set 0-5] [--flag pick|reject|none] [--color red|yellow|green|blue|none] [--json]
+      iphoto-cli rating <datei> [--set 0-5] [--flag pick|reject|none] [--color red|yellow|green|blue|none] [--remove] [--json]
       iphoto-cli adjust <datei> --output <ziel> [--format jpeg|png|tiff|heif] [--quality 0.9]
                         [--exposure N] [--brightness N] [--contrast N] [--saturation N]
                         [--warmth N] [--tint N] [--vibrance N] [--hue N]
                         [--clarity N] [--sharpen N] [--preset <name>]
       iphoto-cli preset list [--json]
       iphoto-cli preset apply <datei> --name <name> --output <ziel> [--format jpeg] [--quality 0.9]
+      iphoto-cli preset delete <name>
       iphoto-cli analyse <datei|ordner> [--json] [--blur-threshold N] [--shadow N] [--highlight N]
       iphoto-cli inpaint <datei> --output <ziel> [--python /usr/bin/python3] [--cmt ~/cmt] [--checkpoint ~/cmt/checkpoints]
       iphoto-cli plugins list [--json]
@@ -83,6 +84,7 @@ private struct CLIArgs {
     var ratingSet: Int? = nil
     var ratingFlag: String? = nil
     var ratingColor: String? = nil
+    var ratingRemove: Bool = false
 
     // adjust flags
     var exposure: Double? = nil
@@ -163,6 +165,8 @@ private func parseArgs(_ args: [String]) -> CLIArgs? {
                 fputs("Fehler: --color erlaubt: red|yellow|green|blue|none\n", stderr); return nil
             }
             result.ratingColor = c
+        case "--remove":
+            result.ratingRemove = true
         case "--exposure":
             i += 1
             guard i < args.count, let v = Double(args[i]) else { fputs("Fehler: --exposure braucht eine Zahl\n", stderr); return nil }
@@ -432,6 +436,12 @@ private func runRating(_ args: CLIArgs) -> Int32 {
 
     let catalog = CatalogStore(dbPath: envDBPath())
     let path = input.path
+
+    if args.ratingRemove {
+        catalog.removeRating(path: path)
+        print("Rating entfernt: \(input.lastPathComponent)")
+        return 0
+    }
 
     // If any write flag is present, save and then read back
     if args.ratingSet != nil || args.ratingFlag != nil || args.ratingColor != nil {
@@ -719,8 +729,26 @@ private func runPreset(_ subArgs: [String]) -> Int32 {
             return 1
         }
 
+    case "delete":
+        guard !subArgs.isEmpty else {
+            fputs("Fehler: 'preset delete' benötigt einen Namen\n", stderr)
+            return 1
+        }
+        let nameOrId = subArgs[0]
+        let catalog = CatalogStore(dbPath: envDBPath())
+        let userPresets = catalog.allUserPresets()
+        guard let found = userPresets.first(where: {
+            $0.name.lowercased() == nameOrId.lowercased() || $0.id.uuidString.lowercased() == nameOrId.lowercased()
+        }) else {
+            fputs("Fehler: Nutzer-Preset '\(nameOrId)' nicht gefunden\n", stderr)
+            return 1
+        }
+        catalog.deletePreset(id: found.id)
+        print("Preset gelöscht: \(found.name)")
+        return 0
+
     default:
-        fputs("Fehler: Unbekannter preset-Unterbefehl '\(sub)'. Erlaubt: list, apply\n", stderr)
+        fputs("Fehler: Unbekannter preset-Unterbefehl '\(sub)'. Erlaubt: list, apply, delete\n", stderr)
         return 1
     }
 }

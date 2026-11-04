@@ -2,6 +2,17 @@
 
 ---
 
+## 1.60.0
+**Feature — CLI rating --remove, preset delete + vollständige Testabdeckung für 8 bisher ungetestete Befehle**
+
+- `iphoto-cli rating <datei> --remove` — entfernt Rating, Flag und Farblabel aus dem Katalog
+- `iphoto-cli preset delete <name>` — löscht Nutzer-Presets per Name oder UUID
+- Testabdeckung von 57 auf **103 Tests** ausgebaut: export, info, rating (dediziert), analyse, preset, plugins, viewmode, people (scan/list/faces/cluster) vollständig getestet inkl. Fehlerpfade
+- Performance-Suite von 23 auf **44 Tests** ausgebaut: Sections 12–19 für info, analyse, preset, plugins, rating, trash, motif, people
+- Latenz-Benchmarks für alle bisher ungetesteten CLI-Befehle mit realistischen Schwellwerten
+
+---
+
 ## 1.59.0
 **Feature — Neue CLI-Befehle: smartfolder, stack, trash, people rename + automatisches Test-Logging**
 

@@ -304,6 +304,197 @@ echo ""
 # ===========================================================================
 # Zusammenfassung
 # ===========================================================================
+# ===========================================================================
+# 12. Info-Latenz
+# ===========================================================================
+echo "=== 12. Info-Latenz ==="
+
+THRESHOLD=1500
+T0=$(ms)
+"$BIN" info "$SMALL" > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "info (64×64)" "$ELAPSED"; else fail "info 64×64" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" info "$SMALL" --json > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "info --json" "$ELAPSED"; else fail "info --json" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
+# 13. Analyse-Latenz
+# ===========================================================================
+echo "=== 13. Analyse-Latenz ==="
+
+THRESHOLD=5000
+T0=$(ms)
+"$BIN" analyse "$SMALL" > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "analyse (64×64)" "$ELAPSED"; else fail "analyse 64×64" "$ELAPSED" "$THRESHOLD"; fi
+
+THRESHOLD=8000
+T0=$(ms)
+"$BIN" analyse "$MEDIUM" > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "analyse (512×512)" "$ELAPSED"; else fail "analyse 512×512" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" analyse "$MEDIUM" --json > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "analyse --json (512×512)" "$ELAPSED"; else fail "analyse --json 512×512" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
+# 14. Preset-Latenz
+# ===========================================================================
+echo "=== 14. Preset-Latenz ==="
+
+THRESHOLD=1000
+T0=$(ms)
+"$BIN" preset list > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "preset list" "$ELAPSED"; else fail "preset list" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" preset list --json > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "preset list --json" "$ELAPSED"; else fail "preset list --json" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
+# 15. Plugins-Latenz
+# ===========================================================================
+echo "=== 15. Plugins-Latenz ==="
+
+THRESHOLD=500
+T0=$(ms)
+"$BIN" plugins list > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "plugins list" "$ELAPSED"; else fail "plugins list" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" plugins dir > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "plugins dir" "$ELAPSED"; else fail "plugins dir" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
+# 16. Rating-Operationen-Latenz
+# ===========================================================================
+echo "=== 16. Rating-Operationen-Latenz ==="
+
+THRESHOLD=500
+T0=$(ms)
+"$BIN" rating "$SMALL" --set 3 > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "rating --set" "$ELAPSED"; else fail "rating --set" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" rating "$SMALL" > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "rating (read)" "$ELAPSED"; else fail "rating read" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" rating "$SMALL" --remove > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "rating --remove" "$ELAPSED"; else fail "rating --remove" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
+# 17. Trash-Latenz
+# ===========================================================================
+echo "=== 17. Trash-Latenz ==="
+
+TRASH_FILE="$TMPDIR_BASE/trash_perf.png"
+cp "$SMALL" "$TRASH_FILE"
+"$BIN" quality scan "$TRASH_FILE" > /dev/null 2>&1 || true
+
+THRESHOLD=500
+T0=$(ms)
+"$BIN" trash mark "$TRASH_FILE" > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "trash mark" "$ELAPSED"; else fail "trash mark" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" trash list > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "trash list (1 Eintrag)" "$ELAPSED"; else fail "trash list 1 Eintrag" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" trash restore "$TRASH_FILE" > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "trash restore" "$ELAPSED"; else fail "trash restore" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
+# 18. Motif-Latenz
+# ===========================================================================
+echo "=== 18. Motif-Latenz ==="
+
+THRESHOLD=1500
+T0=$(ms)
+"$BIN" motif get "$SMALL" > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "motif get (64×64)" "$ELAPSED"; else fail "motif get 64×64" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" motif get "$SMALL" --json > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "motif get --json" "$ELAPSED"; else fail "motif get --json" "$ELAPSED" "$THRESHOLD"; fi
+
+# version list/delete latency
+THRESHOLD=500
+T0=$(ms)
+"$BIN" version list "$VCOPY" > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "version list" "$ELAPSED"; else fail "version list" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
+# 19. People-Latenz
+# ===========================================================================
+echo "=== 19. People-Latenz ==="
+
+THRESHOLD=5000
+T0=$(ms)
+"$BIN" people scan "$SMALL" > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "people scan (64×64)" "$ELAPSED"; else fail "people scan 64×64" "$ELAPSED" "$THRESHOLD"; fi
+
+THRESHOLD=500
+T0=$(ms)
+"$BIN" people list > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "people list" "$ELAPSED"; else fail "people list" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" people faces > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "people faces" "$ELAPSED"; else fail "people faces" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
 echo "=============================="
 echo "Leistungstest: $PASS bestanden, $FAIL fehlgeschlagen"
 echo "=============================="
