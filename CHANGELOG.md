@@ -2,6 +2,13 @@
 
 ---
 
+## 1.58.1
+**Bugfix — run_catalog.sh: fehlende Quelldateien ergänzt**
+
+- Catalog-Test schlug fehl, weil `CatalogStore.swift` inzwischen `SmartFolder`, `FaceRecord`, `ImageDocument` und verwandte Typen referenziert — alle fehlenden Sources und `-framework AppKit` zur Kompilierung ergänzt; 39/39 Tests grün
+
+---
+
 ## 1.58.0
 **Feature — Vollständige CLI-Abdeckung (≥75%) + Leistungstests**
 
