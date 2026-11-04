@@ -658,8 +658,11 @@ struct NavSidebarView: View {
                     .foregroundColor(.secondary)
             }
         } else if images.count == 1 {
-            Image(nsImage: images[0]).resizable().scaledToFill().clipped()
-                .background(Color(NSColor.separatorColor).opacity(0.3))
+            GeometryReader { geo in
+                Image(nsImage: images[0]).resizable().scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height).clipped()
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
         } else {
             GeometryReader { geo in
                 let half = geo.size.width / 2

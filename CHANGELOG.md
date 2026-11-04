@@ -2,6 +2,13 @@
 
 ---
 
+## 1.54.1
+**Bugfix — Album-Cover-Thumbnails korrekt quadratisch (GeometryReader)**
+
+- Single-Cover-Thumbnails in Album-Grid, Sidebar und Banner-Ansicht nutzen jetzt `GeometryReader` mit explizitem `.frame(width:height:)` — `scaledToFill()` bricht nicht mehr aus dem quadratischen Layout aus
+
+---
+
 ## 1.54.0
 **Feature — ELO-Kurve im Bildvergleich-Panel + Ähnliche Bilder als Plugin + Album-Thumbnails quadratisch**
 

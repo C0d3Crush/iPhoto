@@ -236,11 +236,14 @@ struct LibraryGridCell: View {
                     .foregroundColor(.secondary)
             }
         } else if coverImages.count == 1 {
-            Image(nsImage: coverImages[0])
-                .resizable()
-                .scaledToFill()
-                .clipped()
-                .background(Color(NSColor.separatorColor).opacity(0.3))
+            GeometryReader { geo in
+                Image(nsImage: coverImages[0])
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
         } else {
             GeometryReader { geo in
                 let half = geo.size.width / 2
@@ -374,11 +377,14 @@ private struct SmartFolderGridCell: View {
                     .font(.system(size: 28)).foregroundColor(.secondary)
             }
         } else if coverImages.count == 1 {
-            Image(nsImage: coverImages[0])
-                .resizable()
-                .scaledToFill()
-                .clipped()
-                .background(Color(NSColor.separatorColor).opacity(0.3))
+            GeometryReader { geo in
+                Image(nsImage: coverImages[0])
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
         } else {
             GeometryReader { geo in
                 let half = geo.size.width / 2
@@ -502,11 +508,18 @@ private struct AlbumGridCell: View {
                     .foregroundColor(.secondary)
             }
         } else if coverImages.count == 1 {
-            Group {
-                if let img = coverImages[0] {
-                    Image(nsImage: img).resizable().scaledToFill().clipped()
-                } else {
-                    Color(NSColor.separatorColor).opacity(0.3)
+            GeometryReader { geo in
+                Group {
+                    if let img = coverImages[0] {
+                        Image(nsImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
+                    } else {
+                        Color(NSColor.separatorColor).opacity(0.3)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                    }
                 }
             }
             .background(Color(NSColor.separatorColor).opacity(0.3))
