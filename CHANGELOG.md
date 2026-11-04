@@ -2,6 +2,16 @@
 
 ---
 
+## 1.56.4
+**Bugfix — Epsilon 0.10, Same-Person-Tests (T4c), verlässliche Cross-Person-Paare**
+
+- Epsilon 0.08 → 0.10: gleiche Personen in verschiedenen Fotos (z.B. chaplin_1+2 mit Distanz 0.097) werden jetzt korrekt zusammengefasst
+- `Tests/test_faces.sh` T4c neu: prüft chaplin_1+chaplin_2 → gleiche Gruppe; FAIL wenn dieselbe Person getrennt auftaucht
+- T5b auf einstein≠curie (Distanz 0.25) umgestellt — Chaplin vs Curie lag in der Overlap-Zone der historischen S/W-Fotos und war kein verlässlicher Testfall (DBSCAN-Chaining via chaplin_2 als Brückenpunkt)
+- T7b/c/d: Standard-Epsilon-Check prüft jetzt sowohl Same-Person als auch Cross-Person
+
+---
+
 ## 1.56.3
 **Bugfix — Epsilon auf 0.08 gesenkt, Cross-Person-Tests ergänzt**
 
