@@ -483,6 +483,10 @@ private struct ToolbarEntry: Identifiable, Hashable {
         ToolbarEntry(id: "nav.inspector",  icon: "sidebar.right",         label: "Inspector",           visibilityKey: "navtoolbar.showInspector"),
         ToolbarEntry(id: "nav.sort",       icon: "arrow.up.arrow.down",   label: "Sortierung (Grid)",   visibilityKey: "navtoolbar.showSort"),
         ToolbarEntry(id: "nav.slider",     icon: "slider.horizontal.3",   label: "Rastergröße-Slider",  visibilityKey: "navtoolbar.showSlider"),
+        ToolbarEntry(id: "nav.share",      icon: "square.and.arrow.up",   label: "Teilen",              visibilityKey: "navtoolbar.showShare"),
+        ToolbarEntry(id: "nav.tag",        icon: "tag",                   label: "Farblabel",           visibilityKey: "navtoolbar.showTag"),
+        ToolbarEntry(id: "nav.more",       icon: "ellipsis.circle",       label: "Weitere Aktionen",    visibilityKey: "navtoolbar.showMore"),
+        ToolbarEntry(id: "nav.search",     icon: "magnifyingglass",       label: "Suche",               visibilityKey: "navtoolbar.showSearch"),
     ]
 
     static var allActionItems: [ToolbarEntry] {

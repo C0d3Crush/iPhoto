@@ -2,6 +2,18 @@
 
 ---
 
+## 1.75.0
+**Feature — Toolbar-Icons, Intelligente Suche in Toolbar, Dichtes Raster mit Jahresgruppen**
+
+- Toolbar-Icons Teilen (`↑`), Farblabel (`tag`), Weitere Aktionen (`...`) und Suche (`🔍`) hinzugefügt — alle ein-/ausblendbar über Einstellungen → Toolbar
+- Intelligente Suche in der Toolbar: Autocomplete-Dropdown mit Filter-Schlüsseln (`flag:`, `rating:`, `kamera:` etc.), Wert-Vorschläge, Dateiname-Vorschläge und entfernbare Filter-Chips (wie früher in der Seitenleiste)
+- Dichtes Raster: Schieberegler von 80–400 px auf 22–400 px erweitert — Apple-Photos-Stil mit sehr kleinen Thumbnails
+- Raster nach Jahr gruppiert (EXIF-Datum) mit klebenden Jahres-Überschriften und dynamischem Zeilenabstand (1–8 px je nach Größe)
+- Statusleiste im Raster: Anzahl Fotos und Videos
+- Log/Konsole-Panel mit Einklappen-Schaltfläche (`⌃`) in der Tab-Leiste
+
+---
+
 ## 1.74.0
 **Feature — rating batch-set, export --list-formats, catalog scan-needed, Edge-Case-Fixes, 240 CLI-Tests**
 

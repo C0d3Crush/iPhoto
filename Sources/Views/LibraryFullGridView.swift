@@ -1,14 +1,56 @@
 import SwiftUI
 import AppKit
 
+private struct YearGroup: Identifiable {
+    let year: String
+    let documents: [ImageDocument]
+    var id: String { year }
+}
+
 struct LibraryFullGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
+    private var cellSpacing: CGFloat { viewModel.gridThumbnailSize < 50 ? 1 : (viewModel.gridThumbnailSize < 100 ? 4 : 8) }
     private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: viewModel.gridThumbnailSize + 8))]
+        let sp = cellSpacing
+        return [GridItem(.adaptive(minimum: viewModel.gridThumbnailSize + sp))]
     }
     private var cellWidth: CGFloat { viewModel.gridThumbnailSize }
     @StateObject private var scroller = AppKitScroller()
+
+    private var yearGroups: [YearGroup] {
+        var grouped: [String: [ImageDocument]] = [:]
+        for doc in viewModel.visibleDocuments {
+            let year: String
+            if let val = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value,
+               val.count >= 4, let y = Int(val.prefix(4)), y > 1800 {
+                year = String(y)
+            } else {
+                year = "Ohne Datum"
+            }
+            grouped[year, default: []].append(doc)
+        }
+        let sorted = grouped.keys.sorted { a, b in
+            if a == "Ohne Datum" { return false }
+            if b == "Ohne Datum" { return true }
+            return a > b
+        }
+        return sorted.map { YearGroup(year: $0, documents: grouped[$0]!) }
+    }
+
+    private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv"]
+
+    private var statusText: String {
+        let docs = viewModel.visibleDocuments
+        let vidCount = docs.filter { Self.videoExtensions.contains($0.url.pathExtension.lowercased()) }.count
+        let photoCount = docs.count - vidCount
+        let fmt = NumberFormatter()
+        fmt.numberStyle = .decimal
+        fmt.groupingSeparator = "."
+        let ps = fmt.string(from: NSNumber(value: photoCount)) ?? "\(photoCount)"
+        let vs = fmt.string(from: NSNumber(value: vidCount)) ?? "\(vidCount)"
+        return vidCount > 0 ? "\(ps) Fotos, \(vs) Videos · Gerade aktualisiert" : "\(ps) Fotos · Gerade aktualisiert"
+    }
 
     private var isAlbumContext: Bool {
         switch viewModel.navSelection {
@@ -41,39 +83,52 @@ struct LibraryFullGridView: View {
                             .environmentObject(viewModel)
                         Divider()
                     }
-                    ScrollView {
-                        if case .eloRange(let lo, let hi) = viewModel.navSelection {
-                            eloRangeBanner(lo: lo, hi: hi)
-                        }
-                        LazyVGrid(columns: columns, spacing: 8) {
-                            ForEach(viewModel.visibleDocuments, id: \.id) { doc in
-                                let idx = viewModel.collectionIndex(for: doc) ?? 0
-                                let isSel = viewModel.collection.selectedIndices.contains(idx)
-                                let q = viewModel.qualityFlags(for: doc)
-                                ThumbnailCell(document: doc, isSelected: isSel, thumbnailWidth: cellWidth,
-                                              stackCount: viewModel.stackCounts[doc.id] ?? 0,
-                                              isStackExpanded: viewModel.isStackExpanded(doc),
-                                              isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
-                                              onStackToggle: { viewModel.toggleStack(leader: doc) },
-                                              isBlurry: q.blur, isUnder: q.under, isOver: q.over,
-                                              isEyesClosed: q.eyes,
-                                              isBestInStack: viewModel.bestInStackIDs.contains(doc.id))
-                                    .frame(width: cellWidth + 8)
-                                    .contentShape(Rectangle())
-                                    .onAppear { viewModel.requestVisibleThumbnail(at: idx) }
-                                    .onTapGesture(count: 2) { openDetail(at: idx) }
-                                    .onTapGesture { handleTap(at: idx) }
-                                    .contextMenu { ThumbnailContextMenu(doc: doc).environmentObject(viewModel) }
-                                    .onDrag { NSItemProvider(object: doc.url as NSURL) }
+                    VStack(spacing: 0) {
+                        ScrollView {
+                            if case .eloRange(let lo, let hi) = viewModel.navSelection {
+                                eloRangeBanner(lo: lo, hi: hi)
+                            }
+                            let sp = cellSpacing
+                            let useYears = yearGroups.count > 1 || (yearGroups.count == 1 && yearGroups[0].year != "Ohne Datum")
+                            if useYears {
+                                LazyVGrid(columns: columns, spacing: sp, pinnedViews: [.sectionHeaders]) {
+                                    ForEach(yearGroups) { group in
+                                        Section(header: yearSectionHeader(group.year)) {
+                                            ForEach(group.documents, id: \.id) { doc in
+                                                thumbnailCell(doc)
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(cellWidth < 50 ? 4 : 12)
+                                .frame(maxWidth: .infinity)
+                                .background(ScrollViewGrabber(scroller: scroller))
+                            } else {
+                                LazyVGrid(columns: columns, spacing: sp) {
+                                    ForEach(viewModel.visibleDocuments, id: \.id) { doc in
+                                        thumbnailCell(doc)
+                                    }
+                                }
+                                .padding(cellWidth < 50 ? 4 : 12)
+                                .frame(maxWidth: .infinity)
+                                .background(ScrollViewGrabber(scroller: scroller))
                             }
                         }
-                        .padding(12)
-                        .frame(maxWidth: .infinity)
-                        .background(ScrollViewGrabber(scroller: scroller))
-                    }
-                    .background(Color(NSColor.windowBackgroundColor))
-                    .onChange(of: viewModel.collection.currentIndex) { _ in
-                        scrollToCurrent()
+                        .background(Color(NSColor.windowBackgroundColor))
+                        .onChange(of: viewModel.collection.currentIndex) { _ in
+                            scrollToCurrent()
+                        }
+
+                        Divider()
+                        HStack {
+                            Spacer()
+                            Text(statusText)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .padding(.vertical, 5)
+                        .background(Color(NSColor.windowBackgroundColor))
                     }
                 }
             }
@@ -92,7 +147,7 @@ struct LibraryFullGridView: View {
                         Image(systemName: "square.grid.3x3")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
-                        Slider(value: $viewModel.gridThumbnailSize, in: 80...400, step: 10)
+                        Slider(value: $viewModel.gridThumbnailSize, in: 22...400, step: 2)
                             .frame(width: 120)
                         Image(systemName: "square.grid.2x2")
                             .font(.system(size: 10))
@@ -104,6 +159,40 @@ struct LibraryFullGridView: View {
         }
     }
 
+    @ViewBuilder
+    private func thumbnailCell(_ doc: ImageDocument) -> some View {
+        let idx = viewModel.collectionIndex(for: doc) ?? 0
+        let isSel = viewModel.collection.selectedIndices.contains(idx)
+        let q = viewModel.qualityFlags(for: doc)
+        ThumbnailCell(document: doc, isSelected: isSel, thumbnailWidth: cellWidth,
+                      stackCount: viewModel.stackCounts[doc.id] ?? 0,
+                      isStackExpanded: viewModel.isStackExpanded(doc),
+                      isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
+                      onStackToggle: { viewModel.toggleStack(leader: doc) },
+                      isBlurry: q.blur, isUnder: q.under, isOver: q.over,
+                      isEyesClosed: q.eyes,
+                      isBestInStack: viewModel.bestInStackIDs.contains(doc.id))
+            .frame(width: cellWidth + cellSpacing)
+            .contentShape(Rectangle())
+            .onAppear { viewModel.requestVisibleThumbnail(at: idx) }
+            .onTapGesture(count: 2) { openDetail(at: idx) }
+            .onTapGesture { handleTap(at: idx) }
+            .contextMenu { ThumbnailContextMenu(doc: doc).environmentObject(viewModel) }
+            .onDrag { NSItemProvider(object: doc.url as NSURL) }
+    }
+
+    private func yearSectionHeader(_ year: String) -> some View {
+        HStack {
+            Text(year)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary)
+            Spacer()
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 5)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.95))
+    }
+
     // Kein ScrollViewProxy.scrollTo: hinterlässt auf macOS 11 ein persistentes
     // Scroll-Ziel, das nach Layout-Neuaufbau crasht (Bug #31) — AppKit-Scroll.
     private func scrollToCurrent() {
@@ -111,8 +200,8 @@ struct LibraryFullGridView: View {
               let pos = viewModel.visiblePosition(for: cur.id) else { return }
         let count = viewModel.visibleDocuments.count
         let clipWidth = scroller.scrollView?.contentView.bounds.width ?? 0
-        let itemWidth = cellWidth + 8
-        let colSpacing: CGFloat = 8
+        let itemWidth = cellWidth + cellSpacing
+        let colSpacing = cellSpacing
         let cols = max(1, Int((clipWidth - 24 + colSpacing) / (itemWidth + colSpacing)))
         viewModel.gridColumnCount = cols
         scroller.centerRow(position: pos, count: count, columns: cols, verticalPadding: 12)

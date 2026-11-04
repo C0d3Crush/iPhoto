@@ -93,11 +93,9 @@ struct NavSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search + expand button row
+            // Expand button row
             HStack(spacing: 0) {
-                SearchBarView(query: $viewModel.searchQuery)
-                    .environmentObject(viewModel)
-                    .frame(maxWidth: .infinity)
+                Spacer()
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.sidebarAlbumExpanded.toggle()
@@ -1391,6 +1389,18 @@ struct VerboseLogView: View {
                     geekTabButton(tab: .log,     icon: "ant",      label: "Log")
                     geekTabButton(tab: .console, icon: "terminal", label: "Konsole")
                     Spacer()
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+                    }) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(isExpanded ? "Einklappen" : "Ausklappen")
                 }
                 .background(Color(NSColor.windowBackgroundColor))
 
