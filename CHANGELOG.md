@@ -2,6 +2,15 @@
 
 ---
 
+## 1.53.0
+**Feature — Album-Verbesserungen: quadratisches Cover, Informationen in Sidebar, + in Albenansicht**
+
+- Album-Cover mit einem einzelnen Bild bleibt jetzt korrekt quadratisch (`.clipped()` in allen Mosaic-Views)
+- „Informationen…" ist jetzt auch im Rechtsklick-Menü der Sidebar-Alben verfügbar
+- In der Albenansicht (Grid) haben die Abschnitte „Alben" und „iAlben" jetzt einen +-Button zum Erstellen
+
+---
+
 ## 1.52.2
 **Bugfix — Bildvergleich wartet auf beide Bilder**
 

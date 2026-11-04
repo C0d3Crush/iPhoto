@@ -3,6 +3,9 @@ import AppKit
 
 struct AlbumGridExpandedView: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @State private var showCreateAlbum = false
+    @State private var newAlbumName = ""
+    @State private var smartFolderSheetItem: SmartFolderSheetItem? = nil
 
     private let columns = [
         GridItem(.adaptive(minimum: 110, maximum: 160), spacing: 12)
@@ -60,7 +63,12 @@ struct AlbumGridExpandedView: View {
 
                         // Regular albums
                         if !viewModel.library.albums.isEmpty {
-                            gridSectionHeader("Alben", icon: "rectangle.stack")
+                            gridSectionHeader("Alben", icon: "rectangle.stack") {
+                                Button(action: { showCreateAlbum = true }) {
+                                    Image(systemName: "plus").font(.caption)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(viewModel.library.albums) { album in
                                     AlbumGridCell(album: album)
@@ -72,7 +80,12 @@ struct AlbumGridExpandedView: View {
 
                         // Smart folders
                         if !viewModel.library.smartFolders.isEmpty {
-                            gridSectionHeader("iAlben", icon: "folder.badge.gearshape")
+                            gridSectionHeader("iAlben", icon: "folder.badge.gearshape") {
+                                Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
+                                    Image(systemName: "plus").font(.caption)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(viewModel.library.smartFolders) { sf in
                                     SmartFolderGridCell(smartFolder: sf)
@@ -123,17 +136,37 @@ struct AlbumGridExpandedView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
+        .sheet(isPresented: $showCreateAlbum) {
+            AlbumNameSheet(
+                title: "Neues Album",
+                placeholder: "Albumname",
+                confirmLabel: "Erstellen",
+                name: $newAlbumName,
+                isPresented: $showCreateAlbum
+            ) { name in viewModel.createAlbum(name: name) }
+        }
+        .sheet(item: $smartFolderSheetItem) { item in
+            SmartFolderSheet(editing: item.folder)
+                .environmentObject(viewModel)
+        }
     }
 }
 
 // MARK: - Section Header / Nav Row helpers
 
 private func gridSectionHeader(_ title: String, icon: String? = nil) -> some View {
+    gridSectionHeader(title, icon: icon, trailing: { EmptyView() })
+}
+
+private func gridSectionHeader<Trailing: View>(_ title: String, icon: String? = nil,
+                                               @ViewBuilder trailing: () -> Trailing) -> some View {
     HStack(spacing: 6) {
         if let icon = icon {
             Image(systemName: icon).font(.caption).foregroundColor(.secondary)
         }
         Text(title).font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary)
+        Spacer()
+        trailing().foregroundColor(.secondary)
     }
     .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
 }
@@ -206,6 +239,7 @@ struct LibraryGridCell: View {
             Image(nsImage: coverImages[0])
                 .resizable()
                 .scaledToFill()
+                .clipped()
                 .background(Color(NSColor.separatorColor).opacity(0.3))
         } else {
             GeometryReader { geo in
@@ -343,6 +377,7 @@ private struct SmartFolderGridCell: View {
             Image(nsImage: coverImages[0])
                 .resizable()
                 .scaledToFill()
+                .clipped()
                 .background(Color(NSColor.separatorColor).opacity(0.3))
         } else {
             GeometryReader { geo in

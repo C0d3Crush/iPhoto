@@ -947,7 +947,7 @@ struct AlbumBannerView: View {
                     .font(.system(size: 32)).foregroundColor(.secondary)
             }
         } else if images.count == 1 {
-            Image(nsImage: images[0]).resizable().scaledToFill()
+            Image(nsImage: images[0]).resizable().scaledToFill().clipped()
                 .background(Color(NSColor.separatorColor).opacity(0.3))
         } else {
             GeometryReader { geo in

@@ -60,6 +60,7 @@ struct NavSidebarView: View {
     @State private var newAlbumName = ""
     @State private var renamingAlbum: Album? = nil
     @State private var renameText = ""
+    @State private var albumDetailItem: Album? = nil
     @State private var smartFolderSheetItem: SmartFolderSheetItem? = nil
     @State private var albumsCollapsed = false
     @State private var smartFoldersCollapsed = false
@@ -167,6 +168,13 @@ struct NavSidebarView: View {
         }
         .frame(maxWidth: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
+        .sheet(item: $albumDetailItem) { album in
+            AlbumDetailSheet(album: album, isPresented: Binding(
+                get: { albumDetailItem != nil },
+                set: { if !$0 { albumDetailItem = nil } }
+            ))
+            .environmentObject(viewModel)
+        }
         .sheet(item: $smartFolderSheetItem) { item in
             SmartFolderSheet(editing: item.folder)
                 .environmentObject(viewModel)
@@ -304,6 +312,8 @@ struct NavSidebarView: View {
                     .environmentObject(viewModel)
                     .contextMenu {
                         if !multiSel {
+                            Button("Informationen…") { albumDetailItem = album }
+                            Divider()
                             Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
                             Divider()
                         }
@@ -673,7 +683,7 @@ struct NavSidebarView: View {
                     .foregroundColor(.secondary)
             }
         } else if images.count == 1 {
-            Image(nsImage: images[0]).resizable().scaledToFill()
+            Image(nsImage: images[0]).resizable().scaledToFill().clipped()
                 .background(Color(NSColor.separatorColor).opacity(0.3))
         } else {
             GeometryReader { geo in
@@ -1193,7 +1203,7 @@ private struct VolumeRow: View {
     }
 }
 
-private struct AlbumNameSheet: View {
+struct AlbumNameSheet: View {
     let title: String
     let placeholder: String
     let confirmLabel: String
