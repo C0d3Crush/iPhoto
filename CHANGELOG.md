@@ -2,6 +2,14 @@
 
 ---
 
+## 1.48.1
+**Bugfix — Backup-Einträge im Kontextmenü umbenannt**
+
+- „Als JPEG sichern" → „Als Backup sichern"
+- „Sichern & Original in Papierkorb" → „Als Backup sichern & Original in Papierkorb"
+
+---
+
 ## 1.48.0
 **Feature — Pfeil­tasten­navigation + Shift-Mehrfachauswahl in Grid-Views**
 
