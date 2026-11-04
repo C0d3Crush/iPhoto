@@ -10,7 +10,7 @@ private struct YearGroup: Identifiable {
 struct LibraryFullGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
-    private var cellSpacing: CGFloat { viewModel.gridThumbnailSize < 50 ? 1 : (viewModel.gridThumbnailSize < 100 ? 4 : 8) }
+    private var cellSpacing: CGFloat { viewModel.gridThumbnailSize < 60 ? 0 : (viewModel.gridThumbnailSize < 100 ? 4 : 8) }
     private var columns: [GridItem] {
         let sp = cellSpacing
         return [GridItem(.adaptive(minimum: viewModel.gridThumbnailSize + sp))]
@@ -94,16 +94,18 @@ struct LibraryFullGridView: View {
                             VStack(alignment: .leading, spacing: 0) {
                                 if useYears {
                                     ForEach(yearGroups) { group in
-                                        yearSectionHeader(group.year)
-                                            .padding(.horizontal, pad)
-                                            .padding(.top, pad)
+                                        if pad > 0 {
+                                            yearSectionHeader(group.year)
+                                                .padding(.horizontal, pad)
+                                                .padding(.top, pad)
+                                        }
                                         LazyVGrid(columns: columns, spacing: sp) {
                                             ForEach(group.documents, id: \.id) { doc in
                                                 thumbnailCell(doc)
                                             }
                                         }
                                         .padding(.horizontal, pad)
-                                        .padding(.bottom, sp)
+                                        .padding(.bottom, sp > 0 ? sp : 0)
                                     }
                                 } else {
                                     LazyVGrid(columns: columns, spacing: sp) {

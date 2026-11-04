@@ -27,7 +27,7 @@ struct ThumbnailCell: View {
 
     private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
     private var showDetails: Bool { thumbnailWidth >= 60 }
-    private var cornerR: CGFloat { thumbnailWidth < 40 ? 2 : 4 }
+    private var cornerR: CGFloat { showDetails ? 4 : 0 }
 
     var body: some View {
         if showDetails {
@@ -134,7 +134,7 @@ struct ThumbnailCell: View {
                     .strokeBorder(Color.accentColor, lineWidth: 1.5)
             }
         }
-        .aspectRatio(3/2, contentMode: .fit)
+        .aspectRatio(1, contentMode: .fit)
     }
 
     private func qualityBadge(system: String, color: Color) -> some View {
