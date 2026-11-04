@@ -2,6 +2,16 @@
 
 ---
 
+## 1.75.2
+**Bugfix — Kein automatisches Thumbnail-Laden mehr**
+
+- Thumbnail-Laden läuft nicht mehr automatisch beim Import, Speichern oder Ordner-Scan
+- Fortschrittsanzeige „Lade Thum..." aus der Seitenleiste entfernt
+- Neuer Button „Thumbs laden" im For-Geeks-Panel (Log/Konsole-Tab muss aktiviert sein) — Thumbnails werden nur auf explizite Anfrage generiert
+- On-Demand-Laden beim Scrollen durch das Raster bleibt aktiv
+
+---
+
 ## 1.75.0
 **Feature — Toolbar-Icons, Intelligente Suche in Toolbar, Dichtes Raster mit Jahresgruppen**
 

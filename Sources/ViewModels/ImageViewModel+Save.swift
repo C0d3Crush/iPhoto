@@ -56,7 +56,6 @@ extension ImageViewModel {
         }
         loadVersionsForCurrentImage()
         loadCurrentImage()
-        loadThumbnails()
     }
 
     // MARK: - Save Adjusted Image to File
@@ -92,7 +91,6 @@ extension ImageViewModel {
                 self.adj.adjustedImage = nil
                 self.adj.displayImageVersion = UUID()
                 self.loadVersionsForCurrentImage()
-                self.loadThumbnails()
             }
         }
     }

@@ -27,6 +27,7 @@ class ImageViewModel: ObservableObject {
     @Published var navSelection: NavSelection? = .library
     @Published var searchQuery: String = ""
     @Published var searchResultSummary: String? = nil
+    @Published var toolbarSearchVisible: Bool = false
     var searchStartTime: Date? = nil
     @Published var showingLibraryDetail: Bool = false
     @Published var showFullGrid: Bool = false
@@ -298,7 +299,6 @@ class ImageViewModel: ObservableObject {
                     self.loadCurrentImage()
                 }
                 self.evictDistantImages()
-                self.loadThumbnails()
             }
             .store(in: &cancellables)
 
@@ -600,7 +600,6 @@ class ImageViewModel: ObservableObject {
             loadCurrentImage()
         }
         let metaURLs = newDocs.map { $0.url }
-        activity.enqueueWork { [weak self] in self?.loadThumbnails() }
         activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
         activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
         activity.enqueueWork { [weak self] in self?.scanQualityForLibrary() }

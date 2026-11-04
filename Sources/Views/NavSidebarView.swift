@@ -148,28 +148,8 @@ struct NavSidebarView: View {
                 .padding(.trailing, 12)
             }
 
-            if !viewModel.activity.loadingQueue.isEmpty {
-                Divider()
-                LoadingBar(activity: viewModel.activity)
-            } else if let summary = viewModel.activity.loadingSummary {
-                Divider()
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle")
-                        .font(.system(size: 10))
-                        .foregroundColor(.green)
-                    Text(summary)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                    Spacer()
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.windowBackgroundColor))
-                .transition(.opacity)
-            }
-
             VerboseLogView()
+                .environmentObject(viewModel)
         }
         .frame(maxWidth: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
@@ -1376,6 +1356,7 @@ private struct GroupRenameSheet: View {
 private enum GeekTab { case log, console }
 
 struct VerboseLogView: View {
+    @EnvironmentObject var viewModel: ImageViewModel
     @AppStorage("settings.geekMode") private var geekMode = false
     @State private var activeTab: GeekTab = .log
     @State private var isExpanded = false
@@ -1388,6 +1369,19 @@ struct VerboseLogView: View {
                 HStack(spacing: 0) {
                     geekTabButton(tab: .log,     icon: "ant",      label: "Log")
                     geekTabButton(tab: .console, icon: "terminal", label: "Konsole")
+                    Divider().frame(height: 14).padding(.horizontal, 4)
+                    Button(action: { viewModel.loadThumbnails() }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "photo.stack").font(.system(size: 9))
+                            Text("Thumbs laden").font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Alle Thumbnails jetzt generieren")
                     Spacer()
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }

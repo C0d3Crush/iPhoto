@@ -145,9 +145,6 @@ extension ImageViewModel {
                         self.activity.completedImports.insert(folderID)
                     }
                 }
-                if self.activity.importProgress.isEmpty {
-                    self.loadThumbnails()
-                }
             }
         }
     }

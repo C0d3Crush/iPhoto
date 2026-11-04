@@ -26,7 +26,6 @@ extension ImageViewModel {
                     .map { ImageDocument(url: $0) }
                 if !newDocs.isEmpty {
                     self.collection.appendDocuments(newDocs)
-                    self.loadThumbnails()
                 }
             }
 
