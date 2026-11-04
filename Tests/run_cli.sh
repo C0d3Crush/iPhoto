@@ -300,13 +300,24 @@ SDATE_JSON=$("$BIN" search --date "2024" --json 2>&1)
 if echo "$SDATE_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
     pass "search --date --json (valides JSON-Array)"; else fail "search --date --json" "$SDATE_JSON"; fi
 
-# search --rating Grenzen: 0 und 5 sind gültig, >5 sollte Exitcode 0 (leeres Ergebnis) liefern
-SRATING_ZERO=$("$BIN" search --rating 0 2>&1)
-if [ $? -eq 0 ]; then pass "search --rating 0 (Exitcode 0)"; else fail "search --rating 0" "$SRATING_ZERO"; fi
+# search --rating Grenzen
+SRATING_ZERO_EC=0; SRATING_ZERO=$("$BIN" search --rating 0 2>&1) || SRATING_ZERO_EC=$?
+if [ $SRATING_ZERO_EC -eq 0 ]; then pass "search --rating 0 (Exitcode 0)"; else fail "search --rating 0" "$SRATING_ZERO"; fi
 
-# search --rating 5 (Maximalwert)
-SRATING_MAX=$("$BIN" search --rating 5 2>&1)
-if [ $? -eq 0 ]; then pass "search --rating 5 (Exitcode 0)"; else fail "search --rating 5" "$SRATING_MAX"; fi
+SRATING_MAX_EC=0; SRATING_MAX=$("$BIN" search --rating 5 2>&1) || SRATING_MAX_EC=$?
+if [ $SRATING_MAX_EC -eq 0 ]; then pass "search --rating 5 (Exitcode 0)"; else fail "search --rating 5" "$SRATING_MAX"; fi
+
+# search --rating Ungültig (> 5) → Fehler
+SRATING_OOB_EXIT=0; "$BIN" search --rating 6 > /dev/null 2>&1 || SRATING_OOB_EXIT=$?
+if [ $SRATING_OOB_EXIT -ne 0 ]; then pass "search --rating 6 schlägt fehl (Validierung)"; else fail "search --rating 6" "Exitcode 0 — Validierung fehlt"; fi
+
+# search --flag ungültig → Fehler
+SFLAG_INV_EXIT=0; "$BIN" search --flag "invalid_flag" > /dev/null 2>&1 || SFLAG_INV_EXIT=$?
+if [ $SFLAG_INV_EXIT -ne 0 ]; then pass "search --flag invalid schlägt fehl (Validierung)"; else fail "search --flag invalid" "Exitcode 0 — Validierung fehlt"; fi
+
+# search --color ungültig → Fehler
+SCOLOR_INV_EXIT=0; "$BIN" search --color "purple" > /dev/null 2>&1 || SCOLOR_INV_EXIT=$?
+if [ $SCOLOR_INV_EXIT -ne 0 ]; then pass "search --color purple schlägt fehl (Validierung)"; else fail "search --color purple" "Exitcode 0 — Validierung fehlt"; fi
 
 # search ohne Argumente → Exitcode != 0
 SEMPTY_EXIT=0; "$BIN" search > /dev/null 2>&1 || SEMPTY_EXIT=$?
@@ -967,6 +978,55 @@ if [ $INPAINT_EXIT2 -ne 0 ]; then pass "inpaint ohne --output (Fehler korrekt)";
 
 INPAINT_EXIT3=0; "$BIN" inpaint "/nicht/vorhanden.png" --output "$TMPDIR_BASE/x.png" > /dev/null 2>&1 || INPAINT_EXIT3=$?
 if [ $INPAINT_EXIT3 -ne 0 ]; then pass "inpaint nicht-existente Datei (Fehler korrekt)"; else fail "inpaint nicht-existente Datei" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# elo
+# ===========================================================================
+echo "=== elo ==="
+
+# elo list leer
+ELO_LIST=$("$BIN" elo list 2>&1)
+if [ $? -eq 0 ]; then pass "elo list (Exitcode 0)"; else fail "elo list" "$ELO_LIST"; fi
+
+ELO_LIST_JSON=$("$BIN" elo list --json 2>&1)
+if echo "$ELO_LIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "elo list --json (JSON-Array)"; else fail "elo list --json" "$ELO_LIST_JSON"; fi
+
+# elo get (kein Eintrag)
+ELO_GET_EC=0; ELO_GET=$("$BIN" elo get "$INPUT" 2>&1) || ELO_GET_EC=$?
+if [ $ELO_GET_EC -eq 0 ]; then pass "elo get (Exitcode 0, kein Eintrag)"; else fail "elo get" "$ELO_GET"; fi
+
+ELO_GET_JSON_EC=0; ELO_GET_JSON=$("$BIN" elo get "$INPUT" --json 2>&1) || ELO_GET_JSON_EC=$?
+if echo "$ELO_GET_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'elo' in d" 2>/dev/null; then
+    pass "elo get --json (JSON mit 'elo'-Schlüssel)"; else fail "elo get --json" "$ELO_GET_JSON"; fi
+
+# elo set
+ELO_SET=$("$BIN" elo set "$INPUT" 1200 2>&1)
+if echo "$ELO_SET" | grep -qE "gesetzt|ELO"; then pass "elo set (Meldung)"; else fail "elo set" "$ELO_SET"; fi
+
+ELO_SET_JSON=$("$BIN" elo set "$INPUT" 1350 --json 2>&1)
+if echo "$ELO_SET_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "elo set --json (ok=true)"; else fail "elo set --json" "$ELO_SET_JSON"; fi
+
+# elo get nach set
+ELO_AFTER_EC=0; ELO_AFTER=$("$BIN" elo get "$INPUT" --json 2>&1) || ELO_AFTER_EC=$?
+if echo "$ELO_AFTER" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['elo']==1350.0" 2>/dev/null; then
+    pass "elo get nach set (ELO=1350)"; else fail "elo get nach set" "$ELO_AFTER"; fi
+
+# elo list nach set
+ELO_LIST2=$("$BIN" elo list --json 2>&1)
+if echo "$ELO_LIST2" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert len(lst)>=1" 2>/dev/null; then
+    pass "elo list --json nach set (nicht leer)"; else fail "elo list nach set" "$ELO_LIST2"; fi
+
+# elo set ohne Argumente → Fehler
+ELO_SET_EMPTY=0; "$BIN" elo set > /dev/null 2>&1 || ELO_SET_EMPTY=$?
+if [ $ELO_SET_EMPTY -ne 0 ]; then pass "elo set ohne Argumente (Fehler korrekt)"; else fail "elo set ohne Argumente" "Exitcode 0"; fi
+
+# elo get ohne Argumente → Fehler
+ELO_GET_EMPTY=0; "$BIN" elo get > /dev/null 2>&1 || ELO_GET_EMPTY=$?
+if [ $ELO_GET_EMPTY -ne 0 ]; then pass "elo get ohne Argumente (Fehler korrekt)"; else fail "elo get ohne Argumente" "Exitcode 0"; fi
 
 echo ""
 

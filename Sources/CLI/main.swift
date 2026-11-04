@@ -1750,7 +1750,7 @@ private func runStack(_ args: [String]) -> Int32 {
         guard let leaderID = result.leaderByMember[myID],
               let leaderPath = idToPath[leaderID],
               let memberIDs = result.membersByLeader[leaderID] else {
-            if jsonMode { print("null") } else { print("Bild gehört zu keinem Stapel.") }
+            if jsonMode { print("{\"stack\":null}") } else { print("Bild gehört zu keinem Stapel.") }
             return 0
         }
         let memberPaths = memberIDs.compactMap { idToPath[$0] }.sorted()
@@ -2190,7 +2190,11 @@ private func runSearch(_ args: [String]) -> Int32 {
 
     // --flag pick|reject|none
     if let fi = args.firstIndex(of: "--flag"), fi + 1 < args.count {
-        let flag = args[fi + 1]
+        let flag = args[fi + 1].lowercased()
+        guard FlagStatus(rawValue: flag) != nil else {
+            fputs("Fehler: Ungültiger Flag-Wert '\(args[fi + 1])'. Erlaubt: none, pick, reject\n", stderr)
+            return 1
+        }
         let images = catalog.images(flaggedAs: flag)
         return printCatalogImages(images, jsonMode: jsonMode)
     }
@@ -2198,6 +2202,10 @@ private func runSearch(_ args: [String]) -> Int32 {
     // --rating N
     if let ri = args.firstIndex(of: "--rating"), ri + 1 < args.count,
        let n = Int(args[ri + 1]) {
+        guard n >= 0 && n <= 5 else {
+            fputs("Fehler: Bewertung muss zwischen 0 und 5 liegen (angegeben: \(n))\n", stderr)
+            return 1
+        }
         let images = catalog.images(ratedAtLeast: n)
         return printCatalogImages(images, jsonMode: jsonMode)
     }
@@ -2205,6 +2213,10 @@ private func runSearch(_ args: [String]) -> Int32 {
     // --color red|yellow|green|blue|none
     if let ci = args.firstIndex(of: "--color"), ci + 1 < args.count {
         let color = args[ci + 1].lowercased()
+        guard ColorLabel(rawValue: color) != nil else {
+            fputs("Fehler: Ungültige Farbe '\(args[ci + 1])'. Erlaubt: none, red, yellow, green, blue\n", stderr)
+            return 1
+        }
         let images = catalog.images(withColorLabel: color)
         return printCatalogImages(images, jsonMode: jsonMode)
     }
@@ -2332,6 +2344,76 @@ private func runCatalog(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - Elo
+
+private func runElo(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "list"
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+
+    switch sub {
+    case "get":
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli elo get <bildpfad> [--json]\n", stderr); return 1
+        }
+        if let e = catalog.elo(forPath: path) {
+            if jsonMode {
+                let d: [String: Any] = ["path": path, "elo": e.elo, "matches": e.matches]
+                if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
+                   let s = String(data: dd, encoding: .utf8) { print(s) }
+            } else {
+                print("ELO: \(String(format: "%.1f", e.elo))  Duelle: \(e.matches)")
+            }
+        } else {
+            if jsonMode { print("{\"path\":\"\(path)\",\"elo\":null}") }
+            else { print("Kein ELO-Eintrag für diesen Pfad.") }
+        }
+        return 0
+
+    case "list":
+        let all = catalog.allElos()
+        let sorted = all.sorted { $0.value.elo > $1.value.elo }
+        if jsonMode {
+            let arr = sorted.map { ["path": $0.key, "elo": $0.value.elo, "matches": $0.value.matches] as [String: Any] }
+            if let d = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if sorted.isEmpty { print("(keine ELO-Einträge im Katalog)") }
+            else {
+                print(String(format: "%-6s  %-6s  %s", "ELO", "Duelle", "Pfad"))
+                print(String(repeating: "─", count: 60))
+                for (path, e) in sorted {
+                    print(String(format: "%-6.1f  %-6d  %@", e.elo, e.matches, path))
+                }
+            }
+        }
+        return 0
+
+    case "set":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count >= 2, let elo = Double(positional[1]) else {
+            fputs("Verwendung: iphoto-cli elo set <bildpfad> <elo-wert> [--matches N]\n", stderr); return 1
+        }
+        let path = positional[0]
+        var matches = catalog.elo(forPath: path)?.matches ?? 0
+        if let mi = args.firstIndex(of: "--matches"), mi + 1 < args.count,
+           let m = Int(args[mi + 1]) { matches = m }
+        catalog.saveElo(path: path, elo: elo, eloMatches: matches)
+        if jsonMode {
+            let d: [String: Any] = ["path": path, "elo": elo, "matches": matches, "ok": true]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: []),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print("ELO gesetzt: \(String(format: "%.1f", elo)) (\(matches) Duelle) → \(path)")
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli elo get|list|set [opts]\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Motif
 
 private func runMotif(_ args: [String]) -> Int32 {
@@ -2450,6 +2532,9 @@ if firstArg == "catalog" {
 }
 if firstArg == "motif" {
     exit(runMotif(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "elo" {
+    exit(runElo(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "duplicate" {
     exit(runDuplicate(Array(rawArgs.dropFirst(2))))

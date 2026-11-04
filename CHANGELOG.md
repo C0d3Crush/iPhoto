@@ -2,6 +2,18 @@
 
 ---
 
+## 1.71.0
+**Feature — elo CLI, search Validierung, stack query JSON-Fix, 191 CLI-Tests**
+
+- Neuer Befehl `iphoto-cli elo get|list|set` — ELO-Scores lesen und schreiben (--json Support)
+- `search --flag <wert>` validiert jetzt Enum (none/pick/reject) — Fehler bei ungültigem Wert
+- `search --color <wert>` validiert jetzt Enum (none/red/yellow/green/blue) — Fehler bei ungültigem Wert  
+- `search --rating <n>` validiert Bereich 0–5 — Fehler bei Wert außerhalb
+- `stack query --json` gibt bei "kein Stapel" jetzt `{"stack":null}` statt rohem `null`
+- 191 CLI-Tests, 71 Perf-Tests — alle grün
+
+---
+
 ## 1.70.0
 **Feature — smartfolder delete/plugins dir --json, stack query Tests, 178 CLI-Tests**
 
