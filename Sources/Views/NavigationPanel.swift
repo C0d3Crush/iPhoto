@@ -328,7 +328,7 @@ private struct PanelAlbumFolderRow: View {
     @Binding var renamingFolder: AlbumFolder?
     @Binding var renameText: String
     @EnvironmentObject var viewModel: ImageViewModel
-    @State private var isExpanded: Bool = true
+    @State private var isExpanded: Bool = false
     @State private var isDropTargeted = false
 
     private var indent: CGFloat { CGFloat(depth) * 14 }

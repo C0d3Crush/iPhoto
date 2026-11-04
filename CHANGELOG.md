@@ -2,6 +2,14 @@
 
 ---
 
+## 1.51.1
+**Bugfix — Gelber Punkt im ELO-Chart entfernt + Ordner standardmäßig eingeklappt**
+
+- Oranger Marker-Dot im ELO-Verteilungschart entfernt (gestrichelte Linie bleibt)
+- Album-Ordner starten beim App-Start eingeklappt statt ausgeklappt
+
+---
+
 ## 1.51.0
 **Feature — Focus-Tracking + Batch-Delete + leere Detail-Ansicht**
 

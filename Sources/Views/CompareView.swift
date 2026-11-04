@@ -361,18 +361,11 @@ private struct EloAreaGraph: View {
         return ForEach(Array(pairs.enumerated()), id: \.offset) { _, pair in
             let (elo, color) = pair
             let xp = xScreen(elo, width: size.width)
-            // Density at this ELO for the dot y-position (interpolate nearest point)
-            let density = nearestDensity(for: elo)
-            let yp = yScreen(density, height: size.height)
             Path { p in
                 p.move(to:    CGPoint(x: xp, y: size.height))
-                p.addLine(to: CGPoint(x: xp, y: yp))
+                p.addLine(to: CGPoint(x: xp, y: 0))
             }
             .stroke(color.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-                .offset(x: xp - 3.5, y: yp - 3.5)
         }
     }
 
