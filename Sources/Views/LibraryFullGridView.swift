@@ -9,8 +9,6 @@ private struct YearGroup: Identifiable {
 
 struct LibraryFullGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
-    @AppStorage("navtoolbar.showSort")   private var showSort   = true
-    @AppStorage("navtoolbar.showSlider") private var showSlider = true
 
     private var cellSpacing: CGFloat { viewModel.gridThumbnailSize < 50 ? 1 : (viewModel.gridThumbnailSize < 100 ? 4 : 8) }
     private var columns: [GridItem] {
@@ -137,27 +135,6 @@ struct LibraryFullGridView: View {
           }
           DropTargetView()
               .environmentObject(viewModel)
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .automatic) {
-                if showSort {
-                    SortMenuButton()
-                        .environmentObject(viewModel)
-                }
-                if showSlider {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.grid.3x3")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                        Slider(value: $viewModel.gridThumbnailSize, in: 22...400, step: 2)
-                            .frame(width: 120)
-                        Image(systemName: "square.grid.2x2")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                    }
-                    .help("Rastergröße anpassen")
-                }
-            }
         }
     }
 

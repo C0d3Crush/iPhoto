@@ -22,6 +22,8 @@ struct ContentView: View {
     @AppStorage("navtoolbar.showTag")        private var navShowTag        = true
     @AppStorage("navtoolbar.showMore")       private var navShowMore       = true
     @AppStorage("navtoolbar.showSearch")     private var navShowSearch     = true
+    @AppStorage("navtoolbar.showSort")       private var navShowGridSort   = true
+    @AppStorage("navtoolbar.showSlider")     private var navShowSlider     = true
 
     // Per-item action bar visibility
     @AppStorage("toolbar.item.sort")        private var showSort        = true
@@ -39,6 +41,11 @@ struct ContentView: View {
             .compactMap { ActionBarItem(rawValue: String($0)) }
         let missing = ActionBarItem.allCases.filter { !saved.contains($0) }
         return saved.isEmpty ? ActionBarItem.allCases : saved + missing
+    }
+
+    private var isGridViewActive: Bool {
+        if viewModel.showFullGrid { return true }
+        return viewModel.libraryViewMode == .grid
     }
 
     private func toolbarItemVisible(_ item: ActionBarItem) -> Bool {
@@ -147,6 +154,22 @@ struct ContentView: View {
 
             ToolbarItemGroup(placement: .automatic) {
                 if !viewModel.compare.active {
+                    if isGridViewActive {
+                        if navShowGridSort {
+                            SortMenuButton().environmentObject(viewModel).fixedSize()
+                        }
+                        if navShowSlider {
+                            HStack(spacing: 6) {
+                                Image(systemName: "square.grid.3x3")
+                                    .font(.system(size: 10)).foregroundColor(.secondary)
+                                Slider(value: $viewModel.gridThumbnailSize, in: 22...400, step: 2)
+                                    .frame(width: 120)
+                                Image(systemName: "square.grid.2x2")
+                                    .font(.system(size: 10)).foregroundColor(.secondary)
+                            }
+                            .help("Rastergröße anpassen")
+                        }
+                    }
                     ForEach(toolbarOrder.filter { toolbarItemVisible($0) }, id: \.self) { item in
                         toolbarButton(for: item)
                     }
