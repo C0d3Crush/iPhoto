@@ -2,6 +2,15 @@
 
 ---
 
+## 1.57.1
+**Bugfix — Gesichtserkennung: fehlende Gesichter durch EXIF-Thumbnail-Problem behoben**
+
+- Scan-Pipeline (App + CLI): `kCGImageSourceCreateThumbnailFromImageIfAbsent` → `Always` — eingebettete EXIF-Thumbnails (oft nur 160×120 px) werden nicht mehr als Scan-Basis verwendet; stattdessen wird immer aus den vollen Bilddaten dekodiert → deutlich weniger übersehene Gesichter, besonders bei Gruppenfotos und Fotos ohne expliziten Thumbnail
+- Scan-Auflösung: 512 px → 1024 px — bessere Erkennung kleiner Gesichter in Gruppenfotos
+- faceEmbedderVersion 4: alle vorhandenen Face-Scans werden beim nächsten App-Start neu berechnet
+
+---
+
 ## 1.57.0
 **Feature — Verbesserte Gesichts-Gruppierung: sRGB-Normalisierung + Complete-Linkage-Clustering**
 

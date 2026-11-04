@@ -1147,9 +1147,9 @@ private func runPeople(_ args: [String]) -> Int32 {
         for path in paths {
             let url = URL(fileURLWithPath: path)
             guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let img = CGImageSourceCreateImageAtIndex(src, 0, [
-                      kCGImageSourceThumbnailMaxPixelSize: 512,
-                      kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+                  let img = CGImageSourceCreateThumbnailAtIndex(src, 0, [
+                      kCGImageSourceThumbnailMaxPixelSize: 1024,
+                      kCGImageSourceCreateThumbnailFromImageAlways: true,
                       kCGImageSourceCreateThumbnailWithTransform: true
                   ] as CFDictionary) else {
                 fputs("Warnung: Konnte \(path) nicht laden\n", stderr)

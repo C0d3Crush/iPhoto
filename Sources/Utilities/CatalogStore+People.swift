@@ -12,14 +12,14 @@ extension CatalogStore {
         exec("ALTER TABLE images ADD COLUMN face_scanned INTEGER NOT NULL DEFAULT 0")
         exec("CREATE INDEX IF NOT EXISTS idx_images_face_scanned ON images(face_scanned)")
 
-        // v3: sRGB-Normalisierung in FaceDetector. Embeddings neu berechnen (Graustufen-Fotos
-        // haben jetzt andere Embedding-Werte). Benannte Personen bleiben erhalten.
+        // v4: Always-Dekodierung statt IfAbsent — eingebettete EXIF-Thumbnails werden
+        // nicht mehr verwendet; Embeddings aus vollem Bilddaten neu berechnen.
         let embVersion = UserDefaults.standard.integer(forKey: "faceEmbedderVersion")
-        if embVersion < 3 {
+        if embVersion < 4 {
             exec("DELETE FROM faces")
             exec("DELETE FROM people WHERE name IS NULL")
             exec("UPDATE images SET face_scanned=0")
-            UserDefaults.standard.set(3, forKey: "faceEmbedderVersion")
+            UserDefaults.standard.set(4, forKey: "faceEmbedderVersion")
         }
 
         exec("""

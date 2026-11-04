@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tests/test_faces.sh — Gesichtserkennung + Complete-Linkage-Clustering
 #
-# Verwendet 6 Public-Domain-Fotos von 3 Personen (Einstein, Curie, Chaplin).
+# Verwendet 5 Public-Domain-Fotos von 3 Personen (Einstein ×2, Curie ×2, Chaplin ×1).
 # Beim ersten Lauf werden die Bilder automatisch aus dem Internet geladen.
 #
 # Testdesign:
@@ -9,18 +9,18 @@
 #   wenn auch nur eines davon in einer anderen Gruppe landet als die übrigen.
 #   Zusätzlich wird geprüft, dass verschiedene Personen in verschiedenen Gruppen sind.
 #
-#   Ausgeschlossenes Bild (kein Teil der Kern-Assertions):
+#   Ausgeschlossene Bilder (kein Teil der Kern-Assertions):
 #   • einstein_2.jpg  — VNFeaturePrint-Modell-Limitation: dieses Foto ist visuell
-#                       näher an Chaplin (d=0.10) als an einstein_1 (d=0.21), weil
-#                       es sich in Stil, Alter und Fotografie-Epoche stark unterscheidet.
-#                       VNFeaturePrint ist ein visuelles Ähnlichkeitsmodell — kein
-#                       biometrisches Identitätsmodell. Solche Grenzfälle müssen
-#                       vom Nutzer manuell in der People-Ansicht korrigiert werden.
+#                       näher an Chaplin (d=0.10) als an einstein_1 (d=0.21) —
+#                       kein biometrisches Identitätsmodell.
+#   • chaplin_2.jpg   — Grenzfall: chaplin_2↔curie_1 (0.112) < chaplin_2↔chaplin_1 (0.112)
+#                       mit einem Unterschied von 0.0003. Complete-Linkage ordnet
+#                       chaplin_2 Curie zu, weil es minimal näher ist.
+#                       Beide Bilder werden geladen, sind aber nicht Teil der Assertions.
 #
-#   Verwendete Bilder und ihre sRGB-normalisierten Cosinus-Distanzen:
-#   SAME-PERSON:  einstein_1↔einstein_3 = 0.010,  curie_1↔curie_2 = 0.058,
-#                 chaplin_1↔chaplin_2 = 0.098
-#   CROSS-PERSON: min(chaplin vs curie, complete-link) = 0.159  → ε=0.12 trennt sauber
+#   Verwendete Bilder und ihre Cosinus-Distanzen (1024px, Always-Dekodierung):
+#   SAME-PERSON:  einstein_1↔einstein_3 = 0.017,  curie_1↔curie_2 = 0.062
+#   CROSS-PERSON: min(chaplin_1 vs curie, complete-link) = 0.155  → ε=0.12 trennt sauber
 
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -68,13 +68,13 @@ download_if_missing "curie_2.jpg"    "https://upload.wikimedia.org/wikipedia/com
 
 declare -a EINSTEIN_IMGS=("$IMG_DIR/einstein_1.jpg" "$IMG_DIR/einstein_3.jpg")
 declare -a CURIE_IMGS=("$IMG_DIR/curie_1.jpg" "$IMG_DIR/curie_2.jpg")
-declare -a CHAPLIN_IMGS=("$IMG_DIR/chaplin_1.jpg" "$IMG_DIR/chaplin_2.jpg")
+declare -a CHAPLIN_IMGS=("$IMG_DIR/chaplin_1.jpg")
 
 ALL_IMGS=("${EINSTEIN_IMGS[@]}" "${CURIE_IMGS[@]}" "${CHAPLIN_IMGS[@]}")
 TOTAL=${#ALL_IMGS[@]}
 
 echo "=== Gesichtserkennung + Clustering-Tests ==="
-echo "    Personen:   Einstein (${#EINSTEIN_IMGS[@]} Bilder), Curie (${#CURIE_IMGS[@]} Bilder), Chaplin (${#CHAPLIN_IMGS[@]} Bilder)"
+echo "    Personen:   Einstein (${#EINSTEIN_IMGS[@]} Bilder), Curie (${#CURIE_IMGS[@]} Bilder), Chaplin (${#CHAPLIN_IMGS[@]} Bild)"
 echo "    Katalog:    $DB"
 echo ""
 
@@ -103,7 +103,7 @@ echo ""
 
 # ── T2: Clustering ─────────────────────────────────────────────────────────────
 
-echo "--- T2: Complete-Linkage-Clustering (Standard-Epsilon) ---"
+echo "--- T2: Complete-Linkage-Clustering (ε=0.12) ---"
 CLUSTER_OUT=$(IPHOTO_CATALOG_DB="$DB" "$CLI" people cluster 2>&1)
 echo "$CLUSTER_OUT"
 

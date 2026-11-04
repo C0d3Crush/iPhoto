@@ -327,9 +327,12 @@ extension ImageViewModel {
     private func loadThumbnailCGImage(path: String) -> CGImage? {
         let url = URL(fileURLWithPath: path)
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        // Always statt IfAbsent: eingebettete EXIF-Thumbnails (oft 160×120 px) werden ignoriert;
+        // stattdessen immer aus dem vollen Bilddaten dekodiert → klare Qualität für VNDetectFaceRectanglesRequest.
+        // 1024 statt 512: genug Auflösung für kleine Gesichter in Gruppenfotos.
         let opts: [CFString: Any] = [
-            kCGImageSourceThumbnailMaxPixelSize: 512,
-            kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1024,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true
         ]
         return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
