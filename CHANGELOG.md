@@ -2,6 +2,14 @@
 
 ---
 
+## 1.72.0
+**Bugfix — elo list SIGSEGV behoben, 202 CLI-Tests**
+
+- `elo list` (Text-Ausgabe) crashte mit SIGSEGV wenn der Katalog ELO-Einträge enthielt — `%s`-Formatspezifizierer mit Swift-String-Literalen verursacht auf macOS einen Speicherzugriffsfehler; Header-Zeile auf direkte String-Ausgabe umgestellt
+- 202 CLI-Tests — alle grün
+
+---
+
 ## 1.71.0
 **Feature — elo CLI, search Validierung, stack query JSON-Fix, 191 CLI-Tests**
 

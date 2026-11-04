@@ -40,33 +40,40 @@ private func printUsage() {
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
       iphoto-cli duplicate list|similar [--json]
+      iphoto-cli rating list [--flag pick|reject] [--color farbe] [--min-rating N] [--json]
       iphoto-cli smartfolder list [--json]
       iphoto-cli smartfolder query <name> [--json]
-      iphoto-cli smartfolder create <name> [--rating-min N] [--json]
-      iphoto-cli smartfolder delete <name>
+      iphoto-cli smartfolder create <name> [--rating-min N] [--flag pick|reject] [--color farbe] [--json]
+      iphoto-cli smartfolder update <name> [--rating-min N] [--flag pick|reject] [--color farbe]
+      iphoto-cli smartfolder rename <alter-name> <neuer-name>
+      iphoto-cli smartfolder delete <name> [--json]
       iphoto-cli stack list [--json]
       iphoto-cli stack query <bildpfad> [--json]
       iphoto-cli trash list [--json]
       iphoto-cli trash mark <bildpfad> [--json]
       iphoto-cli trash restore <bildpfad>|--all [--json]
       iphoto-cli trash empty [--json]
+      iphoto-cli elo get <bildpfad> [--json]
+      iphoto-cli elo list [--json]
+      iphoto-cli elo set <bildpfad> <wert> [--matches N] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
-    hdr:      Erzeugt 6 Preset-Varianten aus allen RAWs im Ordner (Vergleich)
+    hdr:      Erzeugt 6 Preset-Varianten aus allen RAWs im Ordner (Vergleich); --json
     info:     Gibt alle EXIF/IPTC/GPS-Metadaten aus; --json für maschinenlesbare Ausgabe
-    rating:   Liest oder schreibt Bewertung, Flag und Farblabel aus dem Katalog
+    rating:   Liest/schreibt Bewertung, Flag und Farblabel; 'list' zeigt alle bewerteten Bilder
     adjust:   Wendet Bildanpassungen an und exportiert das Ergebnis
     preset:   Zeigt Built-in-Presets oder wendet einen an
     analyse:  Analysiert Schärfe und Belichtung (Blur + Exposure)
-    inpaint:  KI-basiertes Inpainting via CMT (benötigt Python + CMT-Installation)
-    plugins:  Listet installierte Plugins/Panels auf oder zeigt den Plugin-Ordner
+    inpaint:  KI-basiertes Inpainting via CMT (benötigt Python + CMT-Installation); --json
+    plugins:  Listet installierte Plugins/Panels auf oder zeigt den Plugin-Ordner; dir --json
     album:    Alben erstellen, bearbeiten, Bilder hinzufügen/entfernen
-    quality:  Qualitätsanalyse (Blur, Belichtung, Closed-Eye) scannen und lesen
+    quality:  Qualitätsanalyse (Blur, Belichtung, Closed-Eye) scannen und lesen; list --sort blur|rating|elo
     version:  Versionshistorie eines Bildes sichern, anzeigen oder wiederherstellen
-    search:   Bilder im Katalog nach Text, Flag oder Rating suchen
-    catalog:  Katalog-Statistiken und Pfad anzeigen
+    search:   Bilder im Katalog nach Text, Flag (none/pick/reject), Rating (0-5), Farbe, Kamera, Datum
+    catalog:  Statistiken (inkl. ELO-Anzahl), Pfad, vacuum --json, export
     motif:    Motiv-Tags eines Bildes anzeigen
+    elo:      ELO-Scores lesen, auflisten (nach Score sortiert) und setzen
     duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
     """)
 }
@@ -466,6 +473,50 @@ private func runHotPixel(_ args: CLIArgs) -> Int32 {
 }
 
 // MARK: - Rating Command
+
+private func runRatingList(_ args: [String]) -> Int32 {
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+    var all = catalog.allRatings()
+
+    if let fi = args.firstIndex(of: "--flag"), fi + 1 < args.count {
+        let flag = args[fi + 1].lowercased()
+        guard FlagStatus(rawValue: flag) != nil else {
+            fputs("Fehler: Ungültiger Flag-Wert '\(args[fi + 1])'. Erlaubt: none, pick, reject\n", stderr)
+            return 1
+        }
+        all = all.filter { $0.value.flag == flag }
+    }
+    if let ci = args.firstIndex(of: "--color"), ci + 1 < args.count {
+        let color = args[ci + 1].lowercased()
+        guard ColorLabel(rawValue: color) != nil else {
+            fputs("Fehler: Ungültige Farbe '\(args[ci + 1])'. Erlaubt: none, red, yellow, green, blue\n", stderr)
+            return 1
+        }
+        all = all.filter { $0.value.colorLabel == color }
+    }
+    if let ri = args.firstIndex(of: "--min-rating"), ri + 1 < args.count, let n = Int(args[ri + 1]) {
+        all = all.filter { $0.value.rating >= n }
+    }
+
+    let sorted = all.sorted { $0.key < $1.key }
+    if jsonMode {
+        let arr = sorted.map { (path, e) -> [String: Any] in
+            ["path": path, "rating": e.rating, "flag": e.flag, "color": e.colorLabel]
+        }
+        if let d = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+           let s = String(data: d, encoding: .utf8) { print(s) }
+    } else {
+        if sorted.isEmpty { print("(keine bewerteten Bilder)") }
+        else {
+            for (path, e) in sorted {
+                print("rating=\(e.rating)  flag=\(e.flag)  color=\(e.colorLabel)  \(path)")
+            }
+        }
+        print("Gesamt: \(sorted.count) Bild(er)")
+    }
+    return 0
+}
 
 private func runRating(_ args: CLIArgs) -> Int32 {
     guard let input = args.inputs.first else {
@@ -2025,7 +2076,19 @@ private func runQuality(_ args: [String]) -> Int32 {
 
     case "list":
         let all = catalog.allQualityRecords()
-        let sorted = all.sorted { $0.key < $1.key }
+        let sortKey: String
+        if let si = args.firstIndex(of: "--sort"), si + 1 < args.count {
+            sortKey = args[si + 1].lowercased()
+        } else { sortKey = "path" }
+        let sorted: [(key: String, value: QualityRecord)]
+        switch sortKey {
+        case "blur":    sorted = all.sorted { ($0.value.blurScore ?? 0) > ($1.value.blurScore ?? 0) }
+        case "rating":  let ratings = catalog.allRatings()
+                        sorted = all.sorted { (ratings[$0.key]?.rating ?? 0) > (ratings[$1.key]?.rating ?? 0) }
+        case "elo":     let elos = catalog.allElos()
+                        sorted = all.sorted { (elos[$0.key]?.elo ?? 0) > (elos[$1.key]?.elo ?? 0) }
+        default:        sorted = all.sorted { $0.key < $1.key }
+        }
         if jsonMode {
             let arr = sorted.map { (path, q) -> [String: Any] in
                 var d: [String: Any] = ["path": path, "blur": q.blurScore ?? 0,
@@ -2284,13 +2347,15 @@ private func runCatalog(_ args: [String]) -> Int32 {
         let faceCount   = catalog.allFaces().count
         let peopleCount = catalog.allPeople().count
         let rs = catalog.ratingStats()
+        let eloCount = catalog.eloCount()
 
         if jsonMode {
-            var d: [String: Any] = ["db_path": dbPath, "images": imageCount,
+            let d: [String: Any] = ["db_path": dbPath, "images": imageCount,
                                     "albums": albumCount, "faces": faceCount,
                                     "people": peopleCount,
                                     "rated": rs.rated, "flagged": rs.flagged,
-                                    "by_flag": rs.byFlag, "by_color": rs.byColor]
+                                    "by_flag": rs.byFlag, "by_color": rs.byColor,
+                                    "elo_count": eloCount]
             if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
                let s = String(data: dd, encoding: .utf8) { print(s) }
         } else {
@@ -2301,6 +2366,7 @@ private func runCatalog(_ args: [String]) -> Int32 {
             print("Personen:  \(peopleCount)")
             print("Bewertet:  \(rs.rated)")
             print("Markiert:  \(rs.flagged)")
+            print("ELO:       \(eloCount)")
             if !rs.byFlag.isEmpty {
                 rs.byFlag.sorted { $0.key < $1.key }.forEach { print("  Flagge \($0.key): \($0.value)") }
             }
@@ -2316,9 +2382,20 @@ private func runCatalog(_ args: [String]) -> Int32 {
         return 0
 
     case "vacuum":
+        let dbPathVac = envDBPath() ?? ""
+        let sizeBefore = (try? FileManager.default.attributesOfItem(atPath: dbPathVac))?[.size] as? Int ?? 0
         catalog.vacuum()
-        let dbPath = envDBPath() ?? "Standard"
-        print("Katalog optimiert: \(dbPath)")
+        let sizeAfter = (try? FileManager.default.attributesOfItem(atPath: dbPathVac))?[.size] as? Int ?? 0
+        if jsonMode {
+            let obj: [String: Any] = ["path": dbPathVac, "size_before": sizeBefore,
+                                      "size_after": sizeAfter, "saved": sizeBefore - sizeAfter, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            let saved = sizeBefore - sizeAfter
+            print("Katalog optimiert: \(dbPathVac)")
+            if sizeBefore > 0 { print("Größe: \(sizeAfter) B (gespart: \(saved) B)") }
+        }
         return 0
 
     case "export":
@@ -2380,7 +2457,7 @@ private func runElo(_ args: [String]) -> Int32 {
         } else {
             if sorted.isEmpty { print("(keine ELO-Einträge im Katalog)") }
             else {
-                print(String(format: "%-6s  %-6s  %s", "ELO", "Duelle", "Pfad"))
+                print("ELO     Duelle  Pfad")
                 print(String(repeating: "─", count: 60))
                 for (path, e) in sorted {
                     print(String(format: "%-6.1f  %-6d  %@", e.elo, e.matches, path))
@@ -2535,6 +2612,10 @@ if firstArg == "motif" {
 }
 if firstArg == "elo" {
     exit(runElo(Array(rawArgs.dropFirst(2))))
+}
+// rating list is a subcommand; intercept before CLIArgs parsing
+if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "list" {
+    exit(runRatingList(Array(rawArgs.dropFirst(3))))
 }
 if firstArg == "duplicate" {
     exit(runDuplicate(Array(rawArgs.dropFirst(2))))
