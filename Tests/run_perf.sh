@@ -584,6 +584,35 @@ if [ $ELAPSED -le $THRESHOLD ]; then pass "catalog stats --json (500 Einträge)"
 echo ""
 
 # ===========================================================================
+# 23. Export-Latenz
+# ===========================================================================
+echo "=== 23. Export-Latenz ==="
+
+THRESHOLD=2000
+EXPORT_OUT="$TMPDIR_BASE/perf_export.jpg"
+
+T0=$(ms); "$BIN" export "$SMALL" --format jpeg --output "$EXPORT_OUT" > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "export PNG→JPEG (64×64)" "$ELAPSED"; else fail "export PNG→JPEG 64×64" "$ELAPSED" "$THRESHOLD"; fi
+
+EXPORT_OUT2="$TMPDIR_BASE/perf_export2.jpg"
+T0=$(ms); "$BIN" export "$MEDIUM" --format jpeg --output "$EXPORT_OUT2" > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "export PNG→JPEG (512×512)" "$ELAPSED"; else fail "export PNG→JPEG 512×512" "$ELAPSED" "$THRESHOLD"; fi
+
+EXPORT_OUT3="$TMPDIR_BASE/perf_export3.jpg"
+T0=$(ms); "$BIN" export "$MEDIUM" --format jpeg --output "$EXPORT_OUT3" --json > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "export --json (512×512)" "$ELAPSED"; else fail "export --json 512×512" "$ELAPSED" "$THRESHOLD"; fi
+
+EXPORT_DIR_OUT="$TMPDIR_BASE/perf_export_dir"
+mkdir -p "$EXPORT_DIR_OUT"
+T0=$(ms); "$BIN" export "$MEDIUM" --format png --output-dir "$EXPORT_DIR_OUT" > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "export --output-dir (512×512)" "$ELAPSED"; else fail "export --output-dir 512×512" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
 echo "=============================="
 echo "Leistungstest: $PASS bestanden, $FAIL fehlgeschlagen"
 echo "=============================="

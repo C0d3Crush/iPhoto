@@ -866,6 +866,11 @@ private func runAnalyse(_ args: CLIArgs) -> Int32 {
         ))
     }
 
+    guard !results.isEmpty else {
+        fputs("Fehler: Keine Bilder konnten geladen werden in '\(input.path)'\n", stderr)
+        return 1
+    }
+
     if args.jsonOutput {
         let dicts: [[String: Any]] = results.map { r in
             var flags: [String] = []

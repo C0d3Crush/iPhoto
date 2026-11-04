@@ -2,6 +2,17 @@
 
 ---
 
+## 1.65.0
+**Bugfix + Feature — analyse Exit-Code-Korrektur, search --json, Export-Perf-Tests**
+
+- `analyse`: gibt jetzt Exitcode 1 zurück wenn alle Dateien fehlschlagen (vorher immer 0)
+- `search <text> --json` jetzt getestet (war bereits implementiert, aber nicht im Test erfasst)
+- `analyse <Ordner ohne Bilder>` Fehlerfall-Test hinzugefügt
+- Perf-Section 23: Export-Latenz für JPEG-Konvertierung (64×64 und 512×512) benchmarked
+- 148 CLI-Tests, 61 Perf-Tests — alle grün
+
+---
+
 ## 1.64.0
 **Feature — catalog export, quality scan Ordner, Grenzwert-Tests, Skalierungstest 500 Einträge**
 

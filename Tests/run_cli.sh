@@ -278,6 +278,11 @@ if echo "$SCOLOR_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); 
 STEXT=$("$BIN" search "test" 2>&1)
 if [ $? -eq 0 ]; then pass "search <text> (Exitcode 0)"; else fail "search text" "$STEXT"; fi
 
+# search text --json
+STEXT_JSON=$("$BIN" search "test" --json 2>&1)
+if echo "$STEXT_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "search <text> --json (valides JSON-Array)"; else fail "search <text> --json" "$STEXT_JSON"; fi
+
 # search ohne Argumente → Exitcode != 0
 SEMPTY_EXIT=0; "$BIN" search > /dev/null 2>&1 || SEMPTY_EXIT=$?
 if [ $SEMPTY_EXIT -ne 0 ]; then pass "search (ohne Argumente → Exitcode != 0)"; else fail "search ohne args" "Hätte fehlschlagen sollen"; fi
@@ -630,6 +635,12 @@ if echo "$OUT" | python3 -c "import sys,json; a=json.load(sys.stdin); assert len
 else
     fail "analyse <Ordner> --json" "Sollte Array mit 2 Elementen sein: $OUT"
 fi
+
+# analyse <Ordner mit nur nicht-Bildern> → Exitcode 1 (Fehlerfall)
+NONIMG_DIR="$TMPDIR_BASE/non_images"
+mkdir -p "$NONIMG_DIR"; echo "test" > "$NONIMG_DIR/text.txt"
+ANALYSE_NOIMG_ERR=0; "$BIN" analyse "$NONIMG_DIR" > /dev/null 2>&1 || ANALYSE_NOIMG_ERR=$?
+if [ $ANALYSE_NOIMG_ERR -ne 0 ]; then pass "analyse Ordner ohne Bilder (Fehler korrekt)"; else fail "analyse Ordner ohne Bilder" "Exitcode 0"; fi
 
 echo ""
 
