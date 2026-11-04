@@ -151,6 +151,16 @@ QGET_JSON=$("$BIN" quality get "$INPUT" --json 2>&1)
 if echo "$QGET_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'blur' in d" 2>/dev/null; then
     pass "quality get --json"; else fail "quality get --json" "$QGET_JSON"; fi
 
+# quality scan <Ordner>
+QSCAN_DIR="$TMPDIR_BASE/quality_dir"
+mkdir -p "$QSCAN_DIR"; cp "$INPUT" "$QSCAN_DIR/img1.png"; cp "$INPUT" "$QSCAN_DIR/img2.png"
+QSCAN_D=$("$BIN" quality scan "$QSCAN_DIR" 2>&1)
+if echo "$QSCAN_D" | grep -q "Gesamt: 2"; then pass "quality scan <Ordner> (2 Bilder)"; else fail "quality scan <Ordner>" "$QSCAN_D"; fi
+
+QSCAN_DJ=$("$BIN" quality scan "$QSCAN_DIR" --json 2>&1)
+if echo "$QSCAN_DJ" | python3 -c "import sys,json; a=json.load(sys.stdin); assert len(a)==2" 2>/dev/null; then
+    pass "quality scan <Ordner> --json (2 Einträge)"; else fail "quality scan <Ordner> --json" "$QSCAN_DJ"; fi
+
 # quality list
 QLIST=$("$BIN" quality list 2>&1)
 if echo "$QLIST" | grep -qE 'blur=|keine'; then pass "quality list"; else fail "quality list" "$QLIST"; fi
@@ -292,6 +302,18 @@ if [ $? -eq 0 ] && [ -n "$CPATH" ]; then pass "catalog path (Exitcode 0, nicht l
 # catalog vacuum
 CVACUUM=$("$BIN" catalog vacuum 2>&1)
 if echo "$CVACUUM" | grep -q "optimiert"; then pass "catalog vacuum (Meldung)"; else fail "catalog vacuum" "$CVACUUM"; fi
+
+# catalog export
+EXPORT_DB="$TMPDIR_BASE/catalog_export.db"
+CEXPORT=$("$BIN" catalog export --output "$EXPORT_DB" 2>&1)
+if [ -f "$EXPORT_DB" ] && [ -s "$EXPORT_DB" ]; then pass "catalog export (Datei vorhanden, nicht leer)"; else fail "catalog export" "Datei fehlt oder leer: $CEXPORT"; fi
+
+CEXPORT_JSON=$("$BIN" catalog export --output "$TMPDIR_BASE/catalog_export2.db" --json 2>&1)
+if echo "$CEXPORT_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "catalog export --json (ok=true)"; else fail "catalog export --json" "$CEXPORT_JSON"; fi
+
+CEXPORT_ERR=0; "$BIN" catalog export > /dev/null 2>&1 || CEXPORT_ERR=$?
+if [ $CEXPORT_ERR -ne 0 ]; then pass "catalog export ohne --output (Fehler korrekt)"; else fail "catalog export ohne --output" "Exitcode 0"; fi
 
 echo ""
 
@@ -562,6 +584,12 @@ if [ $RATING_EXIT -ne 0 ]; then pass "rating --flag ungültig (Fehler korrekt)";
 
 RATING_EXIT2=0; "$BIN" rating "/nicht/vorhanden.png" > /dev/null 2>&1 || RATING_EXIT2=$?
 if [ $RATING_EXIT2 -ne 0 ]; then pass "rating nicht-existente Datei (Fehler korrekt)"; else fail "rating nicht-existente Datei" "Exitcode 0"; fi
+
+RATING_EXIT3=0; "$BIN" rating "$INPUT" --set 6 > /dev/null 2>&1 || RATING_EXIT3=$?
+if [ $RATING_EXIT3 -ne 0 ]; then pass "rating --set 6 (Grenzwert-Fehler korrekt)"; else fail "rating --set 6" "Exitcode 0"; fi
+
+RATING_EXIT4=0; "$BIN" rating "$INPUT" --set -1 > /dev/null 2>&1 || RATING_EXIT4=$?
+if [ $RATING_EXIT4 -ne 0 ]; then pass "rating --set -1 (Grenzwert-Fehler korrekt)"; else fail "rating --set -1" "Exitcode 0"; fi
 
 echo ""
 

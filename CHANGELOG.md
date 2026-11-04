@@ -2,6 +2,17 @@
 
 ---
 
+## 1.64.0
+**Feature — catalog export, quality scan Ordner, Grenzwert-Tests, Skalierungstest 500 Einträge**
+
+- `iphoto-cli catalog export --output <ziel.db> [--json]` — atomarer SQLite-Snapshot via VACUUM INTO
+- `iphoto-cli quality scan <ordner>` — akzeptiert jetzt Verzeichnisse (wie `analyse`)
+- Rating-Grenzwert-Tests: `--set 6` und `--set -1` geben korrekt Fehler zurück
+- Perf-Section 22: Skalierungstest mit 500 Katalog-Einträgen (search + catalog stats) — alle unter 3 Sekunden
+- 146 CLI-Tests, 57 Perf-Tests — alle grün
+
+---
+
 ## 1.63.0
 **Feature — motif list, trash empty, trash --json, duplicate similar --json (139 CLI-Tests)**
 

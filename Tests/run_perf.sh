@@ -556,6 +556,34 @@ if [ $ELAPSED -le $THRESHOLD ]; then pass "smartfolder delete" "$ELAPSED"; else 
 echo ""
 
 # ===========================================================================
+# 22. Skalierungstest — 500 Katalog-Einträge
+# ===========================================================================
+echo "=== 22. Skalierungstest (500 Einträge) ==="
+
+for i in $(seq 1 500); do
+    "$BIN" rating "/tmp/perf_img_$(printf '%04d' $i).png" --set 0 > /dev/null 2>&1 || true
+done
+
+THRESHOLD=3000
+T0=$(ms); "$BIN" search "perf_img" > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "search (500 Einträge, text)" "$ELAPSED"; else fail "search 500 Einträge text" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms); "$BIN" search "perf_img" --json > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "search --json (500 Einträge)" "$ELAPSED"; else fail "search --json 500 Einträge" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms); "$BIN" catalog stats > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+THRESHOLD=1000
+if [ $ELAPSED -le $THRESHOLD ]; then pass "catalog stats (500 Einträge)" "$ELAPSED"; else fail "catalog stats 500 Einträge" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms); "$BIN" catalog stats --json > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "catalog stats --json (500 Einträge)" "$ELAPSED"; else fail "catalog stats --json 500 Einträge" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
 echo "=============================="
 echo "Leistungstest: $PASS bestanden, $FAIL fehlgeschlagen"
 echo "=============================="

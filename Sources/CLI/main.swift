@@ -36,7 +36,7 @@ private func printUsage() {
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color red|yellow|green|blue|none] [--json]
-      iphoto-cli catalog stats|path|vacuum [--json]
+      iphoto-cli catalog stats|path|vacuum|export [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
       iphoto-cli duplicate list|similar [--json]
@@ -1813,10 +1813,27 @@ private func runQuality(_ args: [String]) -> Int32 {
 
     switch sub {
     case "scan":
-        let paths = args.dropFirst().filter { !$0.hasPrefix("-") }
-        guard !paths.isEmpty else {
-            fputs("Verwendung: iphoto-cli quality scan <bild1> [<bild2>...]\n", stderr); return 1
+        let imageExts: Set<String> = ["jpg","jpeg","png","tiff","tif","heic","heif","gif","bmp","webp",
+                                       "cr2","cr3","nef","arw","dng","orf","rw2","nrw","raf","pef",
+                                       "srw","erf","kdc","dcr","raw","rwl","mrw","3fr","mef","iiq","x3f"]
+        let rawPaths = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard !rawPaths.isEmpty else {
+            fputs("Verwendung: iphoto-cli quality scan <bild-oder-ordner> [...]\n", stderr); return 1
         }
+        var expandedPaths: [String] = []
+        for p in rawPaths {
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue {
+                let urls = (try? FileManager.default.contentsOfDirectory(
+                    at: URL(fileURLWithPath: p), includingPropertiesForKeys: nil
+                ))?.filter { imageExts.contains($0.pathExtension.lowercased()) }
+                  .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
+                expandedPaths.append(contentsOf: urls.map { $0.path })
+            } else {
+                expandedPaths.append(p)
+            }
+        }
+        let paths = expandedPaths
         var results: [[String: Any]] = []
         for path in paths {
             let url = URL(fileURLWithPath: path)
@@ -2101,8 +2118,25 @@ private func runCatalog(_ args: [String]) -> Int32 {
         print("Katalog optimiert: \(dbPath)")
         return 0
 
+    case "export":
+        guard let outIdx = args.firstIndex(of: "--output"), outIdx + 1 < args.count else {
+            fputs("Verwendung: iphoto-cli catalog export --output <ziel.db>\n", stderr); return 1
+        }
+        let dest = args[outIdx + 1]
+        guard catalog.exportTo(path: dest) else {
+            fputs("Fehler: Katalog-Export fehlgeschlagen → \(dest)\n", stderr); return 1
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["output": dest, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Katalog exportiert: \(dest)")
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export [--json]\n", stderr)
         return 1
     }
 }
