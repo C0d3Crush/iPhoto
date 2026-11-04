@@ -395,7 +395,10 @@ class ImageViewModel: ObservableObject {
             switch event.keyCode {
             case 123: // ←
                 if self.sidebarNavigationFocused {
-                    // in Sidebar: kein Links/Rechts-Konzept, ignorieren
+                    // in Sidebar: ignorieren
+                } else if realMods.isEmpty {
+                    // ← aus Bildbereich → Fokus zur Sidebar wechseln
+                    DispatchQueue.main.async { self.sidebarNavigationFocused = true }
                 } else if mods.contains(.shift) {
                     DispatchQueue.main.async { self.extendSelectionToPrevious() }
                 } else {
@@ -404,7 +407,8 @@ class ImageViewModel: ObservableObject {
                 return nil
             case 124: // →
                 if self.sidebarNavigationFocused {
-                    // in Sidebar: kein Links/Rechts-Konzept, ignorieren
+                    // → aus Sidebar → Fokus zum Bildbereich wechseln
+                    DispatchQueue.main.async { self.sidebarNavigationFocused = false }
                 } else if mods.contains(.shift) {
                     DispatchQueue.main.async { self.extendSelectionToNext() }
                 } else {

@@ -2,6 +2,15 @@
 
 ---
 
+## 1.52.0
+**Feature — ← → Fokuswechsel zwischen Panels + abwechselnde Zeilenhintergründe in Spaltenansicht**
+
+- ← aus der Bildliste wechselt den Fokus zur Sidebar (Alben/intelligente Alben)
+- → aus der Sidebar wechselt den Fokus zurück zur Bildliste
+- LibraryColumnsView zeigt jetzt abwechselnde Graustufen-Zeilenhintergründe wie LibraryListView
+
+---
+
 ## 1.51.1
 **Bugfix — Gelber Punkt im ELO-Chart entfernt + Ordner standardmäßig eingeklappt**
 

@@ -25,11 +25,11 @@ struct LibraryColumnsView: View {
                         Color(NSColor.controlBackgroundColor)
                     } else {
                         ScrollView {
-                            LazyVStack(spacing: 2) {
-                                ForEach(viewModel.visibleDocuments, id: \.id) { doc in
+                            LazyVStack(spacing: 0) {
+                                ForEach(Array(viewModel.visibleDocuments.enumerated()), id: \.element.id) { rowIdx, doc in
                                     let actualIndex = viewModel.collectionIndex(for: doc) ?? 0
                                     let isSelected = viewModel.collection.selectedIndices.contains(actualIndex)
-                                    ColumnsThumbnailRow(doc: doc, isSelected: isSelected)
+                                    ColumnsThumbnailRow(doc: doc, isSelected: isSelected, rowIndex: rowIdx)
                                         .onTapGesture {
                                             viewModel.selectDocument(at: actualIndex)
                                         }
@@ -61,6 +61,7 @@ struct LibraryColumnsView: View {
 private struct ColumnsThumbnailRow: View {
     let doc: ImageDocument
     let isSelected: Bool
+    let rowIndex: Int
 
     @ViewBuilder
     private var thumbnailView: some View {
@@ -76,6 +77,13 @@ private struct ColumnsThumbnailRow: View {
                         .foregroundColor(.secondary)
                 )
         }
+    }
+
+    private var rowBackground: Color {
+        if isSelected { return Color.accentColor.opacity(0.25) }
+        return rowIndex % 2 == 0
+            ? Color(NSColor.windowBackgroundColor)
+            : Color(NSColor.controlBackgroundColor)
     }
 
     var body: some View {
@@ -105,7 +113,7 @@ private struct ColumnsThumbnailRow: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
+        .background(rowBackground)
         .contentShape(Rectangle())
     }
 }
