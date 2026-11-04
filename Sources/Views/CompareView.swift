@@ -18,12 +18,13 @@ struct CompareView: View {
 
             if let left = viewModel.compareLeftDocument,
                let right = viewModel.compareRightDocument {
+                let bothReady = isDocReady(left) && isDocReady(right)
                 HStack(spacing: 1) {
                     comparePane(doc: left, side: .left,
-                                zoom: $leftZoom, fit: $leftFit)
+                                zoom: $leftZoom, fit: $leftFit, ready: bothReady)
                     Divider()
                     comparePane(doc: right, side: .right,
-                                zoom: $rightZoom, fit: $rightFit)
+                                zoom: $rightZoom, fit: $rightFit, ready: bothReady)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -97,15 +98,23 @@ struct CompareView: View {
         .padding(.vertical, 8)
     }
 
+    private func isDocReady(_ doc: ImageDocument) -> Bool {
+        if doc.cgImage != nil || doc.previewImage != nil || doc.thumbnail != nil { return true }
+        if let ns = doc.thumbnailImage ?? doc.placeholderThumbnailImage,
+           ns.cgImage(forProposedRect: nil, context: nil, hints: nil) != nil { return true }
+        return false
+    }
+
     private func comparePane(doc: ImageDocument, side: CompareVerdict,
-                             zoom: Binding<CGFloat>, fit: Binding<Bool>) -> some View {
+                             zoom: Binding<CGFloat>, fit: Binding<Bool>, ready: Bool) -> some View {
         VStack(spacing: 6) {
             ZStack {
                 Color(NSColor.underPageBackgroundColor)
-                if let cg = doc.cgImage ?? doc.previewImage ?? doc.thumbnail {
+                if ready, let cg = doc.cgImage ?? doc.previewImage ?? doc.thumbnail {
                     ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit,
                                        alwaysFitOnImageChange: true)
-                } else if let ns = doc.thumbnailImage ?? doc.placeholderThumbnailImage,
+                } else if ready,
+                          let ns = doc.thumbnailImage ?? doc.placeholderThumbnailImage,
                           let cg = ns.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                     ZoomableScrollView(image: cg, zoomFactor: zoom, fitToWindow: fit,
                                        alwaysFitOnImageChange: true)

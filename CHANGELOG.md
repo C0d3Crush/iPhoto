@@ -2,6 +2,13 @@
 
 ---
 
+## 1.52.2
+**Bugfix — Bildvergleich wartet auf beide Bilder**
+
+- Im Vergleichsmodus wird kein Bild angezeigt, bis beide Seiten vollständig geladen sind — kein einseitiges Flackern mehr
+
+---
+
 ## 1.52.1
 **Bugfix — Schärfewert als Prozentwert (0–100 %)**
 
