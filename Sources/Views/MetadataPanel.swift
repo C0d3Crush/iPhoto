@@ -55,13 +55,14 @@ private struct MetadataPanelContent: View {
         }
 
         if let s = doc.blurScore {
+            let pct = min(s / 4.0, 100.0)
             let label: String
             if doc.blurOverride {
-                label = String(format: "OK (Override, Score %.1f)", s)
+                label = String(format: "OK (Override, %.0f %%)", pct)
             } else if flags.blur {
-                label = String(format: "Unscharf (Score %.1f)", s)
+                label = String(format: "Unscharf (%.0f %%)", pct)
             } else {
-                label = String(format: "Scharf (Score %.1f)", s)
+                label = String(format: "Scharf (%.0f %%)", pct)
             }
             out.append(MetadataEntry(displayName: "Schärfe",
                                      key: "quality.blur", category: .quality,

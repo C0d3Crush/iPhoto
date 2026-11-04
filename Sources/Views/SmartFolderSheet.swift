@@ -436,9 +436,9 @@ private struct CriterionRow: View {
         // --- Qualitätsmerkmale ---
         case .blurScore:
             if criterion.op == .inRange {
-                numericRangeInput(unit: "")
+                numericRangeInput(unit: "%")
             } else {
-                numericSingleInput(unit: "")
+                numericSingleInput(unit: "%")
             }
 
         case .isUnderexposed:

@@ -541,7 +541,9 @@ extension ImageViewModel {
                 return applyNumericOp(c.op, value: ratio, lo: c.numericValue, hi: c.numericValue2)
             case .blurScore:
                 guard doc.qualityScanned, let score = doc.blurScore else { return false }
-                return applyNumericOp(c.op, value: score, lo: c.numericValue, hi: c.numericValue2)
+                // Laplacian-Varianz → 0–100 % (BlurDetector.defaultThreshold ≈ 120 ≙ 30 %)
+                let pct = min(score / 4.0, 100.0)
+                return applyNumericOp(c.op, value: pct, lo: c.numericValue, hi: c.numericValue2)
             case .isUnderexposed:
                 guard doc.qualityScanned else { return false }
                 let flag = !doc.underOverride && (doc.underRatio ?? 0) >= quality.shadowClipThreshold

@@ -2,6 +2,13 @@
 
 ---
 
+## 1.52.1
+**Bugfix — Schärfewert als Prozentwert (0–100 %)**
+
+- Schärfewert in intelligenten Alben und Metadaten-Panel wird jetzt als Prozentwert angezeigt (0 % = komplett unscharf, 100 % = maximal scharf; Schwellenwert ≈ 30 %)
+
+---
+
 ## 1.52.0
 **Feature — ← → Fokuswechsel zwischen Panels + abwechselnde Zeilenhintergründe in Spaltenansicht**
 
