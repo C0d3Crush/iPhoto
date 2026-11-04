@@ -2,6 +2,18 @@
 
 ---
 
+## 1.56.2
+**Bugfix — Embedding-Extraktion korrigiert, Clustering-Schwelle angepasst, Test-Suite hinzugefügt**
+
+- `FaceClusterer.extractEmbedding`: Größenprüfung von hartkodiert 512 Bytes auf beliebige Größe erweitert — `VNFeaturePrint`-Embeddings sind 8192 Bytes (2048×Float32), nicht 512
+- Ohne Fix lieferten alle Embeddings Nullvektoren → kein Clustering möglich
+- Standard-Epsilon von 0.40 auf 0.15 gesenkt (besser kalibriert für moderne Farbfotos)
+- `iphoto-cli people` verwendet jetzt `IPHOTO_CATALOG_DB` korrekt (statt globalem Singleton)
+- `Tests/test_faces.sh`: Neue Test-Suite mit 7 historischen Testfotos (Einstein, Chaplin, Curie) — verifiziert Scan, Clustering, Same-Person-Paare und Cross-Person-Trennung
+- Testbilder unter `Tests/fixtures/faces/` (Public Domain, Wikimedia Commons)
+
+---
+
 ## 1.56.1
 **Bugfix — Gesichts-Embedding durch VNFeaturePrint ersetzt, Clustering-Schwelle angepasst**
 

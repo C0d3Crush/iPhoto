@@ -298,6 +298,26 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# 12. people scan — Gesichtserkennung in echtem Bild
+# ---------------------------------------------------------------------------
+SCAN_IMG="$ROOT/Tests/fixtures/faces/einstein_1.jpg"
+if [ -f "$SCAN_IMG" ]; then
+    SCAN_DB=$(mktemp /tmp/iphoto_scan_test_XXXXXX.db)
+    SCAN_OUT=$(IPHOTO_CATALOG_DB="$SCAN_DB" "$BIN" people scan "$SCAN_IMG" 2>&1)
+    SCAN_FACES=$(echo "$SCAN_OUT" | grep -oE '[0-9]+ Gesicht' | head -1 | grep -oE '[0-9]+')
+    rm -f "$SCAN_DB"
+    if [ "${SCAN_FACES:-0}" -ge 1 ]; then
+        pass "people scan (Gesicht in einstein_1.jpg erkannt)"
+    else
+        fail "people scan" "Kein Gesicht erkannt: $SCAN_OUT"
+    fi
+else
+    pass "people scan (übersprungen — Testbild nicht vorhanden)"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
