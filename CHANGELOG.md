@@ -2,6 +2,16 @@
 
 ---
 
+## 1.50.0
+**Feature — Qualitätsmerkmale als iAlbum-Kriterium**
+
+- Neue Attribute in iAlben: „Unscharf", „Unterbelichtet", „Überbelichtet", „Geschlossene Augen"
+- Kombinierbar mit allen anderen Kriterien (Bewertung, Datum, Kamera usw.)
+- Ersetzen die früheren fest verdrahteten Qualitäts-Tabs — jetzt flexibel als iAlbum filterbar
+- Hinweis: Qualitätsanalyse muss vorher gelaufen sein (Bilder ohne Scan werden übersprungen)
+
+---
+
 ## 1.49.0
 **Feature — Pfeiltasten + Shift-Auswahl in Alben- und iAlben-Sidebar**
 

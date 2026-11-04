@@ -433,6 +433,35 @@ private struct CriterionRow: View {
                 .onAppear { if criterion.textValue.isEmpty { criterion.textValue = "R" } }
             }
 
+        // --- Qualitätsmerkmale ---
+        case .isBlurry:
+            Picker("", selection: $criterion.boolValue) {
+                Text("Unscharf").tag(true)
+                Text("Nicht unscharf").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 140)
+
+        case .isUnderexposed:
+            Picker("", selection: $criterion.boolValue) {
+                Text("Unterbelichtet").tag(true)
+                Text("Nicht unterbelichtet").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 160)
+
+        case .isOverexposed:
+            Picker("", selection: $criterion.boolValue) {
+                Text("Überbelichtet").tag(true)
+                Text("Nicht überbelichtet").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 160)
+
+        case .hasClosedEyes:
+            Picker("", selection: $criterion.boolValue) {
+                Text("Augen geschlossen").tag(true)
+                Text("Augen offen").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 160)
+
         // --- Nicht in Album ---
         case .notInAlbum:
             Text("Keinem Album zugeordnet")

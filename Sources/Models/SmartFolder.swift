@@ -72,6 +72,8 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
     case colorRatio
     // Fotos die keinem Album zugeordnet sind
     case notInAlbum
+    // Qualitätsmerkmale (Analyse muss vorher gelaufen sein)
+    case isBlurry, isUnderexposed, isOverexposed, hasClosedEyes
 
     var displayName: String {
         switch self {
@@ -96,6 +98,10 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .smartFolderRef:   return "iAlbum"
         case .colorRatio:       return "Farbanteil (%)"
         case .notInAlbum:       return "Nicht in Album"
+        case .isBlurry:         return "Unscharf"
+        case .isUnderexposed:   return "Unterbelichtet"
+        case .isOverexposed:    return "Überbelichtet"
+        case .hasClosedEyes:    return "Geschlossene Augen"
         }
     }
 
@@ -103,7 +109,8 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
 
     var type: AttributeType {
         switch self {
-        case .flag, .colorLabel, .isRAW, .orientation, .hdr: return .enumType
+        case .flag, .colorLabel, .isRAW, .orientation, .hdr,
+             .isBlurry, .isUnderexposed, .isOverexposed, .hasClosedEyes: return .enumType
         case .rating, .iso, .focalLength, .aperture, .eloRating: return .numeric
         case .captureDate:                             return .dateType
         case .cameraMake, .cameraModel, .lens, .filename: return .text

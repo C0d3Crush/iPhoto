@@ -539,6 +539,24 @@ extension ImageViewModel {
             case .colorRatio:
                 guard let ratio = colorChannelRatio(doc: doc, channel: c.textValue) else { return false }
                 return applyNumericOp(c.op, value: ratio, lo: c.numericValue, hi: c.numericValue2)
+            case .isBlurry:
+                guard doc.qualityScanned else { return false }
+                let flag = !doc.blurOverride && (doc.blurScore ?? .infinity) < quality.blurThreshold
+                return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
+            case .isUnderexposed:
+                guard doc.qualityScanned else { return false }
+                let flag = !doc.underOverride && (doc.underRatio ?? 0) >= quality.shadowClipThreshold
+                return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
+            case .isOverexposed:
+                guard doc.qualityScanned else { return false }
+                let flag = !doc.overOverride && (doc.overRatio ?? 0) >= quality.highlightClipThreshold
+                return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
+            case .hasClosedEyes:
+                guard doc.qualityScanned else { return false }
+                let flag: Bool
+                if let eo = doc.eyeOpenness { flag = eo < quality.eyeOpennessThreshold }
+                else { flag = false }
+                return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
             }
         }
         return sf.matchAll ? results.allSatisfy { $0 } : results.contains { $0 }

@@ -145,7 +145,8 @@ enum SmartFolderSQLGenerator {
             return "i.path NOT IN (SELECT ai.image_path FROM album_images ai)"
 
         // ── Runtime-only ─────────────────────────────────────────────────────
-        case .colorRatio, .smartFolderRef:
+        case .colorRatio, .smartFolderRef,
+             .isBlurry, .isUnderexposed, .isOverexposed, .hasClosedEyes:
             return nil
         }
     }
