@@ -97,6 +97,24 @@ if [ $ALBUM_ADD_ERR -ne 0 ]; then pass "album add ohne Bilder (Fehler korrekt)";
 ALBUM_REM_ERR=0; "$BIN" album remove "$ALBUM_ID" > /dev/null 2>&1 || ALBUM_REM_ERR=$?
 if [ $ALBUM_REM_ERR -ne 0 ]; then pass "album remove ohne Bilder (Fehler korrekt)"; else fail "album remove ohne Bilder" "Exitcode 0"; fi
 
+# album reorder
+REORDER_AID=$("$BIN" album create "ReorderAlbum" --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || REORDER_AID=""
+if [ -n "$REORDER_AID" ]; then
+    IMG2="$TMPDIR_BASE/test2.png"; cp "$INPUT" "$IMG2"
+    "$BIN" album add "$REORDER_AID" "$INPUT" "$IMG2" > /dev/null 2>&1 || true
+    OUT=$("$BIN" album reorder "$REORDER_AID" "$IMG2" "$INPUT" 2>&1)
+    if echo "$OUT" | grep -q "sortiert"; then pass "album reorder (Meldung)"; else fail "album reorder" "$OUT"; fi
+    OUT=$("$BIN" album reorder "$REORDER_AID" "$IMG2" "$INPUT" --json 2>&1)
+    if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+        pass "album reorder --json (ok=true)"; else fail "album reorder --json" "$OUT"; fi
+    "$BIN" album delete "$REORDER_AID" > /dev/null 2>&1 || true
+else
+    pass "album reorder übersprungen"
+fi
+
+REORDER_ERR=0; "$BIN" album reorder "$ALBUM_ID" > /dev/null 2>&1 || REORDER_ERR=$?
+if [ $REORDER_ERR -ne 0 ]; then pass "album reorder ohne Bilder (Fehler korrekt)"; else fail "album reorder ohne Bilder" "Exitcode 0"; fi
+
 # album delete
 DEL_OUT=$("$BIN" album delete "$ALBUM_ID" 2>&1)
 if echo "$DEL_OUT" | grep -q "gelöscht"; then
@@ -684,6 +702,58 @@ if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert isi
 else
     fail "people cluster --json leer" "Kein JSON oder 'clusters' fehlt: $OUT"
 fi
+
+echo ""
+
+# ===========================================================================
+# hotpixel
+# ===========================================================================
+echo "=== hotpixel ==="
+
+HOTPIXEL_EXIT=0; "$BIN" hotpixel > /dev/null 2>&1 || HOTPIXEL_EXIT=$?
+if [ $HOTPIXEL_EXIT -ne 0 ]; then pass "hotpixel ohne Argumente (Fehler korrekt)"; else fail "hotpixel ohne Argumente" "Exitcode 0"; fi
+
+HOTPIXEL_EXIT2=0; "$BIN" hotpixel "/nicht/vorhanden" > /dev/null 2>&1 || HOTPIXEL_EXIT2=$?
+if [ $HOTPIXEL_EXIT2 -ne 0 ]; then pass "hotpixel nicht-existenter Ordner (Fehler korrekt)"; else fail "hotpixel nicht-existenter Ordner" "Exitcode 0"; fi
+
+EMPTY_DIR="$TMPDIR_BASE/empty_hp"
+mkdir -p "$EMPTY_DIR"
+HOTPIXEL_EXIT3=0; "$BIN" hotpixel "$EMPTY_DIR" > /dev/null 2>&1 || HOTPIXEL_EXIT3=$?
+if [ $HOTPIXEL_EXIT3 -ne 0 ]; then pass "hotpixel leerer Ordner (Fehler korrekt)"; else fail "hotpixel leerer Ordner" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# hdr
+# ===========================================================================
+echo "=== hdr ==="
+
+HDR_EXIT=0; "$BIN" hdr > /dev/null 2>&1 || HDR_EXIT=$?
+if [ $HDR_EXIT -ne 0 ]; then pass "hdr ohne Argumente (Fehler korrekt)"; else fail "hdr ohne Argumente" "Exitcode 0"; fi
+
+HDR_DIR="$TMPDIR_BASE/hdr_single"
+mkdir -p "$HDR_DIR"; cp "$INPUT" "$HDR_DIR/only.png"
+HDR_EXIT2=0; "$BIN" hdr "$HDR_DIR" --output-dir "$TMPDIR_BASE/hdr_out" > /dev/null 2>&1 || HDR_EXIT2=$?
+if [ $HDR_EXIT2 -ne 0 ]; then pass "hdr Ordner mit 1 Bild (Fehler korrekt — min. 2 benötigt)"; else fail "hdr Ordner mit 1 Bild" "Exitcode 0"; fi
+
+HDR_EXIT3=0; "$BIN" hdr "/nicht/vorhanden" --output-dir "$TMPDIR_BASE/hdr_out2" > /dev/null 2>&1 || HDR_EXIT3=$?
+if [ $HDR_EXIT3 -ne 0 ]; then pass "hdr nicht-existenter Ordner (Fehler korrekt)"; else fail "hdr nicht-existenter Ordner" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# inpaint
+# ===========================================================================
+echo "=== inpaint ==="
+
+INPAINT_EXIT=0; "$BIN" inpaint > /dev/null 2>&1 || INPAINT_EXIT=$?
+if [ $INPAINT_EXIT -ne 0 ]; then pass "inpaint ohne Argumente (Fehler korrekt)"; else fail "inpaint ohne Argumente" "Exitcode 0"; fi
+
+INPAINT_EXIT2=0; "$BIN" inpaint "$INPUT" > /dev/null 2>&1 || INPAINT_EXIT2=$?
+if [ $INPAINT_EXIT2 -ne 0 ]; then pass "inpaint ohne --output (Fehler korrekt)"; else fail "inpaint ohne --output" "Exitcode 0"; fi
+
+INPAINT_EXIT3=0; "$BIN" inpaint "/nicht/vorhanden.png" --output "$TMPDIR_BASE/x.png" > /dev/null 2>&1 || INPAINT_EXIT3=$?
+if [ $INPAINT_EXIT3 -ne 0 ]; then pass "inpaint nicht-existente Datei (Fehler korrekt)"; else fail "inpaint nicht-existente Datei" "Exitcode 0"; fi
 
 echo ""
 

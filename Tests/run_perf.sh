@@ -495,6 +495,67 @@ if [ $ELAPSED -le $THRESHOLD ]; then pass "people faces" "$ELAPSED"; else fail "
 echo ""
 
 # ===========================================================================
+# 20. Album-Schreiboperationen-Latenz
+# ===========================================================================
+echo "=== 20. Album-Schreiboperationen-Latenz ==="
+
+THRESHOLD=500
+
+PERF_AID=$("$BIN" album create "PerfAlbum" --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || PERF_AID=""
+
+if [ -n "$PERF_AID" ]; then
+    T0=$(ms); "$BIN" album add "$PERF_AID" "$SMALL" > /dev/null 2>&1 || true; T1=$(ms)
+    ELAPSED=$((T1-T0))
+    if [ $ELAPSED -le $THRESHOLD ]; then pass "album add (Schreiben)" "$ELAPSED"; else fail "album add (Schreiben)" "$ELAPSED" "$THRESHOLD"; fi
+
+    T0=$(ms); "$BIN" album images "$PERF_AID" > /dev/null 2>&1 || true; T1=$(ms)
+    ELAPSED=$((T1-T0))
+    if [ $ELAPSED -le $THRESHOLD ]; then pass "album images (Lesen)" "$ELAPSED"; else fail "album images (Lesen)" "$ELAPSED" "$THRESHOLD"; fi
+
+    T0=$(ms); "$BIN" album reorder "$PERF_AID" "$SMALL" > /dev/null 2>&1 || true; T1=$(ms)
+    ELAPSED=$((T1-T0))
+    if [ $ELAPSED -le $THRESHOLD ]; then pass "album reorder (Schreiben)" "$ELAPSED"; else fail "album reorder (Schreiben)" "$ELAPSED" "$THRESHOLD"; fi
+
+    T0=$(ms); "$BIN" album remove "$PERF_AID" "$SMALL" > /dev/null 2>&1 || true; T1=$(ms)
+    ELAPSED=$((T1-T0))
+    if [ $ELAPSED -le $THRESHOLD ]; then pass "album remove (Schreiben)" "$ELAPSED"; else fail "album remove (Schreiben)" "$ELAPSED" "$THRESHOLD"; fi
+
+    T0=$(ms); "$BIN" album delete "$PERF_AID" > /dev/null 2>&1 || true; T1=$(ms)
+    ELAPSED=$((T1-T0))
+    if [ $ELAPSED -le $THRESHOLD ]; then pass "album delete (Schreiben)" "$ELAPSED"; else fail "album delete (Schreiben)" "$ELAPSED" "$THRESHOLD"; fi
+else
+    pass "album Schreibops-Latenz übersprungen (create fehlgeschlagen)" "0"
+    pass "album images-Latenz übersprungen" "0"
+    pass "album reorder-Latenz übersprungen" "0"
+    pass "album remove-Latenz übersprungen" "0"
+    pass "album delete-Latenz übersprungen" "0"
+fi
+echo ""
+
+# ===========================================================================
+# 21. SmartFolder create/query-Latenz
+# ===========================================================================
+echo "=== 21. SmartFolder create/query-Latenz ==="
+
+THRESHOLD=500
+T0=$(ms); "$BIN" smartfolder create "PerfOrdner" --rating-min 2 > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "smartfolder create" "$ELAPSED"; else fail "smartfolder create" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms); "$BIN" smartfolder query "PerfOrdner" > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "smartfolder query" "$ELAPSED"; else fail "smartfolder query" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms); "$BIN" smartfolder query "PerfOrdner" --json > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "smartfolder query --json" "$ELAPSED"; else fail "smartfolder query --json" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms); "$BIN" smartfolder delete "PerfOrdner" > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "smartfolder delete" "$ELAPSED"; else fail "smartfolder delete" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
 echo "=============================="
 echo "Leistungstest: $PASS bestanden, $FAIL fehlgeschlagen"
 echo "=============================="

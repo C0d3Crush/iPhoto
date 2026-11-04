@@ -32,7 +32,7 @@ private func printUsage() {
       iphoto-cli people faces [--path <bildpfad>] [--json]
       iphoto-cli people cluster [--epsilon 0.12] [--json]
       iphoto-cli people rename <id> <name> [--json]
-      iphoto-cli album list|create|delete|add|remove|images [--json]
+      iphoto-cli album list|create|delete|add|remove|images|reorder [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color red|yellow|green|blue|none] [--json]
@@ -1750,8 +1750,25 @@ private func runAlbum(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "reorder":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli album reorder <album-id> <bild1> [<bild2>...]\n", stderr); return 1
+        }
+        let albumID = positional[0]
+        let paths = Array(positional.dropFirst())
+        for (i, p) in paths.enumerated() { catalog.setSortOrder(albumID: albumID, path: p, order: i) }
+        if jsonMode {
+            let obj: [String: Any] = ["album_id": albumID, "count": paths.count, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("\(paths.count) Bild(er) in Album \(albumID) neu sortiert")
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images\n", stderr)
+        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images|reorder\n", stderr)
         return 1
     }
 }

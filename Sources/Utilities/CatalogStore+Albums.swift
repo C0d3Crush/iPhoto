@@ -52,6 +52,14 @@ extension CatalogStore {
         }
     }
 
+    func setSortOrder(albumID: String, path: String, order: Int) {
+        queue.sync {
+            let stmt = prepare("UPDATE album_images SET sort_order=? WHERE album_id=? AND image_path=?")
+            sqlite3_bind_int(stmt, 1, Int32(order)); bind(stmt, 2, albumID); bind(stmt, 3, path)
+            step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
     func images(inAlbum albumID: String) -> [String] {
         queue.sync {
             let stmt = prepare("SELECT image_path FROM album_images WHERE album_id=? ORDER BY sort_order")

@@ -2,6 +2,17 @@
 
 ---
 
+## 1.62.0
+**Feature — album reorder, hotpixel/hdr/inpaint Fehlerpfad-Tests, 53 Perf-Tests**
+
+- `iphoto-cli album reorder <album-id> <bild1> <bild2> ...` — setzt sort_order explizit in einem Album
+- `CatalogStore.setSortOrder(albumID:path:order:)` — neuer SQLite-Schreibbefehl für Sortierung
+- Tests für `hotpixel`, `hdr`, `inpaint` Fehlerpfade: fehlende Argumente, nicht-existente Dateien, leere Ordner (9 neue Tests)
+- Perf-Suite: Sections 20–21 — Album-Schreiboperationen und SmartFolder create/query/delete (9 neue Benchmarks)
+- 131 CLI-Tests, 53 Perf-Tests — alle grün
+
+---
+
 ## 1.61.0
 **Feature — search --color, catalog vacuum, --json für album/version, 119 CLI-Tests**
 
