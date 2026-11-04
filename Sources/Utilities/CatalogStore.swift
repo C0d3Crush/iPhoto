@@ -341,6 +341,24 @@ final class CatalogStore {
         }
     }
 
+    func allImagesWithSeqNumbers() -> [(path: String, filename: String, seq: Int)] {
+        queue.sync {
+            let stmt = prepare("""
+                SELECT path, filename, sequence_number FROM images
+                WHERE sequence_number IS NOT NULL AND sequence_number > 0
+                ORDER BY filename
+            """)
+            var out: [(path: String, filename: String, seq: Int)] = []
+            while step(stmt) == SQLITE_ROW {
+                let p = String(cString: sqlite3_column_text(stmt, 0))
+                let f = String(cString: sqlite3_column_text(stmt, 1))
+                let s = Int(sqlite3_column_int(stmt, 2))
+                out.append((path: p, filename: f, seq: s))
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
     func removeImage(path: String) {
         queue.sync {
             let stmt = prepare("DELETE FROM images WHERE path=?")

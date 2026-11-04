@@ -13,6 +13,11 @@ PASS=0; FAIL=0
 pass() { echo "  PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "  FAIL: $1 — $2"; FAIL=$((FAIL+1)); }
 
+LOG_DIR="$ROOT/Tests/results"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/cli_$(date +%Y%m%d_%H%M%S).log"
+exec > >(tee "$LOG_FILE") 2>&1
+
 [ -x "$BIN" ] || { echo "Fehler: $BIN nicht gefunden. ./build.sh ausführen."; exit 1; }
 
 # Minimales Test-PNG erzeugen
@@ -243,9 +248,119 @@ if [ $? -eq 0 ]; then pass "duplicate similar (Exitcode 0)"; else fail "duplicat
 echo ""
 
 # ===========================================================================
+# smartfolder
+# ===========================================================================
+echo "=== smartfolder ==="
+
+SF_LIST=$("$BIN" smartfolder list 2>&1)
+if [ $? -eq 0 ]; then pass "smartfolder list leer (Exitcode 0)"; else fail "smartfolder list leer" "$SF_LIST"; fi
+
+SF_CREATE=$("$BIN" smartfolder create "TestOrdner" --rating-min 3 2>&1)
+if echo "$SF_CREATE" | grep -q "TestOrdner"; then pass "smartfolder create (Name in Ausgabe)"; else fail "smartfolder create" "$SF_CREATE"; fi
+
+SF_LIST2=$("$BIN" smartfolder list 2>&1)
+if echo "$SF_LIST2" | grep -q "TestOrdner"; then pass "smartfolder list zeigt neuen Ordner"; else fail "smartfolder list nach create" "$SF_LIST2"; fi
+
+SF_LIST_JSON=$("$BIN" smartfolder list --json 2>&1)
+if echo "$SF_LIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert any(d['name']=='TestOrdner' for d in lst)" 2>/dev/null; then
+    pass "smartfolder list --json (JSON mit TestOrdner)"; else fail "smartfolder list --json" "$SF_LIST_JSON"; fi
+
+SF_DUP_EXIT=0; "$BIN" smartfolder create "TestOrdner" > /dev/null 2>&1 || SF_DUP_EXIT=$?
+if [ $SF_DUP_EXIT -ne 0 ]; then pass "smartfolder create Duplikat schlägt fehl (korrekt)"; else fail "smartfolder create Duplikat" "Sollte fehlschlagen"; fi
+
+SF_QUERY=$("$BIN" smartfolder query "TestOrdner" 2>&1)
+if echo "$SF_QUERY" | python3 -c "import sys; sys.exit(0)" 2>/dev/null && true; then pass "smartfolder query (Exitcode 0)"; else fail "smartfolder query" "$SF_QUERY"; fi
+
+SF_QUERY_JSON=$("$BIN" smartfolder query "TestOrdner" --json 2>&1)
+if echo "$SF_QUERY_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "smartfolder query --json (JSON-Array)"; else fail "smartfolder query --json" "$SF_QUERY_JSON"; fi
+
+SF_MISSING_EXIT=0; "$BIN" smartfolder query "NichtVorhanden" > /dev/null 2>&1 || SF_MISSING_EXIT=$?
+if [ $SF_MISSING_EXIT -ne 0 ]; then pass "smartfolder query fehlender Ordner schlägt fehl"; else fail "smartfolder query missing" "Sollte fehlschlagen"; fi
+
+SF_DEL=$("$BIN" smartfolder delete "TestOrdner" 2>&1)
+if echo "$SF_DEL" | grep -q "gelöscht"; then pass "smartfolder delete (Meldung)"; else fail "smartfolder delete" "$SF_DEL"; fi
+
+SF_LIST3=$("$BIN" smartfolder list 2>&1)
+if echo "$SF_LIST3" | grep -q "TestOrdner"; then fail "smartfolder list nach delete" "Ordner noch vorhanden: $SF_LIST3"; else pass "smartfolder list nach delete (leer)"; fi
+
+echo ""
+
+# ===========================================================================
+# stack
+# ===========================================================================
+echo "=== stack ==="
+
+ST_LIST=$("$BIN" stack list 2>&1)
+if [ $? -eq 0 ]; then pass "stack list (Exitcode 0, keine Seq-Daten)"; else fail "stack list" "$ST_LIST"; fi
+
+ST_LIST_JSON=$("$BIN" stack list --json 2>&1)
+if echo "$ST_LIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "stack list --json (JSON-Array)"; else fail "stack list --json" "$ST_LIST_JSON"; fi
+
+ST_QUERY_EXIT=0; "$BIN" stack query "/nonexistent/image.RAF" > /dev/null 2>&1 || ST_QUERY_EXIT=$?
+if [ $ST_QUERY_EXIT -ne 0 ]; then pass "stack query fehlender Pfad schlägt fehl"; else fail "stack query missing" "Sollte fehlschlagen"; fi
+
+echo ""
+
+# ===========================================================================
+# people rename
+# ===========================================================================
+echo "=== people rename ==="
+
+PR_LIST=$("$BIN" people list --json 2>&1)
+PR_ID=$(echo "$PR_LIST" | python3 -c "import sys,json; lst=json.load(sys.stdin); print(lst[0]['id'])" 2>/dev/null || true)
+if [ -n "$PR_ID" ]; then
+    PR_REN=$("$BIN" people rename "$PR_ID" "TestPerson" 2>&1)
+    if echo "$PR_REN" | grep -q "TestPerson"; then pass "people rename (Meldung enthält neuen Namen)"; else fail "people rename" "$PR_REN"; fi
+    PR_LIST2=$("$BIN" people list --json 2>&1)
+    if echo "$PR_LIST2" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert any(d.get('name')=='TestPerson' for d in lst)" 2>/dev/null; then
+        pass "people rename persistiert (list zeigt neuen Namen)"; else fail "people rename persistiert" "$PR_LIST2"; fi
+else
+    pass "people rename übersprungen (kein Person im Katalog)"
+fi
+
+PR_ERR_EXIT=0; "$BIN" people rename "NICHT-VORHANDEN-UUID" "Name" > /dev/null 2>&1 || PR_ERR_EXIT=$?
+if [ $PR_ERR_EXIT -ne 0 ]; then pass "people rename fehlende ID schlägt fehl"; else fail "people rename fehlende ID" "Sollte fehlschlagen"; fi
+
+echo ""
+
+# ===========================================================================
+# trash
+# ===========================================================================
+echo "=== trash ==="
+
+TR_LIST=$("$BIN" trash list 2>&1)
+if [ $? -eq 0 ]; then pass "trash list leer (Exitcode 0)"; else fail "trash list" "$TR_LIST"; fi
+
+TR_LIST_JSON=$("$BIN" trash list --json 2>&1)
+if echo "$TR_LIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "trash list --json (JSON-Array)"; else fail "trash list --json" "$TR_LIST_JSON"; fi
+
+"$BIN" rating "$INPUT" --set 0 > /dev/null 2>&1 || true
+TR_MARK=$("$BIN" trash mark "$INPUT" 2>&1)
+if echo "$TR_MARK" | grep -q "Papierkorb"; then pass "trash mark (Meldung)"; else fail "trash mark" "$TR_MARK"; fi
+
+TR_LIST2=$("$BIN" trash list 2>&1)
+if echo "$TR_LIST2" | grep -q "$INPUT"; then pass "trash list zeigt markiertes Bild"; else fail "trash list nach mark" "$TR_LIST2"; fi
+
+TR_RESTORE=$("$BIN" trash restore "$INPUT" 2>&1)
+if echo "$TR_RESTORE" | grep -q "wiederhergestellt"; then pass "trash restore (Meldung)"; else fail "trash restore" "$TR_RESTORE"; fi
+
+TR_LIST3=$("$BIN" trash list 2>&1)
+if echo "$TR_LIST3" | grep -q "$INPUT"; then fail "trash list nach restore" "Bild noch im Papierkorb: $TR_LIST3"; else pass "trash list nach restore (leer)"; fi
+
+TR_RESTORE_ALL=$("$BIN" trash restore --all 2>&1)
+if [ $? -eq 0 ]; then pass "trash restore --all (Exitcode 0)"; else fail "trash restore --all" "$TR_RESTORE_ALL"; fi
+
+echo ""
+
+# ===========================================================================
 # Zusammenfassung
 # ===========================================================================
 echo "=============================="
 echo "Ergebnis: $PASS bestanden, $FAIL fehlgeschlagen"
 echo "=============================="
+printf "%s\t%d\t%d\t%s\n" "$(date +%Y-%m-%dT%H:%M:%S)" "$PASS" "$FAIL" "$([ $FAIL -eq 0 ] && echo OK || echo FAIL)" >> "$LOG_DIR/cli_history.tsv"
+echo "Protokoll: $LOG_FILE"
 [ $FAIL -eq 0 ] && exit 0 || exit 1

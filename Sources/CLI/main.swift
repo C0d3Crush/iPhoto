@@ -30,6 +30,7 @@ private func printUsage() {
       iphoto-cli people list [--json]
       iphoto-cli people faces [--path <bildpfad>] [--json]
       iphoto-cli people cluster [--epsilon 0.12] [--json]
+      iphoto-cli people rename <id> <name> [--json]
       iphoto-cli album list|create|delete|add|remove|images [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli version list|backup|restore|delete [--json]
@@ -37,6 +38,15 @@ private func printUsage() {
       iphoto-cli catalog stats|path [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli duplicate list|similar [--json]
+      iphoto-cli smartfolder list [--json]
+      iphoto-cli smartfolder query <name> [--json]
+      iphoto-cli smartfolder create <name> [--rating-min N] [--json]
+      iphoto-cli smartfolder delete <name>
+      iphoto-cli stack list [--json]
+      iphoto-cli stack query <bildpfad> [--json]
+      iphoto-cli trash list [--json]
+      iphoto-cli trash mark <bildpfad>
+      iphoto-cli trash restore <bildpfad>|--all
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -1295,8 +1305,292 @@ private func runPeople(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "rename":
+        guard args.count >= 3 else {
+            fputs("Verwendung: iphoto-cli people rename <id> <name> [--json]\n", stderr)
+            return 1
+        }
+        let personID = args[1]
+        let newName  = args[2]
+        let all = catalog.allPeople()
+        guard let person = all.first(where: { $0.id == personID }) else {
+            fputs("Fehler: Person '\(personID)' nicht im Katalog\n", stderr)
+            return 1
+        }
+        var updated = person; updated.name = newName
+        catalog.updatePerson(updated)
+        if jsonMode {
+            if let data = try? JSONSerialization.data(withJSONObject: ["id": personID, "name": newName]),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+        } else {
+            print("Person umbenannt: \(personID) → \(newName)")
+        }
+        return 0
+
     default:
-        fputs("Fehler: Unbekannter people-Unterbefehl '\(sub)'. Erlaubt: list, faces, cluster\n", stderr)
+        fputs("Fehler: Unbekannter people-Unterbefehl '\(sub)'. Erlaubt: list, faces, cluster, rename\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - SmartFolder
+
+private func smartFolderFileURL() -> URL {
+    if let dbPath = envDBPath() {
+        return URL(fileURLWithPath: dbPath).deletingLastPathComponent()
+            .appendingPathComponent("smartFolders.json")
+    }
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("iPhoto/smartFolders.json")
+}
+
+private func loadSmartFolders() -> [SmartFolder] {
+    guard let data = try? Data(contentsOf: smartFolderFileURL()),
+          let arr  = try? JSONDecoder().decode([SmartFolder].self, from: data)
+    else { return [] }
+    return arr
+}
+
+private func saveSmartFolders(_ folders: [SmartFolder]) -> Bool {
+    let url = smartFolderFileURL()
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                             withIntermediateDirectories: true)
+    guard let data = try? JSONEncoder().encode(folders) else { return false }
+    return (try? data.write(to: url)) != nil
+}
+
+private func runSmartFolder(_ args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        fputs("Verwendung: iphoto-cli smartfolder list|query|create|delete [opts]\n", stderr)
+        return 1
+    }
+    let subArgs  = Array(args.dropFirst())
+    let jsonMode = args.contains("--json")
+
+    switch sub {
+    case "list":
+        let folders = loadSmartFolders()
+        if jsonMode {
+            let items = folders.map { ["id": $0.id.uuidString, "name": $0.name] }
+            if let data = try? JSONSerialization.data(withJSONObject: items),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+            else { print("[]") }
+        } else {
+            if folders.isEmpty { print("(keine Smart-Ordner)") }
+            else { folders.forEach { print("[\($0.id.uuidString)] \($0.name)") } }
+        }
+        return 0
+
+    case "query":
+        guard let name = subArgs.first(where: { !$0.hasPrefix("--") }) else {
+            fputs("Verwendung: iphoto-cli smartfolder query <name> [--json]\n", stderr)
+            return 1
+        }
+        guard let sf = loadSmartFolders().first(where: { $0.name == name }) else {
+            fputs("Fehler: Smart-Ordner '\(name)' nicht gefunden\n", stderr)
+            return 1
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        guard let paths = catalog.orderedPathsForSmartFolder(sf) else {
+            fputs("Fehler: Smart-Ordner enthält nicht ausführbare Kriterien (runtime-only)\n", stderr)
+            return 1
+        }
+        if jsonMode {
+            if let data = try? JSONSerialization.data(withJSONObject: paths),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+            else { print("[]") }
+        } else {
+            if paths.isEmpty { print("(keine Treffer)") }
+            else { paths.forEach { print($0) } }
+        }
+        return 0
+
+    case "create":
+        guard let name = subArgs.first(where: { !$0.hasPrefix("--") }) else {
+            fputs("Verwendung: iphoto-cli smartfolder create <name> [--rating-min N] [--json]\n", stderr)
+            return 1
+        }
+        var folders = loadSmartFolders()
+        guard !folders.contains(where: { $0.name == name }) else {
+            fputs("Fehler: Smart-Ordner '\(name)' existiert bereits\n", stderr)
+            return 1
+        }
+        var sf = SmartFolder(name: name)
+        if let idx = subArgs.firstIndex(of: "--rating-min"), idx + 1 < subArgs.count,
+           let n = Int(subArgs[idx + 1]) {
+            var c = SmartFolderCriterion()
+            c.attribute = .rating
+            c.op = .greaterThan          // greaterThan with ratingValue N means >= N
+            c.ratingValue = n
+            sf.criteria.append(c)
+        }
+        folders.append(sf)
+        guard saveSmartFolders(folders) else {
+            fputs("Fehler: Konnte Smart-Ordner nicht speichern\n", stderr)
+            return 1
+        }
+        if jsonMode {
+            if let data = try? JSONEncoder().encode(sf),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+        } else {
+            print("Smart-Ordner erstellt: [\(sf.id.uuidString)] \(name)")
+        }
+        return 0
+
+    case "delete":
+        guard let name = subArgs.first(where: { !$0.hasPrefix("--") }) else {
+            fputs("Verwendung: iphoto-cli smartfolder delete <name>\n", stderr)
+            return 1
+        }
+        var folders = loadSmartFolders()
+        let before = folders.count
+        folders.removeAll { $0.name == name }
+        guard folders.count < before else {
+            fputs("Fehler: Smart-Ordner '\(name)' nicht gefunden\n", stderr)
+            return 1
+        }
+        guard saveSmartFolders(folders) else {
+            fputs("Fehler: Konnte Smart-Ordner nicht speichern\n", stderr)
+            return 1
+        }
+        print("Smart-Ordner gelöscht: \(name)")
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli smartfolder list|query|create|delete [opts]\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Stack
+
+private func runStack(_ args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        fputs("Verwendung: iphoto-cli stack list|query [opts]\n", stderr)
+        return 1
+    }
+    let jsonMode = args.contains("--json")
+    let catalog  = CatalogStore(dbPath: envDBPath())
+    let raw      = catalog.allImagesWithSeqNumbers()
+
+    // Build StackDetector items and keep path mapping
+    var idToPath: [UUID: String] = [:]
+    let items: [StackDetector.Item] = raw.map { entry in
+        let id = UUID()
+        idToPath[id] = entry.path
+        return StackDetector.Item(id: id, filename: entry.filename, seq: entry.seq)
+    }
+    let result = StackDetector.detect(items)
+
+    switch sub {
+    case "list":
+        // Build stack groups: leader → member paths (leader first)
+        var stacks: [[String: Any]] = []
+        for (leaderID, memberIDs) in result.membersByLeader {
+            guard let leaderPath = idToPath[leaderID] else { continue }
+            let memberPaths = memberIDs.compactMap { idToPath[$0] }.sorted()
+            stacks.append(["leader": leaderPath, "members": memberPaths, "count": memberIDs.count])
+        }
+        stacks.sort { ($0["leader"] as! String) < ($1["leader"] as! String) }
+        if jsonMode {
+            if let data = try? JSONSerialization.data(withJSONObject: stacks),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+            else { print("[]") }
+        } else {
+            if stacks.isEmpty { print("Keine Serienbild-Stapel im Katalog.") }
+            else {
+                for s in stacks {
+                    print("Stapel (\(s["count"]!) Bilder):")
+                    print("  Leader: \(s["leader"]!)")
+                    for m in (s["members"] as! [String]) { print("    \(m)") }
+                }
+            }
+        }
+        return 0
+
+    case "query":
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("--") }) else {
+            fputs("Verwendung: iphoto-cli stack query <bildpfad> [--json]\n", stderr)
+            return 1
+        }
+        guard let myID = idToPath.first(where: { $0.value == path })?.key else {
+            fputs("Fehler: Pfad nicht im Katalog oder keine Sequenznummer\n", stderr)
+            return 1
+        }
+        guard let leaderID = result.leaderByMember[myID],
+              let leaderPath = idToPath[leaderID],
+              let memberIDs = result.membersByLeader[leaderID] else {
+            if jsonMode { print("null") } else { print("Bild gehört zu keinem Stapel.") }
+            return 0
+        }
+        let memberPaths = memberIDs.compactMap { idToPath[$0] }.sorted()
+        if jsonMode {
+            let obj: [String: Any] = ["leader": leaderPath, "members": memberPaths, "count": memberIDs.count]
+            if let data = try? JSONSerialization.data(withJSONObject: obj),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+        } else {
+            print("Stapel (\(memberIDs.count) Bilder), Leader: \(leaderPath)")
+            for m in memberPaths { print("  \(m)") }
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli stack list|query [opts]\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Trash
+
+private func runTrash(_ args: [String]) -> Int32 {
+    guard let sub = args.first else {
+        fputs("Verwendung: iphoto-cli trash list|mark|restore [opts]\n", stderr)
+        return 1
+    }
+    let jsonMode = args.contains("--json")
+    let catalog  = CatalogStore(dbPath: envDBPath())
+
+    switch sub {
+    case "list":
+        let paths = Array(catalog.trashedPaths()).sorted()
+        if jsonMode {
+            if let data = try? JSONSerialization.data(withJSONObject: paths),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+            else { print("[]") }
+        } else {
+            if paths.isEmpty { print("(Papierkorb leer)") }
+            else { paths.forEach { print($0) } }
+        }
+        return 0
+
+    case "mark":
+        let paths = Array(args.dropFirst()).filter { !$0.hasPrefix("--") }
+        guard !paths.isEmpty else {
+            fputs("Verwendung: iphoto-cli trash mark <bildpfad> [...]\n", stderr)
+            return 1
+        }
+        catalog.setTrashed(paths: paths, true)
+        print("\(paths.count) Bild(er) in den Papierkorb verschoben")
+        return 0
+
+    case "restore":
+        let subArgs = Array(args.dropFirst()).filter { !$0.hasPrefix("--") }
+        if subArgs.first == "--all" || args.contains("--all") {
+            let all = Array(catalog.trashedPaths())
+            catalog.setTrashed(paths: all, false)
+            print("\(all.count) Bild(er) aus dem Papierkorb wiederhergestellt")
+        } else {
+            guard !subArgs.isEmpty else {
+                fputs("Verwendung: iphoto-cli trash restore <bildpfad>|--all\n", stderr)
+                return 1
+            }
+            catalog.setTrashed(paths: subArgs, false)
+            print("\(subArgs.count) Bild(er) wiederhergestellt")
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli trash list|mark|restore [opts]\n", stderr)
         return 1
     }
 }
@@ -1765,6 +2059,15 @@ if firstArg == "motif" {
 }
 if firstArg == "duplicate" {
     exit(runDuplicate(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "smartfolder" {
+    exit(runSmartFolder(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "stack" {
+    exit(runStack(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "trash" {
+    exit(runTrash(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

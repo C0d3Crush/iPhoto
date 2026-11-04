@@ -13,6 +13,11 @@ PASS=0; FAIL=0
 pass() { echo "  PASS: $1 (${2}ms)"; PASS=$((PASS+1)); }
 fail() { echo "  FAIL: $1 — ${2}ms > Schwellwert ${3}ms"; FAIL=$((FAIL+1)); }
 
+LOG_DIR="$ROOT/Tests/results"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/perf_$(date +%Y%m%d_%H%M%S).log"
+exec > >(tee "$LOG_FILE") 2>&1
+
 [ -x "$BIN" ] || { echo "Fehler: $BIN nicht gefunden. ./build.sh ausführen."; exit 1; }
 
 # Hilfsfunktion: Zeit in Millisekunden
@@ -215,9 +220,93 @@ if [ $ELAPSED -le $THRESHOLD ]; then pass "duplicate similar" "$ELAPSED"; else f
 echo ""
 
 # ===========================================================================
+# 9. SmartFolder-Abfrage
+# ===========================================================================
+echo "=== 9. SmartFolder-Abfrage ==="
+
+"$BIN" smartfolder create "PerfTest-Rating" --rating-min 1 > /dev/null 2>&1 || true
+
+THRESHOLD=1500
+T0=$(ms)
+"$BIN" smartfolder query "PerfTest-Rating" > /dev/null 2>&1
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "smartfolder query (mit Katalog)" "$ELAPSED"; else fail "smartfolder query" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" smartfolder query "PerfTest-Rating" --json > /dev/null 2>&1
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "smartfolder query --json" "$ELAPSED"; else fail "smartfolder query --json" "$ELAPSED" "$THRESHOLD"; fi
+
+"$BIN" smartfolder delete "PerfTest-Rating" > /dev/null 2>&1 || true
+echo ""
+
+# ===========================================================================
+# 10. Adjust-Pipeline-Latenz
+# ===========================================================================
+echo "=== 10. Adjust-Pipeline-Latenz ==="
+
+ADJ_OUTPUT="$TMPDIR_BASE/adj_out.jpeg"
+THRESHOLD=3000
+T0=$(ms)
+"$BIN" adjust "$MEDIUM" --output "$ADJ_OUTPUT" --format jpeg \
+    --exposure 0.3 --contrast 0.1 --saturation 0.5 > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "adjust (512×512, 3 Regler)" "$ELAPSED"; else fail "adjust 512×512" "$ELAPSED" "$THRESHOLD"; fi
+if [ -f "$ADJ_OUTPUT" ]; then pass "adjust Ausgabedatei vorhanden" "0"; else fail "adjust Ausgabedatei fehlt" "0" "1"; fi
+
+ADJ_OUTPUT2="$TMPDIR_BASE/adj_out2.jpeg"
+THRESHOLD=5000
+T0=$(ms)
+"$BIN" adjust "$MEDIUM" --output "$ADJ_OUTPUT2" --format jpeg \
+    --exposure 0.2 --brightness 0.1 --contrast 0.1 --saturation 0.5 \
+    --warmth 0.1 --vibrance 0.2 --clarity 0.3 --sharpen 0.2 > /dev/null 2>&1 || true
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "adjust (8 Regler gleichzeitig)" "$ELAPSED"; else fail "adjust 8 Regler" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
+# 11. Such-Latenz bei 100 Katalog-Einträgen
+# ===========================================================================
+echo "=== 11. Catalog-Such-Latenz (100 Einträge) ==="
+
+SCALE_DIR="$TMPDIR_BASE/scale_imgs"
+mkdir -p "$SCALE_DIR"
+for i in $(seq 1 100); do
+    cp "$MEDIUM" "$SCALE_DIR/img_$(printf '%03d' $i).png"
+done
+"$BIN" quality scan "$SCALE_DIR" > /dev/null 2>&1 || true
+
+THRESHOLD=2000
+T0=$(ms)
+"$BIN" search "img" > /dev/null 2>&1
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "search (100 Einträge)" "$ELAPSED"; else fail "search 100 Einträge" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms)
+"$BIN" search "img" --json > /dev/null 2>&1
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "search --json (100 Einträge)" "$ELAPSED"; else fail "search --json 100 Einträge" "$ELAPSED" "$THRESHOLD"; fi
+
+THRESHOLD=1500
+T0=$(ms)
+"$BIN" stack list > /dev/null 2>&1
+T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "stack list (100 Katalog-Einträge)" "$ELAPSED"; else fail "stack list 100 Einträge" "$ELAPSED" "$THRESHOLD"; fi
+echo ""
+
+# ===========================================================================
 # Zusammenfassung
 # ===========================================================================
 echo "=============================="
 echo "Leistungstest: $PASS bestanden, $FAIL fehlgeschlagen"
 echo "=============================="
+printf "%s\t%d\t%d\t%s\n" "$(date +%Y-%m-%dT%H:%M:%S)" "$PASS" "$FAIL" "$([ $FAIL -eq 0 ] && echo OK || echo FAIL)" >> "$LOG_DIR/perf_history.tsv"
+echo "Protokoll: $LOG_FILE"
 [ $FAIL -eq 0 ] && exit 0 || exit 1

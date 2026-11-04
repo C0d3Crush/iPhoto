@@ -2,6 +2,20 @@
 
 ---
 
+## 1.59.0
+**Feature — Neue CLI-Befehle: smartfolder, stack, trash, people rename + automatisches Test-Logging**
+
+- `iphoto-cli smartfolder list/create/query/delete` — SmartFolder-Verwaltung über CLI
+- `iphoto-cli stack list/query` — Bildstapel aus dem Katalog abfragen
+- `iphoto-cli trash list/mark/restore` — Papierkorb-Verwaltung über CLI
+- `iphoto-cli people rename <id> <name>` — Personen umbenennen
+- `CatalogStore.allImagesWithSeqNumbers()` — Hilfsfunktion für Seq-Nummer-Abfragen
+- `Tests/run_cli.sh` und `run_perf.sh` schreiben Ergebnisse automatisch nach `Tests/results/` (Einzellog + History-TSV)
+- Perf-Test Sektion 10/11 korrigiert (`$MEDIUM` statt falschem `bench512.png`-Pfad)
+- 57 CLI-Tests, 23 Performance-Tests — alle grün
+
+---
+
 ## 1.58.3
 **Bugfix — SIGILL/SIGSEGV/SIGABRT beim parallelen RAF-Laden auf macOS 11 (Bug #38)**
 
