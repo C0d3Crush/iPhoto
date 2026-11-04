@@ -194,6 +194,8 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/CatalogStore+Motifs.swift \
     $ROOT/Sources/Utilities/CatalogStore+Quality.swift \
     $ROOT/Sources/Utilities/CatalogStore+Ratings.swift \
+    $ROOT/Sources/Utilities/CatalogStore+People.swift \
+    $ROOT/Sources/Models/FaceRecord.swift \
     $ROOT/Sources/Utilities/SmartFolderFileSync.swift \
     $ROOT/Sources/Utilities/SmartFolderSQLGenerator.swift \
     $ROOT/Sources/Utilities/VersionStore.swift \

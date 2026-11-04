@@ -98,6 +98,13 @@ struct ContentView: View {
                     .help("Zurück zur Übersicht")
                 }
 
+                if case .personDetail = viewModel.navSelection {
+                    Button(action: { viewModel.navSelection = .people }) {
+                        Image(systemName: "person.2")
+                    }
+                    .help("Zurück zu Menschen")
+                }
+
                 let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
                 let showModePicker = !viewModel.compare.active
                     && (isLibrary ? navShowViewMode : true)
@@ -274,7 +281,8 @@ struct ContentView: View {
     }
 
     @ViewBuilder private var mainContent: some View {
-        let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
+        let isPersonDetail: Bool = { if case .personDetail = viewModel.navSelection { return true }; return false }()
+        let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil || isPersonDetail
         let inQualityOverview = !viewModel.qualityDetailActive
             && (viewModel.navSelection == .blurry
                 || viewModel.navSelection == .underexposed
@@ -298,6 +306,10 @@ struct ContentView: View {
                     .environmentObject(viewModel)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.navSelection == .people {
+            PeopleView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.navSelection == .duplicates {
             DuplicatesView()
                 .environmentObject(viewModel)

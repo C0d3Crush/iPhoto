@@ -4,7 +4,7 @@ private let kSmartFolderIDType = "com.c0d3cru5h.iphoto.smartfolder-id"
 private let kNavSectionDragType = "com.c0d3cru5h.iphoto.navsection"
 
 enum NavSidebarSection: String, CaseIterable, Hashable {
-    case library, albums, smartFolders, volumes, trash, duplicates, blurry
+    case library, albums, smartFolders, volumes, trash, duplicates, blurry, people
 
     static func loadOrder() -> [NavSidebarSection] {
         guard let raw = UserDefaults.standard.string(forKey: "nav.sectionOrder") else {
@@ -37,6 +37,7 @@ enum NavSidebarSection: String, CaseIterable, Hashable {
         case .trash:        return "Papierkorb"
         case .duplicates:   return "Duplikate"
         case .blurry:       return "Qualität"
+        case .people:       return "Menschen"
         }
     }
 
@@ -49,6 +50,7 @@ enum NavSidebarSection: String, CaseIterable, Hashable {
         case .trash:        return "trash"
         case .duplicates:   return "doc.on.doc"
         case .blurry:       return "eye.trianglebadge.exclamationmark"
+        case .people:       return "person.2"
         }
     }
 }
@@ -64,6 +66,11 @@ struct NavSidebarView: View {
     @State private var smartFolderSheetItem: SmartFolderSheetItem? = nil
     @State private var albumsCollapsed = false
     @State private var smartFoldersCollapsed = false
+    @State private var volumesCollapsed = false
+    @State private var trashCollapsed = false
+    @State private var duplicatesCollapsed = false
+    @State private var qualityCollapsed = false
+    @State private var peopleCollapsed = false
     @State private var collapsedGroups: Set<String> = []
     @State private var movingFolder: SmartFolder? = nil
     @State private var renamingGroupName: String? = nil
@@ -237,6 +244,7 @@ struct NavSidebarView: View {
         case .trash:         trashSection
         case .duplicates:    duplicatesSection
         case .blurry:        blurrySection
+        case .people:        peopleSection
         }
     }
 
@@ -414,10 +422,13 @@ struct NavSidebarView: View {
 
     @ViewBuilder private var volumesSection: some View {
         if !viewModel.library.detectedVolumes.isEmpty {
-            sectionHeader("Wechseldatenträger")
-            ForEach(viewModel.library.detectedVolumes) { volume in
-                VolumeRow(volume: volume, isSelected: viewModel.navSelection == .volume(volume.id))
-                    .environmentObject(viewModel)
+            collapsibleSectionHeader("Wechseldatenträger", isCollapsed: volumesCollapsed,
+                onToggle: { withAnimation(.easeInOut(duration: 0.18)) { volumesCollapsed.toggle() } })
+            if !volumesCollapsed {
+                ForEach(viewModel.library.detectedVolumes) { volume in
+                    VolumeRow(volume: volume, isSelected: viewModel.navSelection == .volume(volume.id))
+                        .environmentObject(viewModel)
+                }
             }
         }
     }
@@ -465,7 +476,9 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var trashSection: some View {
-        sectionHeader("Papierkorb")
+        collapsibleSectionHeader("Papierkorb", isCollapsed: trashCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { trashCollapsed.toggle() } })
+        if !trashCollapsed {
         Button(action: { viewModel.navSelection = .trash }) {
             HStack(spacing: 4) {
                 Label("Papierkorb", systemImage: viewModel.trashedCount > 0 ? "trash.fill" : "trash")
@@ -488,6 +501,7 @@ struct NavSidebarView: View {
             Button("Papierkorb leeren…") { viewModel.emptyTrash() }
                 .disabled(viewModel.trashedCount == 0)
         }
+        } // !trashCollapsed
     }
 
     // Sidebar-Highlight bleibt auf "Ähnliche Bilder", auch wenn der Nutzer in eine
@@ -500,7 +514,9 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var duplicatesSection: some View {
-        sectionHeader("Duplikate")
+        collapsibleSectionHeader("Duplikate", isCollapsed: duplicatesCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { duplicatesCollapsed.toggle() } })
+        if !duplicatesCollapsed {
         Button(action: { viewModel.navSelection = .duplicates }) {
             HStack(spacing: 4) {
                 Label("Duplikate", systemImage: "doc.on.doc")
@@ -526,11 +542,13 @@ struct NavSidebarView: View {
         .contextMenu {
             Button("Neu scannen") { viewModel.detectDuplicates() }
         }
-
+        } // !duplicatesCollapsed
     }
 
     @ViewBuilder private var blurrySection: some View {
-        sectionHeader("Qualität")
+        collapsibleSectionHeader("Qualität", isCollapsed: qualityCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { qualityCollapsed.toggle() } })
+        if !qualityCollapsed {
         Button(action: { viewModel.navSelection = .blurry }) {
             HStack(spacing: 4) {
                 Label("Unscharf", systemImage: "drop.triangle")
@@ -613,6 +631,36 @@ struct NavSidebarView: View {
         }
         .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
         .contextMenu { Button("Neu scannen") { viewModel.detectClosedEyes() } }
+        } // !qualityCollapsed
+    }
+
+    @ViewBuilder private var peopleSection: some View {
+        collapsibleSectionHeader("Menschen", isCollapsed: peopleCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { peopleCollapsed.toggle() } })
+        if !peopleCollapsed {
+        Button(action: { viewModel.navSelection = .people }) {
+            HStack(spacing: 4) {
+                Label("Personen", systemImage: "person.2")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                let count = viewModel.people.people.count
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(viewModel.navSelection == .people ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .contextMenu {
+            Button("Scannen") { viewModel.scanFacesForLibrary() }
+        }
+        } // !peopleCollapsed
     }
 
     private var libraryCompactRow: some View {

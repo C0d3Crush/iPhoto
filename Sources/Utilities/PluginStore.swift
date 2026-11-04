@@ -249,6 +249,17 @@ final class PluginStore: ObservableObject {
           "storageKey": "plugin.similar"
         }
         """),
+        ("builtin-people.json", """
+        {
+          "id": "com.iphoto.builtin.people",
+          "name": "Menschen",
+          "icon": "person.2",
+          "builtin": "people",
+          "order": 11,
+          "defaultEnabled": true,
+          "storageKey": "plugin.people"
+        }
+        """),
     ]
 
     private func writeBuiltins() {

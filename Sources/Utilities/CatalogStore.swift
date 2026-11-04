@@ -114,6 +114,7 @@ final class CatalogStore {
         migrateExifColumns()
         migrateQualityColumns()
         migrateMotifColumns()
+        migrateFaceColumns()
 
         exec("""
         CREATE TABLE IF NOT EXISTS ratings (

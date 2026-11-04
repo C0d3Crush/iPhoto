@@ -73,6 +73,9 @@ class ImageViewModel: ObservableObject {
     /// Views greifen via `viewModel.quality.blurryDocuments` etc. zu.
     let quality = QualityDetectionState()
 
+    /// Gesichts-/Personen-Erkennung (Phase 1: Scan, Zuordnung, Benennung).
+    let people = PeopleState()
+
     /// Duell-/Vergleichsmodus (State + Load-Tracking). Änderungen laufen via
     /// objectWillChange-Forwarding an SwiftUI-Views weiter.
     let compare = ComparisonState()
@@ -210,7 +213,7 @@ class ImageViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // Kind-ViewModels: Änderungen an Views weiterleiten, die nur ImageViewModel beobachten
-        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange, inpaint.objectWillChange, compare.objectWillChange, quality.objectWillChange, backupSettings.objectWillChange] {
+        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange, inpaint.objectWillChange, compare.objectWillChange, quality.objectWillChange, backupSettings.objectWillChange, people.objectWillChange] {
             child
                 .sink { [weak self] _ in self?.objectWillChange.send() }
                 .store(in: &cancellables)
@@ -591,6 +594,7 @@ class ImageViewModel: ObservableObject {
         // (z. B. beim App-Neustart auf gleiche Library) sollen sofort sichtbar sein.
         refreshQualityLists()
         loadPersistedGroupsIfAvailable()
+        loadPeople()
         if selectFirst || collection.documents.count == newDocs.count {
             collection.select(index: firstNewIndex)
             loadCurrentImage()

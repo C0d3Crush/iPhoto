@@ -2,6 +2,18 @@
 
 ---
 
+## 1.55.0
+**Feature — Gesichtserkennung Phase 1: Menschen-Plugin + einklappbare Sidebar-Sektionen + Personen-Bildansicht**
+
+- Neues Plugin „Menschen": erkennt Gesichter in der Bibliothek via Vision-Framework, zeigt runde Crop-Tiles
+- Inspector-Panel „Menschen" zeigt Gesichts-Crops des aktuellen Bildes direkt im Inspector
+- Personen können angelegt, umbenannt und gelöscht werden; Gesichter werden manuell einer Person zugewiesen
+- Doppelklick auf eine Person öffnet eine gefilterte Bildansicht nur mit deren Fotos
+- Alle Sidebar-Sektionen (Duplikate, Qualität, Papierkorb, Wechseldatenträger, Menschen) sind jetzt einklappbar
+- CLI: `iphoto-cli people list [--json]` und `iphoto-cli people faces [--json]`
+
+---
+
 ## 1.54.1
 **Bugfix — Album-Cover-Thumbnails korrekt quadratisch (GeometryReader)**
 

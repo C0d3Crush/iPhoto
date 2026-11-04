@@ -26,6 +26,8 @@ private func printUsage() {
       iphoto-cli plugins dir
       iphoto-cli viewmode get
       iphoto-cli viewmode set <grid|list|columns|gallery>
+      iphoto-cli people list [--json]
+      iphoto-cli people faces [--path <bildpfad>] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -1124,6 +1126,87 @@ private func runViewMode(_ subArgs: [String]) -> Int32 {
     }
 }
 
+// MARK: - People
+
+private func runPeople(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "list"
+    let jsonMode = args.contains("--json")
+
+    switch sub {
+    case "list":
+        let people = CatalogStore.shared.allPeople()
+        if jsonMode {
+            var arr: [[String: Any]] = []
+            for p in people {
+                var obj: [String: Any] = ["id": p.id]
+                if let n = p.name { obj["name"] = n }
+                let faceCount = CatalogStore.shared.allFaces().filter { $0.clusterID == p.id }.count
+                obj["face_count"] = faceCount
+                arr.append(obj)
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let str = String(data: data, encoding: .utf8) {
+                print(str)
+            }
+        } else {
+            if people.isEmpty {
+                print("Keine Personen im Katalog.")
+            } else {
+                for p in people {
+                    let name = p.name ?? "(unbenannt)"
+                    print("\(p.id)  \(name)")
+                }
+            }
+        }
+        return 0
+
+    case "faces":
+        var filterPath: String? = nil
+        var i = 1
+        while i < args.count {
+            if args[i] == "--path", i + 1 < args.count { filterPath = args[i + 1]; i += 2 }
+            else { i += 1 }
+        }
+        let faces: [FaceRecord]
+        if let path = filterPath {
+            faces = CatalogStore.shared.faces(forPath: path)
+        } else {
+            faces = CatalogStore.shared.allFaces()
+        }
+        if jsonMode {
+            var arr: [[String: Any]] = []
+            for f in faces {
+                var obj: [String: Any] = [
+                    "id": f.id,
+                    "image_path": f.imagePath,
+                    "confidence": f.confidence,
+                    "bbox": ["x": f.bbox.origin.x, "y": f.bbox.origin.y, "w": f.bbox.width, "h": f.bbox.height]
+                ]
+                if let cid = f.clusterID { obj["cluster_id"] = cid }
+                arr.append(obj)
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let str = String(data: data, encoding: .utf8) {
+                print(str)
+            }
+        } else {
+            if faces.isEmpty {
+                print("Keine Gesichter gefunden.")
+            } else {
+                for f in faces {
+                    let cluster = f.clusterID ?? "unzugeordnet"
+                    print("\(f.id)  conf=\(String(format: "%.2f", f.confidence))  person=\(cluster)  \(f.imagePath)")
+                }
+            }
+        }
+        return 0
+
+    default:
+        fputs("Fehler: Unbekannter people-Unterbefehl '\(sub)'. Erlaubt: list, faces\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -1142,6 +1225,10 @@ if firstArg == "plugins" {
 if firstArg == "viewmode" {
     let subArgs = Array(rawArgs.dropFirst(2))
     exit(runViewMode(subArgs))
+}
+if firstArg == "people" {
+    let subArgs = Array(rawArgs.dropFirst(2))
+    exit(runPeople(subArgs))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

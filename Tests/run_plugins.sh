@@ -198,10 +198,10 @@ fi
 
 # plugins list --json — valid JSON array with at least 9 items
 PLUGIN_JSON=$("$BIN" plugins list --json 2>&1)
-if echo "$PLUGIN_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list) and len(lst)>=9, f'nur {len(lst)} Einträge'" 2>/dev/null; then
-    pass "plugins list --json (valides JSON-Array mit ≥9 Einträgen)"
+if echo "$PLUGIN_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list) and len(lst)>=10, f'nur {len(lst)} Einträge'" 2>/dev/null; then
+    pass "plugins list --json (valides JSON-Array mit ≥10 Einträgen)"
 else
-    fail "plugins list --json" "Kein valides JSON-Array oder <9 Einträge: $PLUGIN_JSON"
+    fail "plugins list --json" "Kein valides JSON-Array oder <10 Einträge: $PLUGIN_JSON"
 fi
 
 # plugins dir — prints an existing path
@@ -243,6 +243,47 @@ if [ $VIEWMODE_BAD_EXIT -ne 0 ]; then
     pass "viewmode set <ungültig> (Exitcode != 0)"
 else
     fail "viewmode set bogusmode" "Hätte fehlschlagen sollen (Exitcode 0 zurückgegeben)"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# people — list / faces
+# ---------------------------------------------------------------------------
+echo "--- People ---"
+
+# people list — exit 0
+PEOPLE_LIST=$("$BIN" people list 2>&1)
+PEOPLE_EXIT=$?
+if [ $PEOPLE_EXIT -eq 0 ]; then
+    pass "people list (Exitcode 0)"
+else
+    fail "people list" "Exitcode $PEOPLE_EXIT: $PEOPLE_LIST"
+fi
+
+# people list --json — valid JSON array
+PEOPLE_JSON=$("$BIN" people list --json 2>&1)
+if echo "$PEOPLE_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "people list --json (valides JSON-Array)"
+else
+    fail "people list --json" "Kein valides JSON-Array: $PEOPLE_JSON"
+fi
+
+# people faces --json — valid JSON array
+FACES_JSON=$("$BIN" people faces --json 2>&1)
+if echo "$FACES_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "people faces --json (valides JSON-Array)"
+else
+    fail "people faces --json" "Kein valides JSON-Array: $FACES_JSON"
+fi
+
+# people <ungültig> — exit != 0
+PEOPLE_BAD_EXIT=0
+"$BIN" people bogussubcmd > /dev/null 2>&1 || PEOPLE_BAD_EXIT=$?
+if [ $PEOPLE_BAD_EXIT -ne 0 ]; then
+    pass "people <ungültig> (Exitcode != 0)"
+else
+    fail "people bogussubcmd" "Hätte fehlschlagen sollen (Exitcode 0 zurückgegeben)"
 fi
 
 echo ""
