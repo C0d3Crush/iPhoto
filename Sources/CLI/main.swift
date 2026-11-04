@@ -35,8 +35,8 @@ private func printUsage() {
       iphoto-cli album list|create|delete|add|remove|images [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli version list|backup|restore|delete [--json]
-      iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--json]
-      iphoto-cli catalog stats|path [--json]
+      iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color red|yellow|green|blue|none] [--json]
+      iphoto-cli catalog stats|path|vacuum [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli duplicate list|similar [--json]
       iphoto-cli smartfolder list [--json]
@@ -1710,7 +1710,13 @@ private func runAlbum(_ args: [String]) -> Int32 {
         let albumID = positional[0]
         let paths = Array(positional.dropFirst())
         for (i, p) in paths.enumerated() { catalog.addImage(path: p, toAlbum: albumID, order: i) }
-        print("\(paths.count) Bild(er) zu Album \(albumID) hinzugefügt")
+        if jsonMode {
+            let obj: [String: Any] = ["album_id": albumID, "count": paths.count, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("\(paths.count) Bild(er) zu Album \(albumID) hinzugefügt")
+        }
         return 0
 
     case "remove":
@@ -1721,7 +1727,13 @@ private func runAlbum(_ args: [String]) -> Int32 {
         let albumID = positional[0]
         let paths = Array(positional.dropFirst())
         for p in paths { catalog.removeImage(path: p, fromAlbum: albumID) }
-        print("\(paths.count) Bild(er) aus Album \(albumID) entfernt")
+        if jsonMode {
+            let obj: [String: Any] = ["album_id": albumID, "count": paths.count, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("\(paths.count) Bild(er) aus Album \(albumID) entfernt")
+        }
         return 0
 
     case "images":
@@ -1875,7 +1887,14 @@ private func runVersion(_ args: [String]) -> Int32 {
         let url = URL(fileURLWithPath: path)
         do {
             let meta = try store.backupFile(at: url, label: label)
-            print("Version gesichert: \(meta.id.uuidString)")
+            if jsonMode {
+                var obj: [String: Any] = ["id": meta.id.uuidString, "path": path, "ext": meta.ext]
+                if let lbl = meta.label { obj["label"] = lbl }
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                print("Version gesichert: \(meta.id.uuidString)")
+            }
         } catch {
             fputs("Fehler beim Backup: \(error)\n", stderr); return 1
         }
@@ -1895,7 +1914,13 @@ private func runVersion(_ args: [String]) -> Int32 {
         }
         do {
             try store.restoreVersion(meta, to: url)
-            print("Version \(versionIDStr) wiederhergestellt: \(path)")
+            if jsonMode {
+                let obj: [String: Any] = ["id": versionIDStr, "path": path, "ok": true]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                print("Version \(versionIDStr) wiederhergestellt: \(path)")
+            }
         } catch {
             fputs("Fehler bei Wiederherstellung: \(error)\n", stderr); return 1
         }
@@ -1914,7 +1939,13 @@ private func runVersion(_ args: [String]) -> Int32 {
             fputs("Version nicht gefunden: \(versionIDStr)\n", stderr); return 1
         }
         store.deleteVersion(meta, for: url)
-        print("Version \(versionIDStr) gelöscht")
+        if jsonMode {
+            let obj: [String: Any] = ["id": versionIDStr, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Version \(versionIDStr) gelöscht")
+        }
         return 0
 
     default:
@@ -1940,6 +1971,13 @@ private func runSearch(_ args: [String]) -> Int32 {
     if let ri = args.firstIndex(of: "--rating"), ri + 1 < args.count,
        let n = Int(args[ri + 1]) {
         let images = catalog.images(ratedAtLeast: n)
+        return printCatalogImages(images, jsonMode: jsonMode)
+    }
+
+    // --color red|yellow|green|blue|none
+    if let ci = args.firstIndex(of: "--color"), ci + 1 < args.count {
+        let color = args[ci + 1].lowercased()
+        let images = catalog.images(withColorLabel: color)
         return printCatalogImages(images, jsonMode: jsonMode)
     }
 
@@ -2009,8 +2047,14 @@ private func runCatalog(_ args: [String]) -> Int32 {
         print(dbPath)
         return 0
 
+    case "vacuum":
+        catalog.vacuum()
+        let dbPath = envDBPath() ?? "Standard"
+        print("Katalog optimiert: \(dbPath)")
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum [--json]\n", stderr)
         return 1
     }
 }

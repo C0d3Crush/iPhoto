@@ -110,4 +110,23 @@ extension CatalogStore {
             sqlite3_finalize(stmt); return out
         }
     }
+
+    func images(withColorLabel color: String) -> [CatalogImage] {
+        queue.sync {
+            let stmt = prepare("""
+                SELECT i.id,i.path,i.filename,i.size_bytes,i.width,i.height,
+                       i.date_taken,i.camera_make,i.camera_model,i.is_raw,i.imported_at
+                FROM images i JOIN ratings r ON i.path=r.image_path
+                WHERE r.color_label=? ORDER BY i.filename
+            """)
+            bind(stmt, 1, color)
+            var out: [CatalogImage] = []
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
+    func vacuum() {
+        queue.sync { exec("VACUUM") }
+    }
 }

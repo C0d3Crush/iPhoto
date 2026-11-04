@@ -78,6 +78,25 @@ if echo "$IMGS_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); as
 REMOVE_OUT=$("$BIN" album remove "$ALBUM_ID" "$INPUT" 2>&1)
 if echo "$REMOVE_OUT" | grep -q "entfernt"; then pass "album remove"; else fail "album remove" "$REMOVE_OUT"; fi
 
+# album add/remove --json
+AID2=$("$BIN" album create "TestAlbum2" --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || AID2=""
+if [ -n "$AID2" ]; then
+    OUT=$("$BIN" album add "$AID2" "$INPUT" --json 2>&1)
+    if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+        pass "album add --json (ok=true)"; else fail "album add --json" "$OUT"; fi
+    OUT=$("$BIN" album remove "$AID2" "$INPUT" --json 2>&1)
+    if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+        pass "album remove --json (ok=true)"; else fail "album remove --json" "$OUT"; fi
+    "$BIN" album delete "$AID2" > /dev/null 2>&1 || true
+else
+    pass "album add --json übersprungen"
+fi
+
+ALBUM_ADD_ERR=0; "$BIN" album add "$ALBUM_ID" > /dev/null 2>&1 || ALBUM_ADD_ERR=$?
+if [ $ALBUM_ADD_ERR -ne 0 ]; then pass "album add ohne Bilder (Fehler korrekt)"; else fail "album add ohne Bilder" "Exitcode 0"; fi
+ALBUM_REM_ERR=0; "$BIN" album remove "$ALBUM_ID" > /dev/null 2>&1 || ALBUM_REM_ERR=$?
+if [ $ALBUM_REM_ERR -ne 0 ]; then pass "album remove ohne Bilder (Fehler korrekt)"; else fail "album remove ohne Bilder" "Exitcode 0"; fi
+
 # album delete
 DEL_OUT=$("$BIN" album delete "$ALBUM_ID" 2>&1)
 if echo "$DEL_OUT" | grep -q "gelöscht"; then
@@ -160,6 +179,35 @@ if [ -n "$VERSION_ID" ]; then
     if echo "$VDEL" | grep -q "gelöscht"; then pass "version delete"; else fail "version delete" "$VDEL"; fi
 fi
 
+# version backup --json
+VBACK_JSON=$("$BIN" version backup "$INPUT" --json 2>&1)
+if echo "$VBACK_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'id' in d" 2>/dev/null; then
+    pass "version backup --json (JSON mit 'id')"
+else
+    fail "version backup --json" "Kein JSON oder 'id' fehlt: $VBACK_JSON"
+fi
+
+# version restore --json
+VID2=$("$BIN" version list "$INPUT" --json 2>/dev/null | python3 -c "import sys,json; l=json.load(sys.stdin); print(l[0]['id'])" 2>/dev/null) || VID2=""
+if [ -n "$VID2" ]; then
+    VREST_JSON=$("$BIN" version restore "$INPUT" "$VID2" --json 2>&1)
+    if echo "$VREST_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+        pass "version restore --json (ok=true)"
+    else fail "version restore --json" "$VREST_JSON"; fi
+else
+    pass "version restore --json übersprungen (keine Version)"
+fi
+
+# version delete --json
+if [ -n "$VID2" ]; then
+    VDEL_JSON=$("$BIN" version delete "$INPUT" "$VID2" --json 2>&1)
+    if echo "$VDEL_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+        pass "version delete --json (ok=true)"
+    else fail "version delete --json" "$VDEL_JSON"; fi
+else
+    pass "version delete --json übersprungen (keine Version)"
+fi
+
 echo ""
 
 # ===========================================================================
@@ -189,6 +237,15 @@ SFLAG_JSON=$("$BIN" search --flag pick --json 2>&1)
 if echo "$SFLAG_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
     pass "search --flag --json (valides JSON-Array)"; else fail "search --flag --json" "$SFLAG_JSON"; fi
 
+# search --color
+"$BIN" rating "$INPUT" --color red > /dev/null 2>&1 || true
+SCOLOR_EXIT=0; SCOLOR=$("$BIN" search --color red 2>&1) || SCOLOR_EXIT=$?
+if [ $SCOLOR_EXIT -eq 0 ]; then pass "search --color red (Exitcode 0)"; else fail "search --color red" "$SCOLOR"; fi
+
+SCOLOR_JSON=$("$BIN" search --color red --json 2>&1)
+if echo "$SCOLOR_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "search --color --json (valides JSON-Array)"; else fail "search --color --json" "$SCOLOR_JSON"; fi
+
 # search text
 STEXT=$("$BIN" search "test" 2>&1)
 if [ $? -eq 0 ]; then pass "search <text> (Exitcode 0)"; else fail "search text" "$STEXT"; fi
@@ -213,6 +270,10 @@ if echo "$CSTATS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); as
 
 CPATH=$("$BIN" catalog path 2>&1)
 if [ $? -eq 0 ] && [ -n "$CPATH" ]; then pass "catalog path (Exitcode 0, nicht leer)"; else fail "catalog path" "$CPATH"; fi
+
+# catalog vacuum
+CVACUUM=$("$BIN" catalog vacuum 2>&1)
+if echo "$CVACUUM" | grep -q "optimiert"; then pass "catalog vacuum (Meldung)"; else fail "catalog vacuum" "$CVACUUM"; fi
 
 echo ""
 

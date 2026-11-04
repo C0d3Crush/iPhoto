@@ -2,6 +2,19 @@
 
 ---
 
+## 1.61.0
+**Feature — search --color, catalog vacuum, --json für album/version, 119 CLI-Tests**
+
+- `iphoto-cli search --color <farbe>` — sucht Bilder nach Farblabel (red/yellow/green/blue/purple)
+- `iphoto-cli catalog vacuum` — führt SQLite VACUUM aus und meldet Ergebnis
+- `album add/remove --json`: gibt `{"album_id", "count", "ok": true}` aus
+- `version backup/restore/delete --json`: gibt Metadaten-JSON zurück
+- `CatalogStore.images(withColorLabel:)` und `vacuum()` als neue Hilfsfunktionen
+- Testabdeckung von 109 auf **119 Tests** ausgebaut: version --json (3), search --color (2), catalog vacuum (1), album error-cases (4)
+- Alle 44 Performance-Tests, alle 119 CLI-Tests grün
+
+---
+
 ## 1.60.1
 **Bugfix — Export-Validierung, --json für export/adjust, people cluster Leerfall, Testabdeckung**
 
