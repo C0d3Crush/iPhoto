@@ -5,9 +5,14 @@ import Foundation
 // Erkennt Gesichter via VNDetectFaceRectanglesRequest und berechnet pro Face einen
 // VNGenerateImageFeaturePrintRequest-Embedding aus dem Face-Crop.
 //
-// VNFeaturePrint (macOS 10.15+) nutzt ein internes MobileNet/ResNet-Modell —
-// viel diskriminativer als reine Landmark-Positionen. Gleiche Person < 0.35,
-// verschiedene Personen > 0.55 (Cosinus-Distanz).
+// VNFeaturePrint (macOS 10.15+) nutzt ein internes MobileNet/ResNet-Modell.
+// Das Embedding ist visuell (kein biometrisches Identitätsmodell) — gleiche Person
+// kann bei sehr unterschiedlichen Fotos (Alter, Beleuchtung, B&W vs. Farbe)
+// Distance > 0.20 aufweisen. Für standard Farbfotos aus einer Handykamera:
+// gleiche Person ≈ < 0.10, verschiedene Personen ≈ > 0.15.
+//
+// Wichtig: Alle Bilder werden vor der Embedding-Berechnung in sRGB konvertiert,
+// damit Graustufenbilder (DeviceGray) und Farbbilder (sRGB) konsistent behandelt werden.
 //
 // Perf: ~100–300 ms pro Bild (Detect + FeaturePrint) @ 512px Thumbnail.
 
@@ -20,6 +25,9 @@ struct FaceDetector {
         guard let observations = detectRequest.results as? [VNFaceObservation],
               !observations.isEmpty else { return [] }
 
+        // sRGB-Normalisierung: vereinheitlicht Graustufen- und Farbbilder
+        let normalizedImage = toSRGB(image) ?? image
+
         return observations.compactMap { obs -> FaceRecord? in
             // Vision: bottom-left origin → flip Y → top-left origin
             let vb = obs.boundingBox
@@ -28,8 +36,8 @@ struct FaceDetector {
                               width: vb.width,
                               height: vb.height)
 
-            // Schritt 2: Face-Crop + VNFeaturePrint-Embedding
-            let embedding = featurePrintEmbedding(image: image, visionBBox: vb)
+            // Schritt 2: Face-Crop + VNFeaturePrint-Embedding (auf sRGB-normiertem Bild)
+            let embedding = featurePrintEmbedding(image: normalizedImage, visionBBox: vb)
 
             return FaceRecord(
                 id: UUID().uuidString,
@@ -40,6 +48,20 @@ struct FaceDetector {
                 embeddingData: embedding
             )
         }
+    }
+
+    // Konvertiert CGImage in sRGB, damit Graustufen- und Farbbilder gleich behandelt werden.
+    private static func toSRGB(_ image: CGImage) -> CGImage? {
+        guard let cs = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        guard let ctx = CGContext(data: nil,
+                                  width: image.width, height: image.height,
+                                  bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return nil
+        }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return ctx.makeImage()
     }
 
     // Schneidet Face-Region aus dem Bild (mit 20% Rand) und berechnet

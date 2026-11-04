@@ -195,6 +195,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/CatalogStore+Quality.swift \
     $ROOT/Sources/Utilities/CatalogStore+Ratings.swift \
     $ROOT/Sources/Utilities/CatalogStore+People.swift \
+    $ROOT/Sources/Utilities/FaceDetector.swift \
     $ROOT/Sources/Utilities/FaceClusterer.swift \
     $ROOT/Sources/Models/FaceRecord.swift \
     $ROOT/Sources/Utilities/SmartFolderFileSync.swift \
@@ -224,6 +225,7 @@ fi
     -framework AppKit \
     -framework VideoToolbox \
     -framework CoreMedia \
+    -framework Vision \
     -import-objc-header "$ROOT/Sources/Utilities/BridgingHeader.h" \
     -module-name iPhotoCLI \
     -O \

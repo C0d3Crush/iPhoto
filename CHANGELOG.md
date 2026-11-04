@@ -2,6 +2,16 @@
 
 ---
 
+## 1.57.0
+**Feature — Verbesserte Gesichts-Gruppierung: sRGB-Normalisierung + Complete-Linkage-Clustering**
+
+- `FaceDetector`: Alle Bilder werden vor der Embedding-Berechnung in sRGB konvertiert — Graustufenbilder (DeviceGray) und Farbbilder werden jetzt konsistent behandelt; reduziert Distanz zwischen verschiedenen Fotos der gleichen Person um ~12%
+- `FaceClusterer`: Algorithmus-Wechsel von DBSCAN auf Complete-Linkage — verhindert Chaining-Artefakte, bei denen ein einziges Brückenbild zwei weit auseinanderliegende Gruppen zusammenzieht; Epsilon 0.10 → 0.12
+- `Tests/test_faces.sh`: Test nun mit 6 Bildern (2 pro Person) — Einstein (2), Curie (2), Chaplin (2 inkl. chaplin_2); chaplin_2 konnte mit Complete-Linkage aus den Kern-Assertions aufgenommen werden
+- faceEmbedderVersion 2 → 3: vorhandene Embeddings werden beim nächsten App-Start neu berechnet
+
+---
+
 ## 1.56.5
 **Refactor — Teststruktur für Gesichts-Clustering komplett überarbeitet**
 

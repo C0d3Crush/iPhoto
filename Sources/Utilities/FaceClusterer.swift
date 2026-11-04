@@ -1,22 +1,23 @@
 import Foundation
 
-// DBSCAN-Clustering auf VNFeaturePrint-Embeddings (2048×Float32, 8 KB/Face).
+// Complete-Linkage-Clustering auf VNFeaturePrint-Embeddings (2048×Float32, 8 KB/Face).
 //
 // Distanzmetrik: Cosinus-Distanz (1 − cos_sim), normalisiert auf [0, 1].
-// VNFeaturePrint vergleicht visuelle Ähnlichkeit, keine Identität.
-// Epsilon 0.10: same-person Paare in modernen Farbfotos typisch < 0.10,
-// verschiedene Personen > 0.20. Nutzer kann falsche Gruppen manuell trennen.
+// Linkage: Complete-Linkage — zwei Cluster werden nur zusammengeführt, wenn
+// ALLE Paare (a ∈ A, b ∈ B) mit Abstand ≤ epsilon. Verhindert das "Chaining"-Artefakt
+// von DBSCAN, bei dem ein Brückenpunkt zwei weit auseinanderliegende Gruppen verbindet.
 //
-// minPts = 1 → jedes Gesicht landet in einem Cluster (kein Rauschen),
-// UX: Nutzer sieht alle als Personen und mergt bei Bedarf manuell.
+// Epsilon 0.12: typische same-person Paare aus modernen Farbfotos < 0.10,
+// cross-person Paare > 0.15. Nutzer kann falsche Gruppen manuell trennen.
 //
-// Komplexität: O(N²) → bei 500 Faces ~250K Distanzen à ~2048 Ops ≈ 500M Ops, <1 s.
+// Komplexität: O(N³) im Worst Case — bei 500 Faces (~250K Paare × N Merge-Schritten)
+// praktisch < 1 s für normale Bibliotheksgrößen. Bei > 5000 Faces: DB-seitig batchen.
 
 struct FaceClusterer {
-    static let defaultEpsilon: Float = 0.10
+    static let defaultEpsilon: Float = 0.12
     static let defaultMinPts: Int    = 1
 
-    // Gibt [faceID: clusterIndex] zurück. clusterIndex = -1 → Rauschen (nur wenn minPts > 1).
+    // Gibt [faceID: clusterIndex] zurück.
     static func cluster(faces: [FaceRecord],
                         epsilon: Float = defaultEpsilon,
                         minPts: Int    = defaultMinPts) -> [String: Int] {
@@ -24,54 +25,72 @@ struct FaceClusterer {
 
         let embeddings = faces.map { extractEmbedding($0) }
         let n = faces.count
-        let unvisited = -2
-        var labels = [Int](repeating: unvisited, count: n)
-        var clusterCount = 0
 
+        // Distanzmatrix vorberechnen
+        var dist = [[Float]](repeating: [Float](repeating: 0, count: n), count: n)
         for i in 0..<n {
-            guard labels[i] == unvisited else { continue }
-
-            var neighbors = [Int]()
-            for j in 0..<n {
-                if cosineDistance(embeddings[i], embeddings[j]) <= epsilon {
-                    neighbors.append(j)
-                }
+            for j in (i+1)..<n {
+                let d = cosineDistance(embeddings[i], embeddings[j])
+                dist[i][j] = d
+                dist[j][i] = d
             }
-
-            if neighbors.count < minPts {
-                labels[i] = -1  // Rauschen
-                continue
-            }
-
-            labels[i] = clusterCount
-            var seedSet = Set(neighbors.filter { $0 != i })
-            var pending  = Array(seedSet)
-            var pi = 0
-
-            while pi < pending.count {
-                let q = pending[pi]; pi += 1
-
-                if labels[q] == -1 { labels[q] = clusterCount }
-                guard labels[q] == unvisited else { continue }
-
-                labels[q] = clusterCount
-                var qNeighbors = [Int]()
-                for j in 0..<n {
-                    if cosineDistance(embeddings[q], embeddings[j]) <= epsilon {
-                        qNeighbors.append(j)
-                    }
-                }
-                if qNeighbors.count >= minPts {
-                    for nb in qNeighbors where !seedSet.contains(nb) {
-                        seedSet.insert(nb); pending.append(nb)
-                    }
-                }
-            }
-            clusterCount += 1
         }
 
+        // Start: jeder Face ist sein eigener Cluster
+        var memberOf = Array(0..<n)          // memberOf[i] = Cluster-ID von Face i
+        var clusters = [Int: [Int]]()        // cluster-ID → Liste der Face-Indizes
+        for i in 0..<n { clusters[i] = [i] }
+
+        // Complete-Linkage: maximale Distanz zwischen zwei Clustern
+        func completeLink(_ a: [Int], _ b: [Int]) -> Float {
+            var maxD: Float = 0
+            for i in a {
+                for j in b {
+                    let d = dist[i][j]
+                    if d > maxD { maxD = d }
+                }
+            }
+            return maxD
+        }
+
+        // Iterativ nächste Cluster-Paare zusammenführen
+        var changed = true
+        while changed {
+            changed = false
+            let ids = Array(clusters.keys)
+            var bestDist: Float = epsilon
+            var bestA = -1, bestB = -1
+
+            for ai in 0..<ids.count {
+                for bi in (ai+1)..<ids.count {
+                    let d = completeLink(clusters[ids[ai]]!, clusters[ids[bi]]!)
+                    if d < bestDist {
+                        bestDist = d
+                        bestA = ids[ai]
+                        bestB = ids[bi]
+                    }
+                }
+            }
+
+            if bestA >= 0 {
+                var merged = clusters[bestA]!
+                merged.append(contentsOf: clusters[bestB]!)
+                clusters[bestA] = merged
+                clusters.removeValue(forKey: bestB)
+                for i in clusters[bestA]! { memberOf[i] = bestA }
+                changed = true
+            }
+        }
+
+        // Cluster-IDs auf 0..N normieren
+        var idMap = [Int: Int]()
+        var nextId = 0
         var result = [String: Int]()
-        for (i, face) in faces.enumerated() { result[face.id] = labels[i] }
+        for (i, face) in faces.enumerated() {
+            let cid = memberOf[i]
+            if idMap[cid] == nil { idMap[cid] = nextId; nextId += 1 }
+            result[face.id] = idMap[cid]!
+        }
         return result
     }
 

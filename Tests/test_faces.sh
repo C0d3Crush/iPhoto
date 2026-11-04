@@ -1,23 +1,26 @@
 #!/bin/bash
-# Tests/test_faces.sh — Gesichtserkennung + DBSCAN-Clustering
+# Tests/test_faces.sh — Gesichtserkennung + Complete-Linkage-Clustering
 #
-# Verwendet 5 Public-Domain-Fotos von 3 Personen (Einstein, Curie, Chaplin).
+# Verwendet 6 Public-Domain-Fotos von 3 Personen (Einstein, Curie, Chaplin).
 # Beim ersten Lauf werden die Bilder automatisch aus dem Internet geladen.
 #
 # Testdesign:
-#   Für jede Person werden ALLE ihre Fotos gescannt. Der Test schlägt fehl,
+#   Für jede Person werden ALLE ihre Bilder gescannt. Der Test schlägt fehl,
 #   wenn auch nur eines davon in einer anderen Gruppe landet als die übrigen.
 #   Zusätzlich wird geprüft, dass verschiedene Personen in verschiedenen Gruppen sind.
 #
-#   Ausgeschlossene Bilder (kein Teil der Kern-Assertions):
-#   • einstein_2.jpg  — visuell zu verschieden von einstein_1/3 (Distanz 0.235);
-#                       keine verlässliche Trennung von anderen Personen möglich
-#   • chaplin_2.jpg   — Brückenpunkt: gleiche Distanz zu chaplin_1 (0.097) wie
-#                       zu curie_1 (0.096) → DBSCAN-Chaining-Artefakt
+#   Ausgeschlossenes Bild (kein Teil der Kern-Assertions):
+#   • einstein_2.jpg  — VNFeaturePrint-Modell-Limitation: dieses Foto ist visuell
+#                       näher an Chaplin (d=0.10) als an einstein_1 (d=0.21), weil
+#                       es sich in Stil, Alter und Fotografie-Epoche stark unterscheidet.
+#                       VNFeaturePrint ist ein visuelles Ähnlichkeitsmodell — kein
+#                       biometrisches Identitätsmodell. Solche Grenzfälle müssen
+#                       vom Nutzer manuell in der People-Ansicht korrigiert werden.
 #
-#   Verwendete Bilder und ihre Distanzen:
-#   SAME-PERSON:  einstein_1↔einstein_3 = 0.010,  curie_1↔curie_2 = 0.058
-#   CROSS-PERSON: min(chaplin_1 vs curie/einstein) = 0.137  → ε=0.10 trennt sauber
+#   Verwendete Bilder und ihre sRGB-normalisierten Cosinus-Distanzen:
+#   SAME-PERSON:  einstein_1↔einstein_3 = 0.010,  curie_1↔curie_2 = 0.058,
+#                 chaplin_1↔chaplin_2 = 0.098
+#   CROSS-PERSON: min(chaplin vs curie, complete-link) = 0.159  → ε=0.12 trennt sauber
 
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -55,6 +58,7 @@ download_if_missing() {
 download_if_missing "einstein_1.jpg" "https://upload.wikimedia.org/wikipedia/commons/d/d3/Albert_Einstein_Head.jpg"
 download_if_missing "einstein_3.jpg" "https://upload.wikimedia.org/wikipedia/commons/1/14/Albert_Einstein_1947.jpg"
 download_if_missing "chaplin_1.jpg"  "https://upload.wikimedia.org/wikipedia/commons/0/00/Charlie_Chaplin.jpg"
+download_if_missing "chaplin_2.jpg"  "https://upload.wikimedia.org/wikipedia/commons/3/37/Charlie_Chaplin_in_Shoulder_Arms_trimmed.jpg"
 download_if_missing "curie_1.jpg"    "https://upload.wikimedia.org/wikipedia/commons/7/7e/Marie_Curie_c1920.jpg"
 download_if_missing "curie_2.jpg"    "https://upload.wikimedia.org/wikipedia/commons/c/c8/Marie_Curie_c._1920s.jpg"
 
@@ -64,13 +68,13 @@ download_if_missing "curie_2.jpg"    "https://upload.wikimedia.org/wikipedia/com
 
 declare -a EINSTEIN_IMGS=("$IMG_DIR/einstein_1.jpg" "$IMG_DIR/einstein_3.jpg")
 declare -a CURIE_IMGS=("$IMG_DIR/curie_1.jpg" "$IMG_DIR/curie_2.jpg")
-declare -a CHAPLIN_IMGS=("$IMG_DIR/chaplin_1.jpg")
+declare -a CHAPLIN_IMGS=("$IMG_DIR/chaplin_1.jpg" "$IMG_DIR/chaplin_2.jpg")
 
 ALL_IMGS=("${EINSTEIN_IMGS[@]}" "${CURIE_IMGS[@]}" "${CHAPLIN_IMGS[@]}")
 TOTAL=${#ALL_IMGS[@]}
 
 echo "=== Gesichtserkennung + Clustering-Tests ==="
-echo "    Personen:   Einstein (${#EINSTEIN_IMGS[@]} Bilder), Curie (${#CURIE_IMGS[@]} Bilder), Chaplin (${#CHAPLIN_IMGS[@]} Bild)"
+echo "    Personen:   Einstein (${#EINSTEIN_IMGS[@]} Bilder), Curie (${#CURIE_IMGS[@]} Bilder), Chaplin (${#CHAPLIN_IMGS[@]} Bilder)"
 echo "    Katalog:    $DB"
 echo ""
 
@@ -99,7 +103,7 @@ echo ""
 
 # ── T2: Clustering ─────────────────────────────────────────────────────────────
 
-echo "--- T2: DBSCAN-Clustering (Standard-Epsilon) ---"
+echo "--- T2: Complete-Linkage-Clustering (Standard-Epsilon) ---"
 CLUSTER_OUT=$(IPHOTO_CATALOG_DB="$DB" "$CLI" people cluster 2>&1)
 echo "$CLUSTER_OUT"
 
@@ -182,7 +186,7 @@ else
 fi
 
 if [ -n "$CHAPLIN_CLUSTER" ] && [ -n "$CURIE_CLUSTER" ] && [ "$CHAPLIN_CLUSTER" != "$CURIE_CLUSTER" ]; then
-    pass "T4c: Chaplin ≠ Curie (Distanz ~0.16)"
+    pass "T4c: Chaplin ≠ Curie (complete-link Distanz ~0.16)"
 else
     fail "T4c: Chaplin = Curie — falsches Merge!"
 fi
