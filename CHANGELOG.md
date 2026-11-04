@@ -2,6 +2,15 @@
 
 ---
 
+## 1.58.2
+**Bugfix — SIGILL beim Thumbnail-Laden beschädigter RAF-Dateien**
+
+- `decodeEmbeddedJPEG`: Dateilänge wird jetzt vor dem JPEG-Read gegen `jpegOffset + jpegLength` geprüft — abgeschnittene RAF-Dateien (z.B. nach Kartenabbruch) werden übersprungen statt mit SIGILL zu crashen
+- Zusätzliche Plausibilitäts-Guards: `offset ≥ 96`, `100 ≤ length ≤ 30 MB`, exakte Längenprüfung nach dem Lesen
+- Betrifft Bug #37: reproduzierbar bei Fujifilm _XT-Sequenzen mit 3+ Dateien, wenn die dritte Datei unvollständig ist
+
+---
+
 ## 1.58.1
 **Bugfix — run_catalog.sh: fehlende Quelldateien ergänzt**
 

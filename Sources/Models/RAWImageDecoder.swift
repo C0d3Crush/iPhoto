@@ -167,22 +167,30 @@ struct RAWImageDecoder {
         // JPEG-Offset und -Länge aus dem Verzeichnis lesen (Big-Endian)
         let jpegOffset = header.readUInt32BE(at: 0x54)
         let jpegLength = header.readUInt32BE(at: 0x58)
-        guard jpegOffset > 0, jpegLength > 0 else {
-            Log.error("RAF: kein eingebettetes JPEG referenziert (\(name)): offset=\(jpegOffset) length=\(jpegLength)")
+        guard jpegOffset >= 96, jpegLength >= 100, jpegLength <= 30_000_000 else {
+            Log.error("RAF: JPEG-Offset/Länge unrealistisch (\(name)): offset=\(jpegOffset) length=\(jpegLength)")
+            return nil
+        }
+
+        // Sicherstellen, dass der JPEG-Block innerhalb der Datei liegt
+        let fileSize = handle.seekToEndOfFile()
+        guard fileSize >= UInt64(jpegOffset) + UInt64(jpegLength) else {
+            Log.error("RAF: JPEG-Block übersteigt Dateigröße (\(name)): offset=\(jpegOffset)+\(jpegLength) > \(fileSize)")
             return nil
         }
 
         // JPEG-Bytes extrahieren
         iphotoBreadcrumb("decodeEmbeddedJPEG: JPEG-Bytes lesen @\(jpegOffset)+\(jpegLength) (\(name))")
-        Log.trace("JPEG-Bytes lesen: offset=\(jpegOffset) length=\(jpegLength) \(name)")
+        Log.trace("JPEG-Bytes lesen: offset=\(jpegOffset) length=\(jpegLength) fileSize=\(fileSize) \(name)")
         guard (try? handle.seek(toOffset: UInt64(jpegOffset))) != nil else {
             Log.error("RAF: Seek auf JPEG-Offset \(jpegOffset) fehlgeschlagen (\(name))")
             return nil
         }
         guard let jpegData = try? handle.read(upToCount: Int(jpegLength)),
+              jpegData.count == Int(jpegLength),
               jpegData.count >= 4,
               jpegData[0] == 0xFF, jpegData[1] == 0xD8 else {
-            Log.error("RAF: eingebettetes JPEG unlesbar oder ohne JPEG-Magic (\(name))")
+            Log.error("RAF: eingebettetes JPEG unlesbar, abgeschnitten oder ohne JPEG-Magic (\(name))")
             return nil
         }
 
