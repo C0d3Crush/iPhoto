@@ -283,6 +283,23 @@ STEXT_JSON=$("$BIN" search "test" --json 2>&1)
 if echo "$STEXT_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
     pass "search <text> --json (valides JSON-Array)"; else fail "search <text> --json" "$STEXT_JSON"; fi
 
+# search --camera
+"$BIN" rating "$INPUT" --set 0 > /dev/null 2>&1 || true
+SCAM_EXIT=0; SCAM=$("$BIN" search --camera "Canon" 2>&1) || SCAM_EXIT=$?
+if [ $SCAM_EXIT -eq 0 ]; then pass "search --camera Canon (Exitcode 0)"; else fail "search --camera" "$SCAM"; fi
+
+SCAM_JSON=$("$BIN" search --camera "Canon" --json 2>&1)
+if echo "$SCAM_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "search --camera --json (valides JSON-Array)"; else fail "search --camera --json" "$SCAM_JSON"; fi
+
+# search --date
+SDATE_EXIT=0; SDATE=$("$BIN" search --date "2024" 2>&1) || SDATE_EXIT=$?
+if [ $SDATE_EXIT -eq 0 ]; then pass "search --date 2024 (Exitcode 0)"; else fail "search --date" "$SDATE"; fi
+
+SDATE_JSON=$("$BIN" search --date "2024" --json 2>&1)
+if echo "$SDATE_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "search --date --json (valides JSON-Array)"; else fail "search --date --json" "$SDATE_JSON"; fi
+
 # search ohne Argumente → Exitcode != 0
 SEMPTY_EXIT=0; "$BIN" search > /dev/null 2>&1 || SEMPTY_EXIT=$?
 if [ $SEMPTY_EXIT -ne 0 ]; then pass "search (ohne Argumente → Exitcode != 0)"; else fail "search ohne args" "Hätte fehlschlagen sollen"; fi
@@ -688,6 +705,12 @@ if [ $PRESET_EXIT -ne 0 ]; then pass "preset apply unbekannter Name (Fehler korr
 
 PRESET_EXIT2=0; "$BIN" preset delete "__NichtExistent__" > /dev/null 2>&1 || PRESET_EXIT2=$?
 if [ $PRESET_EXIT2 -ne 0 ]; then pass "preset delete unbekannt (Fehler korrekt)"; else fail "preset delete unbekannt" "Exitcode 0"; fi
+
+# adjust Ausgabedatei Größe > 0
+ADJ_SIZE_OUT="$TMPDIR_BASE/adj_size.jpeg"
+"$BIN" adjust "$INPUT" --output "$ADJ_SIZE_OUT" --format jpeg --exposure 0.2 > /dev/null 2>&1 || true
+ADJ_SIZE=$(stat -f%z "$ADJ_SIZE_OUT" 2>/dev/null || echo 0)
+if [ "${ADJ_SIZE:-0}" -gt 100 ]; then pass "adjust Dateigröße > 100 Bytes ($ADJ_SIZE B)"; else fail "adjust Dateigröße" "Zu klein: ${ADJ_SIZE}B"; fi
 
 ADJ_JSON_OUT="$TMPDIR_BASE/adj_json.jpeg"
 OUT=$("$BIN" adjust "$INPUT" --output "$ADJ_JSON_OUT" --format jpeg --exposure 0.1 --json 2>&1)

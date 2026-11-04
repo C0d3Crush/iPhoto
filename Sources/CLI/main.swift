@@ -35,7 +35,7 @@ private func printUsage() {
       iphoto-cli album list|create|delete|add|remove|images|reorder [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli version list|backup|restore|delete [--json]
-      iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color red|yellow|green|blue|none] [--json]
+      iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
       iphoto-cli catalog stats|path|vacuum|export [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
@@ -629,6 +629,12 @@ private func runAdjust(_ args: CLIArgs) -> Int32 {
             return 1
         }
         try ImageExporter.exportSingle(image: outCG, to: output, format: args.format, quality: args.quality)
+        guard FileManager.default.fileExists(atPath: output.path),
+              let attrs = try? FileManager.default.attributesOfItem(atPath: output.path),
+              (attrs[.size] as? Int ?? 0) > 0 else {
+            fputs("FAIL \(input.lastPathComponent): Ausgabedatei nicht geschrieben oder leer\n", stderr)
+            return 1
+        }
         if args.jsonOutput {
             let obj: [String: Any] = [
                 "input": input.lastPathComponent,
@@ -2070,12 +2076,29 @@ private func runSearch(_ args: [String]) -> Int32 {
         return printCatalogImages(images, jsonMode: jsonMode)
     }
 
+    // --camera <model|make>
+    if let ci = args.firstIndex(of: "--camera"), ci + 1 < args.count {
+        let camera = args[ci + 1]
+        let images = catalog.images(withCamera: camera)
+        return printCatalogImages(images, jsonMode: jsonMode)
+    }
+
+    // --date YYYY-MM-DD (Präfix-Match auf date_taken)
+    if let di = args.firstIndex(of: "--date"), di + 1 < args.count {
+        let datePrefix = args[di + 1]
+        let images = catalog.images(onDate: datePrefix)
+        return printCatalogImages(images, jsonMode: jsonMode)
+    }
+
     // Freitext-Suche
     let query = args.filter { !$0.hasPrefix("-") }.joined(separator: " ")
     guard !query.isEmpty else {
         fputs("Verwendung: iphoto-cli search <text> [--json]\n" +
               "           iphoto-cli search --flag pick|reject|none [--json]\n" +
-              "           iphoto-cli search --rating <1-5> [--json]\n", stderr)
+              "           iphoto-cli search --rating <1-5> [--json]\n" +
+              "           iphoto-cli search --color <farbe> [--json]\n" +
+              "           iphoto-cli search --camera <modell> [--json]\n" +
+              "           iphoto-cli search --date YYYY-MM-DD [--json]\n", stderr)
         return 1
     }
     let images = catalog.search(query: query)

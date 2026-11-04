@@ -581,6 +581,15 @@ if [ $ELAPSED -le $THRESHOLD ]; then pass "catalog stats (500 Einträge)" "$ELAP
 T0=$(ms); "$BIN" catalog stats --json > /dev/null 2>&1 || true; T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "catalog stats --json (500 Einträge)" "$ELAPSED"; else fail "catalog stats --json 500 Einträge" "$ELAPSED" "$THRESHOLD"; fi
+
+THRESHOLD=2000
+T0=$(ms); "$BIN" search --camera "Canon" > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "search --camera (500 Einträge)" "$ELAPSED"; else fail "search --camera 500 Einträge" "$ELAPSED" "$THRESHOLD"; fi
+
+T0=$(ms); "$BIN" search --date "2024" > /dev/null 2>&1 || true; T1=$(ms)
+ELAPSED=$((T1-T0))
+if [ $ELAPSED -le $THRESHOLD ]; then pass "search --date (500 Einträge)" "$ELAPSED"; else fail "search --date 500 Einträge" "$ELAPSED" "$THRESHOLD"; fi
 echo ""
 
 # ===========================================================================

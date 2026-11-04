@@ -137,4 +137,34 @@ extension CatalogStore {
     func vacuum() {
         queue.sync { exec("VACUUM") }
     }
+
+    func images(withCamera camera: String) -> [CatalogImage] {
+        queue.sync {
+            let like = "%\(camera)%"
+            let stmt = prepare("""
+                SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at
+                FROM images WHERE camera_make LIKE ? OR camera_model LIKE ?
+                ORDER BY filename
+            """)
+            bind(stmt, 1, like); bind(stmt, 2, like)
+            var out: [CatalogImage] = []
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
+    func images(onDate datePrefix: String) -> [CatalogImage] {
+        queue.sync {
+            let like = "\(datePrefix)%"
+            let stmt = prepare("""
+                SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at
+                FROM images WHERE date_taken LIKE ?
+                ORDER BY date_taken
+            """)
+            bind(stmt, 1, like)
+            var out: [CatalogImage] = []
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            sqlite3_finalize(stmt); return out
+        }
+    }
 }

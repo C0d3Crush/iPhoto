@@ -2,6 +2,18 @@
 
 ---
 
+## 1.67.0
+**Feature — search --camera/--date, adjust Größenvalidierung, 160 CLI-Tests**
+
+- `iphoto-cli search --camera <modell>` — sucht Bilder nach Kamerahersteller/Modell
+- `iphoto-cli search --date YYYY-MM-DD` — sucht Bilder nach Aufnahmedatum (Präfix-Match)
+- `adjust`: validiert jetzt Ausgabedatei nach Export (Existenz + Größe > 0)
+- `CatalogStore.images(withCamera:)` und `images(onDate:)` als neue Hilfsfunktionen
+- Perf-Section 22: search --camera und --date mit 500 Einträgen benchmarked
+- 160 CLI-Tests, 67 Perf-Tests — alle grün
+
+---
+
 ## 1.66.0
 **Feature — viewmode --json, preset apply --json, adjust vollständige Flag-Tests, Perf-Section 24**
 
