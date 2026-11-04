@@ -2,6 +2,18 @@
 
 ---
 
+## 1.60.1
+**Bugfix — Export-Validierung, --json für export/adjust, people cluster Leerfall, Testabdeckung**
+
+- `exportOne()`: Prüft jetzt, ob Ausgabedatei nach Export existiert und Größe > 0 hat (verhindert stille Datenverluste)
+- `export --json`: Gibt JSON-Objekt/-Array mit `{input, output, ok}` statt Plain-Text aus
+- `adjust --json`: Gibt JSON-Objekt mit `{input, output, format, ok}` aus
+- `people cluster --json` bei leerem Katalog: gibt `{"clusters":0,"noise":0,"total_faces":0}` statt Plain-Text
+- `analyse <ordner>`: Verzeichnis-Scan jetzt mit 2 neuen Tests abgedeckt
+- 109 CLI-Tests (vorher 103), alle grün
+
+---
+
 ## 1.60.0
 **Feature — CLI rating --remove, preset delete + vollständige Testabdeckung für 8 bisher ungetestete Befehle**
 

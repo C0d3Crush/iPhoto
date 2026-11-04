@@ -379,6 +379,16 @@ if [ $EXPORT_EXIT -ne 0 ]; then pass "export nicht-existente Datei (Fehler korre
 EXPORT_EXIT2=0; "$BIN" export --format jpeg > /dev/null 2>&1 || EXPORT_EXIT2=$?
 if [ $EXPORT_EXIT2 -ne 0 ]; then pass "export ohne Eingabe (Fehler korrekt)"; else fail "export ohne Eingabe" "Exitcode 0"; fi
 
+EXPORT_SIZE=$(stat -f%z "$EXPORT_JPEG" 2>/dev/null || echo 0)
+if [ "${EXPORT_SIZE:-0}" -gt 100 ]; then pass "export JPEG Dateigröße > 100 Bytes ($EXPORT_SIZE B)"; else fail "export Dateigröße" "Zu klein oder leer: ${EXPORT_SIZE}B"; fi
+
+OUT=$("$BIN" export "$INPUT" --format jpeg --output "$TMPDIR_BASE/export_json.jpg" --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'ok' in d and d['ok']==True" 2>/dev/null; then
+    pass "export --json (JSON mit 'ok': true)"
+else
+    fail "export --json" "Kein JSON oder ok!=true: $OUT"
+fi
+
 echo ""
 
 # ===========================================================================
@@ -466,6 +476,20 @@ if [ $ANALYSE_EXIT -ne 0 ]; then pass "analyse nicht-existente Datei (Fehler kor
 ANALYSE_EXIT2=0; "$BIN" analyse > /dev/null 2>&1 || ANALYSE_EXIT2=$?
 if [ $ANALYSE_EXIT2 -ne 0 ]; then pass "analyse ohne Argumente (Fehler korrekt)"; else fail "analyse ohne Argumente" "Exitcode 0"; fi
 
+ANALYSE_DIR="$TMPDIR_BASE/analyse_dir"
+mkdir -p "$ANALYSE_DIR"
+cp "$INPUT" "$ANALYSE_DIR/img1.png"
+cp "$INPUT" "$ANALYSE_DIR/img2.png"
+OUT=$("$BIN" analyse "$ANALYSE_DIR" 2>&1)
+if echo "$OUT" | grep -q "Gesamt: 2"; then pass "analyse <Ordner> (2 Dateien)"; else fail "analyse <Ordner>" "Sollte 2 Dateien zeigen: $OUT"; fi
+
+OUT=$("$BIN" analyse "$ANALYSE_DIR" --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; a=json.load(sys.stdin); assert len(a)==2" 2>/dev/null; then
+    pass "analyse <Ordner> --json (2 Einträge)"
+else
+    fail "analyse <Ordner> --json" "Sollte Array mit 2 Elementen sein: $OUT"
+fi
+
 echo ""
 
 # ===========================================================================
@@ -497,6 +521,14 @@ if [ $PRESET_EXIT -ne 0 ]; then pass "preset apply unbekannter Name (Fehler korr
 
 PRESET_EXIT2=0; "$BIN" preset delete "__NichtExistent__" > /dev/null 2>&1 || PRESET_EXIT2=$?
 if [ $PRESET_EXIT2 -ne 0 ]; then pass "preset delete unbekannt (Fehler korrekt)"; else fail "preset delete unbekannt" "Exitcode 0"; fi
+
+ADJ_JSON_OUT="$TMPDIR_BASE/adj_json.jpeg"
+OUT=$("$BIN" adjust "$INPUT" --output "$ADJ_JSON_OUT" --format jpeg --exposure 0.1 --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "adjust --json (JSON mit 'ok': true)"
+else
+    fail "adjust --json" "Kein JSON oder ok!=true: $OUT"
+fi
 
 echo ""
 
@@ -584,6 +616,13 @@ if [ $PEOPLE_EXIT -ne 0 ]; then pass "people scan ohne Argumente (Fehler korrekt
 
 PEOPLE_EXIT2=0; "$BIN" people unbekannt > /dev/null 2>&1 || PEOPLE_EXIT2=$?
 if [ $PEOPLE_EXIT2 -ne 0 ]; then pass "people unbekannter Unterbefehl (Fehler korrekt)"; else fail "people unbekannter Unterbefehl" "Exitcode 0"; fi
+
+OUT=$("$BIN" people cluster --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert isinstance(d,dict) and 'clusters' in d" 2>/dev/null; then
+    pass "people cluster --json leer (JSON mit 'clusters')"
+else
+    fail "people cluster --json leer" "Kein JSON oder 'clusters' fehlt: $OUT"
+fi
 
 echo ""
 

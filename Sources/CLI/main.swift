@@ -8,8 +8,8 @@ import CoreImage
 private func printUsage() {
     print("""
     Verwendung:
-      iphoto-cli export <eingabe> --format jpeg|png|tiff|heif [--output <pfad>] [--quality 0.9]
-      iphoto-cli export <datei1> <datei2> ... --format jpeg --output-dir <ordner>
+      iphoto-cli export <eingabe> --format jpeg|png|tiff|heif [--output <pfad>] [--quality 0.9] [--json]
+      iphoto-cli export <datei1> <datei2> ... --format jpeg --output-dir <ordner> [--json]
       iphoto-cli hdr <ordner> --output-dir <ziel>
       iphoto-cli info <eingabe> [--json]
       iphoto-cli hotpixel <ordner>
@@ -258,6 +258,7 @@ private func runExport(_ args: CLIArgs) -> Int32 {
     }
 
     let isBatch = args.inputs.count > 1 || args.outputDir != nil
+    var jsonResults: [[String: Any]] = []
 
     if isBatch {
         guard let dir = args.outputDir else {
@@ -265,14 +266,18 @@ private func runExport(_ args: CLIArgs) -> Int32 {
             return 1
         }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let silent = args.jsonOutput
         var failed = 0
         for input in args.inputs {
             let stem = input.deletingPathExtension().lastPathComponent
             let outURL = dir.appendingPathComponent(stem).appendingPathExtension(args.format.fileExtension)
-            if !exportOne(input: input, output: outURL, format: args.format, quality: args.quality) {
-                failed += 1
-            }
+            let ok = exportOne(input: input, output: outURL, format: args.format, quality: args.quality, silent: silent)
+            if !ok { failed += 1 }
+            jsonResults.append(["input": input.lastPathComponent, "output": outURL.path, "ok": ok])
         }
+        if args.jsonOutput,
+           let data = try? JSONSerialization.data(withJSONObject: jsonResults, options: .prettyPrinted),
+           let str = String(data: data, encoding: .utf8) { print(str) }
         return failed == 0 ? 0 : 1
     } else {
         let input = args.inputs[0]
@@ -285,16 +290,28 @@ private func runExport(_ args: CLIArgs) -> Int32 {
                 .appendingPathComponent(stem)
                 .appendingPathExtension(args.format.fileExtension)
         }
-        return exportOne(input: input, output: outURL, format: args.format, quality: args.quality) ? 0 : 1
+        let ok = exportOne(input: input, output: outURL, format: args.format, quality: args.quality, silent: args.jsonOutput)
+        if args.jsonOutput {
+            let obj: [String: Any] = ["input": input.lastPathComponent, "output": outURL.path, "ok": ok]
+            if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+        }
+        return ok ? 0 : 1
     }
 }
 
 @discardableResult
-private func exportOne(input: URL, output: URL, format: ExportFormat, quality: Double) -> Bool {
+private func exportOne(input: URL, output: URL, format: ExportFormat, quality: Double, silent: Bool = false) -> Bool {
     do {
         let image = try RAWImageDecoder.decode(url: input)
         try ImageExporter.exportSingle(image: image, to: output, format: format, quality: quality)
-        print("OK  \(output.path)")
+        guard FileManager.default.fileExists(atPath: output.path),
+              let attrs = try? FileManager.default.attributesOfItem(atPath: output.path),
+              (attrs[.size] as? Int ?? 0) > 0 else {
+            fputs("FAIL \(input.lastPathComponent): Ausgabedatei nicht geschrieben oder leer\n", stderr)
+            return false
+        }
+        if !silent { print("OK  \(output.path)") }
         return true
     } catch {
         fputs("FAIL \(input.lastPathComponent): \(error.localizedDescription)\n", stderr)
@@ -610,7 +627,18 @@ private func runAdjust(_ args: CLIArgs) -> Int32 {
             return 1
         }
         try ImageExporter.exportSingle(image: outCG, to: output, format: args.format, quality: args.quality)
-        print("OK  \(output.path)")
+        if args.jsonOutput {
+            let obj: [String: Any] = [
+                "input": input.lastPathComponent,
+                "output": output.path,
+                "format": args.format.rawValue.lowercased(),
+                "ok": true
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+        } else {
+            print("OK  \(output.path)")
+        }
         return 0
     } catch {
         fputs("FAIL \(input.lastPathComponent): \(error.localizedDescription)\n", stderr)
@@ -1306,7 +1334,16 @@ private func runPeople(_ args: [String]) -> Int32 {
             } else { i += 1 }
         }
         let faces = catalog.allFaces()
-        guard !faces.isEmpty else { print("Keine Gesichter im Katalog."); return 0 }
+        guard !faces.isEmpty else {
+            if jsonMode {
+                let empty: [String: Any] = ["clusters": 0, "noise": 0, "total_faces": 0]
+                if let data = try? JSONSerialization.data(withJSONObject: empty, options: .prettyPrinted),
+                   let str = String(data: data, encoding: .utf8) { print(str) }
+            } else {
+                print("Keine Gesichter im Katalog.")
+            }
+            return 0
+        }
 
         let clusterMap = FaceClusterer.cluster(faces: faces, epsilon: epsilon)
         let clusterCount = Set(clusterMap.values.filter { $0 >= 0 }).count
