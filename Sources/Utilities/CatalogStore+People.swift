@@ -12,6 +12,16 @@ extension CatalogStore {
         exec("ALTER TABLE images ADD COLUMN face_scanned INTEGER NOT NULL DEFAULT 0")
         exec("CREATE INDEX IF NOT EXISTS idx_images_face_scanned ON images(face_scanned)")
 
+        // v2: Landmark-Embedding → VNFeaturePrint. Alle alten Faces + Cluster löschen,
+        // Bilder neu scannen. Benannte Personen bleiben erhalten — nur Faces + Auto-Cluster.
+        let embVersion = UserDefaults.standard.integer(forKey: "faceEmbedderVersion")
+        if embVersion < 2 {
+            exec("DELETE FROM faces")
+            exec("DELETE FROM people WHERE name IS NULL")
+            exec("UPDATE images SET face_scanned=0")
+            UserDefaults.standard.set(2, forKey: "faceEmbedderVersion")
+        }
+
         exec("""
         CREATE TABLE IF NOT EXISTS faces (
             id          TEXT PRIMARY KEY,

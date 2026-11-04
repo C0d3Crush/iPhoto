@@ -2,6 +2,15 @@
 
 ---
 
+## 1.56.1
+**Bugfix — Gesichts-Embedding durch VNFeaturePrint ersetzt, Clustering-Schwelle angepasst**
+
+- Landmark-basiertes Embedding durch `VNGenerateImageFeaturePrintRequest` (CNN-Modell) ersetzt — viel bessere Trennung zwischen verschiedenen Personen
+- Clustering-Epsilon von 0.55 auf 0.40 gesenkt (konservativer: lieber zu viele Gruppen als falsche Merges)
+- Bestehende Faces + Auto-Cluster werden beim nächsten App-Start automatisch neu berechnet (benannte Personen bleiben)
+
+---
+
 ## 1.56.0
 **Feature — Gesichtserkennung Phase 2: DBSCAN-Clustering + Personen zusammenführen**
 

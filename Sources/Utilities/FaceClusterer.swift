@@ -1,19 +1,19 @@
 import Foundation
 
-// DBSCAN-Clustering auf 128D-Gesichts-Embeddings.
+// DBSCAN-Clustering auf VNFeaturePrint-Embeddings.
 //
 // Distanzmetrik: Cosinus-Distanz (1 − cos_sim), normalisiert auf [0, 1].
-// Gleiche Person typisch < 0.45, verschiedene Personen > 0.65 — epsilon trennt dazwischen.
+// VNFeaturePrint (MobileNet/ResNet): gleiche Person typisch < 0.30,
+// verschiedene Personen > 0.55 — epsilon 0.40 ist konservativ und vermeidet
+// falsche Merges (lieber zu viele Cluster als zu wenige).
 //
-// minPts = 1 → jedes Gesicht landet in einem Cluster (kein Rauschen).
-// Das ist besser für UX: Nutzer sieht alle Gesichter als Personen und mergt bei Bedarf.
-// Ein zu kleines epsilon → zu viele Einzelpersonen (sicherer als Merge-Fehler).
+// minPts = 1 → jedes Gesicht landet in einem Cluster (kein Rauschen),
+// UX: Nutzer sieht alle als Personen und mergt bei Bedarf manuell.
 //
-// Komplexität: O(N²) Distanzberechnung, O(N²) Speicher für Nachbar-Sets → bei
-// 2000 Gesichtern 4M Distanzen à 128 Ops ≈ 512M Float-Ops — in <1 s auf M1/x86.
+// Komplexität: O(N²) → bei 500 Faces ~250K Distanzen à ~512 Ops = 128M Ops, <100 ms.
 
 struct FaceClusterer {
-    static let defaultEpsilon: Float = 0.55
+    static let defaultEpsilon: Float = 0.40
     static let defaultMinPts: Int    = 1
 
     // Gibt [faceID: clusterIndex] zurück. clusterIndex = -1 → Rauschen (nur wenn minPts > 1).

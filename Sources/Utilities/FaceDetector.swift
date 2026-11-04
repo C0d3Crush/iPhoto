@@ -2,80 +2,67 @@ import CoreGraphics
 import Vision
 import Foundation
 
-// Erkennt Gesichter in einem CGImage via VNDetectFaceLandmarksRequest Rev3.
-// Gibt für jedes erkannte Gesicht eine FaceRecord zurück, inklusive:
-// - bbox: normalisierte CGRect, top-left-Ursprung (Vision liefert bottom-left → wird geflippt)
-// - embeddingData: 128 × Float32 = 512 Bytes (FaceEmbedder.compute)
+// Erkennt Gesichter via VNDetectFaceRectanglesRequest und berechnet pro Face einen
+// VNGenerateImageFeaturePrintRequest-Embedding aus dem Face-Crop.
 //
-// Perf: ~80–200 ms pro 512px Thumbnail auf M1 — akzeptabel im Background-Scan,
-//        nicht im Render-Pfad verwenden.
+// VNFeaturePrint (macOS 10.15+) nutzt ein internes MobileNet/ResNet-Modell —
+// viel diskriminativer als reine Landmark-Positionen. Gleiche Person < 0.35,
+// verschiedene Personen > 0.55 (Cosinus-Distanz).
+//
+// Perf: ~100–300 ms pro Bild (Detect + FeaturePrint) @ 512px Thumbnail.
 
 struct FaceDetector {
     static func detect(in image: CGImage, imagePath: String) -> [FaceRecord] {
-        let request = VNDetectFaceLandmarksRequest()
-        request.revision = VNDetectFaceLandmarksRequestRevision3
+        // Schritt 1: Gesichts-Bounding-Boxes
+        let detectRequest = VNDetectFaceRectanglesRequest()
         let handler = VNImageRequestHandler(cgImage: image, orientation: .up, options: [:])
-        do {
-            try handler.perform([request])
-        } catch {
-            return []
-        }
-        guard let observations = request.results as? [VNFaceObservation], !observations.isEmpty else {
-            return []
-        }
-        return observations.map { obs in
-            // Vision: bottom-left origin → flip Y to top-left
+        do { try handler.perform([detectRequest]) } catch { return [] }
+        guard let observations = detectRequest.results as? [VNFaceObservation],
+              !observations.isEmpty else { return [] }
+
+        return observations.compactMap { obs -> FaceRecord? in
+            // Vision: bottom-left origin → flip Y → top-left origin
             let vb = obs.boundingBox
             let bbox = CGRect(x: vb.origin.x,
                               y: 1.0 - vb.origin.y - vb.height,
                               width: vb.width,
                               height: vb.height)
-            let embedding = obs.landmarks.map { FaceEmbedder.compute(landmarks: $0, bbox: vb) }
-            let embeddingData = embedding.flatMap { $0 } // Data? from optional
+
+            // Schritt 2: Face-Crop + VNFeaturePrint-Embedding
+            let embedding = featurePrintEmbedding(image: image, visionBBox: vb)
+
             return FaceRecord(
                 id: UUID().uuidString,
                 imagePath: imagePath,
                 clusterID: nil,
                 bbox: bbox,
                 confidence: Float(obs.confidence),
-                embeddingData: embeddingData
+                embeddingData: embedding
             )
         }
     }
-}
 
-// Berechnet ein 128-Float-Embedding aus Vision-Landmarks.
-// 64 Punkte aus allPoints, normalisiert relativ zur inter-okularen Distanz und Mitte.
-// Weniger Punkte → mit 0 aufgefüllt. Ergebnis: 128 × Float32 = 512 Bytes.
+    // Schneidet Face-Region aus dem Bild (mit 20% Rand) und berechnet
+    // VNGenerateImageFeaturePrintRequest darauf. Gibt nil bei Fehler zurück.
+    private static func featurePrintEmbedding(image: CGImage, visionBBox vb: CGRect) -> Data? {
+        let w = CGFloat(image.width)
+        let h = CGFloat(image.height)
 
-struct FaceEmbedder {
-    static func compute(landmarks: VNFaceLandmarks2D, bbox: CGRect) -> Data {
-        var floats = [Float](repeating: 0, count: 128)
-
-        guard let allPts = landmarks.allPoints?.normalizedPoints, !allPts.isEmpty else {
-            return floats.withUnsafeBytes { Data($0) }
+        // Vision bbox: bottom-left origin, in [0,1]. In Pixel umrechnen + Rand.
+        let pad: CGFloat = 0.2
+        let fx = max(0, (vb.origin.x - pad * vb.width) * w)
+        let fy = max(0, (1.0 - vb.origin.y - vb.height - pad * vb.height) * h)
+        let fw = min(w - fx, (vb.width  + 2 * pad * vb.width)  * w)
+        let fh = min(h - fy, (vb.height + 2 * pad * vb.height) * h)
+        guard fw > 8, fh > 8,
+              let crop = image.cropping(to: CGRect(x: fx, y: fy, width: fw, height: fh)) else {
+            return nil
         }
 
-        // Referenzpunkte für Normalisierung: Mittelpunkte beider Augen
-        let leftCenter  = centroid(landmarks.leftEye?.normalizedPoints ?? [])
-        let rightCenter = centroid(landmarks.rightEye?.normalizedPoints ?? [])
-        let midX = Float((leftCenter.x + rightCenter.x) / 2)
-        let midY = Float((leftCenter.y + rightCenter.y) / 2)
-        let ior  = Float(hypot(rightCenter.x - leftCenter.x, rightCenter.y - leftCenter.y))
-        let scale: Float = ior > 0 ? 1.0 / ior : 1.0
-
-        let take = min(64, allPts.count)
-        for i in 0..<take {
-            floats[i * 2]     = (Float(allPts[i].x) - midX) * scale
-            floats[i * 2 + 1] = (Float(allPts[i].y) - midY) * scale
-        }
-        return floats.withUnsafeBytes { Data($0) }
-    }
-
-    private static func centroid(_ pts: [CGPoint]) -> CGPoint {
-        guard !pts.isEmpty else { return .zero }
-        let sx = pts.reduce(0.0) { $0 + $1.x }
-        let sy = pts.reduce(0.0) { $0 + $1.y }
-        return CGPoint(x: sx / CGFloat(pts.count), y: sy / CGFloat(pts.count))
+        let fpRequest = VNGenerateImageFeaturePrintRequest()
+        let fpHandler = VNImageRequestHandler(cgImage: crop, orientation: .up, options: [:])
+        do { try fpHandler.perform([fpRequest]) } catch { return nil }
+        guard let obs = fpRequest.results?.first as? VNFeaturePrintObservation else { return nil }
+        return obs.data
     }
 }
