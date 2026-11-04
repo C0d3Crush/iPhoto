@@ -24,10 +24,17 @@ let sharedSRGBCIContext = CIContext(options: [.useSoftwareRenderer: false])
 // Begrenzt gleichzeitige CIContext-Renders auf 2 (GPU-Schutz bei Vollbild-Decodes).
 private let ciSemaphore = DispatchSemaphore(value: 2)
 
-// Begrenzt gleichzeitige ImageIO-Thumbnail-Decodes auf 3.
-// CGImageSourceCreateThumbnailAtIndex ist auf macOS 11 nicht thread-safe
-// bei parallelem Zugriff auf viele RAF-embedded-JPEGs → SIGSEGV.
-private let imageIOSemaphore = DispatchSemaphore(value: 3)
+// Begrenzt gleichzeitige ImageIO-Thumbnail-Decodes.
+// CGImageSourceCreateThumbnailAtIndex UND CIContext.createCGImage sind auf macOS 11
+// nicht sicher bei parallelem RAF-Zugriff — SIGSEGV/SIGILL/SIGABRT wenn ≥2 Decodes
+// gleichzeitig laufen (auch 160px-Thumbnails vs. 1500px-Previews vs. Vollbild-CIContext).
+// Da imageIOSemaphore via defer bis zum Ende von decodeEmbeddedJPEG gehalten wird
+// (inklusive applyExifOrientation), serialisiert value=1 auf macOS 11 alle RAF-Ops.
+// macOS 12+ hat diesen Fehler nicht — dort sind 3 parallele Decodes sicher.
+private let imageIOSemaphore: DispatchSemaphore = {
+    if #available(macOS 12.0, *) { return DispatchSemaphore(value: 3) }
+    return DispatchSemaphore(value: 1)
+}()
 
 private func makeCIContext() -> CIContext { sharedSRGBCIContext }
 

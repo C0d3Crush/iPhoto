@@ -2,6 +2,16 @@
 
 ---
 
+## 1.58.3
+**Bugfix — SIGILL/SIGSEGV/SIGABRT beim parallelen RAF-Laden auf macOS 11 (Bug #38)**
+
+- `imageIOSemaphore` auf macOS 11 von `value: 3` auf `value: 1` reduziert — serialisiert alle RAF-Decodes (Thumbnails 160px + 1500px, Vollbild-CIContext) vollständig
+- Verhindert, dass `CGImageSourceCreateThumbnailAtIndex` und `CIContext.createCGImage` gleichzeitig Metal-Ressourcen nutzen (macOS 11 ist unsicher bei parallelem ImageIO + CIContext aus verschiedenen Threads)
+- Betrifft 15 Crash-Reports von Oct-20 bis Nov-04 über 6 Versionen (1.24.1–1.48.0)
+- macOS 12+: weiterhin 3 parallele Decodes erlaubt (kein Regressionsrisiko)
+
+---
+
 ## 1.58.2
 **Bugfix — SIGILL beim Thumbnail-Laden beschädigter RAF-Dateien**
 
