@@ -434,12 +434,12 @@ private struct CriterionRow: View {
             }
 
         // --- Qualitätsmerkmale ---
-        case .isBlurry:
-            Picker("", selection: $criterion.boolValue) {
-                Text("Unscharf").tag(true)
-                Text("Nicht unscharf").tag(false)
+        case .blurScore:
+            if criterion.op == .inRange {
+                numericRangeInput(unit: "")
+            } else {
+                numericSingleInput(unit: "")
             }
-            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 140)
 
         case .isUnderexposed:
             Picker("", selection: $criterion.boolValue) {

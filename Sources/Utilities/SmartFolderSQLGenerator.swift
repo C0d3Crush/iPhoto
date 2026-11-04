@@ -146,7 +146,7 @@ enum SmartFolderSQLGenerator {
 
         // ── Runtime-only ─────────────────────────────────────────────────────
         case .colorRatio, .smartFolderRef,
-             .isBlurry, .isUnderexposed, .isOverexposed, .hasClosedEyes:
+             .blurScore, .isUnderexposed, .isOverexposed, .hasClosedEyes:
             return nil
         }
     }

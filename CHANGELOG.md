@@ -2,6 +2,15 @@
 
 ---
 
+## 1.50.2
+**Bugfix — iAlbum: „Schärfewert" ist jetzt numerisch**
+
+- Attribut „Unscharf" → „Schärfewert" mit numerischen Operatoren (kleiner als / größer als / im Bereich)
+- Niedriger Wert = unschärfer; z.B. „Schärfewert < 80" filtert unscharfe Bilder
+- Ermöglicht präzisere Steuerung als der frühere Boolean (war/war nicht unscharf)
+
+---
+
 ## 1.50.1
 **Bugfix — Scrollleiste verdeckt nicht mehr den +-Knopf in der Sidebar**
 

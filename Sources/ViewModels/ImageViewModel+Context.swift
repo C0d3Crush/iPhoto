@@ -539,10 +539,9 @@ extension ImageViewModel {
             case .colorRatio:
                 guard let ratio = colorChannelRatio(doc: doc, channel: c.textValue) else { return false }
                 return applyNumericOp(c.op, value: ratio, lo: c.numericValue, hi: c.numericValue2)
-            case .isBlurry:
-                guard doc.qualityScanned else { return false }
-                let flag = !doc.blurOverride && (doc.blurScore ?? .infinity) < quality.blurThreshold
-                return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
+            case .blurScore:
+                guard doc.qualityScanned, let score = doc.blurScore else { return false }
+                return applyNumericOp(c.op, value: score, lo: c.numericValue, hi: c.numericValue2)
             case .isUnderexposed:
                 guard doc.qualityScanned else { return false }
                 let flag = !doc.underOverride && (doc.underRatio ?? 0) >= quality.shadowClipThreshold
