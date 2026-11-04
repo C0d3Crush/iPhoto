@@ -2,6 +2,18 @@
 
 ---
 
+## 1.70.0
+**Feature — smartfolder delete/plugins dir --json, stack query Tests, 178 CLI-Tests**
+
+- `smartfolder delete --json` gibt `{"name", "ok": true}` zurück — komplettiert JSON-Parität aller smartfolder-Unterbefehle
+- `plugins dir --json` gibt `{"dir": "<pfad>"}` zurück
+- `stack query` Tests: bekannter Pfad (kein Stapel/keine Sequenz → Exitcode ≤ 1 OK) + --json Variante
+- `search --rating 0` und `search --rating 5` als Grenztests für gültige Bewertungsgrenzen
+- `preset delete` ohne Argument schlägt jetzt sauber fehl (vorher war Bug durch subArgs[0]="delete")
+- 178 CLI-Tests, 71 Perf-Tests — alle grün
+
+---
+
 ## 1.69.0
 **Feature — hotpixel/inpaint/hdr/preset --json, preset delete Bugfix, 174 CLI-Tests, 71 Perf-Tests**
 

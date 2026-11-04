@@ -465,8 +465,12 @@ if [ $SF_REN_DUP_EXIT -ne 0 ]; then pass "smartfolder rename Konflikt schlägt f
 SF_REN_MISS_EXIT=0; "$BIN" smartfolder rename "NichtDa" "NeuName" > /dev/null 2>&1 || SF_REN_MISS_EXIT=$?
 if [ $SF_REN_MISS_EXIT -ne 0 ]; then pass "smartfolder rename fehlend schlägt fehl"; else fail "smartfolder rename fehlend" "Sollte fehlschlagen"; fi
 
+# smartfolder delete --json
+SF_DEL_JSON=$("$BIN" smartfolder delete "UmbOrdner" --json 2>&1)
+if echo "$SF_DEL_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "smartfolder delete --json (ok=true)"; else fail "smartfolder delete --json" "$SF_DEL_JSON"; fi
+
 # cleanup
-"$BIN" smartfolder delete "UmbOrdner" > /dev/null 2>&1 || true
 "$BIN" smartfolder delete "ColorOrdner" > /dev/null 2>&1 || true
 
 echo ""
@@ -485,6 +489,15 @@ if echo "$ST_LIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin);
 
 ST_QUERY_EXIT=0; "$BIN" stack query "/nonexistent/image.RAF" > /dev/null 2>&1 || ST_QUERY_EXIT=$?
 if [ $ST_QUERY_EXIT -ne 0 ]; then pass "stack query fehlender Pfad schlägt fehl"; else fail "stack query missing" "Sollte fehlschlagen"; fi
+
+# stack query auf bekannten Pfad (kein Stapel oder keine Sequenz → Meldung, beide Exitcodes OK)
+"$BIN" rating "$INPUT" --set 1 > /dev/null 2>&1 || true
+ST_QK_EC=0; ST_QUERY_KNOWN=$("$BIN" stack query "$INPUT" 2>&1) || ST_QK_EC=$?
+# Exitcode 0 = kein Stapel (Meldung), Exitcode 1 = keine Sequenznummer — beide akzeptabel
+if [ $ST_QK_EC -le 1 ]; then pass "stack query bekannter Pfad (Exitcode $ST_QK_EC — kein Stapel/seq)"; else fail "stack query bekannter Pfad" "$ST_QUERY_KNOWN"; fi
+
+ST_QK_JSON_EC=0; ST_QUERY_JSON=$("$BIN" stack query "$INPUT" --json 2>&1) || ST_QK_JSON_EC=$?
+if [ $ST_QK_JSON_EC -le 1 ]; then pass "stack query --json (Exitcode $ST_QK_JSON_EC OK)"; else fail "stack query --json" "$ST_QUERY_JSON"; fi
 
 echo ""
 
@@ -807,6 +820,10 @@ fi
 
 OUT=$("$BIN" plugins dir 2>&1)
 if [ -n "$OUT" ]; then pass "plugins dir (Pfad ausgegeben)"; else fail "plugins dir" "Leere Ausgabe"; fi
+
+OUT=$("$BIN" plugins dir --json 2>&1)
+if echo "$OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'dir' in d" 2>/dev/null; then
+    pass "plugins dir --json (JSON mit 'dir')"; else fail "plugins dir --json" "$OUT"; fi
 
 PLUGINS_EXIT=0; "$BIN" plugins invalid_sub > /dev/null 2>&1 || PLUGINS_EXIT=$?
 if [ $PLUGINS_EXIT -ne 0 ]; then pass "plugins unbekannter Unterbefehl (Fehler korrekt)"; else fail "plugins unbekannter Unterbefehl" "Exitcode 0"; fi

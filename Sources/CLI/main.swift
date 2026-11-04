@@ -1184,7 +1184,13 @@ private func runPlugins(_ subArgs: [String]) -> Int32 {
 
     switch sub {
     case "dir":
-        print(pluginDir.path)
+        if jsonOutput {
+            let obj: [String: Any] = ["dir": pluginDir.path]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: []),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print(pluginDir.path)
+        }
         return 0
     case "list":
         let urls = (try? FileManager.default.contentsOfDirectory(
@@ -1670,7 +1676,14 @@ private func runSmartFolder(_ args: [String]) -> Int32 {
             fputs("Fehler: Konnte Smart-Ordner nicht speichern\n", stderr)
             return 1
         }
-        print("Smart-Ordner gelöscht: \(name)")
+        let jsonDelete = subArgs.contains("--json")
+        if jsonDelete {
+            let obj: [String: Any] = ["name": name, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Smart-Ordner gelöscht: \(name)")
+        }
         return 0
 
     default:
