@@ -53,6 +53,8 @@ class ImageViewModel: ObservableObject {
     /// Aktuelle Spaltenanzahl des 2D-Grids; wird von LibraryFullGridView aktualisiert.
     var gridColumnCount: Int = 1
     // Sidebar-Mehrfachauswahl (Alben / iAlben)
+    /// true = letzter Klick war in der Sidebar → Pfeiltasten navigieren Alben/iAlben
+    var sidebarNavigationFocused: Bool = false
     @Published var sidebarSelectedAlbumIDs: Set<UUID> = []
     var sidebarAnchorAlbumID: UUID? = nil
     @Published var sidebarSelectedSmartFolderIDs: Set<UUID> = []
@@ -392,14 +394,18 @@ class ImageViewModel: ObservableObject {
             }
             switch event.keyCode {
             case 123: // ←
-                if mods.contains(.shift) {
+                if self.sidebarNavigationFocused {
+                    // in Sidebar: kein Links/Rechts-Konzept, ignorieren
+                } else if mods.contains(.shift) {
                     DispatchQueue.main.async { self.extendSelectionToPrevious() }
                 } else {
                     DispatchQueue.main.async { self.previous() }
                 }
                 return nil
             case 124: // →
-                if mods.contains(.shift) {
+                if self.sidebarNavigationFocused {
+                    // in Sidebar: kein Links/Rechts-Konzept, ignorieren
+                } else if mods.contains(.shift) {
                     DispatchQueue.main.async { self.extendSelectionToNext() }
                 } else {
                     DispatchQueue.main.async { self.next() }
@@ -407,23 +413,29 @@ class ImageViewModel: ObservableObject {
                 return nil
             case 126: // ↑
                 let ext126 = mods.contains(.shift)
-                switch self.navSelection {
-                case .album:
-                    DispatchQueue.main.async { self.navigateSidebarAlbum(forward: false, extending: ext126) }
-                case .smartFolder:
-                    DispatchQueue.main.async { self.navigateSidebarSmartFolder(forward: false, extending: ext126) }
-                default:
+                if self.sidebarNavigationFocused {
+                    switch self.navSelection {
+                    case .album:
+                        DispatchQueue.main.async { self.navigateSidebarAlbum(forward: false, extending: ext126) }
+                    case .smartFolder:
+                        DispatchQueue.main.async { self.navigateSidebarSmartFolder(forward: false, extending: ext126) }
+                    default: break
+                    }
+                } else {
                     DispatchQueue.main.async { ext126 ? self.extendSelectionByRow(forward: false) : self.navigateByRow(forward: false) }
                 }
                 return nil
             case 125: // ↓
                 let ext125 = mods.contains(.shift)
-                switch self.navSelection {
-                case .album:
-                    DispatchQueue.main.async { self.navigateSidebarAlbum(forward: true, extending: ext125) }
-                case .smartFolder:
-                    DispatchQueue.main.async { self.navigateSidebarSmartFolder(forward: true, extending: ext125) }
-                default:
+                if self.sidebarNavigationFocused {
+                    switch self.navSelection {
+                    case .album:
+                        DispatchQueue.main.async { self.navigateSidebarAlbum(forward: true, extending: ext125) }
+                    case .smartFolder:
+                        DispatchQueue.main.async { self.navigateSidebarSmartFolder(forward: true, extending: ext125) }
+                    default: break
+                    }
+                } else {
                     DispatchQueue.main.async { ext125 ? self.extendSelectionByRow(forward: true) : self.navigateByRow(forward: true) }
                 }
                 return nil
@@ -623,6 +635,7 @@ class ImageViewModel: ObservableObject {
 
     func selectDocument(at index: Int) {
         Log.trace("selectDocument(\(index)) — Klick angekommen")
+        sidebarNavigationFocused = false
         persistAdjustmentsForCurrent()
         collection.select(index: index)
         loadCurrentImage()

@@ -409,7 +409,8 @@ struct DetailView: View {
                     Text("Bild wird geladen…")
                         .foregroundColor(.secondary)
                 }
-            } else if let image = viewModel.adj.showOriginal ? viewModel.currentImage
+            } else if !viewModel.visibleDocuments.isEmpty,
+                      let image = viewModel.adj.showOriginal ? viewModel.currentImage
                         : (viewModel.inpaint.resultImage
                            ?? viewModel.adj.adjustedImage
                            ?? viewModel.currentImage) {

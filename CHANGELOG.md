@@ -2,6 +2,15 @@
 
 ---
 
+## 1.51.0
+**Feature — Focus-Tracking + Batch-Delete + leere Detail-Ansicht**
+
+- Pfeiltasten navigieren jetzt dort, wo zuletzt geklickt wurde: Sidebar-Klick → Alben/iAlben; Thumbnail-Klick → Bilder
+- Rechtsklick auf markierte Alben löscht alle gleichzeitig (Batch-Delete)
+- Wenn alle sichtbaren Bilder gelöscht/getrasht werden, zeigt die Detail-Ansicht den leeren Platzhalter statt dem letzten Bild
+
+---
+
 ## 1.50.2
 **Bugfix — iAlbum: „Schärfewert" ist jetzt numerisch**
 

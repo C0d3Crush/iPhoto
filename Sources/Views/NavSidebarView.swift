@@ -271,10 +271,19 @@ struct NavSidebarView: View {
             return provider
         }
         .contextMenu {
-            Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
-            Button("In Gruppe verschieben") { movingFolder = sf }
-            Divider()
-            Button("Löschen") { viewModel.deleteSmartFolder(sf) }
+            let multiSel = viewModel.sidebarSelectedSmartFolderIDs.count > 1
+                && viewModel.sidebarSelectedSmartFolderIDs.contains(sf.id)
+            if !multiSel {
+                Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
+                Button("In Gruppe verschieben") { movingFolder = sf }
+                Divider()
+            }
+            Button(multiSel
+                   ? "\(viewModel.sidebarSelectedSmartFolderIDs.count) iAlben löschen"
+                   : "Löschen") {
+                if multiSel { viewModel.deleteSelectedSidebarSmartFolders() }
+                else { viewModel.deleteSmartFolder(sf) }
+            }
         }
     }
 
@@ -289,12 +298,21 @@ struct NavSidebarView: View {
             ))
         if !albumsCollapsed {
             ForEach(viewModel.library.albums) { album in
+                let multiSel = viewModel.sidebarSelectedAlbumIDs.count > 1
+                    && viewModel.sidebarSelectedAlbumIDs.contains(album.id)
                 AlbumRow(album: album, isSelected: viewModel.navSelection == .album(album.id))
                     .environmentObject(viewModel)
                     .contextMenu {
-                        Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
-                        Divider()
-                        Button("Album löschen") { viewModel.deleteAlbum(album) }
+                        if !multiSel {
+                            Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
+                            Divider()
+                        }
+                        Button(multiSel
+                               ? "\(viewModel.sidebarSelectedAlbumIDs.count) Alben löschen"
+                               : "Album löschen") {
+                            if multiSel { viewModel.deleteSelectedSidebarAlbums() }
+                            else { viewModel.deleteAlbum(album) }
+                        }
                     }
             }
         }

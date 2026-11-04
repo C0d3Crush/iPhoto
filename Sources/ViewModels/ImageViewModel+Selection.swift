@@ -192,6 +192,7 @@ extension ImageViewModel {
     }
 
     func toggleSelection(at index: Int) {
+        sidebarNavigationFocused = false
         if collection.selectedIndices.contains(index) {
             collection.selectedIndices.remove(index)
             if collection.currentIndex == index {
@@ -276,6 +277,7 @@ extension ImageViewModel {
     // MARK: - Sidebar navigation + multi-select
 
     func sidebarSelectAlbum(_ album: Album, extending: Bool) {
+        sidebarNavigationFocused = true
         if extending, let anchor = sidebarAnchorAlbumID,
            let anchorIdx = library.albums.firstIndex(where: { $0.id == anchor }),
            let targetIdx = library.albums.firstIndex(where: { $0.id == album.id }) {
@@ -290,6 +292,7 @@ extension ImageViewModel {
     }
 
     func sidebarSelectSmartFolder(_ sf: SmartFolder, extending: Bool) {
+        sidebarNavigationFocused = true
         let flat = flatSidebarSmartFolders()
         if extending, let anchor = sidebarAnchorSmartFolderID,
            let anchorIdx = flat.firstIndex(where: { $0.id == anchor }),

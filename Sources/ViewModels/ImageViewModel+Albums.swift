@@ -56,6 +56,21 @@ extension ImageViewModel {
         CatalogStore.shared.deleteAlbum(id: album.id.uuidString)
     }
 
+    func deleteSelectedSidebarAlbums() {
+        let ids = sidebarSelectedAlbumIDs
+        guard ids.count > 1 else { return }
+        let toDelete = library.albums.filter { ids.contains($0.id) }
+        for album in toDelete {
+            removeAlbumFromFilesystem(album)
+            CatalogStore.shared.deleteAlbum(id: album.id.uuidString)
+        }
+        library.albums.removeAll { ids.contains($0.id) }
+        if case .album(let id) = navSelection, ids.contains(id) { navSelection = .library }
+        library.saveAlbums()
+        sidebarSelectedAlbumIDs = []
+        sidebarAnchorAlbumID = nil
+    }
+
     func renameAlbum(_ album: Album, to name: String) {
         guard let idx = library.albums.firstIndex(where: { $0.id == album.id }) else { return }
         let oldDir = albumSystemPath(for: album)
