@@ -54,6 +54,13 @@ struct PeopleView: View {
                     .scaleEffect(0.7)
                     .frame(width: 16, height: 16)
             }
+            Button(action: { viewModel.clusterFaces() }) {
+                Label("Gruppieren", systemImage: "person.3")
+                    .font(.caption)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(viewModel.people.isScanning)
+
             Button(action: { viewModel.scanFacesForLibrary() }) {
                 Label("Scannen", systemImage: "person.crop.rectangle.badge.plus")
                     .font(.caption)
@@ -76,7 +83,9 @@ struct PeopleView: View {
         VStack(spacing: 4) {
             ProgressView(value: viewModel.people.scanProgress)
                 .padding(.horizontal, 16)
-            Text("Gesichter werden erkannt…")
+            Text(viewModel.people.scanProgress < 0.85
+                 ? "Gesichter werden erkannt…"
+                 : "Gesichter werden gruppiert…")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

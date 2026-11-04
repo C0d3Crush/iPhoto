@@ -277,6 +277,15 @@ else
     fail "people faces --json" "Kein valides JSON-Array: $FACES_JSON"
 fi
 
+# people cluster --json — exit 0, valides JSON
+CLUSTER_JSON=$("$BIN" people cluster --json 2>&1)
+CLUSTER_EXIT=$?
+if [ $CLUSTER_EXIT -eq 0 ]; then
+    pass "people cluster (Exitcode 0)"
+else
+    fail "people cluster" "Exitcode $CLUSTER_EXIT: $CLUSTER_JSON"
+fi
+
 # people <ungültig> — exit != 0
 PEOPLE_BAD_EXIT=0
 "$BIN" people bogussubcmd > /dev/null 2>&1 || PEOPLE_BAD_EXIT=$?

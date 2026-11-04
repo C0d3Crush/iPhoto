@@ -2,6 +2,19 @@
 
 ---
 
+## 1.56.0
+**Feature — Gesichtserkennung Phase 2: DBSCAN-Clustering + Personen zusammenführen**
+
+- Scan startet jetzt automatisch DBSCAN-Clustering nach der Erkennungsphase
+- Gleiche Gesichter werden anhand 128D-Cosinus-Ähnlichkeit (ε=0.55) automatisch gruppiert
+- Benannte Personen bleiben beim Neu-Gruppieren erhalten — nur unbenannte Cluster werden ersetzt
+- Neuer „Gruppieren"-Button in der Menschen-Ansicht für manuelles Re-Clustering
+- Personen zusammenführen via Kontextmenü (Rechtsklick auf Person → Zusammenführen)
+- Scan-Fortschritt zeigt jetzt zwei Phasen: Erkennen (0–80%) und Gruppieren (80–100%)
+- CLI: `iphoto-cli people cluster [--epsilon 0.55] [--json]`
+
+---
+
 ## 1.55.0
 **Feature — Gesichtserkennung Phase 1: Menschen-Plugin + einklappbare Sidebar-Sektionen + Personen-Bildansicht**
 
