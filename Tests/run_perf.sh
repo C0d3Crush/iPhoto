@@ -560,8 +560,11 @@ echo ""
 # ===========================================================================
 echo "=== 22. Skalierungstest (500 Einträge) ==="
 
+SCALE_DIR="$TMPDIR_BASE/scale500"
+mkdir -p "$SCALE_DIR"
 for i in $(seq 1 500); do
-    "$BIN" rating "/tmp/perf_img_$(printf '%04d' $i).png" --set 0 > /dev/null 2>&1 || true
+    make_png "$SCALE_DIR/perf_img_$(printf '%04d' $i).png" 32 32
+    "$BIN" rating "$SCALE_DIR/perf_img_$(printf '%04d' $i).png" --set 0 > /dev/null 2>&1 || true
 done
 
 THRESHOLD=3000

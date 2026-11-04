@@ -2,6 +2,19 @@
 
 ---
 
+## 1.68.0
+**Feature — smartfolder update/rename/criteria, catalog stats Bewertungs-Breakdown, 170 CLI-Tests**
+
+- `iphoto-cli smartfolder update <name> [--rating-min N] [--flag pick|reject] [--color red|yellow|green|blue]` — Kriterien eines bestehenden Smart-Ordners ersetzen
+- `iphoto-cli smartfolder rename <alter-name> <neuer-name>` — Smart-Ordner umbenennen (Konflikt-Check)
+- `iphoto-cli smartfolder create` unterstützt jetzt `--flag` und `--color` als Kriterien
+- `catalog stats` zeigt Bewertungs-Breakdown: Bewertet/Markiert mit Flag- und Farb-Zählung
+- `catalog stats --json` gibt `rated`, `flagged`, `by_flag`, `by_color` zurück
+- Interne `parseSFCriteria()` Hilfsfunktion für einheitliches Argument-Parsing
+- 170 CLI-Tests, 67 Perf-Tests — alle grün
+
+---
+
 ## 1.67.0
 **Feature — search --camera/--date, adjust Größenvalidierung, 160 CLI-Tests**
 

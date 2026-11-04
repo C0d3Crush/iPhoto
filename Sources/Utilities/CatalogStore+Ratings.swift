@@ -46,6 +46,29 @@ extension CatalogStore {
         }
     }
 
+    func ratingStats() -> (rated: Int, flagged: Int, byFlag: [String: Int], byColor: [String: Int]) {
+        queue.sync {
+            var rated = 0, flagged = 0
+            var byFlag: [String: Int] = [:], byColor: [String: Int] = [:]
+            let s1 = prepare("SELECT COUNT(*) FROM ratings WHERE rating > 0")
+            if step(s1) == SQLITE_ROW { rated = Int(sqlite3_column_int(s1, 0)) }
+            sqlite3_finalize(s1)
+            let s2 = prepare("SELECT flag, COUNT(*) FROM ratings WHERE flag != 'none' AND flag != '' GROUP BY flag")
+            while step(s2) == SQLITE_ROW {
+                let f = String(cString: sqlite3_column_text(s2, 0))
+                let n = Int(sqlite3_column_int(s2, 1))
+                byFlag[f] = n; flagged += n
+            }
+            sqlite3_finalize(s2)
+            let s3 = prepare("SELECT color_label, COUNT(*) FROM ratings WHERE color_label != 'none' AND color_label != '' GROUP BY color_label")
+            while step(s3) == SQLITE_ROW {
+                byColor[String(cString: sqlite3_column_text(s3, 0))] = Int(sqlite3_column_int(s3, 1))
+            }
+            sqlite3_finalize(s3)
+            return (rated, flagged, byFlag, byColor)
+        }
+    }
+
     // MARK: - ELO (Bildvergleich)
 
     /// Persistiert nur die ELO-Spalten — bewusst getrennt von saveRating(), damit

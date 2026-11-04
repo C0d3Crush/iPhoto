@@ -1456,6 +1456,29 @@ private func saveSmartFolders(_ folders: [SmartFolder]) -> Bool {
     return (try? data.write(to: url)) != nil
 }
 
+private func parseSFCriteria(_ args: [String]) -> [SmartFolderCriterion] {
+    var criteria: [SmartFolderCriterion] = []
+    if let idx = args.firstIndex(of: "--rating-min"), idx + 1 < args.count,
+       let n = Int(args[idx + 1]) {
+        var c = SmartFolderCriterion()
+        c.attribute = .rating; c.op = .greaterThan; c.ratingValue = n
+        criteria.append(c)
+    }
+    if let idx = args.firstIndex(of: "--flag"), idx + 1 < args.count,
+       let f = FlagStatus(rawValue: args[idx + 1].lowercased()) {
+        var c = SmartFolderCriterion()
+        c.attribute = .flag; c.op = .isExact; c.flagValue = f
+        criteria.append(c)
+    }
+    if let idx = args.firstIndex(of: "--color"), idx + 1 < args.count,
+       let col = ColorLabel(rawValue: args[idx + 1].lowercased()) {
+        var c = SmartFolderCriterion()
+        c.attribute = .colorLabel; c.op = .isExact; c.colorValue = col
+        criteria.append(c)
+    }
+    return criteria
+}
+
 private func runSmartFolder(_ args: [String]) -> Int32 {
     guard let sub = args.first else {
         fputs("Verwendung: iphoto-cli smartfolder list|query|create|delete [opts]\n", stderr)
@@ -1504,7 +1527,7 @@ private func runSmartFolder(_ args: [String]) -> Int32 {
 
     case "create":
         guard let name = subArgs.first(where: { !$0.hasPrefix("--") }) else {
-            fputs("Verwendung: iphoto-cli smartfolder create <name> [--rating-min N] [--json]\n", stderr)
+            fputs("Verwendung: iphoto-cli smartfolder create <name> [--rating-min N] [--flag pick|reject] [--color red|yellow|green|blue] [--json]\n", stderr)
             return 1
         }
         var folders = loadSmartFolders()
@@ -1513,14 +1536,7 @@ private func runSmartFolder(_ args: [String]) -> Int32 {
             return 1
         }
         var sf = SmartFolder(name: name)
-        if let idx = subArgs.firstIndex(of: "--rating-min"), idx + 1 < subArgs.count,
-           let n = Int(subArgs[idx + 1]) {
-            var c = SmartFolderCriterion()
-            c.attribute = .rating
-            c.op = .greaterThan          // greaterThan with ratingValue N means >= N
-            c.ratingValue = n
-            sf.criteria.append(c)
-        }
+        sf.criteria = parseSFCriteria(subArgs)
         folders.append(sf)
         guard saveSmartFolders(folders) else {
             fputs("Fehler: Konnte Smart-Ordner nicht speichern\n", stderr)
@@ -1531,6 +1547,60 @@ private func runSmartFolder(_ args: [String]) -> Int32 {
                let str = String(data: data, encoding: .utf8) { print(str) }
         } else {
             print("Smart-Ordner erstellt: [\(sf.id.uuidString)] \(name)")
+        }
+        return 0
+
+    case "update":
+        let positional = subArgs.filter { !$0.hasPrefix("--") }
+        guard let name = positional.first else {
+            fputs("Verwendung: iphoto-cli smartfolder update <name> [--rating-min N] [--flag pick|reject] [--color red|yellow|green|blue]\n", stderr)
+            return 1
+        }
+        var folders = loadSmartFolders()
+        guard let idx = folders.firstIndex(where: { $0.name == name }) else {
+            fputs("Fehler: Smart-Ordner '\(name)' nicht gefunden\n", stderr)
+            return 1
+        }
+        folders[idx].criteria = parseSFCriteria(subArgs)
+        guard saveSmartFolders(folders) else {
+            fputs("Fehler: Konnte Smart-Ordner nicht speichern\n", stderr)
+            return 1
+        }
+        if jsonMode {
+            if let data = try? JSONEncoder().encode(folders[idx]),
+               let str = String(data: data, encoding: .utf8) { print(str) }
+        } else {
+            print("Smart-Ordner aktualisiert: \(name)")
+        }
+        return 0
+
+    case "rename":
+        let positional = subArgs.filter { !$0.hasPrefix("--") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli smartfolder rename <alter-name> <neuer-name>\n", stderr)
+            return 1
+        }
+        let oldName = positional[0]; let newName = positional[1]
+        var folders = loadSmartFolders()
+        guard let idx = folders.firstIndex(where: { $0.name == oldName }) else {
+            fputs("Fehler: Smart-Ordner '\(oldName)' nicht gefunden\n", stderr)
+            return 1
+        }
+        guard !folders.contains(where: { $0.name == newName }) else {
+            fputs("Fehler: Smart-Ordner '\(newName)' existiert bereits\n", stderr)
+            return 1
+        }
+        folders[idx].name = newName
+        guard saveSmartFolders(folders) else {
+            fputs("Fehler: Konnte Smart-Ordner nicht speichern\n", stderr)
+            return 1
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["old_name": oldName, "new_name": newName, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Smart-Ordner umbenannt: \(oldName) → \(newName)")
         }
         return 0
 
@@ -1554,7 +1624,7 @@ private func runSmartFolder(_ args: [String]) -> Int32 {
         return 0
 
     default:
-        fputs("Verwendung: iphoto-cli smartfolder list|query|create|delete [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli smartfolder list|query|create|update|rename|delete [opts]\n", stderr)
         return 1
     }
 }
@@ -2134,23 +2204,34 @@ private func runCatalog(_ args: [String]) -> Int32 {
     switch sub {
     case "stats":
         let dbPath = envDBPath() ?? "(Standard: ~/Library/Application Support/iPhoto/catalog.db)"
-        let imageCount = catalog.allImages().count
-        let albumCount = catalog.allAlbums().count
-        let faceCount  = catalog.allFaces().count
+        let imageCount  = catalog.allImages().count
+        let albumCount  = catalog.allAlbums().count
+        let faceCount   = catalog.allFaces().count
         let peopleCount = catalog.allPeople().count
+        let rs = catalog.ratingStats()
 
         if jsonMode {
-            let d: [String: Any] = ["db_path": dbPath, "images": imageCount,
+            var d: [String: Any] = ["db_path": dbPath, "images": imageCount,
                                     "albums": albumCount, "faces": faceCount,
-                                    "people": peopleCount]
+                                    "people": peopleCount,
+                                    "rated": rs.rated, "flagged": rs.flagged,
+                                    "by_flag": rs.byFlag, "by_color": rs.byColor]
             if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
                let s = String(data: dd, encoding: .utf8) { print(s) }
         } else {
-            print("Katalog:  \(dbPath)")
-            print("Bilder:   \(imageCount)")
-            print("Alben:    \(albumCount)")
-            print("Gesichter:\(faceCount)")
-            print("Personen: \(peopleCount)")
+            print("Katalog:   \(dbPath)")
+            print("Bilder:    \(imageCount)")
+            print("Alben:     \(albumCount)")
+            print("Gesichter: \(faceCount)")
+            print("Personen:  \(peopleCount)")
+            print("Bewertet:  \(rs.rated)")
+            print("Markiert:  \(rs.flagged)")
+            if !rs.byFlag.isEmpty {
+                rs.byFlag.sorted { $0.key < $1.key }.forEach { print("  Flagge \($0.key): \($0.value)") }
+            }
+            if !rs.byColor.isEmpty {
+                rs.byColor.sorted { $0.key < $1.key }.forEach { print("  Farbe \($0.key): \($0.value)") }
+            }
         }
         return 0
 

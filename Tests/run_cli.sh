@@ -313,10 +313,13 @@ echo "=== catalog ==="
 
 CSTATS=$("$BIN" catalog stats 2>&1)
 if echo "$CSTATS" | grep -qE 'Bilder:|images'; then pass "catalog stats (enthält 'Bilder:')"; else fail "catalog stats" "$CSTATS"; fi
+if echo "$CSTATS" | grep -qE 'Bewertet:|Markiert:'; then pass "catalog stats enthält Bewertungs-Felder"; else fail "catalog stats Bewertungs-Felder fehlen" "$CSTATS"; fi
 
 CSTATS_JSON=$("$BIN" catalog stats --json 2>&1)
 if echo "$CSTATS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'images' in d" 2>/dev/null; then
     pass "catalog stats --json (valides JSON mit 'images')"; else fail "catalog stats --json" "$CSTATS_JSON"; fi
+if echo "$CSTATS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'rated' in d and 'flagged' in d" 2>/dev/null; then
+    pass "catalog stats --json enthält 'rated'/'flagged'"; else fail "catalog stats --json rated/flagged fehlen" "$CSTATS_JSON"; fi
 
 CPATH=$("$BIN" catalog path 2>&1)
 if [ $? -eq 0 ] && [ -n "$CPATH" ]; then pass "catalog path (Exitcode 0, nicht leer)"; else fail "catalog path" "$CPATH"; fi
@@ -426,6 +429,37 @@ if echo "$SF_DEL" | grep -q "gelöscht"; then pass "smartfolder delete (Meldung)
 
 SF_LIST3=$("$BIN" smartfolder list 2>&1)
 if echo "$SF_LIST3" | grep -q "TestOrdner"; then fail "smartfolder list nach delete" "Ordner noch vorhanden: $SF_LIST3"; else pass "smartfolder list nach delete (leer)"; fi
+
+# smartfolder create --flag / --color criteria
+SF_FLAG=$("$BIN" smartfolder create "FlagOrdner" --flag pick 2>&1)
+if echo "$SF_FLAG" | grep -q "FlagOrdner"; then pass "smartfolder create --flag pick (Name in Ausgabe)"; else fail "smartfolder create --flag" "$SF_FLAG"; fi
+
+SF_COLOR=$("$BIN" smartfolder create "ColorOrdner" --color red 2>&1)
+if echo "$SF_COLOR" | grep -q "ColorOrdner"; then pass "smartfolder create --color red (Name in Ausgabe)"; else fail "smartfolder create --color" "$SF_COLOR"; fi
+
+# smartfolder update
+SF_UPD=$("$BIN" smartfolder update "FlagOrdner" --rating-min 4 2>&1)
+if echo "$SF_UPD" | grep -q "aktualisiert\|FlagOrdner"; then pass "smartfolder update (Meldung)"; else fail "smartfolder update" "$SF_UPD"; fi
+
+# smartfolder rename
+SF_REN=$("$BIN" smartfolder rename "FlagOrdner" "UmbOrdner" 2>&1)
+if echo "$SF_REN" | grep -q "umbenannt\|UmbOrdner"; then pass "smartfolder rename (Meldung)"; else fail "smartfolder rename" "$SF_REN"; fi
+
+SF_LIST4=$("$BIN" smartfolder list 2>&1)
+if echo "$SF_LIST4" | grep -q "UmbOrdner"; then pass "smartfolder list zeigt umbenannten Ordner"; else fail "smartfolder list nach rename" "$SF_LIST4"; fi
+if echo "$SF_LIST4" | grep -q "FlagOrdner"; then fail "smartfolder list: alter Name noch vorhanden" "$SF_LIST4"; else pass "smartfolder list: alter Name weg nach rename"; fi
+
+# smartfolder rename Konflikt
+SF_REN_DUP_EXIT=0; "$BIN" smartfolder rename "UmbOrdner" "ColorOrdner" > /dev/null 2>&1 || SF_REN_DUP_EXIT=$?
+if [ $SF_REN_DUP_EXIT -ne 0 ]; then pass "smartfolder rename Konflikt schlägt fehl"; else fail "smartfolder rename Konflikt" "Sollte fehlschlagen"; fi
+
+# smartfolder rename fehlender Ordner
+SF_REN_MISS_EXIT=0; "$BIN" smartfolder rename "NichtDa" "NeuName" > /dev/null 2>&1 || SF_REN_MISS_EXIT=$?
+if [ $SF_REN_MISS_EXIT -ne 0 ]; then pass "smartfolder rename fehlend schlägt fehl"; else fail "smartfolder rename fehlend" "Sollte fehlschlagen"; fi
+
+# cleanup
+"$BIN" smartfolder delete "UmbOrdner" > /dev/null 2>&1 || true
+"$BIN" smartfolder delete "ColorOrdner" > /dev/null 2>&1 || true
 
 echo ""
 
