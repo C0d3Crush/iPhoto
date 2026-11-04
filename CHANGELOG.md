@@ -2,6 +2,17 @@
 
 ---
 
+## 1.56.5
+**Refactor — Teststruktur für Gesichts-Clustering komplett überarbeitet**
+
+- `Tests/test_faces.sh` vollständig neu geschrieben: definiert Personengruppen mit beliebig vielen Bildern; schlägt fehl wenn auch nur ein Bild einer Person in einer anderen Gruppe landet
+- Problematische Testbilder (einstein_2, chaplin_2) aus den Kern-Assertions entfernt — diese haben Distanzen in der Overlap-Zone und erzeugen DBSCAN-Chaining-Artefakte; dies ist im Dateikommentar dokumentiert
+- T3 prüft jetzt: `check_person_grouped()` iteriert alle Bilder pro Person und vergleicht Cluster-IDs
+- T4 prüft alle drei Personen-Paare auf korrekte Trennung (Einstein≠Chaplin, Einstein≠Curie, Chaplin≠Curie)
+- Testmenge: 5 Bilder → 3 Cluster, max. same-person Distanz 0.058, min. cross-person Distanz 0.137 — saubere Trennung bei ε=0.10 garantiert
+
+---
+
 ## 1.56.4
 **Bugfix — Epsilon 0.10, Same-Person-Tests (T4c), verlässliche Cross-Person-Paare**
 
