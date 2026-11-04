@@ -238,6 +238,17 @@ final class PluginStore: ObservableObject {
           "storageKey": "plugin.inpaint"
         }
         """),
+        ("builtin-similar.json", """
+        {
+          "id": "com.iphoto.builtin.similar",
+          "name": "Ähnliche Bilder",
+          "icon": "square.on.square.dashed",
+          "builtin": "similar",
+          "order": 10,
+          "defaultEnabled": true,
+          "storageKey": "plugin.similar"
+        }
+        """),
     ]
 
     private func writeBuiltins() {

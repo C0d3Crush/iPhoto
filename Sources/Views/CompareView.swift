@@ -199,7 +199,7 @@ struct CompareView: View {
 
     // Gaussian KDE: 40 sample points over the actual ELO range.
     // Scott's bandwidth; capped at 300 samples for large libraries.
-    private static func kdePoints(elos: [Double], sampleCount: Int = 40) -> [(x: Double, y: Double)] {
+    static func kdePoints(elos: [Double], sampleCount: Int = 40) -> [(x: Double, y: Double)] {
         guard elos.count >= 2 else {
             let x = elos.first ?? 1500
             return [(x: x - 200, y: 0), (x: x, y: 1), (x: x + 200, y: 0)]
@@ -254,7 +254,7 @@ struct CompareView: View {
 
 // MARK: - ELO Area Graph (KDE)
 
-private struct EloAreaGraph: View {
+struct EloAreaGraph: View {
     let points: [(x: Double, y: Double)]   // KDE sample points, sorted by x
     let leftElo:  Double?
     let rightElo: Double?

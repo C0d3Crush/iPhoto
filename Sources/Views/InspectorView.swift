@@ -194,6 +194,7 @@ private struct PluginBlock: View {
         case "hotpixel":    HotPixelPanel()
         case "inpaint":     InpaintPanel()
         case "toolbox":     ToolboxPanel()
+        case "similar":     SimilarPanel()
         default:            EmptyView()
         }
     }

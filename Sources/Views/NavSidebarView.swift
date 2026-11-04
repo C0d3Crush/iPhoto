@@ -527,31 +527,6 @@ struct NavSidebarView: View {
             Button("Neu scannen") { viewModel.detectDuplicates() }
         }
 
-        Button(action: { viewModel.navSelection = .similar }) {
-            HStack(spacing: 4) {
-                Label("Ähnliche Bilder", systemImage: "square.on.square.dashed")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.quality.similarGroups.isEmpty {
-                    Text("\(viewModel.quality.similarGroups.count)")
-                        .font(.caption2)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Color.blue)
-                        .cornerRadius(4)
-                        .padding(.trailing, 2)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(isSimilarSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .padding(.horizontal, 4)
-        .contextMenu {
-            Button("Neu gruppieren") { viewModel.detectSimilarImages() }
-        }
     }
 
     @ViewBuilder private var blurrySection: some View {

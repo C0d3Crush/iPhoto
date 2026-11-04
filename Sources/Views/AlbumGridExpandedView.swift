@@ -504,7 +504,7 @@ private struct AlbumGridCell: View {
         } else if coverImages.count == 1 {
             Group {
                 if let img = coverImages[0] {
-                    Image(nsImage: img).resizable().scaledToFill()
+                    Image(nsImage: img).resizable().scaledToFill().clipped()
                 } else {
                     Color(NSColor.separatorColor).opacity(0.3)
                 }

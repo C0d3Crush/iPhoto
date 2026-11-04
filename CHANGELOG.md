@@ -2,6 +2,15 @@
 
 ---
 
+## 1.54.0
+**Feature — ELO-Kurve im Bildvergleich-Panel + Ähnliche Bilder als Plugin + Album-Thumbnails quadratisch**
+
+- ELO-Verteilungskurve ist jetzt direkt im „Bildvergleich"-Inspector-Panel sichtbar (nicht nur in der Vollansicht)
+- „Ähnliche Bilder" aus der Sidebar entfernt und als Inspector-Plugin implementiert: Gruppen-Badge, „Öffnen"- und „Neu gruppieren"-Button
+- Album-Cover-Thumbnails werden jetzt überall korrekt quadratisch geclippt (`.clipped()` in `AlbumGridCell`)
+
+---
+
 ## 1.53.0
 **Feature — Album-Verbesserungen: quadratisches Cover, Informationen in Sidebar, + in Albenansicht**
 
