@@ -1390,19 +1390,6 @@ struct VerboseLogView: View {
                 HStack(spacing: 0) {
                     geekTabButton(tab: .log,     icon: "ant",      label: "Log")
                     geekTabButton(tab: .console, icon: "terminal", label: "Konsole")
-                    Divider().frame(height: 14).padding(.horizontal, 4)
-                    Button(action: { viewModel.loadThumbnails() }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "photo.stack").font(.system(size: 9))
-                            Text("Thumbs laden").font(.system(size: 10, weight: .medium))
-                        }
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Alle Thumbnails jetzt generieren")
                     Spacer()
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }

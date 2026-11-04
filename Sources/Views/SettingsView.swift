@@ -339,6 +339,20 @@ struct SettingsView: View {
                         set: { UserDefaults.standard.set($0, forKey: "settings.geekMode") }
                     )
                 )
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Thumbnails generieren")
+                        Text("Startet die Thumbnail-Generierung für alle Bilder manuell.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Jetzt laden") {
+                        viewModel.loadThumbnails()
+                    }
+                }
+                .padding(.vertical, 2)
             }
 
             Divider().padding(.vertical, 4)
