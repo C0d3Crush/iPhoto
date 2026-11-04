@@ -2,6 +2,21 @@
 
 ---
 
+## 1.69.0
+**Feature — hotpixel/inpaint/hdr/preset --json, preset delete Bugfix, 174 CLI-Tests, 71 Perf-Tests**
+
+- `hotpixel --json` gibt strukturierten JSON-Report (hot_count, grade, top_pixels, sensor-Dimensionen)
+- `inpaint --json` gibt `{"input", "output", "ok": true}` bei Erfolg zurück
+- `hdr --json` gibt Summary-JSON (input_count, decoded, presets_ok/total, output_dir, ok)
+- `preset delete` Bugfix: Name wurde als "delete" interpretiert statt als tatsächlichem Namen
+- `preset delete --json` gibt `{"name", "id", "ok": true}` zurück
+- Hotpixel-Fortschrittsausgabe wird im JSON-Modus unterdrückt (kein gemischtes stdout)
+- `search --rating 0` und `search --rating 5` als Grenztests abgedeckt
+- Perf-Section 25: `info` und `analyse` Latenz-Benchmarks (single + 5-Bilder-Batch)
+- 174 CLI-Tests, 71 Perf-Tests — alle grün
+
+---
+
 ## 1.68.0
 **Feature — smartfolder update/rename/criteria, catalog stats Bewertungs-Breakdown, 170 CLI-Tests**
 

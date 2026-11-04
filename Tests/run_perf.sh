@@ -656,6 +656,30 @@ fi
 echo ""
 
 # ===========================================================================
+echo "=== 25. Info + Analyse Latenz ==="
+THRESHOLD_INFO=1500
+THRESHOLD_ANALYSE=3000
+
+# info single image
+T0=$(ms); "$BIN" info "$SMALL" > /dev/null 2>&1; T1=$(ms); DT=$((T1-T0))
+if [ $DT -le $THRESHOLD_INFO ]; then pass "info single (${DT}ms)" "$DT"; else fail "info single" "$DT" "$THRESHOLD_INFO"; fi
+
+# info --json
+T0=$(ms); "$BIN" info "$SMALL" --json > /dev/null 2>&1; T1=$(ms); DT=$((T1-T0))
+if [ $DT -le $THRESHOLD_INFO ]; then pass "info --json (${DT}ms)" "$DT"; else fail "info --json" "$DT" "$THRESHOLD_INFO"; fi
+
+# analyse single image
+T0=$(ms); "$BIN" analyse "$SMALL" > /dev/null 2>&1; T1=$(ms); DT=$((T1-T0))
+if [ $DT -le $THRESHOLD_ANALYSE ]; then pass "analyse single (${DT}ms)" "$DT"; else fail "analyse single" "$DT" "$THRESHOLD_ANALYSE"; fi
+
+# analyse directory (10 images)
+BATCH_DIR="$TMPDIR_BASE"
+T0=$(ms); "$BIN" analyse "$BATCH_DIR/batch_1.png" "$BATCH_DIR/batch_2.png" "$BATCH_DIR/batch_3.png" "$BATCH_DIR/batch_4.png" "$BATCH_DIR/batch_5.png" > /dev/null 2>&1; T1=$(ms); DT=$((T1-T0))
+if [ $DT -le $((THRESHOLD_ANALYSE * 5)) ]; then pass "analyse 5 Bilder (${DT}ms)" "$DT"; else fail "analyse 5 Bilder" "$DT" "$((THRESHOLD_ANALYSE * 5))"; fi
+
+echo ""
+
+# ===========================================================================
 echo "=============================="
 echo "Leistungstest: $PASS bestanden, $FAIL fehlgeschlagen"
 echo "=============================="

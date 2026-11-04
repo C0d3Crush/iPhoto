@@ -300,6 +300,14 @@ SDATE_JSON=$("$BIN" search --date "2024" --json 2>&1)
 if echo "$SDATE_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
     pass "search --date --json (valides JSON-Array)"; else fail "search --date --json" "$SDATE_JSON"; fi
 
+# search --rating Grenzen: 0 und 5 sind gültig, >5 sollte Exitcode 0 (leeres Ergebnis) liefern
+SRATING_ZERO=$("$BIN" search --rating 0 2>&1)
+if [ $? -eq 0 ]; then pass "search --rating 0 (Exitcode 0)"; else fail "search --rating 0" "$SRATING_ZERO"; fi
+
+# search --rating 5 (Maximalwert)
+SRATING_MAX=$("$BIN" search --rating 5 2>&1)
+if [ $? -eq 0 ]; then pass "search --rating 5 (Exitcode 0)"; else fail "search --rating 5" "$SRATING_MAX"; fi
+
 # search ohne Argumente → Exitcode != 0
 SEMPTY_EXIT=0; "$BIN" search > /dev/null 2>&1 || SEMPTY_EXIT=$?
 if [ $SEMPTY_EXIT -ne 0 ]; then pass "search (ohne Argumente → Exitcode != 0)"; else fail "search ohne args" "Hätte fehlschlagen sollen"; fi
@@ -740,6 +748,10 @@ if [ $PRESET_EXIT -ne 0 ]; then pass "preset apply unbekannter Name (Fehler korr
 PRESET_EXIT2=0; "$BIN" preset delete "__NichtExistent__" > /dev/null 2>&1 || PRESET_EXIT2=$?
 if [ $PRESET_EXIT2 -ne 0 ]; then pass "preset delete unbekannt (Fehler korrekt)"; else fail "preset delete unbekannt" "Exitcode 0"; fi
 
+# preset delete ohne Argument
+PRESET_DEL_EMPTY=0; "$BIN" preset delete > /dev/null 2>&1 || PRESET_DEL_EMPTY=$?
+if [ $PRESET_DEL_EMPTY -ne 0 ]; then pass "preset delete ohne Argument (Fehler korrekt)"; else fail "preset delete ohne Argument" "Exitcode 0 — Bug: wurde als 'delete' interpretiert"; fi
+
 # adjust Ausgabedatei Größe > 0
 ADJ_SIZE_OUT="$TMPDIR_BASE/adj_size.jpeg"
 "$BIN" adjust "$INPUT" --output "$ADJ_SIZE_OUT" --format jpeg --exposure 0.2 > /dev/null 2>&1 || true
@@ -897,6 +909,13 @@ EMPTY_DIR="$TMPDIR_BASE/empty_hp"
 mkdir -p "$EMPTY_DIR"
 HOTPIXEL_EXIT3=0; "$BIN" hotpixel "$EMPTY_DIR" > /dev/null 2>&1 || HOTPIXEL_EXIT3=$?
 if [ $HOTPIXEL_EXIT3 -ne 0 ]; then pass "hotpixel leerer Ordner (Fehler korrekt)"; else fail "hotpixel leerer Ordner" "Exitcode 0"; fi
+
+# hotpixel --json mit echtem Bild (1-Frame-Ordner → result produziert JSON)
+HP_JSON_DIR="$TMPDIR_BASE/hp_json"
+mkdir -p "$HP_JSON_DIR"; cp "$INPUT" "$HP_JSON_DIR/frame.png"
+HP_JSON=$("$BIN" hotpixel "$HP_JSON_DIR" --json 2>&1)
+if echo "$HP_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'hot_count' in d and 'grade' in d" 2>/dev/null; then
+    pass "hotpixel --json (JSON mit hot_count und grade)"; else fail "hotpixel --json" "$HP_JSON"; fi
 
 echo ""
 

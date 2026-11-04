@@ -388,16 +388,40 @@ private func runHotPixel(_ args: CLIArgs) -> Int32 {
         return 1
     }
 
-    print("Hot-Pixel-Analyse: \(urls.count) Datei(en) in \(dir.lastPathComponent)")
+    if !args.jsonOutput {
+        print("Hot-Pixel-Analyse: \(urls.count) Datei(en) in \(dir.lastPathComponent)")
+    }
 
     guard let result = HotPixelAnalyzer.analyze(urls: urls, progress: { status, pct in
+        guard !args.jsonOutput else { return }
         let bar = String(repeating: "█", count: Int(pct * 30))
             + String(repeating: "░", count: 30 - Int(pct * 30))
         print("\r[\(bar)] \(Int(pct * 100))%  \(status)          ", terminator: "")
         fflush(stdout)
     }) else {
-        fputs("\nFehler: Analyse fehlgeschlagen (keine Frames dekodierbar)\n", stderr)
+        fputs("Fehler: Analyse fehlgeschlagen (keine Frames dekodierbar)\n", stderr)
         return 1
+    }
+
+    if args.jsonOutput {
+        let topPixels: [[String: Any]] = result.hotPixels.prefix(10).map {
+            ["x": $0.x, "y": $0.y, "value": $0.value]
+        }
+        let obj: [String: Any] = [
+            "sensor_width":  result.sensorWidth,
+            "sensor_height": result.sensorHeight,
+            "frame_count":   result.frameCount,
+            "dark_mean":     result.darkMean,
+            "dark_std":      result.darkStd,
+            "threshold":     result.threshold,
+            "hot_count":     result.hotCount,
+            "grade":         result.grade,
+            "grade_label":   result.gradeLabel,
+            "top_pixels":    topPixels
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+           let str = String(data: data, encoding: .utf8) { print(str) }
+        return 0
     }
 
     print("\n")
@@ -424,7 +448,7 @@ private func runHotPixel(_ args: CLIArgs) -> Int32 {
         print("")
     }
 
-    // ASCII cluster grid (20×20 → condensed to 10×5 for terminal)
+    // ASCII cluster grid (20×20)
     print("  Cluster-Grid (20×20, Wert = Anzahl Hot Pixel pro Zelle):")
     for row in result.clusterGrid {
         let line = row.map { v -> String in
@@ -774,11 +798,12 @@ private func runPreset(_ subArgs: [String]) -> Int32 {
         }
 
     case "delete":
-        guard !subArgs.isEmpty else {
-            fputs("Fehler: 'preset delete' benötigt einen Namen\n", stderr)
+        let deletePositional = subArgs.dropFirst().filter { !$0.hasPrefix("--") }
+        guard let nameOrId = deletePositional.first else {
+            fputs("Fehler: 'preset delete <name>' — Name angeben\n", stderr)
             return 1
         }
-        let nameOrId = subArgs[0]
+        let jsonDelete = subArgs.contains("--json")
         let catalog = CatalogStore(dbPath: envDBPath())
         let userPresets = catalog.allUserPresets()
         guard let found = userPresets.first(where: {
@@ -788,7 +813,13 @@ private func runPreset(_ subArgs: [String]) -> Int32 {
             return 1
         }
         catalog.deletePreset(id: found.id)
-        print("Preset gelöscht: \(found.name)")
+        if jsonDelete {
+            let obj: [String: Any] = ["name": found.name, "id": found.id.uuidString, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Preset gelöscht: \(found.name)")
+        }
         return 0
 
     default:
@@ -995,7 +1026,13 @@ private func runInpaint(_ args: CLIArgs) -> Int32 {
             fputs("Fehler: Schreiben fehlgeschlagen\n", stderr)
             return 1
         }
-        print("OK  \(outURL.path)")
+        if args.jsonOutput {
+            let obj: [String: Any] = ["input": input.lastPathComponent, "output": outURL.path, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("OK  \(outURL.path)")
+        }
         return 0
     } catch {
         fputs("FAIL \(input.lastPathComponent): \(error.localizedDescription)\n", stderr)
@@ -1118,8 +1155,21 @@ private func runHDR(_ args: CLIArgs) -> Int32 {
         }
     }
 
-    print(String(repeating: "─", count: 56))
-    print("Fertig. \(hdrPresets.count - failed)/\(hdrPresets.count) erfolgreich → \(outDir.path)")
+    if args.jsonOutput {
+        let obj: [String: Any] = [
+            "input_count":  inputURLs.count,
+            "decoded":      cgImages.count,
+            "presets_ok":   hdrPresets.count - failed,
+            "presets_total": hdrPresets.count,
+            "output_dir":   outDir.path,
+            "ok":           failed == 0
+        ]
+        if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: d, encoding: .utf8) { print(s) }
+    } else {
+        print(String(repeating: "─", count: 56))
+        print("Fertig. \(hdrPresets.count - failed)/\(hdrPresets.count) erfolgreich → \(outDir.path)")
+    }
     return failed == 0 ? 0 : 1
 }
 
