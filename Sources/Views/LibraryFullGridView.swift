@@ -89,30 +89,33 @@ struct LibraryFullGridView: View {
                                 eloRangeBanner(lo: lo, hi: hi)
                             }
                             let sp = cellSpacing
+                            let pad: CGFloat = cellWidth < 50 ? 4 : 12
                             let useYears = yearGroups.count > 1 || (yearGroups.count == 1 && yearGroups[0].year != "Ohne Datum")
-                            if useYears {
-                                LazyVGrid(columns: columns, spacing: sp, pinnedViews: [.sectionHeaders]) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if useYears {
                                     ForEach(yearGroups) { group in
-                                        Section(header: yearSectionHeader(group.year)) {
+                                        yearSectionHeader(group.year)
+                                            .padding(.horizontal, pad)
+                                            .padding(.top, pad)
+                                        LazyVGrid(columns: columns, spacing: sp) {
                                             ForEach(group.documents, id: \.id) { doc in
                                                 thumbnailCell(doc)
                                             }
                                         }
+                                        .padding(.horizontal, pad)
+                                        .padding(.bottom, sp)
                                     }
-                                }
-                                .padding(cellWidth < 50 ? 4 : 12)
-                                .frame(maxWidth: .infinity)
-                                .background(ScrollViewGrabber(scroller: scroller))
-                            } else {
-                                LazyVGrid(columns: columns, spacing: sp) {
-                                    ForEach(viewModel.visibleDocuments, id: \.id) { doc in
-                                        thumbnailCell(doc)
+                                } else {
+                                    LazyVGrid(columns: columns, spacing: sp) {
+                                        ForEach(viewModel.visibleDocuments, id: \.id) { doc in
+                                            thumbnailCell(doc)
+                                        }
                                     }
+                                    .padding(pad)
                                 }
-                                .padding(cellWidth < 50 ? 4 : 12)
-                                .frame(maxWidth: .infinity)
-                                .background(ScrollViewGrabber(scroller: scroller))
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(ScrollViewGrabber(scroller: scroller))
                         }
                         .background(Color(NSColor.windowBackgroundColor))
                         .onChange(of: viewModel.collection.currentIndex) { _ in
