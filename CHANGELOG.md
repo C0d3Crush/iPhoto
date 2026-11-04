@@ -2,6 +2,15 @@
 
 ---
 
+## 1.56.3
+**Bugfix — Epsilon auf 0.08 gesenkt, Cross-Person-Tests ergänzt**
+
+- Standard-Clustering-Epsilon 0.15 → 0.08: verhindert falsches Zusammenfassen verschiedener Personen (chaplin+curie hatten Distanz 0.086 < 0.15)
+- `Tests/test_faces.sh`: 5 neue Cross-Person-Assertions (T5b/c/d, T7b/c) — hätten den Screenshot-Bug sofort gemeldet
+- T7 prüft jetzt auch mit dem Standard-Epsilon ob kein falsches Merge entsteht
+
+---
+
 ## 1.56.2
 **Bugfix — Embedding-Extraktion korrigiert, Clustering-Schwelle angepasst, Test-Suite hinzugefügt**
 

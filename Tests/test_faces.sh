@@ -182,18 +182,42 @@ fi
 
 echo ""
 
-# ── T5: Verschiedene Personen in unterschiedlichen Clustern ───────────────────
+# ── T5: Verschiedene Personen MÜSSEN in unterschiedlichen Clustern sein ────────
+# Kritisch: Diese Tests fangen falsche Merges ab (der Fehler, den der User sah).
+# Distanzen bei epsilon=0.08: alle cross-person Paare > 0.085 → immer getrennt.
 
-echo "--- T5: Cross-Person-Trennung ---"
+echo "--- T5: Cross-Person-Trennung (kein falsches Merge) ---"
 
 E1=$(cluster_for_path "einstein_1.jpg")
 CH1=$(cluster_for_path "chaplin_1.jpg")
+CH2=$(cluster_for_path "chaplin_2.jpg")
+C1=$(cluster_for_path "curie_1.jpg")
+C2=$(cluster_for_path "curie_2.jpg")
 
-# Einstein vs Chaplin: Distanz ~0.308 — weit auseinander
+# Einstein vs Chaplin: Distanz ~0.31
 if [ -n "$E1" ] && [ -n "$CH1" ] && [ "$E1" != "$CH1" ]; then
-    pass "T5a: einstein_1 und chaplin_1 in unterschiedlichen Clustern (Distanz ~0.31)"
+    pass "T5a: einstein_1 ≠ chaplin_1 (Distanz ~0.31)"
 else
-    fail "T5a: einstein_1 ($E1) und chaplin_1 ($CH1) fälschlich im gleichen Cluster"
+    fail "T5a: einstein_1 ($E1) = chaplin_1 ($CH1) — falsches Merge!"
+fi
+
+# Chaplin vs Curie: Distanz ~0.086–0.157 — das war der Bug im Screenshot
+if [ -n "$CH1" ] && [ -n "$C1" ] && [ "$CH1" != "$C1" ]; then
+    pass "T5b: chaplin_1 ≠ curie_1 (Distanz ~0.16)"
+else
+    fail "T5b: chaplin_1 ($CH1) = curie_1 ($C1) — falsches Merge!"
+fi
+
+if [ -n "$CH2" ] && [ -n "$C2" ] && [ "$CH2" != "$C2" ]; then
+    pass "T5c: chaplin_2 ≠ curie_2 (Distanz ~0.086 — kritischer Grenzfall)"
+else
+    fail "T5c: chaplin_2 ($CH2) = curie_2 ($C2) — falsches Merge! Epsilon zu hoch?"
+fi
+
+if [ -n "$CH1" ] && [ -n "$C2" ] && [ "$CH1" != "$C2" ]; then
+    pass "T5d: chaplin_1 ≠ curie_2 (Distanz ~0.14)"
+else
+    fail "T5d: chaplin_1 ($CH1) = curie_2 ($C2) — falsches Merge!"
 fi
 
 echo ""
@@ -213,15 +237,37 @@ fi
 
 echo ""
 
-# ── T7: Re-Cluster mit Standard-Epsilon ───────────────────────────────────────
+# ── T7: Re-Clustering mit Standard-Epsilon + Cross-Person-Validierung ─────────
+# Dieser Test fängt falsche Merges bei Epsilon-Änderungen ab.
 
-echo "--- T7: Re-Clustering mit Standard-Epsilon (0.15) ---"
+echo "--- T7: Re-Clustering mit Standard-Epsilon + Cross-Person-Check ---"
 RECLUSTER_OUT=$(IPHOTO_CATALOG_DB="$DB" "$CLI" people cluster 2>&1)
 echo "$RECLUSTER_OUT"
-if echo "$RECLUSTER_OUT" | grep -q "Clustering abgeschlossen"; then
-    pass "T7: Re-Clustering erfolgreich"
+
+if ! echo "$RECLUSTER_OUT" | grep -q "Clustering abgeschlossen"; then
+    fail "T7a: Re-Clustering fehlgeschlagen"
 else
-    fail "T7: Re-Clustering fehlgeschlagen"
+    pass "T7a: Re-Clustering erfolgreich"
+fi
+
+FACES_JSON_DEFAULT=$(IPHOTO_CATALOG_DB="$DB" "$CLI" people faces --json 2>&1)
+FACES_JSON_AFTER_CLUSTER="$FACES_JSON_DEFAULT"
+
+CH1_D=$(cluster_for_path "chaplin_1.jpg")
+C1_D=$(cluster_for_path "curie_1.jpg")
+CH2_D=$(cluster_for_path "chaplin_2.jpg")
+C2_D=$(cluster_for_path "curie_2.jpg")
+
+if [ -n "$CH1_D" ] && [ -n "$C1_D" ] && [ "$CH1_D" != "$C1_D" ]; then
+    pass "T7b: Standard-Epsilon: chaplin_1 ≠ curie_1 (kein falsches Merge)"
+else
+    fail "T7b: Standard-Epsilon: chaplin_1 = curie_1 — Epsilon zu hoch! Screenshot-Bug reproduziert."
+fi
+
+if [ -n "$CH2_D" ] && [ -n "$C2_D" ] && [ "$CH2_D" != "$C2_D" ]; then
+    pass "T7c: Standard-Epsilon: chaplin_2 ≠ curie_2 (kein falsches Merge)"
+else
+    fail "T7c: Standard-Epsilon: chaplin_2 = curie_2 — Epsilon zu hoch! Screenshot-Bug reproduziert."
 fi
 
 echo ""
