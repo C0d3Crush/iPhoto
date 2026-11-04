@@ -59,6 +59,9 @@ private func printUsage() {
       iphoto-cli adjustments list [--json]
       iphoto-cli adjustments get <bildpfad> [--json]
       iphoto-cli adjustments delete <bildpfad> [--json]
+      iphoto-cli rating batch-set <bild1> [<bild2>...] [--set N] [--flag pick|reject|none] [--color farbe] [--json]
+      iphoto-cli export --list-formats [--json]
+      iphoto-cli catalog scan-needed [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -2058,16 +2061,21 @@ private func runQuality(_ args: [String]) -> Int32 {
         var expandedPaths: [String] = []
         for p in rawPaths {
             var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue {
-                let urls = (try? FileManager.default.contentsOfDirectory(
-                    at: URL(fileURLWithPath: p), includingPropertiesForKeys: nil
-                ))?.filter { imageExts.contains($0.pathExtension.lowercased()) }
-                  .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
-                expandedPaths.append(contentsOf: urls.map { $0.path })
+            if FileManager.default.fileExists(atPath: p, isDirectory: &isDir) {
+                if isDir.boolValue {
+                    let urls = (try? FileManager.default.contentsOfDirectory(
+                        at: URL(fileURLWithPath: p), includingPropertiesForKeys: nil
+                    ))?.filter { imageExts.contains($0.pathExtension.lowercased()) }
+                      .sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
+                    expandedPaths.append(contentsOf: urls.map { $0.path })
+                } else {
+                    expandedPaths.append(p)
+                }
             } else {
-                expandedPaths.append(p)
+                fputs("Fehler: Pfad nicht gefunden: \(p)\n", stderr)
             }
         }
+        guard !expandedPaths.isEmpty else { return 1 }
         let paths = expandedPaths
         var results: [[String: Any]] = []
         for path in paths {
@@ -2436,8 +2444,32 @@ private func runCatalog(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "scan-needed":
+        let exif    = catalog.pathsNeedingExifScan()
+        let quality = catalog.pathsNeedingQualityScan()
+        let motif   = catalog.pathsNeedingMotifScan()
+        let face    = catalog.pathsNeedingFaceScan()
+        if jsonMode {
+            let obj: [String: Any] = [
+                "exif": exif, "quality": quality, "motif": motif, "face": face,
+                "total_exif": exif.count, "total_quality": quality.count,
+                "total_motif": motif.count, "total_face": face.count
+            ]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Ausstehende Scans:")
+            print("  EXIF:     \(exif.count)")
+            print("  Qualität: \(quality.count)")
+            print("  Motiv:    \(motif.count)")
+            print("  Gesicht:  \(face.count)")
+            let total = exif.count + quality.count + motif.count + face.count
+            print("Gesamt: \(total) Scan-Aufgaben")
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed [--json]\n", stderr)
         return 1
     }
 }
@@ -2517,6 +2549,65 @@ private func runElo(_ args: [String]) -> Int32 {
         fputs("Verwendung: iphoto-cli elo get|list|set [opts]\n", stderr)
         return 1
     }
+}
+
+// MARK: - Rating Batch-Set
+
+private func runRatingBatchSet(_ args: [String]) -> Int32 {
+    let jsonMode = args.contains("--json")
+    var ratingValue: Int? = nil
+    var flagValue = "none"
+    var colorValue = "none"
+    var paths: [String] = []
+    var i = 0
+    while i < args.count {
+        switch args[i] {
+        case "--set":
+            if i + 1 < args.count, let n = Int(args[i + 1]) { ratingValue = n; i += 2 }
+            else { fputs("Fehler: --set braucht eine Zahl\n", stderr); return 1 }
+        case "--flag":
+            if i + 1 < args.count { flagValue = args[i + 1].lowercased(); i += 2 }
+            else { fputs("Fehler: --flag braucht einen Wert\n", stderr); return 1 }
+        case "--color":
+            if i + 1 < args.count { colorValue = args[i + 1].lowercased(); i += 2 }
+            else { fputs("Fehler: --color braucht einen Wert\n", stderr); return 1 }
+        case "--json": i += 1
+        default:
+            if !args[i].hasPrefix("-") { paths.append(args[i]) }
+            i += 1
+        }
+    }
+    guard !paths.isEmpty else {
+        fputs("Verwendung: iphoto-cli rating batch-set <bild1> [<bild2>...] [--set N] [--flag X] [--color X] [--json]\n", stderr)
+        return 1
+    }
+    if let r = ratingValue, r < 0 || r > 5 {
+        fputs("Fehler: --set muss zwischen 0 und 5 liegen (angegeben: \(r))\n", stderr); return 1
+    }
+    if flagValue != "none", FlagStatus(rawValue: flagValue) == nil {
+        fputs("Fehler: Ungültiger Flag-Wert '\(flagValue)'. Erlaubt: none, pick, reject\n", stderr); return 1
+    }
+    if colorValue != "none", ColorLabel(rawValue: colorValue) == nil {
+        fputs("Fehler: Ungültige Farbe '\(colorValue)'. Erlaubt: none, red, yellow, green, blue\n", stderr); return 1
+    }
+    let catalog = CatalogStore(dbPath: envDBPath())
+    var results: [[String: Any]] = []
+    for path in paths {
+        let existing = catalog.rating(forPath: path)
+        let r = ratingValue ?? (existing?.rating ?? 0)
+        let f = flagValue != "none" ? flagValue : (existing?.flag ?? "none")
+        let c = colorValue != "none" ? colorValue : (existing?.colorLabel ?? "none")
+        catalog.saveRating(path: path, rating: r, flag: f, colorLabel: c)
+        results.append(["path": path, "rating": r, "flag": f, "color": c])
+    }
+    if jsonMode {
+        let obj: [String: Any] = ["count": paths.count, "results": results, "ok": true]
+        if let d = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
+           let s = String(data: d, encoding: .utf8) { print(s) }
+    } else {
+        print("\(paths.count) Bild(er) bewertet")
+    }
+    return 0
 }
 
 // MARK: - Adjustments CLI
@@ -2737,6 +2828,19 @@ if firstArg == "trash" {
 }
 if firstArg == "adjustments" {
     exit(runAdjustments(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "export", rawArgs.contains("--list-formats") {
+    let jsonMode = rawArgs.contains("--json")
+    if jsonMode {
+        print("[\"jpeg\", \"png\", \"tiff\", \"heif\"]")
+    } else {
+        print("jpeg\npng\ntiff\nheif")
+    }
+    exit(0)
+}
+// rating batch-set intercept before CLIArgs parsing
+if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "batch-set" {
+    exit(runRatingBatchSet(Array(rawArgs.dropFirst(3))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

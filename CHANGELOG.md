@@ -2,6 +2,18 @@
 
 ---
 
+## 1.74.0
+**Feature — rating batch-set, export --list-formats, catalog scan-needed, Edge-Case-Fixes, 240 CLI-Tests**
+
+- Neuer Befehl `iphoto-cli rating batch-set <bild1> [<bild2>...] [--set N] [--flag X] [--color X] [--json]` — Bewertung auf mehrere Bilder gleichzeitig setzen
+- `export --list-formats [--json]` — listet unterstützte Exportformate auf
+- `catalog scan-needed [--json]` — zeigt ausstehende Scan-Aufgaben (EXIF, Qualität, Motiv, Gesicht)
+- `quality scan` gibt jetzt Fehler zurück wenn alle übergebenen Pfade nicht existieren (statt stilles OK)
+- Edge-Case-Tests: album add Ghost-ID, version restore ungültige UUID, quality scan nicht-existenter Pfad, search leerer Suchbegriff, elo set nicht-numerischer Wert
+- 240 CLI-Tests — alle grün
+
+---
+
 ## 1.73.0
 **Feature — adjustments CLI, album delete --json, Input-Validierung, 222 CLI-Tests**
 

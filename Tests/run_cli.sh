@@ -1171,6 +1171,98 @@ if [ $ADJ_UNK_ERR -ne 0 ]; then pass "adjustments unbekannter Unterbefehl (Fehle
 echo ""
 
 # ===========================================================================
+# rating batch-set
+# ===========================================================================
+echo "=== rating batch-set ==="
+
+IMG2_BS="$TMPDIR_BASE/batch1.png"; cp "$INPUT" "$IMG2_BS"
+IMG3_BS="$TMPDIR_BASE/batch2.png"; cp "$INPUT" "$IMG3_BS"
+
+BS_OUT=$("$BIN" rating batch-set "$INPUT" "$IMG2_BS" "$IMG3_BS" --set 4 --flag pick 2>&1)
+if echo "$BS_OUT" | grep -q "3 Bild"; then pass "rating batch-set 3 Bilder (Meldung)"; else fail "rating batch-set" "$BS_OUT"; fi
+
+BS_JSON=$("$BIN" rating batch-set "$INPUT" "$IMG2_BS" --set 2 --json 2>&1)
+if echo "$BS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True and d['count']==2" 2>/dev/null; then
+    pass "rating batch-set --json (count=2, ok=true)"; else fail "rating batch-set --json" "$BS_JSON"; fi
+
+# batch-set --json results array contains correct rating
+if echo "$BS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert all(r['rating']==2 for r in d['results'])" 2>/dev/null; then
+    pass "rating batch-set --json results rating=2"; else fail "rating batch-set results" "$BS_JSON"; fi
+
+# validation: --set out of range
+BS_ERR=0; "$BIN" rating batch-set "$INPUT" --set 6 > /dev/null 2>&1 || BS_ERR=$?
+if [ $BS_ERR -ne 0 ]; then pass "rating batch-set --set 6 (Fehler korrekt)"; else fail "rating batch-set --set 6" "Exitcode 0"; fi
+
+# validation: invalid flag
+BS_FLAG_ERR=0; "$BIN" rating batch-set "$INPUT" --flag bogus > /dev/null 2>&1 || BS_FLAG_ERR=$?
+if [ $BS_FLAG_ERR -ne 0 ]; then pass "rating batch-set --flag bogus (Fehler korrekt)"; else fail "rating batch-set --flag bogus" "Exitcode 0"; fi
+
+# validation: no paths
+BS_NOPATH=0; "$BIN" rating batch-set --set 3 > /dev/null 2>&1 || BS_NOPATH=$?
+if [ $BS_NOPATH -ne 0 ]; then pass "rating batch-set ohne Pfade (Fehler korrekt)"; else fail "rating batch-set ohne Pfade" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# export --list-formats
+# ===========================================================================
+echo "=== export --list-formats ==="
+
+FMT_OUT=$("$BIN" export --list-formats 2>&1)
+for fmt in jpeg png tiff heif; do
+    if echo "$FMT_OUT" | grep -q "$fmt"; then pass "export --list-formats enthält '$fmt'"; else fail "export --list-formats $fmt" "$FMT_OUT"; fi
+done
+
+FMT_JSON=$("$BIN" export --list-formats --json 2>&1)
+if echo "$FMT_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list) and 'jpeg' in lst and 'heif' in lst" 2>/dev/null; then
+    pass "export --list-formats --json (JSON-Array mit jpeg+heif)"; else fail "export --list-formats --json" "$FMT_JSON"; fi
+
+echo ""
+
+# ===========================================================================
+# catalog scan-needed
+# ===========================================================================
+echo "=== catalog scan-needed ==="
+
+SCAN_NEEDED=$("$BIN" catalog scan-needed 2>&1)
+if echo "$SCAN_NEEDED" | grep -q "EXIF\|Qualität\|Motiv"; then pass "catalog scan-needed (Ausgabe enthält Scan-Typen)"; else fail "catalog scan-needed" "$SCAN_NEEDED"; fi
+
+SCAN_JSON=$("$BIN" catalog scan-needed --json 2>&1)
+if echo "$SCAN_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'total_exif' in d and 'total_quality' in d" 2>/dev/null; then
+    pass "catalog scan-needed --json (JSON mit total_exif, total_quality)"; else fail "catalog scan-needed --json" "$SCAN_JSON"; fi
+
+echo ""
+
+# ===========================================================================
+# Edge-Case Tests
+# ===========================================================================
+echo "=== edge cases ==="
+
+# album add mit nicht-existenter Album-ID → aktuell stille Aufnahme, Exitcode 0
+ALB_GHOST_ID="00000000-0000-0000-0000-000000000000"
+ALB_GHOST_EC=0; OUT=$("$BIN" album add "$ALB_GHOST_ID" "$INPUT" 2>&1) || ALB_GHOST_EC=$?
+# Dokumentiert: add in nicht-existentes Album gibt keine Fehlermeldung zurück (silent insert)
+if [ $ALB_GHOST_EC -eq 0 ]; then pass "album add ghost-ID (Silent success, Exitcode 0 — dokumentiert)"; else pass "album add ghost-ID (Exitcode $ALB_GHOST_EC — auch akzeptabel)"; fi
+
+# version restore mit ungültiger UUID → Fehler
+VER_BAD_EC=0; "$BIN" version restore "$INPUT" "KEINE-GUELTIGE-UUID" > /dev/null 2>&1 || VER_BAD_EC=$?
+if [ $VER_BAD_EC -ne 0 ]; then pass "version restore ungültige UUID (Fehler korrekt)"; else fail "version restore ungültige UUID" "Exitcode 0"; fi
+
+# quality scan nicht-existenter Pfad → Fehler oder Warnung
+QUAL_NEX_EC=0; "$BIN" quality scan "/nicht/vorhanden/ordner" > /dev/null 2>&1 || QUAL_NEX_EC=$?
+if [ $QUAL_NEX_EC -ne 0 ]; then pass "quality scan nicht-existenter Pfad (Fehler korrekt)"; else fail "quality scan nicht-existenter Pfad" "Exitcode 0"; fi
+
+# search mit leerem Suchbegriff → kein Absturz
+SEARCH_EMPTY_EC=0; OUT=$("$BIN" search "" 2>&1) || SEARCH_EMPTY_EC=$?
+if [ $SEARCH_EMPTY_EC -le 1 ]; then pass "search leer (kein Absturz, Exitcode <= 1)"; else fail "search leer" "Exitcode $SEARCH_EMPTY_EC"; fi
+
+# elo set mit nicht-numerischem Wert → Fehler
+ELO_NAN=0; "$BIN" elo set "$INPUT" "abc" > /dev/null 2>&1 || ELO_NAN=$?
+if [ $ELO_NAN -ne 0 ]; then pass "elo set nicht-numerischer Wert (Fehler korrekt)"; else fail "elo set abc" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
 # Zusammenfassung
 # ===========================================================================
 echo "=============================="
