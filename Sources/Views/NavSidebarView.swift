@@ -251,11 +251,14 @@ struct NavSidebarView: View {
         }
         .padding(.horizontal, indented ? 24 : 10)
         .padding(.vertical, 5)
-        .background(viewModel.navSelection == .smartFolder(sf.id) ? Color.accentColor.opacity(0.2) : Color.clear)
+        .background((viewModel.navSelection == .smartFolder(sf.id) || viewModel.sidebarSelectedSmartFolderIDs.contains(sf.id)) ? Color.accentColor.opacity(0.2) : Color.clear)
         .cornerRadius(6)
         .contentShape(Rectangle())
         .padding(.horizontal, 4)
-        .onTapGesture { viewModel.navSelection = .smartFolder(sf.id) }
+        .onTapGesture {
+            let shift = viewModel.lastClickModifiers.contains(.shift)
+            viewModel.sidebarSelectSmartFolder(sf, extending: shift)
+        }
         .onDrag {
             let provider = NSItemProvider()
             let idData = sf.id.uuidString.data(using: .utf8) ?? Data()
@@ -962,8 +965,15 @@ private struct AlbumRow: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var isTargeted = false
 
+    private var isMultiSelected: Bool {
+        viewModel.sidebarSelectedAlbumIDs.contains(album.id)
+    }
+
     var body: some View {
-        Button(action: { viewModel.selectAlbum(album) }) {
+        Button(action: {
+            let shift = viewModel.lastClickModifiers.contains(.shift)
+            viewModel.sidebarSelectAlbum(album, extending: shift)
+        }) {
             HStack(spacing: 4) {
                 Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -977,7 +987,7 @@ private struct AlbumRow: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(isSelected ? Color.accentColor.opacity(0.2) : (isTargeted ? Color.accentColor.opacity(0.1) : Color.clear))
+            .background((isSelected || isMultiSelected) ? Color.accentColor.opacity(0.2) : (isTargeted ? Color.accentColor.opacity(0.1) : Color.clear))
             .cornerRadius(6)
         }
         .buttonStyle(PlainButtonStyle())

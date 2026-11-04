@@ -144,10 +144,12 @@ struct ContentView: View {
 
             ToolbarItemGroup(placement: .primaryAction) { EmptyView() }
         }
-        .onChange(of: viewModel.navSelection) { _ in
+        .onChange(of: viewModel.navSelection) { sel in
             viewModel.showingLibraryDetail = false
             viewModel.qualityDetailActive = false
             if viewModel.compare.active { viewModel.stopCompareMode() }
+            if case .album = sel {} else { viewModel.sidebarSelectedAlbumIDs = []; viewModel.sidebarAnchorAlbumID = nil }
+            if case .smartFolder = sel {} else { viewModel.sidebarSelectedSmartFolderIDs = []; viewModel.sidebarAnchorSmartFolderID = nil }
         }
         .onChange(of: viewModel.windowTitle) { title in
             NSApp.mainWindow?.title = title

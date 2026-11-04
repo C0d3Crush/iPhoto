@@ -52,6 +52,11 @@ class ImageViewModel: ObservableObject {
     @Published var gridThumbnailSize: CGFloat = 160
     /// Aktuelle Spaltenanzahl des 2D-Grids; wird von LibraryFullGridView aktualisiert.
     var gridColumnCount: Int = 1
+    // Sidebar-Mehrfachauswahl (Alben / iAlben)
+    @Published var sidebarSelectedAlbumIDs: Set<UUID> = []
+    var sidebarAnchorAlbumID: UUID? = nil
+    @Published var sidebarSelectedSmartFolderIDs: Set<UUID> = []
+    var sidebarAnchorSmartFolderID: UUID? = nil
     @Published var isStartupLoading: Bool = true                 { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
@@ -401,17 +406,25 @@ class ImageViewModel: ObservableObject {
                 }
                 return nil
             case 126: // ↑
-                if mods.contains(.shift) {
-                    DispatchQueue.main.async { self.extendSelectionByRow(forward: false) }
-                } else {
-                    DispatchQueue.main.async { self.navigateByRow(forward: false) }
+                let ext126 = mods.contains(.shift)
+                switch self.navSelection {
+                case .album:
+                    DispatchQueue.main.async { self.navigateSidebarAlbum(forward: false, extending: ext126) }
+                case .smartFolder:
+                    DispatchQueue.main.async { self.navigateSidebarSmartFolder(forward: false, extending: ext126) }
+                default:
+                    DispatchQueue.main.async { ext126 ? self.extendSelectionByRow(forward: false) : self.navigateByRow(forward: false) }
                 }
                 return nil
             case 125: // ↓
-                if mods.contains(.shift) {
-                    DispatchQueue.main.async { self.extendSelectionByRow(forward: true) }
-                } else {
-                    DispatchQueue.main.async { self.navigateByRow(forward: true) }
+                let ext125 = mods.contains(.shift)
+                switch self.navSelection {
+                case .album:
+                    DispatchQueue.main.async { self.navigateSidebarAlbum(forward: true, extending: ext125) }
+                case .smartFolder:
+                    DispatchQueue.main.async { self.navigateSidebarSmartFolder(forward: true, extending: ext125) }
+                default:
+                    DispatchQueue.main.async { ext125 ? self.extendSelectionByRow(forward: true) : self.navigateByRow(forward: true) }
                 }
                 return nil
             case 0 where onlyCmdDown:  DispatchQueue.main.async { self.selectAll()     }; return nil

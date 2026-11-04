@@ -2,6 +2,17 @@
 
 ---
 
+## 1.49.0
+**Feature — Pfeiltasten + Shift-Auswahl in Alben- und iAlben-Sidebar**
+
+- ↑/↓ navigieren zwischen Alben (wenn ein Album aktiv ist) bzw. iAlben (wenn ein iAlbum aktiv ist)
+- Shift+↑/↓ erweitert die Markierung zeilenweise
+- Shift+Klick auf ein Album oder iAlbum markiert eine Range ab dem letzten Klick
+- Markierte Einträge werden mit Akzentfarbe hervorgehoben
+- Beim Wechsel zu einer anderen Sektion (Bibliothek, Papierkorb etc.) wird die Sidebar-Auswahl automatisch zurückgesetzt
+
+---
+
 ## 1.48.1
 **Bugfix — Backup-Einträge im Kontextmenü umbenannt**
 

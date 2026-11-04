@@ -273,6 +273,63 @@ extension ImageViewModel {
         extendSelection(to: prevIdx)
     }
 
+    // MARK: - Sidebar navigation + multi-select
+
+    func sidebarSelectAlbum(_ album: Album, extending: Bool) {
+        if extending, let anchor = sidebarAnchorAlbumID,
+           let anchorIdx = library.albums.firstIndex(where: { $0.id == anchor }),
+           let targetIdx = library.albums.firstIndex(where: { $0.id == album.id }) {
+            let lo = min(anchorIdx, targetIdx), hi = max(anchorIdx, targetIdx)
+            sidebarSelectedAlbumIDs = Set(library.albums[lo...hi].map { $0.id })
+        } else {
+            sidebarSelectedAlbumIDs = [album.id]
+            sidebarAnchorAlbumID = album.id
+        }
+        sidebarSelectedSmartFolderIDs = []
+        selectAlbum(album)
+    }
+
+    func sidebarSelectSmartFolder(_ sf: SmartFolder, extending: Bool) {
+        let flat = flatSidebarSmartFolders()
+        if extending, let anchor = sidebarAnchorSmartFolderID,
+           let anchorIdx = flat.firstIndex(where: { $0.id == anchor }),
+           let targetIdx = flat.firstIndex(where: { $0.id == sf.id }) {
+            let lo = min(anchorIdx, targetIdx), hi = max(anchorIdx, targetIdx)
+            sidebarSelectedSmartFolderIDs = Set(flat[lo...hi].map { $0.id })
+        } else {
+            sidebarSelectedSmartFolderIDs = [sf.id]
+            sidebarAnchorSmartFolderID = sf.id
+        }
+        sidebarSelectedAlbumIDs = []
+        navSelection = .smartFolder(sf.id)
+    }
+
+    func navigateSidebarAlbum(forward: Bool, extending: Bool) {
+        guard case .album(let id) = navSelection,
+              let idx = library.albums.firstIndex(where: { $0.id == id }) else { return }
+        let target = forward ? idx + 1 : idx - 1
+        guard target >= 0, target < library.albums.count else { return }
+        sidebarSelectAlbum(library.albums[target], extending: extending)
+    }
+
+    func navigateSidebarSmartFolder(forward: Bool, extending: Bool) {
+        let flat = flatSidebarSmartFolders()
+        guard case .smartFolder(let id) = navSelection,
+              let idx = flat.firstIndex(where: { $0.id == id }) else { return }
+        let target = forward ? idx + 1 : idx - 1
+        guard target >= 0, target < flat.count else { return }
+        sidebarSelectSmartFolder(flat[target], extending: extending)
+    }
+
+    func flatSidebarSmartFolders() -> [SmartFolder] {
+        var result = library.smartFolders.filter { $0.group == nil || $0.group?.isEmpty == true }
+        let groups = Array(Set(library.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
+        for group in groups {
+            result += library.smartFolders.filter { $0.group == group }
+        }
+        return result
+    }
+
     func removeDocument(_ doc: ImageDocument) {
         guard let idx = collection.documents.firstIndex(where: { $0.id == doc.id }) else { return }
         if collection.selectedIndices.contains(idx) && collection.selectedIndices.count > 1 {
