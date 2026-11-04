@@ -56,6 +56,9 @@ private func printUsage() {
       iphoto-cli elo get <bildpfad> [--json]
       iphoto-cli elo list [--json]
       iphoto-cli elo set <bildpfad> <wert> [--matches N] [--json]
+      iphoto-cli adjustments list [--json]
+      iphoto-cli adjustments get <bildpfad> [--json]
+      iphoto-cli adjustments delete <bildpfad> [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -223,6 +226,7 @@ private func parseArgs(_ args: [String]) -> CLIArgs? {
         case "--blur-threshold":
             i += 1
             guard i < args.count, let v = Double(args[i]) else { fputs("Fehler: --blur-threshold braucht eine Zahl\n", stderr); return nil }
+            guard v > 0 else { fputs("Fehler: --blur-threshold muss größer als 0 sein\n", stderr); return nil }
             result.blurThreshold = v
         case "--shadow":
             i += 1
@@ -495,7 +499,11 @@ private func runRatingList(_ args: [String]) -> Int32 {
         }
         all = all.filter { $0.value.colorLabel == color }
     }
-    if let ri = args.firstIndex(of: "--min-rating"), ri + 1 < args.count, let n = Int(args[ri + 1]) {
+    if let ri = args.firstIndex(of: "--min-rating"), ri + 1 < args.count {
+        guard let n = Int(args[ri + 1]), n >= 0, n <= 5 else {
+            fputs("Fehler: --min-rating muss zwischen 0 und 5 liegen (angegeben: \(args[ri + 1]))\n", stderr)
+            return 1
+        }
         all = all.filter { $0.value.rating >= n }
     }
 
@@ -1469,6 +1477,10 @@ private func runPeople(_ args: [String]) -> Int32 {
         var i = 1
         while i < args.count {
             if args[i] == "--epsilon", i + 1 < args.count, let v = Float(args[i + 1]) {
+                guard v > 0 else {
+                    fputs("Fehler: --epsilon muss größer als 0 sein (angegeben: \(args[i + 1]))\n", stderr)
+                    return 1
+                }
                 epsilon = v; i += 2
             } else { i += 1 }
         }
@@ -1565,11 +1577,14 @@ private func saveSmartFolders(_ folders: [SmartFolder]) -> Bool {
 
 private func parseSFCriteria(_ args: [String]) -> [SmartFolderCriterion] {
     var criteria: [SmartFolderCriterion] = []
-    if let idx = args.firstIndex(of: "--rating-min"), idx + 1 < args.count,
-       let n = Int(args[idx + 1]) {
-        var c = SmartFolderCriterion()
-        c.attribute = .rating; c.op = .greaterThan; c.ratingValue = n
-        criteria.append(c)
+    if let idx = args.firstIndex(of: "--rating-min"), idx + 1 < args.count {
+        if let n = Int(args[idx + 1]), n >= 0, n <= 5 {
+            var c = SmartFolderCriterion()
+            c.attribute = .rating; c.op = .greaterThan; c.ratingValue = n
+            criteria.append(c)
+        } else {
+            fputs("Fehler: --rating-min muss zwischen 0 und 5 liegen (angegeben: \(args[idx + 1]))\n", stderr)
+        }
     }
     if let idx = args.firstIndex(of: "--flag"), idx + 1 < args.count,
        let f = FlagStatus(rawValue: args[idx + 1].lowercased()) {
@@ -1944,7 +1959,13 @@ private func runAlbum(_ args: [String]) -> Int32 {
             fputs("Verwendung: iphoto-cli album delete <id>\n", stderr); return 1
         }
         catalog.deleteAlbum(id: id)
-        print("Album gelöscht: \(id)")
+        if jsonMode {
+            let obj: [String: Any] = ["id": id, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: []),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Album gelöscht: \(id)")
+        }
         return 0
 
     case "add":
@@ -2471,10 +2492,17 @@ private func runElo(_ args: [String]) -> Int32 {
         guard positional.count >= 2, let elo = Double(positional[1]) else {
             fputs("Verwendung: iphoto-cli elo set <bildpfad> <elo-wert> [--matches N]\n", stderr); return 1
         }
+        guard elo >= 0 && elo <= 9999 else {
+            fputs("Fehler: ELO-Wert muss zwischen 0 und 9999 liegen (angegeben: \(positional[1]))\n", stderr); return 1
+        }
         let path = positional[0]
         var matches = catalog.elo(forPath: path)?.matches ?? 0
-        if let mi = args.firstIndex(of: "--matches"), mi + 1 < args.count,
-           let m = Int(args[mi + 1]) { matches = m }
+        if let mi = args.firstIndex(of: "--matches"), mi + 1 < args.count {
+            guard let m = Int(args[mi + 1]), m >= 0 else {
+                fputs("Fehler: --matches muss eine nicht-negative ganze Zahl sein\n", stderr); return 1
+            }
+            matches = m
+        }
         catalog.saveElo(path: path, elo: elo, eloMatches: matches)
         if jsonMode {
             let d: [String: Any] = ["path": path, "elo": elo, "matches": matches, "ok": true]
@@ -2487,6 +2515,84 @@ private func runElo(_ args: [String]) -> Int32 {
 
     default:
         fputs("Verwendung: iphoto-cli elo get|list|set [opts]\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Adjustments CLI
+
+private func runAdjustments(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "list"
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+
+    switch sub {
+    case "list":
+        let paths = catalog.allModifiedPaths().sorted()
+        if jsonMode {
+            if let d = try? JSONSerialization.data(withJSONObject: paths, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if paths.isEmpty { print("(keine gespeicherten Anpassungen)") }
+            else {
+                for p in paths { print(p) }
+                print("Gesamt: \(paths.count) Bild(er) mit Anpassungen")
+            }
+        }
+        return 0
+
+    case "get":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard let path = positional.first else {
+            fputs("Verwendung: iphoto-cli adjustments get <bildpfad> [--json]\n", stderr); return 1
+        }
+        guard let adj = catalog.loadAdjustments(path: path) else {
+            if jsonMode { print("{}") } else { print("Keine Anpassungen für: \(path)") }
+            return 0
+        }
+        if jsonMode {
+            let d: [String: Any] = [
+                "path": path,
+                "exposure": adj.exposure, "brightness": adj.brightness,
+                "contrast": adj.contrast, "saturation": adj.saturation,
+                "vibrance": adj.vibrance, "hue": adj.hue,
+                "warmth": adj.warmth, "tint": adj.tint,
+                "clarity": adj.clarity, "texture": adj.texture, "dehaze": adj.dehaze,
+                "sharpen_amount": adj.sharpenAmount, "sharpen_radius": adj.sharpenRadius,
+                "luma_noise": adj.lumaNoise, "color_noise": adj.colorNoise,
+                "rotation": adj.rotation, "turns": adj.turns,
+                "vignette_amount": adj.vignetteAmount, "distortion": adj.distortion
+            ]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print("Anpassungen für: \(path)")
+            print("  Belichtung:  \(adj.exposure)")
+            print("  Helligkeit:  \(adj.brightness)")
+            print("  Kontrast:    \(adj.contrast)")
+            print("  Sättigung:   \(adj.saturation)")
+            print("  Vibrance:    \(adj.vibrance)")
+            print("  Rotation:    \(adj.rotation)°  Drehungen: \(adj.turns)")
+        }
+        return 0
+
+    case "delete":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard let path = positional.first else {
+            fputs("Verwendung: iphoto-cli adjustments delete <bildpfad> [--json]\n", stderr); return 1
+        }
+        catalog.deleteAdjustments(path: path)
+        if jsonMode {
+            let d: [String: Any] = ["path": path, "ok": true]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: []),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print("Anpassungen gelöscht: \(path)")
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli adjustments list|get|delete [opts]\n", stderr)
         return 1
     }
 }
@@ -2628,6 +2734,9 @@ if firstArg == "stack" {
 }
 if firstArg == "trash" {
     exit(runTrash(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "adjustments" {
+    exit(runAdjustments(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

@@ -2,6 +2,20 @@
 
 ---
 
+## 1.73.0
+**Feature — adjustments CLI, album delete --json, Input-Validierung, 222 CLI-Tests**
+
+- Neuer Befehl `iphoto-cli adjustments list|get|delete` — gespeicherte Bildanpassungen lesen und löschen (--json Support)
+- `album delete --json` gibt `{"id", "ok": true}` zurück — komplettiert JSON-Parität aller album-Unterbefehle
+- `elo set` validiert jetzt ELO-Bereich (0–9999) und --matches (nicht-negativ)
+- `rating list --min-rating` validiert jetzt Bereich 0–5
+- `analyse --blur-threshold` muss jetzt größer als 0 sein
+- `smartfolder create/update --rating-min` warnt bei Wert außerhalb 0–5
+- `people cluster --epsilon` muss jetzt größer als 0 sein
+- 222 CLI-Tests — alle grün
+
+---
+
 ## 1.72.0
 **Bugfix — elo list SIGSEGV behoben, 202 CLI-Tests**
 

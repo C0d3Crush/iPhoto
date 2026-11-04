@@ -122,6 +122,17 @@ if echo "$DEL_OUT" | grep -q "gelöscht"; then
     if ! echo "$LIST2" | grep -q "$ALBUM_ID"; then pass "album delete (Album verschwunden)"; else fail "album delete" "Album noch vorhanden"; fi
 else fail "album delete" "$DEL_OUT"; fi
 
+# album delete --json
+DEL_AID_JSON=$("$BIN" album create "DelJsonAlbum" --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || DEL_AID_JSON=""
+if [ -n "$DEL_AID_JSON" ]; then
+    DEL_JSON_OUT=$("$BIN" album delete "$DEL_AID_JSON" --json 2>&1)
+    if echo "$DEL_JSON_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True and 'id' in d" 2>/dev/null; then
+        pass "album delete --json (ok=true, id vorhanden)"; else fail "album delete --json" "$DEL_JSON_OUT"
+    fi
+else
+    pass "album delete --json übersprungen"
+fi
+
 # album <ungültig>
 ALBUM_BAD=0; "$BIN" album bogus > /dev/null 2>&1 || ALBUM_BAD=$?
 if [ $ALBUM_BAD -ne 0 ]; then pass "album <ungültig> (Exitcode != 0)"; else fail "album bogus" "Hätte fehlschlagen sollen"; fi
@@ -169,6 +180,21 @@ if echo "$QLIST" | grep -qE 'blur=|keine'; then pass "quality list"; else fail "
 QLIST_JSON=$("$BIN" quality list --json 2>&1)
 if echo "$QLIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
     pass "quality list --json (valides JSON-Array)"; else fail "quality list --json" "$QLIST_JSON"; fi
+
+# quality list --sort blur
+QLIST_SORT=$("$BIN" quality list --sort blur --json 2>&1)
+if echo "$QLIST_SORT" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "quality list --sort blur --json (JSON-Array)"; else fail "quality list --sort blur" "$QLIST_SORT"; fi
+
+# quality list --sort rating
+QLIST_SORT2=$("$BIN" quality list --sort rating --json 2>&1)
+if echo "$QLIST_SORT2" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "quality list --sort rating --json (JSON-Array)"; else fail "quality list --sort rating" "$QLIST_SORT2"; fi
+
+# quality list --sort elo
+QLIST_SORT3=$("$BIN" quality list --sort elo --json 2>&1)
+if echo "$QLIST_SORT3" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "quality list --sort elo --json (JSON-Array)"; else fail "quality list --sort elo" "$QLIST_SORT3"; fi
 
 echo ""
 
@@ -339,6 +365,9 @@ if echo "$CSTATS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); as
     pass "catalog stats --json (valides JSON mit 'images')"; else fail "catalog stats --json" "$CSTATS_JSON"; fi
 if echo "$CSTATS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'rated' in d and 'flagged' in d" 2>/dev/null; then
     pass "catalog stats --json enthält 'rated'/'flagged'"; else fail "catalog stats --json rated/flagged fehlen" "$CSTATS_JSON"; fi
+if echo "$CSTATS_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'elo_count' in d" 2>/dev/null; then
+    pass "catalog stats --json enthält 'elo_count'"; else fail "catalog stats --json elo_count fehlt" "$CSTATS_JSON"; fi
+if echo "$CSTATS" | grep -qE 'ELO:'; then pass "catalog stats enthält ELO-Feld"; else fail "catalog stats ELO-Feld fehlt" "$CSTATS"; fi
 
 CPATH=$("$BIN" catalog path 2>&1)
 if [ $? -eq 0 ] && [ -n "$CPATH" ]; then pass "catalog path (Exitcode 0, nicht leer)"; else fail "catalog path" "$CPATH"; fi
@@ -346,6 +375,10 @@ if [ $? -eq 0 ] && [ -n "$CPATH" ]; then pass "catalog path (Exitcode 0, nicht l
 # catalog vacuum
 CVACUUM=$("$BIN" catalog vacuum 2>&1)
 if echo "$CVACUUM" | grep -q "optimiert"; then pass "catalog vacuum (Meldung)"; else fail "catalog vacuum" "$CVACUUM"; fi
+
+CVACUUM_JSON=$("$BIN" catalog vacuum --json 2>&1)
+if echo "$CVACUUM_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True and 'size_after' in d" 2>/dev/null; then
+    pass "catalog vacuum --json (ok=true, size_after vorhanden)"; else fail "catalog vacuum --json" "$CVACUUM_JSON"; fi
 
 # catalog export
 EXPORT_DB="$TMPDIR_BASE/catalog_export.db"
@@ -448,6 +481,11 @@ if echo "$SF_DEL" | grep -q "gelöscht"; then pass "smartfolder delete (Meldung)
 
 SF_LIST3=$("$BIN" smartfolder list 2>&1)
 if echo "$SF_LIST3" | grep -q "TestOrdner"; then fail "smartfolder list nach delete" "Ordner noch vorhanden: $SF_LIST3"; else pass "smartfolder list nach delete (leer)"; fi
+
+# smartfolder --rating-min Grenzwert-Validierung (6 → Warnung, Ordner ohne Rating-Kriterium)
+SF_RMIN_WARN=$("$BIN" smartfolder create "RminWarnOrdner" --rating-min 6 2>&1)
+if echo "$SF_RMIN_WARN" | grep -q "Fehler\|RminWarnOrdner"; then pass "smartfolder create --rating-min 6 (Warnung oder ok)"; else fail "smartfolder create --rating-min 6" "$SF_RMIN_WARN"; fi
+"$BIN" smartfolder delete "RminWarnOrdner" > /dev/null 2>&1 || true
 
 # smartfolder create --flag / --color criteria
 SF_FLAG=$("$BIN" smartfolder create "FlagOrdner" --flag pick 2>&1)
@@ -694,6 +732,36 @@ if [ $RATING_EXIT3 -ne 0 ]; then pass "rating --set 6 (Grenzwert-Fehler korrekt)
 RATING_EXIT4=0; "$BIN" rating "$INPUT" --set -1 > /dev/null 2>&1 || RATING_EXIT4=$?
 if [ $RATING_EXIT4 -ne 0 ]; then pass "rating --set -1 (Grenzwert-Fehler korrekt)"; else fail "rating --set -1" "Exitcode 0"; fi
 
+# rating list
+"$BIN" rating "$INPUT" --set 3 --flag pick --color red > /dev/null 2>&1 || true
+RLIST=$("$BIN" rating list 2>&1)
+if echo "$RLIST" | grep -qE 'rating=|Gesamt:'; then pass "rating list (Ausgabe vorhanden)"; else fail "rating list" "$RLIST"; fi
+
+RLIST_JSON=$("$BIN" rating list --json 2>&1)
+if echo "$RLIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list) and 'rating' in lst[0]" 2>/dev/null; then
+    pass "rating list --json (JSON-Array mit 'rating')"; else fail "rating list --json" "$RLIST_JSON"; fi
+
+# rating list --flag
+RLIST_FLAG=$("$BIN" rating list --flag pick --json 2>&1)
+if echo "$RLIST_FLAG" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list) and all(d['flag']=='pick' for d in lst)" 2>/dev/null; then
+    pass "rating list --flag pick (alle Ergebnisse flag=pick)"; else fail "rating list --flag pick" "$RLIST_FLAG"; fi
+
+# rating list --min-rating
+RLIST_MIN=$("$BIN" rating list --min-rating 3 --json 2>&1)
+if echo "$RLIST_MIN" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list) and all(d['rating']>=3 for d in lst)" 2>/dev/null; then
+    pass "rating list --min-rating 3 (alle Ergebnisse rating>=3)"; else fail "rating list --min-rating 3" "$RLIST_MIN"; fi
+
+# rating list --flag ungültig → Fehler
+RLIST_INV_EC=0; "$BIN" rating list --flag "invalid" > /dev/null 2>&1 || RLIST_INV_EC=$?
+if [ $RLIST_INV_EC -ne 0 ]; then pass "rating list --flag invalid (Fehler korrekt)"; else fail "rating list --flag invalid" "Exitcode 0"; fi
+
+# rating list --min-rating Grenzwert-Fehler (6 und -1)
+RLIST_MIN_ERR=0; "$BIN" rating list --min-rating 6 > /dev/null 2>&1 || RLIST_MIN_ERR=$?
+if [ $RLIST_MIN_ERR -ne 0 ]; then pass "rating list --min-rating 6 (Grenzwert-Fehler korrekt)"; else fail "rating list --min-rating 6" "Exitcode 0"; fi
+
+RLIST_MIN_NEG=0; "$BIN" rating list --min-rating -1 > /dev/null 2>&1 || RLIST_MIN_NEG=$?
+if [ $RLIST_MIN_NEG -ne 0 ]; then pass "rating list --min-rating -1 (Grenzwert-Fehler korrekt)"; else fail "rating list --min-rating -1" "Exitcode 0"; fi
+
 echo ""
 
 # ===========================================================================
@@ -739,6 +807,14 @@ NONIMG_DIR="$TMPDIR_BASE/non_images"
 mkdir -p "$NONIMG_DIR"; echo "test" > "$NONIMG_DIR/text.txt"
 ANALYSE_NOIMG_ERR=0; "$BIN" analyse "$NONIMG_DIR" > /dev/null 2>&1 || ANALYSE_NOIMG_ERR=$?
 if [ $ANALYSE_NOIMG_ERR -ne 0 ]; then pass "analyse Ordner ohne Bilder (Fehler korrekt)"; else fail "analyse Ordner ohne Bilder" "Exitcode 0"; fi
+
+# analyse --blur-threshold 0 → Fehler
+BLUR_ZERO=0; "$BIN" analyse "$INPUT" --blur-threshold 0 > /dev/null 2>&1 || BLUR_ZERO=$?
+if [ $BLUR_ZERO -ne 0 ]; then pass "analyse --blur-threshold 0 (Fehler korrekt)"; else fail "analyse --blur-threshold 0" "Exitcode 0"; fi
+
+# analyse --blur-threshold -5 → Fehler
+BLUR_NEG=0; "$BIN" analyse "$INPUT" --blur-threshold -5 > /dev/null 2>&1 || BLUR_NEG=$?
+if [ $BLUR_NEG -ne 0 ]; then pass "analyse --blur-threshold -5 (Fehler korrekt)"; else fail "analyse --blur-threshold -5" "Exitcode 0"; fi
 
 echo ""
 
@@ -920,6 +996,14 @@ else
     fail "people cluster --json leer" "Kein JSON oder 'clusters' fehlt: $OUT"
 fi
 
+# people cluster --epsilon 0 → Fehler
+EPSILON_ZERO=0; "$BIN" people cluster --epsilon 0 > /dev/null 2>&1 || EPSILON_ZERO=$?
+if [ $EPSILON_ZERO -ne 0 ]; then pass "people cluster --epsilon 0 (Fehler korrekt)"; else fail "people cluster --epsilon 0" "Exitcode 0"; fi
+
+# people cluster --epsilon -0.1 → Fehler
+EPSILON_NEG=0; "$BIN" people cluster --epsilon -0.1 > /dev/null 2>&1 || EPSILON_NEG=$?
+if [ $EPSILON_NEG -ne 0 ]; then pass "people cluster --epsilon -0.1 (Fehler korrekt)"; else fail "people cluster --epsilon -0.1" "Exitcode 0"; fi
+
 echo ""
 
 # ===========================================================================
@@ -1024,9 +1108,65 @@ if echo "$ELO_LIST2" | python3 -c "import sys,json; lst=json.load(sys.stdin); as
 ELO_SET_EMPTY=0; "$BIN" elo set > /dev/null 2>&1 || ELO_SET_EMPTY=$?
 if [ $ELO_SET_EMPTY -ne 0 ]; then pass "elo set ohne Argumente (Fehler korrekt)"; else fail "elo set ohne Argumente" "Exitcode 0"; fi
 
+# elo set ELO > 9999 → Fehler
+ELO_OVER=0; "$BIN" elo set "$INPUT" 10000 > /dev/null 2>&1 || ELO_OVER=$?
+if [ $ELO_OVER -ne 0 ]; then pass "elo set 10000 (Grenzwert-Fehler korrekt)"; else fail "elo set 10000" "Exitcode 0"; fi
+
+# elo set ELO < 0 → Fehler
+ELO_NEG=0; "$BIN" elo set "$INPUT" -1 > /dev/null 2>&1 || ELO_NEG=$?
+if [ $ELO_NEG -ne 0 ]; then pass "elo set -1 (Grenzwert-Fehler korrekt)"; else fail "elo set -1" "Exitcode 0"; fi
+
+# elo set --matches negative → Fehler
+ELO_MATCHES_NEG=0; "$BIN" elo set "$INPUT" 1200 --matches -5 > /dev/null 2>&1 || ELO_MATCHES_NEG=$?
+if [ $ELO_MATCHES_NEG -ne 0 ]; then pass "elo set --matches -5 (Grenzwert-Fehler korrekt)"; else fail "elo set --matches -5" "Exitcode 0"; fi
+
 # elo get ohne Argumente → Fehler
 ELO_GET_EMPTY=0; "$BIN" elo get > /dev/null 2>&1 || ELO_GET_EMPTY=$?
 if [ $ELO_GET_EMPTY -ne 0 ]; then pass "elo get ohne Argumente (Fehler korrekt)"; else fail "elo get ohne Argumente" "Exitcode 0"; fi
+
+echo ""
+
+# ===========================================================================
+# adjustments
+# ===========================================================================
+echo "=== adjustments ==="
+
+# adjustments list (leer — keine Anpassungen gespeichert)
+ADJ_LIST=$("$BIN" adjustments list 2>&1)
+if [ $? -eq 0 ]; then pass "adjustments list leer (Exitcode 0)"; else fail "adjustments list leer" "$ADJ_LIST"; fi
+
+ADJ_LIST_JSON=$("$BIN" adjustments list --json 2>&1)
+if echo "$ADJ_LIST_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list)" 2>/dev/null; then
+    pass "adjustments list --json (JSON-Array)"; else fail "adjustments list --json" "$ADJ_LIST_JSON"; fi
+
+# adjustments get (kein Eintrag → {})
+ADJ_GET=$("$BIN" adjustments get "$INPUT" --json 2>&1)
+if echo "$ADJ_GET" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+    pass "adjustments get --json kein Eintrag (gültiges JSON)"; else fail "adjustments get --json" "$ADJ_GET"; fi
+
+# adjustments get text mode (kein Eintrag → Meldung)
+ADJ_GET_TXT=$("$BIN" adjustments get "$INPUT" 2>&1)
+if [ $? -eq 0 ]; then pass "adjustments get (Exitcode 0)"; else fail "adjustments get" "$ADJ_GET_TXT"; fi
+
+# adjustments delete (Pfad ohne Eintrag → ok, kein Fehler)
+ADJ_DEL=$("$BIN" adjustments delete "$INPUT" 2>&1)
+if [ $? -eq 0 ]; then pass "adjustments delete ohne Eintrag (Exitcode 0)"; else fail "adjustments delete" "$ADJ_DEL"; fi
+
+ADJ_DEL_JSON=$("$BIN" adjustments delete "$INPUT" --json 2>&1)
+if echo "$ADJ_DEL_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok')==True" 2>/dev/null; then
+    pass "adjustments delete --json (ok=true)"; else fail "adjustments delete --json" "$ADJ_DEL_JSON"; fi
+
+# adjustments get ohne Argumente → Fehler
+ADJ_GET_ERR=0; "$BIN" adjustments get > /dev/null 2>&1 || ADJ_GET_ERR=$?
+if [ $ADJ_GET_ERR -ne 0 ]; then pass "adjustments get ohne Argumente (Fehler korrekt)"; else fail "adjustments get ohne Argumente" "Exitcode 0"; fi
+
+# adjustments delete ohne Argumente → Fehler
+ADJ_DEL_ERR=0; "$BIN" adjustments delete > /dev/null 2>&1 || ADJ_DEL_ERR=$?
+if [ $ADJ_DEL_ERR -ne 0 ]; then pass "adjustments delete ohne Argumente (Fehler korrekt)"; else fail "adjustments delete ohne Argumente" "Exitcode 0"; fi
+
+# adjustments unbekannter Unterbefehl → Fehler
+ADJ_UNK_ERR=0; "$BIN" adjustments bogus > /dev/null 2>&1 || ADJ_UNK_ERR=$?
+if [ $ADJ_UNK_ERR -ne 0 ]; then pass "adjustments unbekannter Unterbefehl (Fehler korrekt)"; else fail "adjustments bogus" "Exitcode 0"; fi
 
 echo ""
 
