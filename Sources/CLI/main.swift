@@ -45,7 +45,7 @@ private func printUsage() {
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
-      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add [--json]
+      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune [--json]
       iphoto-cli albumfolder list|create|rename|delete [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
@@ -86,6 +86,7 @@ private func printUsage() {
       iphoto-cli stack query <bildpfad> [--json]
       iphoto-cli trash list [--json]
       iphoto-cli trash mark <bildpfad> [--json]
+      iphoto-cli trash mark-rejected [--dry-run] [--json]
       iphoto-cli trash restore <bildpfad>|--all [--json]
       iphoto-cli trash empty [--json]
       iphoto-cli elo get <bildpfad> [--json]
@@ -104,6 +105,7 @@ private func printUsage() {
       iphoto-cli catalog remove <pfad> [<pfad> ...] [--json]
       iphoto-cli catalog get <pfad> [--json]
       iphoto-cli catalog add <pfad> [<pfad> ...] [--json]
+      iphoto-cli catalog prune [--dry-run] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -2399,7 +2401,7 @@ private func runStack(_ args: [String]) -> Int32 {
 
 private func runTrash(_ args: [String]) -> Int32 {
     guard let sub = args.first else {
-        fputs("Verwendung: iphoto-cli trash list|mark|restore [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli trash list|mark|mark-rejected|restore|empty [opts]\n", stderr)
         return 1
     }
     let jsonMode = args.contains("--json")
@@ -2462,6 +2464,34 @@ private func runTrash(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "mark-rejected":
+        // trash mark-rejected [--dry-run] [--json] — alle als "reject" markierten Bilder
+        // in einem Rutsch in den Papierkorb legen (bereits getrashte werden übersprungen).
+        let extra = args.dropFirst().filter { !$0.hasPrefix("-") }
+        let unknownFlags = args.dropFirst().filter { $0.hasPrefix("-") && $0 != "--json" && $0 != "--dry-run" }
+        guard extra.isEmpty, unknownFlags.isEmpty else {
+            fputs("Verwendung: iphoto-cli trash mark-rejected [--dry-run] [--json]\n", stderr)
+            return 1
+        }
+        let dryRun = args.contains("--dry-run")
+        let already = catalog.trashedPaths()
+        let rejected = catalog.images(flaggedAs: FlagStatus.reject.rawValue)
+            .map { $0.path }
+            .filter { !already.contains($0) }
+            .sorted()
+        if !dryRun && !rejected.isEmpty { catalog.setTrashed(paths: rejected, true) }
+        if jsonMode {
+            let obj: [String: Any] = ["paths": rejected, "count": rejected.count,
+                                      "dry_run": dryRun, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            rejected.forEach { print($0) }
+            print(dryRun ? "\(rejected.count) abgelehnte(s) Bild(er) würden in den Papierkorb verschoben (Probelauf)"
+                         : "\(rejected.count) abgelehnte(s) Bild(er) in den Papierkorb verschoben")
+        }
+        return 0
+
     case "empty":
         let count = catalog.emptyTrash()
         if jsonMode {
@@ -2474,7 +2504,7 @@ private func runTrash(_ args: [String]) -> Int32 {
         return 0
 
     default:
-        fputs("Verwendung: iphoto-cli trash list|mark|restore|empty [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli trash list|mark|mark-rejected|restore|empty [opts]\n", stderr)
         return 1
     }
 }
@@ -3146,6 +3176,21 @@ private func printCatalogImages(_ images: [CatalogImage], jsonMode: Bool) -> Int
 
 // MARK: - Catalog
 
+/// Entfernt Bilder samt Bewertung, Gesichtern, Anpassungen, Album-Zuordnung und
+/// Papierkorb-Eintrag aus dem Katalog. Dateien auf der Platte bleiben unberührt.
+private func removeCatalogEntries(_ paths: [String], catalog: CatalogStore) {
+    guard !paths.isEmpty else { return }
+    let albumIDs = catalog.allAlbums().map { $0.id }
+    for p in paths {
+        for aid in albumIDs { catalog.removeImage(path: p, fromAlbum: aid) }
+        catalog.removeRating(path: p)
+        catalog.deleteFaces(forPath: p)
+        catalog.deleteAdjustments(path: p)
+        catalog.removeImage(path: p)
+    }
+    catalog.setTrashed(paths: paths, false)
+}
+
 private func runCatalog(_ args: [String]) -> Int32 {
     let sub = args.first ?? "stats"
     let jsonMode = args.contains("--json")
@@ -3309,15 +3354,7 @@ private func runCatalog(_ args: [String]) -> Int32 {
             missing.forEach { fputs("Fehler: Bild nicht im Katalog: \($0)\n", stderr) }
             return 1
         }
-        let albumIDs = catalog.allAlbums().map { $0.id }
-        for p in paths {
-            for aid in albumIDs { catalog.removeImage(path: p, fromAlbum: aid) }
-            catalog.removeRating(path: p)
-            catalog.deleteFaces(forPath: p)
-            catalog.deleteAdjustments(path: p)
-            catalog.removeImage(path: p)
-        }
-        catalog.setTrashed(paths: paths, false)
+        removeCatalogEntries(Array(paths), catalog: catalog)
         if jsonMode {
             let obj: [String: Any] = ["removed": paths, "count": paths.count, "ok": true]
             if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
@@ -3410,8 +3447,43 @@ private func runCatalog(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "prune":
+        // catalog prune [--dry-run] [--json]
+        // Entfernt Katalog-Einträge, deren Datei nicht mehr auf der Platte liegt
+        // (verschoben/gelöscht außerhalb der App). Existenz-Check parallel.
+        let extra = args.dropFirst().filter { !$0.hasPrefix("-") }
+        let unknownFlags = args.dropFirst().filter { $0.hasPrefix("-") && $0 != "--json" && $0 != "--dry-run" }
+        guard extra.isEmpty, unknownFlags.isEmpty else {
+            fputs("Verwendung: iphoto-cli catalog prune [--dry-run] [--json]\n", stderr); return 1
+        }
+        let dryRun = args.contains("--dry-run")
+        let allPaths = catalog.allImages().map { $0.path }
+        var exists = [Bool](repeating: true, count: allPaths.count)
+        exists.withUnsafeMutableBufferPointer { buf in
+            guard let base = buf.baseAddress else { return }   // leerer Katalog
+            DispatchQueue.concurrentPerform(iterations: allPaths.count) { idx in
+                base[idx] = FileManager.default.fileExists(atPath: allPaths[idx])
+            }
+        }
+        let missing = zip(allPaths, exists).filter { !$0.1 }.map { $0.0 }.sorted()
+        if !dryRun && !missing.isEmpty { removeCatalogEntries(missing, catalog: catalog) }
+        if jsonMode {
+            let obj: [String: Any] = ["missing": missing, "count": missing.count,
+                                      "checked": allPaths.count, "dry_run": dryRun, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            missing.forEach { print($0) }
+            if dryRun {
+                print("Fehlende Dateien: \(missing.count) von \(allPaths.count) (Probelauf, nichts entfernt)")
+            } else {
+                print("Aus Katalog entfernt: \(missing.count) von \(allPaths.count) Bild(er) (Datei fehlt)")
+            }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune [--json]\n", stderr)
         return 1
     }
 }

@@ -1378,6 +1378,123 @@ if [ $ELO_ERR -ne 0 ]; then pass "elo reset (ohne Argument → Fehler)"; else fa
 echo ""
 
 # ---------------------------------------------------------------------------
+echo "--- CATALOG PRUNE ---"
+
+PR_DB="$TMPDIR/pr_catalog.db"
+PR_IMG_A="$TMPDIR/pr_a.png"
+PR_IMG_B="$TMPDIR/pr_b.png"
+cp "$INPUT_PNG" "$PR_IMG_A"
+cp "$INPUT_PNG" "$PR_IMG_B"
+
+# leerer Katalog → count 0
+PR_EXIT=0
+PR_OUT=$(IPHOTO_CATALOG_DB="$PR_DB" "$BIN" catalog prune --json 2>&1) || PR_EXIT=$?
+if [ $PR_EXIT -eq 0 ] && echo "$PR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['count']==0 and d['checked']==0" 2>/dev/null; then
+    pass "catalog prune --json (leerer Katalog)"
+else
+    fail "catalog prune --json (leer)" "Exit $PR_EXIT: $PR_OUT"
+fi
+
+IPHOTO_CATALOG_DB="$PR_DB" "$BIN" catalog add "$PR_IMG_A" "$PR_IMG_B" > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$PR_DB" "$BIN" rating batch-set "$PR_IMG_A" --set 4 > /dev/null 2>&1 || true
+rm -f "$PR_IMG_A"
+
+# --dry-run → meldet A, entfernt nichts
+PR_EXIT=0
+PR_OUT=$(IPHOTO_CATALOG_DB="$PR_DB" "$BIN" catalog prune --dry-run --json 2>&1) || PR_EXIT=$?
+PR_LIST=$(IPHOTO_CATALOG_DB="$PR_DB" "$BIN" catalog list --json 2>&1) || true
+if [ $PR_EXIT -eq 0 ] \
+   && echo "$PR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['dry_run'] and d['count']==1 and d['checked']==2 and d['missing'][0].endswith('pr_a.png')" 2>/dev/null \
+   && echo "$PR_LIST" | python3 -c "import sys,json; assert len(json.load(sys.stdin))==2" 2>/dev/null; then
+    pass "catalog prune --dry-run (fehlende Datei gemeldet, nichts entfernt)"
+else
+    fail "catalog prune --dry-run" "Exit $PR_EXIT: $PR_OUT | $PR_LIST"
+fi
+
+# echt → A + Rating weg, B bleibt
+PR_EXIT=0
+PR_OUT=$(IPHOTO_CATALOG_DB="$PR_DB" "$BIN" catalog prune --json 2>&1) || PR_EXIT=$?
+PR_LIST=$(IPHOTO_CATALOG_DB="$PR_DB" "$BIN" catalog list --json 2>&1) || true
+PR_RATINGS=$(IPHOTO_CATALOG_DB="$PR_DB" "$BIN" rating list --json 2>&1) || true
+if [ $PR_EXIT -eq 0 ] \
+   && echo "$PR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert not d['dry_run'] and d['count']==1" 2>/dev/null \
+   && echo "$PR_LIST" | python3 -c "import sys,json; d=json.load(sys.stdin); assert len(d)==1 and d[0]['path'].endswith('pr_b.png')" 2>/dev/null \
+   && ! echo "$PR_RATINGS" | grep -q "pr_a.png"; then
+    pass "catalog prune --json (Eintrag + Rating entfernt, vorhandene bleiben)"
+else
+    fail "catalog prune --json" "Exit $PR_EXIT: $PR_OUT | $PR_LIST | $PR_RATINGS"
+fi
+
+# unbekannte Option → Fehler
+PR_ERR=0
+IPHOTO_CATALOG_DB="$PR_DB" "$BIN" catalog prune --force > /dev/null 2>&1 || PR_ERR=$?
+if [ $PR_ERR -ne 0 ]; then pass "catalog prune --force (unbekannte Option → Fehler)"; else fail "catalog prune --force" "Hätte fehlschlagen sollen"; fi
+
+# Positionsargument → Fehler
+PR_ERR=0
+IPHOTO_CATALOG_DB="$PR_DB" "$BIN" catalog prune "$PR_IMG_B" > /dev/null 2>&1 || PR_ERR=$?
+if [ $PR_ERR -ne 0 ]; then pass "catalog prune <pfad> (Argument → Fehler)"; else fail "catalog prune <pfad>" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+echo "--- TRASH MARK-REJECTED ---"
+
+TR_DB="$TMPDIR/tr_catalog.db"
+TR_IMG_A="$TMPDIR/tr_a.png"
+TR_IMG_B="$TMPDIR/tr_b.png"
+TR_IMG_C="$TMPDIR/tr_c.png"
+cp "$INPUT_PNG" "$TR_IMG_A"
+cp "$INPUT_PNG" "$TR_IMG_B"
+cp "$INPUT_PNG" "$TR_IMG_C"
+IPHOTO_CATALOG_DB="$TR_DB" "$BIN" catalog add "$TR_IMG_A" "$TR_IMG_B" "$TR_IMG_C" > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$TR_DB" "$BIN" rating batch-set "$TR_IMG_A" "$TR_IMG_B" --flag reject > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$TR_DB" "$BIN" rating batch-set "$TR_IMG_C" --flag pick > /dev/null 2>&1 || true
+
+# --dry-run → 2 Kandidaten, Papierkorb bleibt leer
+TR_EXIT=0
+TR_OUT=$(IPHOTO_CATALOG_DB="$TR_DB" "$BIN" trash mark-rejected --dry-run --json 2>&1) || TR_EXIT=$?
+TR_LIST=$(IPHOTO_CATALOG_DB="$TR_DB" "$BIN" trash list --json 2>&1) || true
+if [ $TR_EXIT -eq 0 ] \
+   && echo "$TR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['dry_run'] and d['count']==2" 2>/dev/null \
+   && echo "$TR_LIST" | python3 -c "import sys,json; assert json.load(sys.stdin)==[]" 2>/dev/null; then
+    pass "trash mark-rejected --dry-run (2 Kandidaten, nichts verschoben)"
+else
+    fail "trash mark-rejected --dry-run" "Exit $TR_EXIT: $TR_OUT | $TR_LIST"
+fi
+
+# echt → A + B im Papierkorb, C (pick) nicht
+TR_EXIT=0
+TR_OUT=$(IPHOTO_CATALOG_DB="$TR_DB" "$BIN" trash mark-rejected --json 2>&1) || TR_EXIT=$?
+TR_LIST=$(IPHOTO_CATALOG_DB="$TR_DB" "$BIN" trash list --json 2>&1) || true
+if [ $TR_EXIT -eq 0 ] \
+   && echo "$TR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['count']==2" 2>/dev/null \
+   && echo "$TR_LIST" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert len(d)==2 and not any(p.endswith('tr_c.png') for p in d)
+" 2>/dev/null; then
+    pass "trash mark-rejected --json (nur Rejects im Papierkorb)"
+else
+    fail "trash mark-rejected --json" "Exit $TR_EXIT: $TR_OUT | $TR_LIST"
+fi
+
+# erneut → bereits getrashte übersprungen
+TR_OUT=$(IPHOTO_CATALOG_DB="$TR_DB" "$BIN" trash mark-rejected --json 2>&1) || true
+if echo "$TR_OUT" | python3 -c "import sys,json; assert json.load(sys.stdin)['count']==0" 2>/dev/null; then
+    pass "trash mark-rejected erneut (idempotent, count 0)"
+else
+    fail "trash mark-rejected erneut" "$TR_OUT"
+fi
+
+# unbekannte Option → Fehler
+TR_ERR=0
+IPHOTO_CATALOG_DB="$TR_DB" "$BIN" trash mark-rejected --all > /dev/null 2>&1 || TR_ERR=$?
+if [ $TR_ERR -ne 0 ]; then pass "trash mark-rejected --all (unbekannte Option → Fehler)"; else fail "trash mark-rejected --all" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

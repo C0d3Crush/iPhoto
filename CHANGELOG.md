@@ -2,6 +2,13 @@
 
 ---
 
+## 1.93.0
+**CLI: Katalog bereinigen und abgelehnte Bilder gesammelt in den Papierkorb**
+- Neuer Befehl `iphoto-cli catalog prune [--dry-run] [--json]` entfernt Katalog-Einträge, deren Datei außerhalb der App gelöscht oder verschoben wurde — samt Bewertung, Gesichtern, Anpassungen und Album-Zuordnung; die Existenzprüfung läuft parallel, `--dry-run` zeigt nur an
+- Neuer Befehl `iphoto-cli trash mark-rejected [--dry-run] [--json]` legt alle als „Abgelehnt" markierten Bilder in einem Schritt in den Papierkorb; bereits getrashte werden übersprungen
+- `catalog remove` und `catalog prune` teilen sich jetzt dieselbe Lösch-Routine
+- Tests in `Tests/run_plugins.sh` (leerer Katalog, Probelauf, echtes Bereinigen, Idempotenz, Fehlerpfade)
+
 ## 1.92.0
 **CLI: ELO-Duelle austragen und zurücksetzen**
 - Neuer Befehl `iphoto-cli elo match <links> <rechts> [--winner left|right|draw] [--json]` trägt ein Duell zwischen zwei Bildern aus — gleiche ELO-Formel und K-Faktor-Decay wie der Duell-Modus der App; beide Werte und Duell-Zähler werden gespeichert
