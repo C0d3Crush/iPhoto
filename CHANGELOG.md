@@ -2,6 +2,13 @@
 
 ---
 
+## 1.100.0
+**PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
+- Neuer GitHub-Actions-Workflow `project-manager.yml` läuft alle 2 Stunden und analysiert offene, noch nicht zugewiesene Issues
+- Claude (`claude-opus-4-7`) erfindet bei Bedarf neue Akteure (Rollen) und wählt den passenden für jeden Issue aus
+- Akteure werden in `.github/actors.json` persistiert und bei neuen Akteur-Erfindungen automatisch committed
+- Jeder zugewiesene Issue erhält ein GitHub-Label `actor:<id>` und einen Kommentar mit einer konkreten Direktive (Aufgabe, Kontext, erwartetes Ergebnis)
+
 ## 1.99.0
 **CLI: Smart-Ordner-SQL anzeigen und Treffer zählen**
 - Neuer Befehl `iphoto-cli smartfolder sql <name> [--count] [--json]` zeigt das SQL, das der Smart-Ordner gegen den Katalog ausführt (mit `--count` die Zähl-Abfrage der Seitenleiste); Laufzeit-Kriterien werden als Hinweis markiert
