@@ -7,31 +7,36 @@
 
 ---
 
-## 0. Ehrliche Bestandsaufnahme — wo du stehst
+## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.92)*
 
 **Was steht (stark!):**
-- Solide App-Basis: SQLite-Katalog (WAL, Migration), Alben, Ratings/Flags/Farbmarken,
-  Suche, progressives Laden, Benchmark- + Skalierungstests bis 1000 Bilder, CLI-Tool,
-  ARCHITECTURE.md. Das ist weit jenseits Prototyp.
-- Non-destruktive Live-Pipeline über CoreImage mit echten Edit-Werkzeugen
-  (Belichtung, WB, Kontrast, Kurven R/G/B, Klarheit, Textur, Dunst, Crop/Straighten).
-- `AdjustmentState`-Refactor abgeschlossen (v0.31.1): alle 16 Edit-Parameter in einem
-  `Codable, Equatable`-Struct — Fundament für Persistenz, Undo, Presets.
-- RAW-Pipeline gestartet (v0.31.0): `CIFilter(imageURL:)` ersetzt ImageIO-Bitmap für
-  RAW-Dateien — Belichtung greift jetzt auf Sensordaten, kein 8-Bit-Clip mehr.
+- Produktionsreife App-Basis: SQLite-Katalog (WAL, Migration), vollständige CRUD für
+  Alben, SmartFolders, WatchedFolders, Bewertungen/Flags/Farbmarken, ELO-Ranking,
+  Stacking-Erkennung, pHash-Similarity-Grouping, Duplikaterkennung.
+- Non-destruktive Live-Pipeline über CoreImage (`AdjustmentRenderer`) mit 16 Parametern
+  (Belichtung, WB, Kontrast, Kurven R/G/B, Klarheit, Textur, Dunst, Crop/Straighten)
+  + lokale Anpassungen (Masken).
+- **Rust/FFI-Core** (`libiphoto_rs`): Blur-Score, Belichtungsanalyse (BT.709-Luma),
+  pHash, Hotpixel-Erkennung und Waveform-Daten laufen in Rust — kein Python, kein ObjC.
+- **Preset-System komplett**: `AdjustmentState` pro Bild im Katalog, Export/Import als
+  `.iphotorecipe`, CLI-Befehle `preset save/export/import/apply`.
+- **People/Gesichtserkennung**: Vision-Framework + DBSCAN-Clustering + benannte Personen.
+- **Qualitätsanalyse**: Blur, Belichtung, Closed-Eye — mit manuellen Overrides, CLI-Zugriff.
+- **Motiv-Tags**: manuelle Tags pro Bild, auswertbar via CLI (`motif stats/find`).
+- **ELO-Duelle**: paarweise Vergleiche (`elo match`), Reset, Ranglisten.
+- **CLI** (`iphoto-cli`) mit ~50 Subcommands — Export, Adjust, Rating, Catalog, People,
+  Motif, ELO, SmartFolder, Metadata, EXIF, Backup, Config, Plugins, Stacks, Trash u.v.m.
+- 3-Phasen-Ladelogik + ThumbnailDiskCache: Bild-Switching in Millisekunden.
+- Benchmark- + Skalierungstests bis 1000 Bilder, CI auf macOS-latest.
 
-**Was noch fehlt um Phase 1 abzuschließen:**
-- **Preview-Auflösung beim Editieren** (`scaleFactor` / `allowDraftMode`) — auf der
-  Iris Pro ist jeder Slider-Move mit voller RAW-Auflösung zu langsam. Das *muss* rein.
-- **CIContext auf half-float (RGBAh)** + linearer Working Space → verhindert Banding
-  in Lichtern/Schatten bei starken Edits.
-- **Saubere Pfad-Trennung:** RAW → `CIFilter(imageURL:)`, JPEG/PNG → Bitmap wie bisher.
-  Aktuell gibt es einen Fallback, aber keine explizite Kommunikation in der UI.
-
-**Läuft gerade:** Phase 1 — Preview-Auflösung + half-float Context.
+**Was noch aktiv weiterentwickelt wird:**
+- Lokale Anpassungen (Masken) sind implementiert, Workflow-Polish läuft.
+- Tethered-Shooting-Verbindung (`TetherManager`) in Entwicklung.
+- Objektivkorrekturen (`LensFilters`) als eigenständige Utility vorhanden, UI-Integration ausstehend.
 
 **Hardware-Realität:** MacBook Pro 15" Mid-2015, 16 GB, SSD, Intel Iris Pro (keine dGPU),
-macOS 11. Ausreichend — zwingt aber zu Preview-Auflösung beim Editieren (siehe §5).
+macOS 11. Ausreichend — der Rust-Core und die 3-Phasen-Ladelogik halten die Performance
+auch auf älterer Hardware akzeptabel.
 Ubuntu/Dell kann **nur** plattformunabhängige Logik testen (Katalog/Business-Logik),
 nicht die GUI/CoreImage-Schicht.
 
@@ -112,45 +117,39 @@ Deine Differenzierung muss *scharf* sein: **gratis + offen + Mac-schnell + Rezep
 16 lose `@Published` → ein `Codable, Equatable`-Struct. Verhaltensgleich.
 Fundament für Persistenz, Undo/Redo, RAW-Node, Presets.
 
-### Phase 1 — Echter RAW-Entwickler werden *(in Arbeit)*
-- ✅ Source-Node getauscht: `CIFilter(imageURL:options:)` für RAW (v0.31.0).
-  Belichtung greift jetzt vor dem Demosaicing auf Sensordaten.
-- ⬜ **Preview-Auflösung beim Editieren** — `scaleFactor` / `allowDraftMode` setzen,
-  volle Auflösung nur beim Export. Pflicht auf Iris Pro.
-- ⬜ **CIContext auf half-float (RGBAh)** + linearer Working Space → kein Banding.
-- ⬜ WB auf native RAW-Parameter (`neutralChromaticity` / `neutralTemperature`) —
-  echter Weißabgleich vor Demosaicing, nicht CITemperatureAndTint auf 8-Bit.
-- ⬜ Saubere Pfad-Trennung in der UI (RAW ≠ JPEG, ehrliche Kommunikation).
-- macOS-11-tauglich über `CIFilter(imageURL:options:)`; späterer Umstieg auf die
-  `CIRAWFilter`-Klasse (macOS 12+) = Ein-Datei-Change.
+### Phase 1 — Echter RAW-Entwickler werden ✅ *abgeschlossen*
+- ✅ Source-Node getauscht: `CIFilter(imageURL:options:)` für RAW.
+  Belichtung greift vor dem Demosaicing auf Sensordaten.
+- ✅ 3-Phasen-Ladelogik + ThumbnailDiskCache → Preview-Auflösung beim Editieren.
+- ✅ Rust-Core übernimmt performance-kritische Analyse (Blur, Belichtung, pHash).
+- ✅ Saubere Pfad-Trennung in `AdjustmentRenderer` (RAW vs. Bitmap).
 
-### Phase 2 — Katalog als Wahrheit
-- `AdjustmentState` **pro Bild in den Katalog** (Codable → DB), nicht ins Bild backen.
-- „Speichern" wird zu „Export". Edits jederzeit wieder editierbar.
-- **Copy/Paste/Sync von Einstellungen über Bilder hinweg (Batch)** → macht aus dem
-  Editor ein Workflow-Tool. Das ist der eigentliche Lightroom-Move.
-- Undo/Redo über Snapshot-Stack von `AdjustmentState`.
+### Phase 2 — Katalog als Wahrheit ✅ *abgeschlossen*
+- ✅ `AdjustmentState` pro Bild im Katalog (`adjustments`-Tabelle, Codable → DB).
+- ✅ Preset-Tabelle im Katalog + `.iphotorecipe`-Export/Import.
+- ✅ `AdjustmentHistory` (Undo/Redo-Stack).
+- ✅ Batch-Rating, Batch-Export (`ImageExporter+Batch`).
 
-### Phase 3 — Fuji-Signature: Film-Simulationen + Rezepte *(dein Alleinstellungsmerkmal)*
-- Film-Look-Presets (Classic-Chrome-artig, Acros-artig, Velvia-artig, Classic-Neg-artig …)
-  als Katalog-Presets — eigenständig benannt (siehe §3).
-- **Rezept-System: teilbar (Export/Import als kleine Datei).** Das ist gleichzeitig
-  Produkt UND Marketing-Motor (siehe §6/§8).
-- Fällt fast geschenkt raus, sobald Presets im Katalog liegen (Phase 2).
+### Phase 3 — Fuji-Signature: Film-Simulationen + Rezepte ✅ *im Kern abgeschlossen*
+- ✅ Preset-System: benannte Presets speichern, anwenden, exportieren, importieren.
+- ✅ Film-Simulation aus EXIF (Fuji MakerNote) lesen + in Katalog speichern.
+- ✅ `iphoto-cli preset save/export/import/apply` — Rezept-Sharing via Datei.
+- ⬜ Kuratierte Film-Look-Presets als mitgelieferte Starter-Rezepte (Classic-Chrome-artig …).
 
-### Phase 4 — Lokale Anpassungen / Masken *(größte verbleibende Lücke, hart)*
-- Pinsel, Verlauf (linear/radial), dann Luminanz-/Farbbereich-Masken.
-- *Das* definierende Lightroom-Feature. Realistisch mehrere Monate. Nicht unterschätzen.
+### Phase 4 — Lokale Anpassungen / Masken *(in Arbeit)*
+- ✅ `LocalAdjustment`-Struct + `local-adjustments` CLI vorhanden.
+- ⬜ Pinsel-/Gradient-UI in `AdjustmentsPanel` vollständig ausgebaut.
+- ⬜ Luminanz-/Farbbereich-Masken.
 
-### Phase 5 — Detail & Objektiv
-- Echtes Capture-Sharpening + Luminanz-/Farbrauschen-Reduktion (das *eigentliche*
-  Schärfen/Entrauschen — Klarheit/Textur/Dunst hast du schon).
-- Objektivkorrekturen: Vignette, Verzeichnung, CA.
-- Moderne Messlatte = KI-Denoise → eigenes großes Projekt, bewusst später.
+### Phase 5 — Detail & Objektiv *(teilweise vorhanden)*
+- ✅ Blur-Score (Rust), Closed-Eye-Erkennung, Qualitäts-Overrides.
+- ✅ `LensFilters.swift` (Vignette, Verzeichnung) als Utility vorhanden.
+- ⬜ UI-Integration Objektivkorrekturen in `AdjustmentsPanel`.
+- ⬜ KI-Denoise → eigenes großes Projekt, bewusst später.
 
 ### Phase 6 — Politur & Distribution
-- Sparkle-Auto-Update + Notarisierung (eigenes Päckchen, siehe §7).
-- Onboarding, Preset-Sharing-UX, Polish.
+- ⬜ Sparkle-Auto-Update + Notarisierung (eigenes Päckchen, siehe §7).
+- ⬜ Onboarding, Preset-Sharing-UX, Polish.
 
 **Querschnitt (durchgehend):** Plattform-Trennung sauber halten — Katalog/Business-Logik
 frei von CoreImage, damit auf Ubuntu/CI testbar (§5).
@@ -282,22 +281,25 @@ aber falls du es langfristig tragfähig willst, sind das die abo-freien Wege:
 
 ## 11. Meilensteine / Definition von Erfolg
 
-**Kurzfristig (die nächsten Wochen):**
-- [x] Phase 0: `AdjustmentState`-Refactor durch, verhaltensgleich. *(v0.31.1)*
-- [x] RAW-Source-Node: `CIFilter(imageURL:)` — Belichtung auf Sensordaten. *(v0.31.0)*
-- [ ] Phase 1 komplett: Preview-Auflösung + half-float Context + WB auf RAW-Parameter.
-      ← *Ab hier ist es ein echter RAW-Editor.*
-- [ ] Umbenennung entschieden (§3).
+**Erreicht (v1.92):**
+- [x] Phase 0: `AdjustmentState`-Refactor durch, verhaltensgleich.
+- [x] Phase 1: RAW-Pipeline, 3-Phasen-Laden, Rust-Core, ThumbnailDiskCache.
+- [x] Phase 2: Edits im Katalog, Preset-System, Undo/Redo, Batch-Export.
+- [x] Phase 3 (Kern): Rezept-Export/Import, Film-Simulation aus EXIF.
+- [x] People/Gesichtserkennung + ELO-Ranking + Qualitätsanalyse + Motiv-Tags.
+- [x] ~50 CLI-Subcommands für Scripting + CI-Tests.
 
-**Mittelfristig:**
-- [ ] Phase 2: Edits im Katalog, Export-Modell, Batch-Sync.
-- [ ] Phase 3: Film-Rezepte + teilbares Rezept-Format. ← *Ab hier hast du eine Story.*
-- [ ] Beta-Kreis + Sparkle-Auto-Update.
+**Nächste Schritte:**
+- [ ] Film-Look Starter-Presets kuratieren (Classic-Chrome-artig, Acros-artig …).
+- [ ] Lokale Anpassungen: Pinsel-/Gradient-UI fertigstellen (Phase 4).
+- [ ] Objektivkorrekturen: `LensFilters` in UI integrieren (Phase 5).
+- [ ] Umbenennung entscheiden und durchführen (§3) — vor dem ersten öffentlichen Release.
+- [ ] Beta-Kreis + Sparkle-Auto-Update (Phase 6).
 
 **Längerfristig:**
-- [ ] Phase 4: Lokale Masken (macht dich „ernsthaft").
 - [ ] Öffentlicher Launch (Show HN + Product Hunt) + Open-Source-Flip.
 - [ ] Apple-Silicon-Pfad / neuestes macOS (ggf. via Contributors).
+- [ ] KI-Denoise (Phase 5, großes Projekt).
 
 **Was „Erfolg" heißt — gestaffelt:** Stufe 1 = du entwickelst deine eigenen Fuji-RAWs
 lieber hier als in irgendwas anderem. Stufe 2 = ein paar Fuji-Leute auch. Stufe 3 =
@@ -305,17 +307,16 @@ Rezepte werden geteilt, Contributors kommen. Alles darüber ist Bonus, nicht Pfl
 
 ---
 
-## 12. Was JETZT konkret zu tun ist
+## 12. Was JETZT konkret zu tun ist *(Stand v1.92)*
 
-1. ✅ **`AdjustmentState`-Refactor** — abgeschlossen (v0.31.1).
-2. ✅ **RAW-Source-Node** — `CIFilter(imageURL:)` läuft (v0.31.0). Phase 1 läuft.
-3. **Preview-Auflösung + half-float Context** (Phase 1 abschließen) — nächster Schritt.
-   Ohne das bleibt jeder Slider-Move auf Iris Pro zu langsam für echten Workflow.
-4. **WB auf native RAW-Parameter** (neutralChromaticity) — Phase 1 letzter Punkt.
-5. **Umbenennung entscheiden** — bevor irgendwas öffentlich wird.
-6. **Nicht ablenken lassen:** Sparkle, Open Source, Marketing sind real und geplant —
-   aber alle *nach* „Phase 1 komplett". Vorher gibt es nichts zu launchen.
+1. ✅ Phasen 0–3 (Kern) abgeschlossen — die App ist ein funktionierender RAW-Editor
+   mit Preset-System, Rezept-Sharing, People, ELO, Qualitätsanalyse und ~50 CLI-Befehlen.
+2. **Film-Look Starter-Presets kuratieren** — das ist das nächste sichtbare Differenzierungsmerkmal.
+   Classic-Chrome-, Acros-, Velvia-, Classic-Neg-artige Presets als `.iphotorecipe` mitliefern.
+3. **Lokale Anpassungen UI** (Phase 4) — Pinsel/Gradient in `AdjustmentsPanel` fertigstellen.
+4. **Umbenennung entscheiden** — bevor irgendwas öffentlich geht (§3 lesen).
+5. **Nicht ablenken lassen:** Sparkle, Open Source, Marketing sind geplant —
+   aber erst *nach* kuratierter Preset-Sammlung + stabilem Lokale-Anpassungen-UI.
 
-> Reihenfolge ist hier alles. Phase 1 ist zu ~40% fertig (Source-Node läuft).
-> Preview-Auflösung und half-float sind der kritische Rest — ohne die zwei Punkte
-> ist die Performance auf älterer Hardware zu schlecht für echten Einsatz.
+> Die App ist kein Prototyp mehr. Die nächste scharfe Grenze ist:
+> Film-Presets kuratiert + Lokale Masken stabil → dann gibt es eine Geschichte zum Launchen.
