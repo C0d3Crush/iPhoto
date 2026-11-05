@@ -2,11 +2,23 @@
 
 ---
 
-## 1.87.0
+## 1.87.2
 **Performance — Rust-Core: Waveform-Akkumulator + pHash-Similarity**
 - `AnalysisEngine`: Luma-Histogramm + Waveform-Akkumulator aus Swift-Loop nach Rust ausgelagert (`iphoto_waveform_accumulate`) — BT.709, integer-skaliert, LLVM-auto-vektorisiert (~6–10× schneller)
 - `SimilarityGrouper`: pHash Seed-and-Pull Gruppen-Suche jetzt via Rust + Rayon-Parallelisierung des inneren Scans (`iphoto_phash_seed_pull_groups`) — gleiche Semantik, paralleler Inner-Loop
 - Neue Rust-Module: `waveform.rs`, `similarity.rs`; neue C-FFI-Exporte in `lib.rs` + `iphoto_rs.h`
+
+## 1.87.1
+**CI-Build repariert**
+- Fehlender `CoreGraphics`-Import in `ImageExporter+Batch.swift` ergänzt (App-Build schlug in CI fehl)
+
+## 1.87.0
+**CLI: Bewertungs-Histogramm und EXIF-Katalogbefehle**
+- Neu: `iphoto-cli rating histogram [--json]` — Sterneverteilung (0–5), Anzahl bewerteter Bilder und Durchschnittsbewertung
+- Neu: `iphoto-cli exif get <bild> [--json]` — zeigt die im Katalog gespeicherten EXIF-Werte (Brennweite, ISO, Blende, Objektiv, Filmsimulation, HDR, Sequenz)
+- Neu: `iphoto-cli exif set <bild> [--iso N] [--focal MM] [--aperture F] [--lens NAME] [--film NAME] [--hdr true|false]` — korrigiert EXIF-Werte im Katalog (nicht angegebene Felder bleiben erhalten)
+- Neu: `iphoto-cli exif films [--json]` — listet alle Filmsimulationen im Katalog
+- Tests für alle neuen Befehle in `Tests/run_plugins.sh`
 
 ## 1.86.1
 **CI-Fix, fehlende Methoden, App-Umbenennung**

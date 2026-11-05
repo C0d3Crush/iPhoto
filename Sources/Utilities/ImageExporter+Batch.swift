@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 extension ImageExporter {
     static func exportBatch(

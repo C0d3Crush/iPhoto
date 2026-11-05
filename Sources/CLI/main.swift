@@ -71,6 +71,11 @@ private func printUsage() {
       iphoto-cli smartfolder sync [<name>] [--json]
       iphoto-cli local-adjustments list <bildpfad> [--json]
       iphoto-cli local-adjustments clear <bildpfad> [--json]
+      iphoto-cli rating histogram [--json]
+      iphoto-cli exif get <bildpfad> [--json]
+      iphoto-cli exif set <bildpfad> [--iso N] [--focal MM] [--aperture F] [--lens NAME]
+                          [--film NAME] [--hdr true|false] [--json]
+      iphoto-cli exif films [--json]
       iphoto-cli stack list [--json]
       iphoto-cli stack query <bildpfad> [--json]
       iphoto-cli trash list [--json]
@@ -3714,6 +3719,170 @@ private func runLocalAdjustments(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - rating histogram
+
+private func runRatingHistogram(_ args: [String]) -> Int32 {
+    let jsonMode = args.contains("--json")
+    if let bad = args.first(where: { $0 != "--json" }) {
+        fputs("Fehler: Unbekanntes Argument '\(bad)'\nVerwendung: iphoto-cli rating histogram [--json]\n", stderr)
+        return 1
+    }
+    let catalog = CatalogStore(dbPath: envDBPath())
+    let dist = catalog.ratingDistribution()
+    let catalogTotal = catalog.allImages().count
+    var buckets: [Int] = Array(repeating: 0, count: 6)
+    for (stars, n) in dist where stars >= 1 && stars <= 5 { buckets[stars] = n }
+    let rated = buckets[1...5].reduce(0, +)
+    // Ratings können für Pfade existieren, die (noch) nicht im images-Table stehen.
+    let total = max(catalogTotal, rated)
+    buckets[0] = total - rated
+    let weighted = (1...5).reduce(0) { $0 + $1 * buckets[$1] }
+    let avg = rated > 0 ? Double(weighted) / Double(rated) : 0
+    if jsonMode {
+        var byStars: [String: Int] = [:]
+        for i in 0...5 { byStars[String(i)] = buckets[i] }
+        let d: [String: Any] = ["total": total, "rated": rated, "unrated": buckets[0],
+                                "average": (avg * 100).rounded() / 100, "byStars": byStars]
+        if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: dd, encoding: .utf8) { print(s) }
+    } else {
+        let maxN = max(1, buckets.max() ?? 1)
+        for i in stride(from: 5, through: 0, by: -1) {
+            let label = i == 0 ? "ohne " : String(repeating: "★", count: i).padding(toLength: 5, withPad: " ", startingAt: 0)
+            let bar = String(repeating: "█", count: buckets[i] * 30 / maxN)
+            print("\(label) \(String(format: "%6ld", buckets[i]))  \(bar)")
+        }
+        print("Bewertet: \(rated) / \(total)  Ø \(String(format: "%.2f", avg))")
+    }
+    return 0
+}
+
+// MARK: - exif get / set / films
+
+private func exifDict(path: String, _ e: (focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool, filmSimulation: String?, sequenceNumber: Int?, autoBracketing: Bool)) -> [String: Any] {
+    var d: [String: Any] = ["path": path, "hdr": e.hdr, "autoBracketing": e.autoBracketing]
+    func orNull<T>(_ v: T?) -> Any { if let v = v { return v } else { return NSNull() } }
+    d["focalLength"] = orNull(e.focalLength)
+    d["iso"] = orNull(e.iso)
+    d["aperture"] = orNull(e.aperture)
+    d["lens"] = orNull(e.lensModel)
+    d["film"] = orNull(e.filmSimulation)
+    d["sequenceNumber"] = orNull(e.sequenceNumber)
+    return d
+}
+
+private func printExifJSON(_ obj: Any) {
+    if let dd = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+       let s = String(data: dd, encoding: .utf8) { print(s) }
+}
+
+private func runExif(_ args: [String]) -> Int32 {
+    let jsonMode = args.contains("--json")
+    let sub = args.first ?? ""
+    let rest = Array(args.dropFirst()).filter { $0 != "--json" }
+
+    switch sub {
+    case "get":
+        guard let path = rest.first, !path.hasPrefix("--") else {
+            fputs("Verwendung: iphoto-cli exif get <bildpfad> [--json]\n", stderr); return 1
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        guard let e = catalog.exif(forPath: path) else {
+            fputs("Fehler: Bild nicht im Katalog: \(path)\n", stderr); return 1
+        }
+        if jsonMode { printExifJSON(exifDict(path: path, e)) }
+        else {
+            func f<T>(_ v: T?) -> String { if let v = v { return "\(v)" } else { return "—" } }
+            print("Pfad:        \(path)")
+            print("Brennweite:  \(f(e.focalLength))")
+            print("ISO:         \(f(e.iso))")
+            print("Blende:      \(f(e.aperture))")
+            print("Objektiv:    \(f(e.lensModel))")
+            print("Filmsim.:    \(f(e.filmSimulation))")
+            print("HDR:         \(e.hdr)")
+            print("Sequenz:     \(f(e.sequenceNumber))")
+            print("Bracketing:  \(e.autoBracketing)")
+        }
+        return 0
+
+    case "set":
+        guard let path = rest.first, !path.hasPrefix("--") else {
+            fputs("Verwendung: iphoto-cli exif set <bildpfad> [--iso N] [--focal MM] [--aperture F] [--lens NAME] [--film NAME] [--hdr true|false] [--json]\n", stderr)
+            return 1
+        }
+        let opts = Array(rest.dropFirst())
+        guard !opts.isEmpty else {
+            fputs("Fehler: Mindestens ein Feld angeben (--iso, --focal, --aperture, --lens, --film, --hdr)\n", stderr)
+            return 1
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        if catalog.image(forPath: path) == nil {
+            guard FileManager.default.fileExists(atPath: path) else {
+                fputs("Fehler: Bild weder im Katalog noch auf der Festplatte: \(path)\n", stderr); return 1
+            }
+            catalog.upsertImage(path: path, filename: URL(fileURLWithPath: path).lastPathComponent,
+                                isRAW: ImageDocument.rawExtensions.contains(URL(fileURLWithPath: path).pathExtension.lowercased()))
+        }
+        let cur = catalog.exif(forPath: path)
+        var focal = cur?.focalLength, iso = cur?.iso, ap = cur?.aperture
+        var lens = cur?.lensModel, film = cur?.filmSimulation, hdr = cur?.hdr ?? false
+        var i = 0
+        while i < opts.count {
+            let key = opts[i]
+            guard i + 1 < opts.count else {
+                fputs("Fehler: Wert fehlt für \(key)\n", stderr); return 1
+            }
+            let val = opts[i + 1]
+            switch key {
+            case "--iso":
+                guard let n = Int(val), n > 0 else { fputs("Fehler: Ungültiger ISO-Wert '\(val)'\n", stderr); return 1 }
+                iso = n
+            case "--focal":
+                guard let v = Double(val), v > 0 else { fputs("Fehler: Ungültige Brennweite '\(val)'\n", stderr); return 1 }
+                focal = v
+            case "--aperture":
+                guard let v = Double(val), v > 0 else { fputs("Fehler: Ungültige Blende '\(val)'\n", stderr); return 1 }
+                ap = v
+            case "--lens": lens = val.isEmpty ? nil : val
+            case "--film": film = val.isEmpty ? nil : val
+            case "--hdr":
+                switch val.lowercased() {
+                case "true", "1", "yes": hdr = true
+                case "false", "0", "no": hdr = false
+                default: fputs("Fehler: --hdr erwartet true|false (angegeben: \(val))\n", stderr); return 1
+                }
+            default:
+                fputs("Fehler: Unbekannte Option '\(key)'\n", stderr); return 1
+            }
+            i += 2
+        }
+        catalog.upsertExif(path: path, focalLength: focal, iso: iso, aperture: ap, lensModel: lens,
+                           hdr: hdr, filmSimulation: film, sequenceNumber: cur?.sequenceNumber,
+                           autoBracketing: cur?.autoBracketing ?? false)
+        guard let e = catalog.exif(forPath: path) else {
+            fputs("Fehler: EXIF konnte nicht gespeichert werden: \(path)\n", stderr); return 1
+        }
+        if jsonMode {
+            var d = exifDict(path: path, e); d["ok"] = true
+            printExifJSON(d)
+        } else {
+            print("EXIF gespeichert: \(path)")
+        }
+        return 0
+
+    case "films":
+        let films = CatalogStore(dbPath: envDBPath()).allFilmSimulations()
+        if jsonMode { printExifJSON(films) }
+        else if films.isEmpty { print("(keine Filmsimulationen im Katalog)") }
+        else { films.forEach { print($0) } }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli exif get|set|films ... [--json]\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -3805,6 +3974,12 @@ if firstArg == "metadata" {
 }
 if firstArg == "local-adjustments" {
     exit(runLocalAdjustments(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "histogram" {
+    exit(runRatingHistogram(Array(rawArgs.dropFirst(3))))
+}
+if firstArg == "exif" {
+    exit(runExif(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }
