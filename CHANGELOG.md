@@ -2,6 +2,14 @@
 
 ---
 
+## 1.95.0
+**CLI: App-Suchsyntax parsen und gegen den Katalog ausführen**
+- Neuer Befehl `iphoto-cli query filters [--json]` listet alle Suchfilter der App (`bewertung:`, `typ:`, `vor:`, `nach:`, `kamera:`, `album:`, `markiert:`, `unscharf:`, `motiv:`, `elo:`, `farbe:`) mit Hinweis und Vorschlagswerten
+- Neuer Befehl `iphoto-cli query parse <suchtext> [--json]` zerlegt eine Suche wie in der Suchleiste in Freitext und Filter und warnt bei ungültigen Werten (z. B. `bewertung:9`, `farbe:lila`)
+- Neuer Befehl `iphoto-cli query run <suchtext> [--blur-threshold N] [--include-trashed] [--json]` führt die Suche gegen den Katalog aus — alle Filter werden UND-verknüpft, Papierkorb-Bilder standardmäßig ausgeblendet; ungültige Filterwerte brechen mit Fehler ab
+- Bewertungen, ELO, Motive und Qualitätswerte werden nur bei Bedarf und je mit einer Sammelabfrage geladen (kein N+1)
+- Tests in `Tests/run_plugins.sh` (Filterliste, Parsen, Warnungen, Treffer pro Filter, Kombination, Fehlerpfade)
+
 ## 1.94.0
 **CLI: Alben umbenennen und als Ordner exportieren**
 - Neuer Befehl `iphoto-cli album rename <album-id|name> <neuer-name> [--json]` benennt ein Album um — per ID oder Namen, Bildzuordnung und Reihenfolge bleiben erhalten

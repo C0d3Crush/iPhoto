@@ -108,6 +108,9 @@ private func printUsage() {
       iphoto-cli catalog get <pfad> [--json]
       iphoto-cli catalog add <pfad> [<pfad> ...] [--json]
       iphoto-cli catalog prune [--dry-run] [--json]
+      iphoto-cli query filters [--json]
+      iphoto-cli query parse <suchtext> [--json]
+      iphoto-cli query run <suchtext> [--blur-threshold 80] [--include-trashed] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -128,6 +131,8 @@ private func printUsage() {
     elo:      ELO-Scores lesen, auflisten (nach Score sortiert) und setzen
     duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
     config:   Einstellungen anzeigen, lesen (get <key>), schreiben (set <key> <wert>), ex-/importieren
+    query:    App-Suchsyntax (bewertung:5 typ:raw vor:2024 nach:2023-06 kamera:x album:x markiert:pick
+              unscharf:ja motiv:x elo:>=1600 farbe:rot + Freitext) parsen oder gegen den Katalog ausführen
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
     """)
 }
@@ -4471,6 +4476,218 @@ private func runExif(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - query (App-Suchsyntax: bewertung:5 typ:raw elo:>=1600 …)
+
+private let queryRawExts: Set<String> = ["cr2","cr3","nef","nrw","arw","srf","sr2","dng","orf","rw2","raf","pef","srw","erf","kdc","dcr","raw","rwl","mrw","3fr","mef","iiq","x3f"]
+
+private func queryDateParse(_ s: String) -> Date? {
+    let fmt = DateFormatter()
+    fmt.locale = Locale(identifier: "en_US_POSIX")
+    fmt.timeZone = TimeZone(identifier: "UTC")
+    if s.count == 4 { fmt.dateFormat = "yyyy";    return fmt.date(from: s) }
+    if s.count == 7 { fmt.dateFormat = "yyyy-MM"; return fmt.date(from: s) }
+    fmt.dateFormat = "yyyy-MM-dd"; return fmt.date(from: s)
+}
+
+/// Parst date_taken aus dem Katalog (EXIF "yyyy:MM:dd HH:mm:ss" oder ISO-ähnlich).
+private func queryDateKey(_ raw: String?) -> Date {
+    guard let raw = raw, !raw.isEmpty else { return Date.distantPast }
+    let fmt = DateFormatter()
+    fmt.locale = Locale(identifier: "en_US_POSIX")
+    fmt.timeZone = TimeZone(identifier: "UTC")
+    for f in ["yyyy:MM:dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"] {
+        fmt.dateFormat = f
+        if let d = fmt.date(from: String(raw.prefix(f.replacingOccurrences(of: "'", with: "").count))) { return d }
+    }
+    return Date.distantPast
+}
+
+private let queryColorMap: [String: String] = ["rot": "red", "gelb": "yellow", "grün": "green", "gruen": "green", "blau": "blue"]
+
+private func queryEloPredicate(_ val: String) -> ((Double) -> Bool)? {
+    if val.hasPrefix(">="), let t = Double(val.dropFirst(2)) { return { $0 >= t } }
+    if val.hasPrefix("<="), let t = Double(val.dropFirst(2)) { return { $0 <= t } }
+    if val.hasPrefix(">"),  let t = Double(val.dropFirst(1)) { return { $0 >  t } }
+    if val.hasPrefix("<"),  let t = Double(val.dropFirst(1)) { return { $0 <  t } }
+    if let t = Double(val) { return { $0 >= t } }
+    return nil
+}
+
+/// Validiert einen Filter-Wert; nil = gültig, sonst Fehlermeldung.
+private func queryValidate(_ tok: SearchToken) -> String? {
+    let val = tok.value.lowercased()
+    switch tok.key {
+    case "bewertung":
+        guard let r = Int(val), (0...5).contains(r) else { return "bewertung:\(tok.value) — erwartet 0–5" }
+    case "vor", "nach":
+        guard queryDateParse(val) != nil else { return "\(tok.key):\(tok.value) — erwartet JJJJ, JJJJ-MM oder JJJJ-MM-TT" }
+    case "markiert":
+        guard ["pick", "reject", "ja", "nein"].contains(val) else { return "markiert:\(tok.value) — erwartet pick, reject, ja, nein" }
+    case "unscharf":
+        guard ["ja", "nein"].contains(val) else { return "unscharf:\(tok.value) — erwartet ja, nein" }
+    case "elo":
+        guard queryEloPredicate(val) != nil else { return "elo:\(tok.value) — erwartet z.B. >=1600, <1500, 1700" }
+    case "farbe":
+        guard queryColorMap[val] != nil else { return "farbe:\(tok.value) — erwartet rot, gelb, grün, blau" }
+    default: break
+    }
+    return nil
+}
+
+private func printQueryJSON(_ obj: Any) {
+    if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+       let s = String(data: d, encoding: .utf8) { print(s) }
+}
+
+private func runQuery(_ args: [String]) -> Int32 {
+    let jsonMode = args.contains("--json")
+    let sub = args.first ?? ""
+    var rest = Array(args.dropFirst()).filter { $0 != "--json" }
+
+    switch sub {
+    case "filters":
+        if jsonMode {
+            printQueryJSON(FilterDefinition.all.map {
+                ["key": $0.key, "label": $0.label, "hint": $0.hint, "suggestions": $0.valueSuggestions] as [String: Any]
+            })
+        } else {
+            for f in FilterDefinition.all {
+                print("\(f.key.padding(toLength: 10, withPad: " ", startingAt: 0)) \(f.label.padding(toLength: 16, withPad: " ", startingAt: 0)) \(f.hint)")
+            }
+        }
+        return 0
+
+    case "parse":
+        let raw = rest.joined(separator: " ")
+        guard !raw.trimmingCharacters(in: .whitespaces).isEmpty else {
+            fputs("Verwendung: iphoto-cli query parse <suchtext> [--json]\n", stderr); return 1
+        }
+        let q = SearchQuery.parse(raw)
+        let warnings = q.filters.compactMap { queryValidate($0) }
+        if jsonMode {
+            printQueryJSON([
+                "raw": q.raw,
+                "free_text": q.freeText,
+                "filters": q.filters.map { ["key": $0.key, "value": $0.value] },
+                "warnings": warnings,
+            ] as [String: Any])
+        } else {
+            print("Freitext: \(q.freeText.isEmpty ? "—" : q.freeText)")
+            if q.filters.isEmpty { print("Filter:   —") }
+            for f in q.filters { print("Filter:   \(f.key) = \(f.value)") }
+            for w in warnings { print("Warnung:  \(w)") }
+        }
+        return 0
+
+    case "run":
+        var blurT = 80.0
+        if let bi = rest.firstIndex(of: "--blur-threshold") {
+            guard bi + 1 < rest.count, let v = Double(rest[bi + 1]), v > 0 else {
+                fputs("Fehler: --blur-threshold braucht eine positive Zahl\n", stderr); return 1
+            }
+            blurT = v
+            rest.removeSubrange(bi...(bi + 1))
+        }
+        let includeTrashed = rest.contains("--include-trashed")
+        rest.removeAll { $0 == "--include-trashed" }
+        let raw = rest.joined(separator: " ")
+        guard !raw.trimmingCharacters(in: .whitespaces).isEmpty else {
+            fputs("Verwendung: iphoto-cli query run <suchtext> [--blur-threshold N] [--include-trashed] [--json]\n", stderr); return 1
+        }
+        let q = SearchQuery.parse(raw)
+        let errors = q.filters.compactMap { queryValidate($0) }
+        guard errors.isEmpty else {
+            errors.forEach { fputs("Fehler: Ungültiger Filter \($0)\n", stderr) }
+            return 1
+        }
+
+        let catalog = CatalogStore(dbPath: envDBPath())
+        var result = catalog.allImages()
+        if !includeTrashed {
+            let trashed = catalog.trashedPaths()
+            if !trashed.isEmpty { result = result.filter { !trashed.contains($0.path) } }
+        }
+        // Lookup-Tabellen nur laden, wenn ein Filter sie braucht (je ein Bulk-SELECT, kein N+1).
+        let keys = Set(q.filters.map { $0.key })
+        let needRatings = keys.contains("bewertung") || keys.contains("markiert") || keys.contains("farbe")
+        let ratings: [String: (rating: Int, flag: String, colorLabel: String)] = needRatings ? catalog.allRatings() : [:]
+        let elos: [String: (elo: Double, matches: Int)] = keys.contains("elo") ? catalog.allElos() : [:]
+        let motifs: [String: [String]] = keys.contains("motiv")
+            ? Dictionary(catalog.allMotifs().map { ($0.path, $0.tags) }, uniquingKeysWith: { a, _ in a }) : [:]
+        let quality: [String: QualityRecord] = keys.contains("unscharf") ? catalog.allQualityRecords() : [:]
+
+        if !q.freeText.isEmpty {
+            let t = q.freeText.lowercased()
+            result = result.filter { img in
+                img.filename.lowercased().contains(t)
+                || (img.cameraModel?.lowercased().contains(t) ?? false)
+                || (img.cameraMake?.lowercased().contains(t) ?? false)
+            }
+        }
+
+        for f in q.filters {
+            let val = f.value.lowercased()
+            switch f.key {
+            case "bewertung":
+                let r = Int(val)!
+                result = result.filter { (ratings[$0.path]?.rating ?? 0) == r }
+            case "typ":
+                if val == "raw" {
+                    result = result.filter { $0.isRAW || queryRawExts.contains(($0.path as NSString).pathExtension.lowercased()) }
+                } else {
+                    let alt: Set<String> = val == "jpg" ? ["jpg", "jpeg"] : (val == "tiff" ? ["tif", "tiff"] : [val])
+                    result = result.filter { alt.contains(($0.path as NSString).pathExtension.lowercased()) }
+                }
+            case "vor":
+                let d = queryDateParse(val)!
+                result = result.filter { queryDateKey($0.dateTaken) < d }
+            case "nach":
+                let d = queryDateParse(val)!
+                result = result.filter { queryDateKey($0.dateTaken) > d }
+            case "kamera":
+                result = result.filter {
+                    ($0.cameraModel?.lowercased().contains(val) ?? false) || ($0.cameraMake?.lowercased().contains(val) ?? false)
+                }
+            case "album":
+                let ids = catalog.allAlbums().filter { $0.name.lowercased().contains(val) }.map { $0.id }
+                var paths = Set<String>()
+                for id in ids { paths.formUnion(catalog.images(inAlbum: id)) }
+                result = result.filter { paths.contains($0.path) }
+            case "markiert":
+                result = result.filter {
+                    let flag = ratings[$0.path]?.flag ?? "none"
+                    switch val {
+                    case "pick":   return flag == "pick"
+                    case "reject": return flag == "reject"
+                    case "ja":     return flag != "none"
+                    default:       return flag == "none"
+                    }
+                }
+            case "unscharf":
+                let blurry: (String) -> Bool = { p in
+                    guard let r = quality[p], !r.blurOverride, let s = r.blurScore else { return false }
+                    return s < blurT
+                }
+                result = result.filter { val == "ja" ? blurry($0.path) : !blurry($0.path) }
+            case "motiv":
+                result = result.filter { img in motifs[img.path]?.contains { $0.lowercased().contains(val) } ?? false }
+            case "elo":
+                let pred = queryEloPredicate(val)!
+                result = result.filter { pred(elos[$0.path]?.elo ?? EloRating.initial) }
+            case "farbe":
+                let c = queryColorMap[val]!
+                result = result.filter { ratings[$0.path]?.colorLabel == c }
+            default: break
+            }
+        }
+        return printCatalogImages(result, jsonMode: jsonMode)
+
+    default:
+        fputs("Verwendung: iphoto-cli query filters|parse|run [--json]\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -4568,6 +4785,9 @@ if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "histogram" {
 }
 if firstArg == "exif" {
     exit(runExif(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "query" {
+    exit(runQuery(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

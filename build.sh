@@ -178,6 +178,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Models/RatingStore.swift \
     $ROOT/Sources/Models/StackDetector.swift \
     $ROOT/Sources/Models/SmartFolder.swift \
+    $ROOT/Sources/Models/SearchParser.swift \
     $ROOT/Sources/Utilities/Data+Extensions.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \
     $ROOT/Sources/Utilities/Log.swift \

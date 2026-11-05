@@ -1563,6 +1563,85 @@ if [ $AL_ERR -ne 0 ]; then pass "album export unbekannt (→ Fehler)"; else fail
 echo ""
 
 # ---------------------------------------------------------------------------
+echo "--- QUERY (App-Suchsyntax) ---"
+
+QY_DB="$TMPDIR/qy_catalog.db"
+QY_A="$TMPDIR/qy_a.png"
+QY_B="$TMPDIR/qy_b.png"
+cp "$INPUT_PNG" "$QY_A"
+cp "$INPUT_PNG" "$QY_B"
+IPHOTO_CATALOG_DB="$QY_DB" "$BIN" exif set "$QY_A" --iso 100 > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$QY_DB" "$BIN" exif set "$QY_B" --iso 200 > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$QY_DB" "$BIN" rating "$QY_A" --set 5 --flag pick --color red > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$QY_DB" "$BIN" elo set "$QY_B" 1800 > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$QY_DB" "$BIN" motif set "$QY_A" "strand,sonne" > /dev/null 2>&1 || true
+
+# Hilfsfunktion: sortierte Basenames aus JSON-Ergebnis
+qy_names() { python3 -c "import sys,json,os; print(','.join(sorted(os.path.basename(x['path']) for x in json.load(sys.stdin))))"; }
+
+QY_EXIT=0
+QY_OUT=$(IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query filters --json 2>&1) || QY_EXIT=$?
+if [ $QY_EXIT -eq 0 ] && echo "$QY_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+keys=[x['key'] for x in d]
+assert 'bewertung' in keys and 'elo' in keys and 'farbe' in keys and len(keys)>=10
+" 2>/dev/null; then pass "query filters --json"; else fail "query filters --json" "Exit $QY_EXIT: $QY_OUT"; fi
+
+QY_EXIT=0
+QY_OUT=$(IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query parse "urlaub bewertung:5 elo:>=1600 foo:bar" --json 2>&1) || QY_EXIT=$?
+if [ $QY_EXIT -eq 0 ] && echo "$QY_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['free_text']=='urlaub foo:bar', d
+assert [(f['key'],f['value']) for f in d['filters']]==[('bewertung','5'),('elo','>=1600')], d
+assert d['warnings']==[]
+" 2>/dev/null; then pass "query parse --json (Freitext + Filter)"; else fail "query parse --json" "Exit $QY_EXIT: $QY_OUT"; fi
+
+QY_OUT=$(IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query parse "bewertung:9 farbe:lila" --json 2>&1) || true
+if echo "$QY_OUT" | python3 -c "import sys,json; assert len(json.load(sys.stdin)['warnings'])==2" 2>/dev/null; then
+    pass "query parse meldet ungültige Werte als Warnung"
+else
+    fail "query parse Warnungen" "$QY_OUT"
+fi
+
+QY_ERR=0
+IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query parse > /dev/null 2>&1 || QY_ERR=$?
+if [ $QY_ERR -ne 0 ]; then pass "query parse ohne Text (→ Fehler)"; else fail "query parse ohne Text" "Hätte fehlschlagen sollen"; fi
+
+QY_OUT=$(IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query run "bewertung:5" --json 2>&1 | qy_names) || true
+if [ "$QY_OUT" = "qy_a.png" ]; then pass "query run bewertung:5"; else fail "query run bewertung:5" "$QY_OUT"; fi
+
+QY_OUT=$(IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query run "elo:>=1700" --json 2>&1 | qy_names) || true
+if [ "$QY_OUT" = "qy_b.png" ]; then pass "query run elo:>=1700"; else fail "query run elo:>=1700" "$QY_OUT"; fi
+
+QY_OUT=$(IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query run "markiert:pick farbe:rot motiv:strand" --json 2>&1 | qy_names) || true
+if [ "$QY_OUT" = "qy_a.png" ]; then pass "query run markiert+farbe+motiv (AND)"; else fail "query run markiert+farbe+motiv" "$QY_OUT"; fi
+
+QY_OUT=$(IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query run "qy_b" --json 2>&1 | qy_names) || true
+if [ "$QY_OUT" = "qy_b.png" ]; then pass "query run Freitext"; else fail "query run Freitext" "$QY_OUT"; fi
+
+QY_OUT=$(IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query run "typ:png" --json 2>&1 | qy_names) || true
+if [ "$QY_OUT" = "qy_a.png,qy_b.png" ]; then pass "query run typ:png"; else fail "query run typ:png" "$QY_OUT"; fi
+
+QY_OUT=$(IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query run "nach:2000" --json 2>&1 | qy_names) || true
+if [ "$QY_OUT" = "" ]; then pass "query run nach:2000 (undatiert → leer)"; else fail "query run nach:2000" "$QY_OUT"; fi
+
+QY_ERR=0
+IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query run "bewertung:abc" > /dev/null 2>&1 || QY_ERR=$?
+if [ $QY_ERR -ne 0 ]; then pass "query run bewertung:abc (→ Fehler)"; else fail "query run bewertung:abc" "Hätte fehlschlagen sollen"; fi
+
+QY_ERR=0
+IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query run "farbe:lila" > /dev/null 2>&1 || QY_ERR=$?
+if [ $QY_ERR -ne 0 ]; then pass "query run farbe:lila (→ Fehler)"; else fail "query run farbe:lila" "Hätte fehlschlagen sollen"; fi
+
+QY_ERR=0
+IPHOTO_CATALOG_DB="$QY_DB" "$BIN" query bogus > /dev/null 2>&1 || QY_ERR=$?
+if [ $QY_ERR -ne 0 ]; then pass "query unbekannter Subcommand (→ Fehler)"; else fail "query bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
