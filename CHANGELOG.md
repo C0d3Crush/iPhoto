@@ -3,6 +3,7 @@
 ---
 
 ## 1.100.0
+<<<<<<< HEAD
 **PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
 - Neuer GitHub-Actions-Workflow `project-manager.yml` läuft alle 2 Stunden und analysiert offene, noch nicht zugewiesene Issues
 - Claude (`claude-opus-4-7`) erfindet bei Bedarf neue Akteure (Rollen) und wählt den passenden für jeden Issue aus
@@ -21,6 +22,12 @@
 - `iphoto-cli gear focal|iso|aperture [--limit N] [--json]` liefert Histogramme (Textausgabe mit Balken)
 - Liest Bilder mit einer einzigen Katalog-Abfrage, EXIF-Werte aus dem In-Memory-Cache — kein SQLite-Query pro Bild
 - Tests in `Tests/run_plugins.sh` (leerer Katalog, Ranglisten, Histogramme, Median, Fehlerpfade)
+
+**CLI: Katalog-Statistik nach Kamera und Aufnahmezeitraum**
+- Neuer Befehl `iphoto-cli catalog cameras [--json]` zählt die Bilder pro Kamera (Hersteller + Modell) inkl. RAW-Anteil und Speicherbedarf; Bilder ohne Kamera-Angabe werden separat ausgewiesen
+- Neuer Befehl `iphoto-cli catalog timeline [--by year|month|day] [--json]` zeigt die Bilder pro Jahr, Monat oder Tag, als Balkendiagramm oder JSON; Bilder ohne Datum werden separat gezählt
+- Beide Befehle werten den Katalog in einem einzigen Durchlauf aus (O(N))
+- Tests in `Tests/run_plugins.sh` (leerer Katalog, Kamera-Gruppierung, Monats-/Jahres-/Tagesgruppierung, Fehlerpfade)
 
 ## 1.99.0
 **CLI: Smart-Ordner-SQL anzeigen und Treffer zählen**

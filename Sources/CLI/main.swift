@@ -47,7 +47,7 @@ private func printUsage() {
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
-      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune [--json]
+      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline [--json]
       iphoto-cli albumfolder list|create|rename|delete [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
@@ -113,6 +113,8 @@ private func printUsage() {
       iphoto-cli catalog get <pfad> [--json]
       iphoto-cli catalog add <pfad> [<pfad> ...] [--json]
       iphoto-cli catalog prune [--dry-run] [--json]
+      iphoto-cli catalog cameras [--json]
+      iphoto-cli catalog timeline [--by year|month|day] [--json]
       iphoto-cli query filters [--json]
       iphoto-cli query parse <suchtext> [--json]
       iphoto-cli query run <suchtext> [--blur-threshold 80] [--include-trashed] [--json]
@@ -146,6 +148,7 @@ private func printUsage() {
     version:  Versionshistorie eines Bildes sichern, anzeigen oder wiederherstellen
     search:   Bilder im Katalog nach Text, Flag (none/pick/reject), Rating (0-5), Farbe, Kamera, Datum
     catalog:  Statistiken (inkl. ELO-Anzahl), Pfad, vacuum --json, export
+              cameras: Bilder pro Kamera; timeline: Bilder pro Jahr/Monat/Tag (--by)
     motif:    Motiv-Tags eines Bildes anzeigen
     elo:      ELO-Scores lesen, auflisten (nach Score sortiert) und setzen
     duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
@@ -3679,8 +3682,93 @@ private func runCatalog(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "cameras":
+        // catalog cameras [--json] — Bilder pro Kamera (Make + Model), ein Durchlauf O(N)
+        let unknownFlags = args.dropFirst().filter { $0 != "--json" }
+        guard unknownFlags.isEmpty else {
+            fputs("Verwendung: iphoto-cli catalog cameras [--json]\n", stderr); return 1
+        }
+        var buckets: [String: (count: Int, raw: Int, bytes: Int64)] = [:]
+        var unknown = 0
+        let images = catalog.allImages()
+        for img in images {
+            let cam = [img.cameraMake, img.cameraModel]
+                .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            if cam.isEmpty { unknown += 1; continue }
+            var b = buckets[cam] ?? (count: 0, raw: 0, bytes: 0)
+            b.count += 1
+            if img.isRAW { b.raw += 1 }
+            b.bytes += img.sizeBytes
+            buckets[cam] = b
+        }
+        let sorted = buckets.sorted { $0.value.count != $1.value.count ? $0.value.count > $1.value.count : $0.key < $1.key }
+        if jsonMode {
+            let arr: [[String: Any]] = sorted.map {
+                ["camera": $0.key, "count": $0.value.count, "raw": $0.value.raw, "size_bytes": $0.value.bytes] as [String: Any]
+            }
+            let obj: [String: Any] = ["cameras": arr, "unknown": unknown, "total": images.count]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else if images.isEmpty {
+            print("(keine Bilder im Katalog)")
+        } else {
+            for (cam, b) in sorted { print(String(format: "%6ld  (%ld RAW)  ", b.count, b.raw) + cam) }
+            if unknown > 0 { print(String(format: "%6ld  ", unknown) + "(ohne Kamera-Angabe)") }
+            print("Kameras: \(sorted.count)  Bilder: \(images.count)")
+        }
+        return 0
+
+    case "timeline":
+        // catalog timeline [--by year|month|day] [--json] — Bilder pro Aufnahmezeitraum
+        var granularity = "month"
+        var rest = Array(args.dropFirst())
+        if let bi = rest.firstIndex(of: "--by") {
+            guard bi + 1 < rest.count, ["year", "month", "day"].contains(rest[bi + 1]) else {
+                fputs("Fehler: --by erwartet year, month oder day\n", stderr); return 1
+            }
+            granularity = rest[bi + 1]
+            rest.removeSubrange(bi...(bi + 1))
+        }
+        guard rest.allSatisfy({ $0 == "--json" }) else {
+            fputs("Verwendung: iphoto-cli catalog timeline [--by year|month|day] [--json]\n", stderr); return 1
+        }
+        let prefixLen = granularity == "year" ? 4 : (granularity == "month" ? 7 : 10)
+        var buckets: [String: Int] = [:]
+        var undated = 0
+        let images = catalog.allImages()
+        for img in images {
+            // EXIF "YYYY:MM:DD HH:MM:SS" oder ISO "YYYY-MM-DDTHH:MM:SS" → "YYYY-MM-DD"
+            guard let raw = img.dateTaken, raw.count >= 10 else { undated += 1; continue }
+            let datePart = String(raw.prefix(10)).replacingOccurrences(of: ":", with: "-")
+            let comps = datePart.split(separator: "-")
+            guard comps.count == 3, comps[0].count == 4, comps[1].count == 2, comps[2].count == 2,
+                  comps.allSatisfy({ part in part.allSatisfy { ch in ch.isNumber } }),
+                  !datePart.hasPrefix("0000") else { undated += 1; continue }
+            buckets[String(datePart.prefix(prefixLen)), default: 0] += 1
+        }
+        let sorted = buckets.sorted { $0.key < $1.key }
+        if jsonMode {
+            let arr: [[String: Any]] = sorted.map { ["period": $0.key, "count": $0.value] as [String: Any] }
+            let obj: [String: Any] = ["by": granularity, "periods": arr,
+                                      "undated": undated, "total": images.count]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else if images.isEmpty {
+            print("(keine Bilder im Katalog)")
+        } else {
+            let maxCount = max(sorted.map { $0.value }.max() ?? 1, 1)
+            for (period, n) in sorted {
+                let bar = String(repeating: "█", count: max(1, n * 40 / maxCount))
+                print("\(period.padding(toLength: 10, withPad: " ", startingAt: 0)) \(String(format: "%6ld", n))  \(bar)")
+            }
+            if undated > 0 { print("ohne Datum \(String(format: "%6ld", undated))") }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline [--json]\n", stderr)
         return 1
     }
 }
