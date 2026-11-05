@@ -101,6 +101,22 @@ struct SettingsView: View {
                 .pickerStyle(RadioGroupPickerStyle())
                 .labelsHidden()
             }
+
+            Divider().padding(.vertical, 4)
+
+            Section(header: Text("Beim Löschen").font(.headline)) {
+                Toggle(isOn: Binding(
+                    get: { s.backupBeforeDelete },
+                    set: { s.backupBeforeDelete = $0 }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Vor dem Löschen sichern")
+                        Text("Erstellt eine Sicherungskopie im Backup-Zielordner bevor die Datei endgültig gelöscht wird.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
         }
         .padding(20)
     }

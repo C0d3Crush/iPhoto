@@ -133,23 +133,38 @@ extension ImageViewModel {
         // Pick-Schutz gilt auch für endgültiges Löschen (aus dem Papierkorb).
         if showPickBlockedAlertIfNeeded(docs) { return }
         let count = docs.count
+        let willBackup = backupSettings.backupBeforeDelete
         let alert = NSAlert()
         alert.messageText = count == 1 ? "Datei endgültig löschen?" : "\(count) Dateien endgültig löschen?"
-        alert.informativeText = count == 1
-            ? "Die Originaldatei wird aus iPhoto entfernt und in den macOS-Papierkorb verschoben."
-            : "Die \(count) Originaldateien werden aus iPhoto entfernt und in den macOS-Papierkorb verschoben."
+        if willBackup {
+            alert.informativeText = count == 1
+                ? "Die Originaldatei wird zuerst gesichert, dann aus iPhoto entfernt und in den macOS-Papierkorb verschoben."
+                : "Die \(count) Originaldateien werden zuerst gesichert, dann aus iPhoto entfernt und in den macOS-Papierkorb verschoben."
+        } else {
+            alert.informativeText = count == 1
+                ? "Die Originaldatei wird aus iPhoto entfernt und in den macOS-Papierkorb verschoben."
+                : "Die \(count) Originaldateien werden aus iPhoto entfernt und in den macOS-Papierkorb verschoben."
+        }
         alert.addButton(withTitle: "Endgültig löschen")
         alert.addButton(withTitle: "Abbrechen")
         alert.alertStyle = .critical
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
         let taskID = UUID()
-        activity.enqueue(id: taskID, label: "Endgültig löschen…", icon: "trash",
+        let label = willBackup ? "Sichern & löschen…" : "Endgültig löschen…"
+        activity.enqueue(id: taskID, label: label, icon: "trash",
                        done: 0, total: docs.count, summaryVerb: "gelöscht")
+
+        let settings = backupSettings
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             var trashedIDs: Set<UUID> = []
+            let (backupRoot, stopBackup) = willBackup ? settings.resolveDestination() : (URL(fileURLWithPath: "/"), {})
+            defer { if willBackup { stopBackup() } }
             for (i, doc) in docs.enumerated() {
                 let (accessURL, stop) = BookmarkStore.shared.access(url: doc.url)
+                if willBackup {
+                    _ = BackupService.backup(source: accessURL, root: backupRoot, settings: settings)
+                }
                 try? FileManager.default.trashItem(at: accessURL, resultingItemURL: nil)
                 stop()
                 trashedIDs.insert(doc.id)

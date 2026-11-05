@@ -2,6 +2,15 @@
 
 ---
 
+## 1.84.0
+**Feature — Sicherungskopie vor dem Löschen**
+
+- Neue Einstellung im Backup-Tab: „Vor dem Löschen sichern" — wenn aktiviert, wird jede Datei vor dem endgültigen Löschen automatisch im konfigurierten Backup-Zielordner gesichert (inkl. Jahr/Monat-Sortierung, JPEG-Qualität und Metadaten-Optionen aus den Backup-Einstellungen)
+- Bestätigungs-Dialog zeigt an wenn Sicherung aktiviert ist
+- `BackupSettings.backupBeforeDelete` (UserDefaults `backup.backupBeforeDelete`)
+
+---
+
 ## 1.83.0
 **Feature — CLI: catalog backup-now + albumfolder-Verwaltung**
 

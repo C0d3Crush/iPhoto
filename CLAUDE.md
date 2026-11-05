@@ -84,6 +84,17 @@ SwiftUI MVVM app targeting macOS 11.7+. Frameworks: SwiftUI, AppKit, CoreImage, 
 - Formats: JPEG, PNG, TIFF, HEIF; converts to sRGB for cross-version Preview compatibility
 - Batch export runs in parallel; progress tracked via `ExportState` observable
 
+## Multi-Akteur-Workflow
+
+Dieses Repo wird von mehreren Akteuren gleichzeitig bearbeitet (Nutzer lokal + Cloud-Agents alle 2h). **Vor jeder Arbeitssitzung zuerst pullen:**
+
+```bash
+git pull origin main
+git pull origin feature/rust-core   # falls auf diesem Branch
+```
+
+Konflikte sofort auflösen, nie einfach force-pushen. Beim Starten einer neuen Sitzung immer prüfen ob Remote-Commits vorliegen.
+
 ## Commit & Push Convention
 
 Prefix all commit messages with a type label: `bugfix:`, `feature:`, `refactor:`, `chore:`, etc.
