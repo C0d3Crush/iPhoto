@@ -168,6 +168,26 @@ extension CatalogStore {
         }
     }
 
+    // Alle Bilder mit mindestens einem gesetzten Nutzer-Override — ein einzelner SELECT
+    // statt N quality(forPath:)-Roundtrips (CLI `quality override list`).
+    func allQualityOverrides() -> [String: (blur: Bool, under: Bool, over: Bool, eyesClosed: Bool)] {
+        queue.sync {
+            let stmt = prepare("""
+                SELECT path, blur_override, under_override, over_override, eyes_closed_override FROM images
+                WHERE blur_override=1 OR under_override=1 OR over_override=1 OR eyes_closed_override=1
+            """)
+            var out: [String: (blur: Bool, under: Bool, over: Bool, eyesClosed: Bool)] = [:]
+            while step(stmt) == SQLITE_ROW {
+                let path = String(cString: sqlite3_column_text(stmt, 0))
+                out[path] = (blur: sqlite3_column_int(stmt, 1) != 0,
+                             under: sqlite3_column_int(stmt, 2) != 0,
+                             over: sqlite3_column_int(stmt, 3) != 0,
+                             eyesClosed: sqlite3_column_int(stmt, 4) != 0)
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
     func pathsNeedingQualityScan() -> [String] {
         queue.sync {
             let stmt = prepare("SELECT path FROM images WHERE quality_scanned=0 ORDER BY filename")

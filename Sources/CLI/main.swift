@@ -40,6 +40,7 @@ private func printUsage() {
       iphoto-cli people import-names <datei.csv> [--json]
       iphoto-cli album list|create|delete|add|remove|images|reorder [--json]
       iphoto-cli quality scan|list|get [--json]
+      iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
       iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now [--json]
@@ -2799,10 +2800,102 @@ private func runQuality(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "override":
+        return runQualityOverride(Array(args.dropFirst()), catalog: catalog, jsonMode: jsonMode)
+
     default:
-        fputs("Verwendung: iphoto-cli quality scan|list|get\n", stderr)
+        fputs("Verwendung: iphoto-cli quality scan|list|get|override\n", stderr)
         return 1
     }
+}
+
+// Nutzer-Korrekturen der Quality-Flags ("Bild ist doch nicht unscharf") — gleiche Spalten,
+// die BlurryView/ExposureView in der App respektieren.
+private func runQualityOverride(_ args: [String], catalog: CatalogStore, jsonMode: Bool) -> Int32 {
+    let usage = "Verwendung: iphoto-cli quality override list [--json]\n" +
+                "       iphoto-cli quality override <bildpfad> [--blur on|off] [--under on|off] [--over on|off] [--eyes-closed on|off] [--clear] [--json]\n"
+    let rest = args.filter { $0 != "--json" }
+    func emit(_ obj: Any) {
+        if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: d, encoding: .utf8) { print(s) }
+    }
+    guard let first = rest.first, !first.hasPrefix("--") else {
+        fputs(usage, stderr); return 1
+    }
+
+    if first == "list" {
+        let all = catalog.allQualityOverrides().sorted { $0.key < $1.key }
+        if jsonMode {
+            emit(all.map { ["path": $0.key, "blur": $0.value.blur, "under": $0.value.under,
+                            "over": $0.value.over, "eyes_closed": $0.value.eyesClosed] as [String: Any] })
+        } else {
+            if all.isEmpty { print("(keine Overrides)") }
+            for (path, o) in all {
+                var flags: [String] = []
+                if o.blur { flags.append("blur") }
+                if o.under { flags.append("under") }
+                if o.over { flags.append("over") }
+                if o.eyesClosed { flags.append("eyes-closed") }
+                print("\(flags.joined(separator: ","))  \(path)")
+            }
+        }
+        return 0
+    }
+
+    let path = first
+    guard catalog.image(forPath: path) != nil else {
+        fputs("Fehler: Bild nicht im Katalog: \(path)\n", stderr); return 1
+    }
+    var blur: Bool? = nil, under: Bool? = nil, over: Bool? = nil, eyes: Bool? = nil
+    let opts = Array(rest.dropFirst())
+    var i = 0
+    while i < opts.count {
+        let key = opts[i]
+        if key == "--clear" {
+            blur = false; under = false; over = false; eyes = false
+            i += 1; continue
+        }
+        guard ["--blur", "--under", "--over", "--eyes-closed"].contains(key) else {
+            fputs("Fehler: Unbekannte Option \(key)\n", stderr); fputs(usage, stderr); return 1
+        }
+        guard i + 1 < opts.count else {
+            fputs("Fehler: Wert fehlt für \(key)\n", stderr); return 1
+        }
+        let val: Bool
+        switch opts[i + 1].lowercased() {
+        case "on", "true", "1", "yes":  val = true
+        case "off", "false", "0", "no": val = false
+        default:
+            fputs("Fehler: Ungültiger Wert '\(opts[i + 1])' für \(key) (on|off)\n", stderr); return 1
+        }
+        switch key {
+        case "--blur":  blur = val
+        case "--under": under = val
+        case "--over":  over = val
+        default:        eyes = val
+        }
+        i += 2
+    }
+    let changed = blur != nil || under != nil || over != nil || eyes != nil
+    if changed {
+        catalog.setQualityOverride(path: path, blur: blur, under: under, over: over, eyesClosed: eyes)
+    }
+    let q = catalog.quality(forPath: path)
+    let state: [String: Any] = ["path": path,
+                                "blur": q?.blurOverride ?? false,
+                                "under": q?.underOverride ?? false,
+                                "over": q?.overOverride ?? false,
+                                "eyes_closed": q?.eyesClosedOverride ?? false,
+                                "changed": changed]
+    if jsonMode { emit(state) }
+    else {
+        print("Pfad:         \(path)")
+        print("Blur:         \(q?.blurOverride ?? false)")
+        print("Unterbel.:    \(q?.underOverride ?? false)")
+        print("Überbel.:     \(q?.overOverride ?? false)")
+        print("Augen zu:     \(q?.eyesClosedOverride ?? false)")
+    }
+    return 0
 }
 
 // MARK: - Version

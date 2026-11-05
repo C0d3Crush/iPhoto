@@ -904,6 +904,97 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# quality override list / set / clear
+# ---------------------------------------------------------------------------
+echo "--- QUALITY OVERRIDE ---"
+
+QO_DB="$TMPDIR/qo_catalog.db"
+QO_IMG="$TMPDIR/qo_test.png"
+cp "$INPUT_PNG" "$QO_IMG"
+
+# leere Liste auf frischem Katalog
+QO_LIST_EXIT=0
+QO_LIST=$(IPHOTO_CATALOG_DB="$QO_DB" "$BIN" quality override list --json 2>&1) || QO_LIST_EXIT=$?
+if [ $QO_LIST_EXIT -eq 0 ] && echo "$QO_LIST" | python3 -c "import sys,json; assert json.load(sys.stdin)==[]" 2>/dev/null; then
+    pass "quality override list --json (leer)"
+else
+    fail "quality override list --json (leer)" "Exit $QO_LIST_EXIT: $QO_LIST"
+fi
+
+# Bild nicht im Katalog → Fehler
+QO_MISS_EXIT=0
+IPHOTO_CATALOG_DB="$QO_DB" "$BIN" quality override "/nonexistent/none.jpg" --blur on > /dev/null 2>&1 || QO_MISS_EXIT=$?
+if [ $QO_MISS_EXIT -ne 0 ]; then
+    pass "quality override (nicht im Katalog → Fehler)"
+else
+    fail "quality override (nicht im Katalog)" "Hätte fehlschlagen sollen"
+fi
+
+# Bild registrieren (exif set legt Katalog-Eintrag an), dann Overrides setzen
+IPHOTO_CATALOG_DB="$QO_DB" "$BIN" exif set "$QO_IMG" --iso 100 > /dev/null 2>&1 || true
+QO_SET_EXIT=0
+QO_SET=$(IPHOTO_CATALOG_DB="$QO_DB" "$BIN" quality override "$QO_IMG" --blur on --eyes-closed on --json 2>&1) || QO_SET_EXIT=$?
+if [ $QO_SET_EXIT -eq 0 ] && echo "$QO_SET" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['blur'] and d['eyes_closed'] and not d['under'] and not d['over'] and d['changed']
+" 2>/dev/null; then
+    pass "quality override --blur on --eyes-closed on --json"
+else
+    fail "quality override set" "Exit $QO_SET_EXIT: $QO_SET"
+fi
+
+# Persistenz: list im neuen Prozess
+QO_LIST2=$(IPHOTO_CATALOG_DB="$QO_DB" "$BIN" quality override list --json 2>&1) || true
+if echo "$QO_LIST2" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert len(d)==1 and d[0]['blur'] and d[0]['eyes_closed'] and not d[0]['over']
+" 2>/dev/null; then
+    pass "quality override list nach set (1 Eintrag persistiert)"
+else
+    fail "quality override list nach set" "$QO_LIST2"
+fi
+
+# ungültiger Wert → Fehler
+QO_BAD_EXIT=0
+IPHOTO_CATALOG_DB="$QO_DB" "$BIN" quality override "$QO_IMG" --blur maybe > /dev/null 2>&1 || QO_BAD_EXIT=$?
+if [ $QO_BAD_EXIT -ne 0 ]; then
+    pass "quality override --blur maybe (Fehler)"
+else
+    fail "quality override --blur maybe" "Hätte fehlschlagen sollen"
+fi
+
+# unbekannte Option → Fehler
+QO_OPT_EXIT=0
+IPHOTO_CATALOG_DB="$QO_DB" "$BIN" quality override "$QO_IMG" --bogus on > /dev/null 2>&1 || QO_OPT_EXIT=$?
+if [ $QO_OPT_EXIT -ne 0 ]; then
+    pass "quality override --bogus (Fehler)"
+else
+    fail "quality override --bogus" "Hätte fehlschlagen sollen"
+fi
+
+# --clear setzt alles zurück, Liste wieder leer
+IPHOTO_CATALOG_DB="$QO_DB" "$BIN" quality override "$QO_IMG" --clear > /dev/null 2>&1 || true
+QO_LIST3=$(IPHOTO_CATALOG_DB="$QO_DB" "$BIN" quality override list --json 2>&1) || true
+if echo "$QO_LIST3" | python3 -c "import sys,json; assert json.load(sys.stdin)==[]" 2>/dev/null; then
+    pass "quality override --clear (Liste leer)"
+else
+    fail "quality override --clear" "$QO_LIST3"
+fi
+
+# fehlendes Argument → Fehler
+QO_NOARG_EXIT=0
+IPHOTO_CATALOG_DB="$QO_DB" "$BIN" quality override > /dev/null 2>&1 || QO_NOARG_EXIT=$?
+if [ $QO_NOARG_EXIT -ne 0 ]; then
+    pass "quality override (ohne Argument → Fehler)"
+else
+    fail "quality override (ohne Argument)" "Hätte fehlschlagen sollen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

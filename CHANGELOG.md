@@ -2,6 +2,12 @@
 
 ---
 
+## 1.88.0
+**CLI: Quality-Overrides verwalten**
+- Neuer Befehl `iphoto-cli quality override <bild> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]` setzt bzw. zeigt Nutzer-Korrekturen der Qualitäts-Flags („doch nicht unscharf“)
+- `iphoto-cli quality override list [--json]` listet alle Bilder mit gesetzten Overrides (ein einzelner SQL-Query statt N Einzelabfragen)
+- Tests in `Tests/run_plugins.sh` (Happy-Path, Persistenz, `--clear`, ungültige Werte/Optionen, fehlendes Bild)
+
 ## 1.87.3
 **CI nach App-Umbenennung repariert**
 - View-Smoke-Test, CI-Zip-Schritt und `notarize.sh` lesen den App-Namen jetzt aus `build.sh` (seit 1.86.1 „iPhoto Α“) statt fest `iPhoto.app` zu erwarten
