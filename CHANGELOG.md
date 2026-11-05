@@ -2,6 +2,13 @@
 
 ---
 
+## 1.86.1
+**CI-Fix, fehlende Methoden, App-Umbenennung**
+- App heißt jetzt **iPhoto Α** (griechisches großes Alpha)
+- CI-Workflow validiert jetzt auch `Tests/run_plugins.sh`
+- Doppelte `backupNow()`-Funktion entfernt (Cloud-Agent-Duplikat)
+- `eloCount()` und `ratingDistribution()` in CatalogStore ergänzt
+
 ## 1.86.0
 **Feature — CLI: local-adjustments + smartfolder sync**
 
