@@ -2,6 +2,10 @@
 
 ---
 
+## 1.87.1
+**CI-Build repariert**
+- Fehlender `CoreGraphics`-Import in `ImageExporter+Batch.swift` ergänzt (App-Build schlug in CI fehl)
+
 ## 1.87.0
 **CLI: Bewertungs-Histogramm und EXIF-Katalogbefehle**
 - Neu: `iphoto-cli rating histogram [--json]` — Sterneverteilung (0–5), Anzahl bewerteter Bilder und Durchschnittsbewertung
