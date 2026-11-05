@@ -46,6 +46,26 @@ void iphoto_mean_std(const float *values, uint32_t count,
 // out muss size³×4 floats vorab allokiert sein.
 void iphoto_oklab_lut(float vibrance, float hue_deg, float *out, uint32_t size);
 
+// ── WaveformAccumulator ───────────────────────────────────────────────────────
+// rgba: RGBA8-Pixel (scopeW × scopeH × 4 Bytes, premultiplied alpha wird ignoriert).
+// out_h: Höhe der Waveform-Puffer (üblich 200). luma_hist muss 256 u32-Slots haben.
+// luma_acc / r_acc / g_acc / b_acc: je w × out_h floats (vorab mit 0 befüllen).
+void iphoto_waveform_accumulate(
+    const uint8_t *rgba, uint32_t w, uint32_t h, uint32_t out_h,
+    uint32_t *luma_hist,
+    float *luma_acc, float *r_acc, float *g_acc, float *b_acc);
+
+// ── pHash Seed-and-Pull Similarity ────────────────────────────────────────────
+// Gibt heap-allokierten u32-Array zurück. Gruppen-Separator = 0xFFFFFFFF.
+// Rückgabe NULL wenn count < 2 oder keine Gruppen gefunden.
+// MUSS mit iphoto_phash_groups_free(ptr, out_len) freigegeben werden.
+uint32_t *iphoto_phash_seed_pull_groups(
+    const uint64_t *hashes_h, const uint64_t *hashes_v,
+    uint32_t count, uint32_t max_distance,
+    uint32_t *out_len);
+
+void iphoto_phash_groups_free(uint32_t *ptr, uint32_t len);
+
 #ifdef __cplusplus
 }
 #endif

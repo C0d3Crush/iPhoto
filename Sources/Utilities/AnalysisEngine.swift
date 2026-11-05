@@ -64,33 +64,31 @@ final class AnalysisEngine: ObservableObject {
             let gBins = gHist.map { Int($0) }
             let bBins = bHist.map { Int($0) }
 
-            // Per-pixel pass: luma histogram + waveform accumulation
-            var lBins = [Int](repeating: 0, count: 256)
+            // Per-pixel pass: luma histogram + waveform accumulation (Rust-Core)
             let outH = 200
-            var lumaAcc = [Float](repeating: 0, count: scopeW * outH)
-            var rAcc    = [Float](repeating: 0, count: scopeW * outH)
-            var gAcc    = [Float](repeating: 0, count: scopeW * outH)
-            var bAcc    = [Float](repeating: 0, count: scopeW * outH)
-
-            for row in 0..<scopeH {
-                for col in 0..<scopeW {
-                    let base = row * scopeW * 4 + col * 4
-                    let r = Float(scaled[base])   / 255
-                    let g = Float(scaled[base+1]) / 255
-                    let b = Float(scaled[base+2]) / 255
-                    let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-                    lBins[min(255, Int(luma * 255))] += 1
-
-                    func acc(_ v: Float, buf: inout [Float]) {
-                        let y = min(outH - 1, Int((1 - v) * Float(outH - 1)))
-                        buf[y * scopeW + col] += 1
+            var lumaHist = [UInt32](repeating: 0, count: 256)
+            var lumaAcc  = [Float](repeating: 0, count: scopeW * outH)
+            var rAcc     = [Float](repeating: 0, count: scopeW * outH)
+            var gAcc     = [Float](repeating: 0, count: scopeW * outH)
+            var bAcc     = [Float](repeating: 0, count: scopeW * outH)
+            scaled.withUnsafeBytes { rgbaPtr in
+                lumaHist.withUnsafeMutableBufferPointer { lhp in
+                    lumaAcc.withUnsafeMutableBufferPointer { lap in
+                        rAcc.withUnsafeMutableBufferPointer { rp in
+                            gAcc.withUnsafeMutableBufferPointer { gp in
+                                bAcc.withUnsafeMutableBufferPointer { bp in
+                                    iphoto_waveform_accumulate(
+                                        rgbaPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                                        UInt32(scopeW), UInt32(scopeH), UInt32(outH),
+                                        lhp.baseAddress, lap.baseAddress,
+                                        rp.baseAddress, gp.baseAddress, bp.baseAddress)
+                                }
+                            }
+                        }
                     }
-                    acc(luma, buf: &lumaAcc)
-                    acc(r,    buf: &rAcc)
-                    acc(g,    buf: &gAcc)
-                    acc(b,    buf: &bAcc)
                 }
             }
+            let lBins = lumaHist.map { Int($0) }
 
             let tAnalysis = Date().timeIntervalSince(t0)
             let hist   = Self.renderHistogram(r: rBins, g: gBins, b: bBins, luma: lBins)

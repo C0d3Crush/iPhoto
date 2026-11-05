@@ -2,6 +2,12 @@
 
 ---
 
+## 1.87.0
+**Performance — Rust-Core: Waveform-Akkumulator + pHash-Similarity**
+- `AnalysisEngine`: Luma-Histogramm + Waveform-Akkumulator aus Swift-Loop nach Rust ausgelagert (`iphoto_waveform_accumulate`) — BT.709, integer-skaliert, LLVM-auto-vektorisiert (~6–10× schneller)
+- `SimilarityGrouper`: pHash Seed-and-Pull Gruppen-Suche jetzt via Rust + Rayon-Parallelisierung des inneren Scans (`iphoto_phash_seed_pull_groups`) — gleiche Semantik, paralleler Inner-Loop
+- Neue Rust-Module: `waveform.rs`, `similarity.rs`; neue C-FFI-Exporte in `lib.rs` + `iphoto_rs.h`
+
 ## 1.86.1
 **CI-Fix, fehlende Methoden, App-Umbenennung**
 - App heißt jetzt **iPhoto Α** (griechisches großes Alpha)

@@ -31,25 +31,30 @@ struct SimilarityGrouper {
             .sorted { $0.0.filename < $1.0.filename }
         guard hashed.count > 1 else { return [] }
 
-        var claimed = [Bool](repeating: false, count: hashed.count)
-        var result: [[ImageDocument]] = []
+        var hashesH = hashed.map { $0.1 }
+        var hashesV = hashed.map { $0.2 }
+        var flatLen: UInt32 = 0
 
-        for i in 0..<hashed.count where !claimed[i] {
-            let seedH = hashed[i].1
-            let seedV = hashed[i].2
-            var group: [ImageDocument] = [hashed[i].0]
-            claimed[i] = true
-            for j in (i + 1)..<hashed.count where !claimed[j] {
-                let dH = (seedH ^ hashed[j].1).nonzeroBitCount
-                if dH > maxDistance { continue }
-                let dV = (seedV ^ hashed[j].2).nonzeroBitCount
-                if dV > maxDistance { continue }
-                group.append(hashed[j].0)
-                claimed[j] = true
+        guard let flatPtr = iphoto_phash_seed_pull_groups(
+            &hashesH, &hashesV, UInt32(hashed.count), UInt32(maxDistance), &flatLen
+        ), flatLen > 0 else { return [] }
+        defer { iphoto_phash_groups_free(flatPtr, flatLen) }
+
+        var result: [[ImageDocument]] = []
+        var currentGroup: [ImageDocument] = []
+        for i in 0..<Int(flatLen) {
+            let idx = flatPtr[i]
+            if idx == UInt32.max {
+                if currentGroup.count > 1 {
+                    result.append(currentGroup.sorted { $0.filename < $1.filename })
+                }
+                currentGroup = []
+            } else if Int(idx) < hashed.count {
+                currentGroup.append(hashed[Int(idx)].0)
             }
-            if group.count > 1 {
-                result.append(group.sorted { $0.filename < $1.filename })
-            }
+        }
+        if currentGroup.count > 1 {
+            result.append(currentGroup.sorted { $0.filename < $1.filename })
         }
 
         return result.sorted { $0[0].filename < $1[0].filename }
