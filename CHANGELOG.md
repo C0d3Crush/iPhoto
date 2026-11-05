@@ -8,6 +8,11 @@
 - `iphoto-cli catalog add <pfad> [...] [--json]` registriert Bilder direkt im Katalog — liest nur Header-Metadaten (kein Pixel-Decode), parallel über alle Dateien, ein einziger SQLite-Batch-Insert in einer Transaktion
 - Tests in `Tests/run_plugins.sh` (Happy-Path, Upsert ohne Duplikate, unbekannte/fehlende Dateien, fehlende Argumente)
 
+## 1.89.1
+**Belichtungserkennung basiert jetzt auf Histogramm**
+- Über- und Unterbelichtung werden aus dem BT.709-Luma-Histogramm abgeleitet – identische Gewichtung wie HistogramView (R·218+G·732+B·74)
+- Grayscale-Render + Rust-Pfad `iphoto_exposure_analyze` entfernt; Erkennung ist jetzt konsistent mit dem angezeigten Histogramm
+
 ## 1.89.0
 **CLI: Katalog-Bilder auflisten/entfernen, Personen löschen/zurücksetzen**
 - Neuer Befehl `iphoto-cli catalog list [--limit N] [--json]` listet alle Bilder im Katalog (Pfad, Größe, Kamera, Aufnahmedatum)
