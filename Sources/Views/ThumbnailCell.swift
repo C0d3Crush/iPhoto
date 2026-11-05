@@ -14,6 +14,7 @@ struct ThumbnailCell: View {
     var isEyesClosed: Bool = false
     var isBestInStack: Bool = false
 
+    @AppStorage("grid.forceSquare")   private var forceSquare     = false
     @AppStorage("badge.rating")      private var showRating      = true
     @AppStorage("badge.colorLabel")  private var showColorLabel  = true
     @AppStorage("badge.flag")        private var showFlag        = true
@@ -26,7 +27,7 @@ struct ThumbnailCell: View {
     @AppStorage("badge.hdr")         private var showHDR         = true
 
     private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
-    private var showDetails: Bool { thumbnailWidth >= 50 }
+    private var showDetails: Bool { !forceSquare && thumbnailWidth >= 50 }
     private var cornerR: CGFloat { showDetails ? 4 : 0 }
 
     var body: some View {

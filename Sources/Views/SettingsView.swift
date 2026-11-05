@@ -109,6 +109,27 @@ struct SettingsView: View {
 
     private var thumbnailsTab: some View {
         Form {
+            Section(header: Text("Rasteransicht").font(.headline)) {
+                Toggle(isOn: Binding(
+                    get: { UserDefaults.standard.object(forKey: "grid.forceSquare") as? Bool ?? false },
+                    set: { UserDefaults.standard.set($0, forKey: "grid.forceSquare") }
+                )) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "square.grid.3x3.fill")
+                            .foregroundColor(.secondary)
+                            .frame(width: 18)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nur quadratische Symbole").font(.system(size: 12))
+                            Text("Alle Thumbnails werden als Quadrate beschnitten — unabhängig von der Rastergröße.")
+                                .font(.caption).foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            Divider().padding(.vertical, 4)
+
             Section(header: Text("Angezeigte Symbole").font(.headline)) {
                 badgeToggle("Sternebewertung",       key: "badge.rating",      icon: "star.fill",             color: .yellow)
                 badgeToggle("Farb-Label",             key: "badge.colorLabel",  icon: "circle.fill",           color: .blue)
