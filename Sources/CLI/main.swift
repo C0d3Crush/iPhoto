@@ -77,6 +77,8 @@ private func printUsage() {
       iphoto-cli smartfolder rename <alter-name> <neuer-name>
       iphoto-cli smartfolder delete <name> [--json]
       iphoto-cli smartfolder sync [<name>] [--json]
+      iphoto-cli smartfolder sql <name> [--count] [--json]
+      iphoto-cli smartfolder count [<name>] [--json]
       iphoto-cli local-adjustments list <bildpfad> [--json]
       iphoto-cli local-adjustments clear <bildpfad> [--json]
       iphoto-cli rating histogram [--json]
@@ -2148,7 +2150,7 @@ private func parseSFCriteria(_ args: [String]) -> [SmartFolderCriterion] {
 
 private func runSmartFolder(_ args: [String]) -> Int32 {
     guard let sub = args.first else {
-        fputs("Verwendung: iphoto-cli smartfolder list|query|create|delete [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli smartfolder list|query|create|update|rename|delete|sync|sql|count [opts]\n", stderr)
         return 1
     }
     let subArgs  = Array(args.dropFirst())
@@ -2327,8 +2329,79 @@ private func runSmartFolder(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "sql":
+        // Zeigt das vom SmartFolderSQLGenerator erzeugte SQL — Debugging für Smart-Ordner-Regeln.
+        guard let name = subArgs.first(where: { !$0.hasPrefix("--") }) else {
+            fputs("Verwendung: iphoto-cli smartfolder sql <name> [--count] [--json]\n", stderr)
+            return 1
+        }
+        guard let sf = loadSmartFolders().first(where: { $0.name == name }) else {
+            fputs("Fehler: Smart-Ordner '\(name)' nicht gefunden\n", stderr)
+            return 1
+        }
+        let countMode = subArgs.contains("--count")
+        let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "cli"
+        let sql = countMode
+            ? SmartFolderSQLGenerator.generateCount(for: sf)
+            : SmartFolderSQLGenerator.generate(for: sf, version: version)
+        let runtimeOnly = SmartFolderSQLGenerator.hasRuntimeOnlyCriteria(sf)
+        if jsonMode {
+            let obj: [String: Any] = ["name": sf.name, "id": sf.id.uuidString,
+                                      "kind": countMode ? "count" : "select",
+                                      "criteria": sf.criteria.count,
+                                      "matchAll": sf.matchAll,
+                                      "runtimeOnly": runtimeOnly,
+                                      "sql": sql]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print(sql)
+            if runtimeOnly {
+                fputs("Hinweis: enthält Laufzeit-Kriterien — SQL ist nicht vollständig ausführbar\n", stderr)
+            }
+        }
+        return 0
+
+    case "count":
+        // Sidebar-Badge-Zähler (COUNT-Query ohne ORDER BY/LIMIT) für einen oder alle Smart-Ordner.
+        let targetName = subArgs.first(where: { !$0.hasPrefix("--") })
+        let folders = loadSmartFolders()
+        let selected = targetName.map { n in folders.filter { $0.name == n } } ?? folders
+        if let name = targetName, selected.isEmpty {
+            fputs("Fehler: Smart-Ordner '\(name)' nicht gefunden\n", stderr)
+            return 1
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        let t0 = Date()
+        var rows: [[String: Any]] = []
+        rows.reserveCapacity(selected.count)
+        for sf in selected {
+            var row: [String: Any] = ["name": sf.name, "id": sf.id.uuidString]
+            if let n = catalog.countForSmartFolder(sf) {
+                row["count"] = n
+                row["runtimeOnly"] = false
+            } else {
+                row["count"] = NSNull()
+                row["runtimeOnly"] = true
+            }
+            rows.append(row)
+        }
+        let ms = Int(Date().timeIntervalSince(t0) * 1000)
+        if jsonMode {
+            let obj: [String: Any] = ["folders": rows, "total": rows.count, "ms": ms]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if rows.isEmpty { print("(keine Smart-Ordner)") }
+            for r in rows {
+                let c = (r["count"] as? Int).map { String($0) } ?? "– (Laufzeit-Kriterien)"
+                print("\(r["name"]!): \(c)")
+            }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli smartfolder list|query|create|update|rename|delete|sync [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli smartfolder list|query|create|update|rename|delete|sync|sql|count [opts]\n", stderr)
         return 1
     }
 }

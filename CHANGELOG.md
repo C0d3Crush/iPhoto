@@ -2,6 +2,12 @@
 
 ---
 
+## 1.97.0
+**CLI: Smart-Ordner-SQL anzeigen und Treffer zählen**
+- Neuer Befehl `iphoto-cli smartfolder sql <name> [--count] [--json]` zeigt das SQL, das der Smart-Ordner gegen den Katalog ausführt (mit `--count` die Zähl-Abfrage der Seitenleiste); Laufzeit-Kriterien werden als Hinweis markiert
+- Neuer Befehl `iphoto-cli smartfolder count [<name>] [--json]` liefert die Trefferzahl eines oder aller Smart-Ordner per schlanker COUNT-Abfrage (ohne Pfadliste) inkl. Laufzeit in ms
+- Tests in `Tests/run_plugins.sh` (Zählung mit Pick-Ordner, SELECT-/COUNT-SQL, leerer Bestand, Fehlerpfade für fehlende/unbekannte Namen)
+
 ## 1.96.0
 **CLI: Bugreports auflisten, lesen und als behoben markieren**
 - Neuer Befehl `iphoto-cli bugreport list [--fixed|--all] [--json]` listet die Crash-Berichte aus `~/Documents/bugreports/` (neueste zuerst), optional auch die behobenen aus `fixed/`
