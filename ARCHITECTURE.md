@@ -10,7 +10,7 @@ Minimum Deployment Target: **macOS 11.0 (Big Sur)**.
 ┌─────────────────────────────────────────────────────────────────┐
 │                          SwiftUI Views                          │
 │  ContentView · SidebarView · InspectorView · LibraryGridView   │
-│  ThumbnailCell · ZoomableScrollView · CropEditor · CurvesView  │
+│  ThumbnailCell · ZoomableScrollView · CropEditorView · CurvesView │
 └──────────────────────────┬──────────────────────────────────────┘
                            │  @EnvironmentObject / @Published
 ┌──────────────────────────▼──────────────────────────────────────┐
@@ -58,7 +58,7 @@ Reine SwiftUI-Views ohne eigene Logik. Alle Aktionen delegieren an `ImageViewMod
 | `AnalysePanel.swift` | Histogramm, Waveform, RGB-Parade, Gradationskurven |
 | `MetadataPanel.swift` | EXIF/IPTC anzeigen und editieren |
 | `VersionHistorySheet.swift` | Gespeicherte Bildversionen anzeigen und wiederherstellen |
-| `CropEditor.swift` | Interaktiver Zuschnitt-Editor |
+| `CropEditorView.swift` | Interaktiver Zuschnitt-Editor |
 | `CurvesView.swift` | Tonwertkurven-Editor mit 5 Kontrollpunkten |
 
 ### ViewModel (`Sources/ViewModels/`)
