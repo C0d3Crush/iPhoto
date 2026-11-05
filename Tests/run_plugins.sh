@@ -995,6 +995,167 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# catalog list / remove
+# ---------------------------------------------------------------------------
+echo "--- CATALOG LIST / REMOVE ---"
+
+CL_DB="$TMPDIR/cl_catalog.db"
+CL_IMG_A="$TMPDIR/cl_a.png"
+CL_IMG_B="$TMPDIR/cl_b.png"
+cp "$INPUT_PNG" "$CL_IMG_A"
+cp "$INPUT_PNG" "$CL_IMG_B"
+
+# leerer Katalog → []
+CL_EMPTY_EXIT=0
+CL_EMPTY=$(IPHOTO_CATALOG_DB="$CL_DB" "$BIN" catalog list --json 2>&1) || CL_EMPTY_EXIT=$?
+if [ $CL_EMPTY_EXIT -eq 0 ] && echo "$CL_EMPTY" | python3 -c "import sys,json; assert json.load(sys.stdin)==[]" 2>/dev/null; then
+    pass "catalog list --json (leer)"
+else
+    fail "catalog list --json (leer)" "Exit $CL_EMPTY_EXIT: $CL_EMPTY"
+fi
+
+# zwei Bilder registrieren + bewerten
+IPHOTO_CATALOG_DB="$CL_DB" "$BIN" exif set "$CL_IMG_A" --iso 100 > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$CL_DB" "$BIN" exif set "$CL_IMG_B" --iso 200 > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$CL_DB" "$BIN" rating "$CL_IMG_A" --set 4 > /dev/null 2>&1 || true
+
+CL_LIST_EXIT=0
+CL_LIST=$(IPHOTO_CATALOG_DB="$CL_DB" "$BIN" catalog list --json 2>&1) || CL_LIST_EXIT=$?
+if [ $CL_LIST_EXIT -eq 0 ] && echo "$CL_LIST" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+paths=sorted(x['path'] for x in d)
+assert len(d)==2 and all('filename' in x for x in d)
+" 2>/dev/null; then
+    pass "catalog list --json (2 Bilder)"
+else
+    fail "catalog list --json (2 Bilder)" "Exit $CL_LIST_EXIT: $CL_LIST"
+fi
+
+# --limit 1
+CL_LIM=$(IPHOTO_CATALOG_DB="$CL_DB" "$BIN" catalog list --limit 1 --json 2>&1) || true
+if echo "$CL_LIM" | python3 -c "import sys,json; assert len(json.load(sys.stdin))==1" 2>/dev/null; then
+    pass "catalog list --limit 1"
+else
+    fail "catalog list --limit 1" "$CL_LIM"
+fi
+
+# ungültiges --limit → Fehler
+CL_BADLIM_EXIT=0
+IPHOTO_CATALOG_DB="$CL_DB" "$BIN" catalog list --limit abc > /dev/null 2>&1 || CL_BADLIM_EXIT=$?
+if [ $CL_BADLIM_EXIT -ne 0 ]; then
+    pass "catalog list --limit abc (Fehler)"
+else
+    fail "catalog list --limit abc" "Hätte fehlschlagen sollen"
+fi
+
+# remove: unbekannter Pfad → Fehler, nichts gelöscht
+CL_RM_MISS_EXIT=0
+IPHOTO_CATALOG_DB="$CL_DB" "$BIN" catalog remove "$CL_IMG_A" "/nonexistent/none.jpg" > /dev/null 2>&1 || CL_RM_MISS_EXIT=$?
+CL_AFTER_MISS=$(IPHOTO_CATALOG_DB="$CL_DB" "$BIN" catalog list --json 2>&1) || true
+if [ $CL_RM_MISS_EXIT -ne 0 ] && echo "$CL_AFTER_MISS" | python3 -c "import sys,json; assert len(json.load(sys.stdin))==2" 2>/dev/null; then
+    pass "catalog remove (unbekannter Pfad → Fehler, nichts entfernt)"
+else
+    fail "catalog remove (unbekannter Pfad)" "Exit $CL_RM_MISS_EXIT: $CL_AFTER_MISS"
+fi
+
+# remove ohne Argument → Fehler
+CL_RM_NOARG_EXIT=0
+IPHOTO_CATALOG_DB="$CL_DB" "$BIN" catalog remove > /dev/null 2>&1 || CL_RM_NOARG_EXIT=$?
+if [ $CL_RM_NOARG_EXIT -ne 0 ]; then
+    pass "catalog remove (ohne Argument → Fehler)"
+else
+    fail "catalog remove (ohne Argument)" "Hätte fehlschlagen sollen"
+fi
+
+# remove A → 1 Bild übrig, Rating weg, Datei bleibt
+CL_RM_EXIT=0
+CL_RM=$(IPHOTO_CATALOG_DB="$CL_DB" "$BIN" catalog remove "$CL_IMG_A" --json 2>&1) || CL_RM_EXIT=$?
+CL_AFTER=$(IPHOTO_CATALOG_DB="$CL_DB" "$BIN" catalog list --json 2>&1) || true
+CL_RATINGS=$(IPHOTO_CATALOG_DB="$CL_DB" "$BIN" rating list --json 2>&1) || true
+if [ $CL_RM_EXIT -eq 0 ] && [ -f "$CL_IMG_A" ] \
+   && echo "$CL_RM" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['count']==1" 2>/dev/null \
+   && echo "$CL_AFTER" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert len(d)==1 and d[0]['path'].endswith('cl_b.png')
+" 2>/dev/null \
+   && ! echo "$CL_RATINGS" | grep -q "cl_a.png"; then
+    pass "catalog remove --json (Bild + Rating entfernt, Datei bleibt)"
+else
+    fail "catalog remove --json" "Exit $CL_RM_EXIT: $CL_RM | $CL_AFTER | $CL_RATINGS"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# people delete / reset
+# ---------------------------------------------------------------------------
+echo "--- PEOPLE DELETE / RESET ---"
+
+PD_DB="$TMPDIR/pd_catalog.db"
+IPHOTO_CATALOG_DB="$PD_DB" "$BIN" people list > /dev/null 2>&1 || true
+python3 - "$PD_DB" <<'PYEOF'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.executemany("INSERT INTO people (id, name, cover_face_id) VALUES (?,?,NULL)",
+              [("p-named", "Anna"), ("p-auto1", None), ("p-auto2", None)])
+c.commit(); c.close()
+PYEOF
+
+# delete unbekannte ID → Fehler
+PD_MISS_EXIT=0
+IPHOTO_CATALOG_DB="$PD_DB" "$BIN" people delete does-not-exist > /dev/null 2>&1 || PD_MISS_EXIT=$?
+if [ $PD_MISS_EXIT -ne 0 ]; then
+    pass "people delete (unbekannte ID → Fehler)"
+else
+    fail "people delete (unbekannte ID)" "Hätte fehlschlagen sollen"
+fi
+
+# delete ohne Argument → Fehler
+PD_NOARG_EXIT=0
+IPHOTO_CATALOG_DB="$PD_DB" "$BIN" people delete > /dev/null 2>&1 || PD_NOARG_EXIT=$?
+if [ $PD_NOARG_EXIT -ne 0 ]; then
+    pass "people delete (ohne Argument → Fehler)"
+else
+    fail "people delete (ohne Argument)" "Hätte fehlschlagen sollen"
+fi
+
+# delete p-auto1 → 2 Personen übrig
+PD_EXIT=0
+PD_OUT=$(IPHOTO_CATALOG_DB="$PD_DB" "$BIN" people delete p-auto1 --json 2>&1) || PD_EXIT=$?
+PD_LIST=$(IPHOTO_CATALOG_DB="$PD_DB" "$BIN" people list --json 2>&1) || true
+if [ $PD_EXIT -eq 0 ] \
+   && echo "$PD_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['deleted'] and d['id']=='p-auto1'" 2>/dev/null \
+   && echo "$PD_LIST" | python3 -c "
+import sys,json
+ids=sorted(p['id'] for p in json.load(sys.stdin))
+assert ids==['p-auto2','p-named']
+" 2>/dev/null; then
+    pass "people delete --json (Person entfernt)"
+else
+    fail "people delete --json" "Exit $PD_EXIT: $PD_OUT | $PD_LIST"
+fi
+
+# reset → unbenannte weg, benannte bleibt
+PR_EXIT=0
+PR_OUT=$(IPHOTO_CATALOG_DB="$PD_DB" "$BIN" people reset --json 2>&1) || PR_EXIT=$?
+PR_LIST=$(IPHOTO_CATALOG_DB="$PD_DB" "$BIN" people list --json 2>&1) || true
+if [ $PR_EXIT -eq 0 ] \
+   && echo "$PR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['removed_people']==1 and d['kept_named']==1" 2>/dev/null \
+   && echo "$PR_LIST" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert len(d)==1 and d[0]['name']=='Anna' and d[0]['face_count']==0
+" 2>/dev/null; then
+    pass "people reset --json (unbenannte gelöscht, benannte behalten)"
+else
+    fail "people reset --json" "Exit $PR_EXIT: $PR_OUT | $PR_LIST"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

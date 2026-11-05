@@ -2,6 +2,15 @@
 
 ---
 
+## 1.89.0
+**CLI: Katalog-Bilder auflisten/entfernen, Personen löschen/zurücksetzen**
+- Neuer Befehl `iphoto-cli catalog list [--limit N] [--json]` listet alle Bilder im Katalog (Pfad, Größe, Kamera, Aufnahmedatum)
+- Neuer Befehl `iphoto-cli catalog remove <pfad> [...] [--json]` entfernt Bilder samt Bewertung, Gesichtern, Anpassungen, Album-Zuordnung und Papierkorb-Eintrag aus dem Katalog — die Dateien bleiben unberührt; bei unbekanntem Pfad wird nichts gelöscht
+- Neuer Befehl `iphoto-cli people delete <id> [--json]` löscht eine Person (Gesichter bleiben unzugeordnet erhalten)
+- Neuer Befehl `iphoto-cli people reset [--json]` löst alle Cluster-Zuordnungen und löscht unbenannte Personen; benannte bleiben erhalten
+- Performance: `people list --json` berechnet Gesichter-Anzahlen einmalig statt pro Person alle Gesichter neu zu laden (O(P·F) → O(F))
+- Tests in `Tests/run_plugins.sh` (Happy-Path, `--limit`, unbekannte Pfade/IDs, fehlende Argumente)
+
 ## 1.88.0
 **CLI: Quality-Overrides verwalten**
 - Neuer Befehl `iphoto-cli quality override <bild> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]` setzt bzw. zeigt Nutzer-Korrekturen der Qualitäts-Flags („doch nicht unscharf“)

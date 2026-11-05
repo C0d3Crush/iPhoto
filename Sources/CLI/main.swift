@@ -36,6 +36,8 @@ private func printUsage() {
       iphoto-cli people faces [--path <bildpfad>] [--json]
       iphoto-cli people cluster [--epsilon 0.12] [--json]
       iphoto-cli people rename <id> <name> [--json]
+      iphoto-cli people delete <id> [--json]
+      iphoto-cli people reset [--json]
       iphoto-cli people export-names [--output <datei.csv>] [--json]
       iphoto-cli people import-names <datei.csv> [--json]
       iphoto-cli album list|create|delete|add|remove|images|reorder [--json]
@@ -43,7 +45,7 @@ private func printUsage() {
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
-      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now [--json]
+      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove [--json]
       iphoto-cli albumfolder list|create|rename|delete [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
@@ -93,6 +95,8 @@ private func printUsage() {
       iphoto-cli export --list-formats [--json]
       iphoto-cli catalog scan-needed [--json]
       iphoto-cli catalog backup-now [--json]
+      iphoto-cli catalog list [--limit N] [--json]
+      iphoto-cli catalog remove <pfad> [<pfad> ...] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -1570,12 +1574,14 @@ private func runPeople(_ args: [String]) -> Int32 {
     case "list":
         let people = catalog.allPeople()
         if jsonMode {
+            // Face-Counts einmal vorberechnen statt allFaces() pro Person (war O(P·F) + P SQL-Queries)
+            var faceCounts: [String: Int] = [:]
+            for f in catalog.allFaces() { if let c = f.clusterID { faceCounts[c, default: 0] += 1 } }
             var arr: [[String: Any]] = []
             for p in people {
                 var obj: [String: Any] = ["id": p.id]
                 if let n = p.name { obj["name"] = n }
-                let faceCount = catalog.allFaces().filter { $0.clusterID == p.id }.count
-                obj["face_count"] = faceCount
+                obj["face_count"] = faceCounts[p.id] ?? 0
                 arr.append(obj)
             }
             if let data = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
@@ -1775,8 +1781,41 @@ private func runPeople(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "delete":
+        // people delete <id> [--json] — Person löschen, Gesichter bleiben (unzugeordnet)
+        guard let personID = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli people delete <id> [--json]\n", stderr); return 1
+        }
+        guard catalog.allPeople().contains(where: { $0.id == personID }) else {
+            fputs("Fehler: Person '\(personID)' nicht im Katalog\n", stderr); return 1
+        }
+        catalog.deletePerson(id: personID)
+        if jsonMode {
+            let obj: [String: Any] = ["id": personID, "deleted": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Person gelöscht: \(personID)")
+        }
+        return 0
+
+    case "reset":
+        // people reset [--json] — alle Cluster-Zuordnungen lösen, unbenannte Personen löschen
+        let before = catalog.allPeople()
+        catalog.resetAllClusters()
+        let kept = catalog.allPeople().count
+        let removed = before.count - kept
+        if jsonMode {
+            let obj: [String: Any] = ["removed_people": removed, "kept_named": kept, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Cluster zurückgesetzt: \(removed) unbenannte Person(en) gelöscht, \(kept) benannte behalten")
+        }
+        return 0
+
     default:
-        fputs("Fehler: Unbekannter people-Unterbefehl '\(sub)'. Erlaubt: list, faces, cluster, rename, export-names, import-names\n", stderr)
+        fputs("Fehler: Unbekannter people-Unterbefehl '\(sub)'. Erlaubt: list, faces, cluster, rename, delete, reset, export-names, import-names\n", stderr)
         return 1
     }
 }
@@ -3220,8 +3259,69 @@ private func runCatalog(_ args: [String]) -> Int32 {
             return 1
         }
 
+    case "list":
+        // catalog list [--limit N] [--json]
+        var limit: Int? = nil
+        if let li = args.firstIndex(of: "--limit") {
+            guard li + 1 < args.count, let n = Int(args[li + 1]), n > 0 else {
+                fputs("Fehler: --limit erwartet eine positive Ganzzahl\n", stderr); return 1
+            }
+            limit = n
+        }
+        var images = catalog.allImages()
+        if let n = limit, images.count > n { images = Array(images.prefix(n)) }
+        if jsonMode {
+            let arr: [[String: Any]] = images.map { (img: CatalogImage) -> [String: Any] in
+                var o: [String: Any] = ["path": img.path, "filename": img.filename,
+                                        "width": img.width, "height": img.height,
+                                        "is_raw": img.isRAW, "size_bytes": img.sizeBytes]
+                if let d = img.dateTaken { o["date_taken"] = d }
+                let cam = [img.cameraMake, img.cameraModel].compactMap { $0 }.joined(separator: " ")
+                if !cam.isEmpty { o["camera"] = cam }
+                return o
+            }
+            if let d = try? JSONSerialization.data(withJSONObject: arr, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else if images.isEmpty {
+            print("(keine Bilder im Katalog)")
+        } else {
+            for img in images { print("\(img.width)x\(img.height)  \(img.path)") }
+        }
+        return 0
+
+    case "remove":
+        // catalog remove <pfad> [<pfad> ...] [--json]
+        // Entfernt Bilder samt Bewertung, Gesichtern, Anpassungen, Album-Zuordnung und Papierkorb-Eintrag.
+        // Die Dateien auf der Platte bleiben unberührt.
+        let paths = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard !paths.isEmpty else {
+            fputs("Verwendung: iphoto-cli catalog remove <pfad> [<pfad> ...] [--json]\n", stderr); return 1
+        }
+        let missing = paths.filter { catalog.image(forPath: $0) == nil }
+        guard missing.isEmpty else {
+            missing.forEach { fputs("Fehler: Bild nicht im Katalog: \($0)\n", stderr) }
+            return 1
+        }
+        let albumIDs = catalog.allAlbums().map { $0.id }
+        for p in paths {
+            for aid in albumIDs { catalog.removeImage(path: p, fromAlbum: aid) }
+            catalog.removeRating(path: p)
+            catalog.deleteFaces(forPath: p)
+            catalog.deleteAdjustments(path: p)
+            catalog.removeImage(path: p)
+        }
+        catalog.setTrashed(paths: paths, false)
+        if jsonMode {
+            let obj: [String: Any] = ["removed": paths, "count": paths.count, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Aus Katalog entfernt: \(paths.count) Bild(er)")
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove [--json]\n", stderr)
         return 1
     }
 }
