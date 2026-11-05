@@ -27,7 +27,7 @@ jobs:
 
       - name: Run PM Scheduler
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.claude }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python .github/scripts/pm_scheduler.py
 
