@@ -1913,6 +1913,166 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# gear summary / cameras / lenses / focal / iso / aperture
+# ---------------------------------------------------------------------------
+echo "--- GEAR ---"
+
+GR_DIR="$TMPDIR/gear"; mkdir -p "$GR_DIR"
+GR_DB="$GR_DIR/catalog.db"
+gr() { IPHOTO_CATALOG_DB="$GR_DB" "$BIN" "$@"; }
+for n in a b c d; do cp "$INPUT_PNG" "$GR_DIR/gr_$n.png"; done
+
+# leerer Katalog → summary mit 0 Bildern, Listen leer
+GR_EXIT=0
+GR_OUT=$(gr gear summary --json 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['images']==0 and d['with_exif']==0 and d['top_lens'] is None and d['iso_median'] is None
+" 2>/dev/null; then
+    pass "gear summary --json (leerer Katalog)"
+else
+    fail "gear summary --json (leer)" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+GR_EXIT=0
+GR_OUT=$(gr gear lenses --json 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | python3 -c "import sys,json; assert json.load(sys.stdin)==[]" 2>/dev/null; then
+    pass "gear lenses --json (leer → [])"
+else
+    fail "gear lenses --json (leer)" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+# Testdaten: 3 Bilder mit EXIF, 1 Bild ohne
+gr exif set "$GR_DIR/gr_a.png" --lens "XF35mmF1.4 R" --iso 400 --focal 35 --aperture 2.8 > /dev/null 2>&1 || true
+gr exif set "$GR_DIR/gr_b.png" --lens "XF35mmF1.4 R" --iso 800 --focal 35 --aperture 1.4 > /dev/null 2>&1 || true
+gr exif set "$GR_DIR/gr_c.png" --lens "XF23mmF2 R WR" --iso 200 --focal 23 --aperture 2 > /dev/null 2>&1 || true
+gr catalog add "$GR_DIR/gr_d.png" > /dev/null 2>&1 || true
+
+GR_EXIT=0
+GR_OUT=$(gr gear lenses --json 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert [(x['lens'],x['count']) for x in d]==[('XF35mmF1.4 R',2),('XF23mmF2 R WR',1),('(unbekannt)',1)], d
+" 2>/dev/null; then
+    pass "gear lenses --json (Rangliste, unbekannt zuletzt)"
+else
+    fail "gear lenses --json" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+GR_EXIT=0
+GR_OUT=$(gr gear lenses --limit 1 --json 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert len(d)==1 and d[0]['lens']=='XF35mmF1.4 R'
+" 2>/dev/null; then
+    pass "gear lenses --limit 1"
+else
+    fail "gear lenses --limit 1" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+GR_EXIT=0
+GR_OUT=$(gr gear focal --json 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert [(x['label'],x['count']) for x in d]==[('23',1),('35',2)], d
+" 2>/dev/null; then
+    pass "gear focal --json (Histogramm aufsteigend)"
+else
+    fail "gear focal --json" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+GR_EXIT=0
+GR_OUT=$(gr gear iso --json 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert [x['value'] for x in d]==[200,400,800] and all(x['count']==1 for x in d), d
+" 2>/dev/null; then
+    pass "gear iso --json (3 Stufen)"
+else
+    fail "gear iso --json" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+GR_EXIT=0
+GR_OUT=$(gr gear aperture --json 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert [x['label'] for x in d]==['f/1.4','f/2','f/2.8'], d
+" 2>/dev/null; then
+    pass "gear aperture --json (f/-Labels)"
+else
+    fail "gear aperture --json" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+GR_EXIT=0
+GR_OUT=$(gr gear cameras --json 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert sum(x['count'] for x in d)==4 and all('camera' in x for x in d), d
+" 2>/dev/null; then
+    pass "gear cameras --json (alle 4 Bilder gezählt)"
+else
+    fail "gear cameras --json" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+GR_EXIT=0
+GR_OUT=$(gr gear summary --json 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['images']==4 and d['with_exif']==3 and d['lenses']==2, d
+assert d['top_lens']=='XF35mmF1.4 R'
+assert d['focal_min']==23 and d['focal_max']==35 and d['focal_median']==35
+assert d['iso_min']==200 and d['iso_max']==800 and d['iso_median']==400
+assert abs(d['aperture_min']-1.4)<1e-6 and abs(d['aperture_max']-2.8)<1e-6
+" 2>/dev/null; then
+    pass "gear summary --json (Min/Max/Median)"
+else
+    fail "gear summary --json" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+GR_EXIT=0
+GR_OUT=$(gr gear summary 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | grep -q "Objektive:     2" && echo "$GR_OUT" | grep -q "Median 400"; then
+    pass "gear summary (Textausgabe)"
+else
+    fail "gear summary (Text)" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+GR_EXIT=0
+GR_OUT=$(gr gear focal 2>&1) || GR_EXIT=$?
+if [ $GR_EXIT -eq 0 ] && echo "$GR_OUT" | grep -q "35 mm"; then
+    pass "gear focal (Textausgabe mit Balken)"
+else
+    fail "gear focal (Text)" "Exit $GR_EXIT: $GR_OUT"
+fi
+
+# Fehlerpfade
+GR_ERR=0
+gr gear bogus > /dev/null 2>&1 || GR_ERR=$?
+if [ $GR_ERR -ne 0 ]; then pass "gear unbekannter Subcommand (→ Fehler)"; else fail "gear bogus" "Hätte fehlschlagen sollen"; fi
+
+GR_ERR=0
+gr gear lenses --limit abc > /dev/null 2>&1 || GR_ERR=$?
+if [ $GR_ERR -ne 0 ]; then pass "gear lenses --limit abc (→ Fehler)"; else fail "gear --limit abc" "Hätte fehlschlagen sollen"; fi
+
+GR_ERR=0
+gr gear iso --limit 0 > /dev/null 2>&1 || GR_ERR=$?
+if [ $GR_ERR -ne 0 ]; then pass "gear iso --limit 0 (→ Fehler)"; else fail "gear --limit 0" "Hätte fehlschlagen sollen"; fi
+
+GR_ERR=0
+gr gear summary --bogus > /dev/null 2>&1 || GR_ERR=$?
+if [ $GR_ERR -ne 0 ]; then pass "gear summary --bogus (→ Fehler)"; else fail "gear --bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

@@ -2,6 +2,14 @@
 
 ---
 
+## 1.100.0
+**CLI: Ausrüstungs-Statistik aus dem Katalog (`gear`)**
+- Neuer Befehl `iphoto-cli gear summary [--json]` fasst die Bibliothek zusammen: Anzahl Kameras/Objektive, meistgenutztes Objektiv und Kamera sowie Min/Max/Median von Brennweite, ISO und Blende
+- `iphoto-cli gear cameras|lenses [--limit N] [--json]` zeigt eine Rangliste nach Häufigkeit (unbekannte Einträge immer zuletzt)
+- `iphoto-cli gear focal|iso|aperture [--limit N] [--json]` liefert Histogramme (Textausgabe mit Balken); `--limit` behält die häufigsten Werte
+- Liest Bilder mit einer einzigen Katalog-Abfrage, EXIF-Werte aus dem In-Memory-Cache — kein SQLite-Query pro Bild für gescannte Bilder
+- Tests in `Tests/run_plugins.sh` (leerer Katalog, Ranglisten, Histogramme, Median, Textausgabe, Fehlerpfade für unbekannte Befehle/Optionen und ungültiges `--limit`)
+
 ## 1.99.0
 **CLI: Smart-Ordner-SQL anzeigen und Treffer zählen**
 - Neuer Befehl `iphoto-cli smartfolder sql <name> [--count] [--json]` zeigt das SQL, das der Smart-Ordner gegen den Katalog ausführt (mit `--count` die Zähl-Abfrage der Seitenleiste); Laufzeit-Kriterien werden als Hinweis markiert
