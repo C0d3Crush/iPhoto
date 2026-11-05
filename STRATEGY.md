@@ -7,7 +7,7 @@
 
 ---
 
-## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.96)*
+## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.99)*
 
 **Was steht (stark!):**
 - Produktionsreife App-Basis: SQLite-Katalog (WAL, Migration), vollständige CRUD für
@@ -24,9 +24,10 @@
 - **Qualitätsanalyse**: Blur, Belichtung, Closed-Eye — mit manuellen Overrides, CLI-Zugriff.
 - **Motiv-Tags**: manuelle Tags pro Bild, auswertbar via CLI (`motif stats/find`).
 - **ELO-Duelle**: paarweise Vergleiche (`elo match`), Reset, Ranglisten.
-- **CLI** (`iphoto-cli`) mit ~55 Subcommands — Export, Adjust, Rating, Catalog, People,
+- **CLI** (`iphoto-cli`) mit ~60 Subcommands — Export, Adjust, Rating, Catalog, People,
   Motif, ELO, SmartFolder, Metadata, EXIF, Backup, Config, Plugins, Stacks, Trash,
-  `query filters/parse/run` (Suchsyntax-Debugger), `bugreport list/show/fix/reopen` u.v.m.
+  `rating export/import` (JSON/CSV), `bookmarks list/stats/remove/prune`,
+  `smartfolder sql/count` (SQL-Inspektion), `query filters/parse/run`, `bugreport` u.v.m.
 - 3-Phasen-Ladelogik + ThumbnailDiskCache: Bild-Switching in Millisekunden.
 - Benchmark- + Skalierungstests bis 1000 Bilder, CI auf macOS-latest.
 
@@ -282,13 +283,15 @@ aber falls du es langfristig tragfähig willst, sind das die abo-freien Wege:
 
 ## 11. Meilensteine / Definition von Erfolg
 
-**Erreicht (v1.96):**
+**Erreicht (v1.99):**
 - [x] Phase 0: `AdjustmentState`-Refactor durch, verhaltensgleich.
 - [x] Phase 1: RAW-Pipeline, 3-Phasen-Laden, Rust-Core, ThumbnailDiskCache.
 - [x] Phase 2: Edits im Katalog, Preset-System, Undo/Redo, Batch-Export.
 - [x] Phase 3 (Kern): Rezept-Export/Import, Film-Simulation aus EXIF.
 - [x] People/Gesichtserkennung + ELO-Ranking + Qualitätsanalyse + Motiv-Tags.
-- [x] ~55 CLI-Subcommands: `catalog prune`, `trash mark-rejected`, `album rename/export`,
+- [x] ~60 CLI-Subcommands: `catalog prune`, `trash mark-rejected`, `album rename/export`,
+      `rating export/import` (JSON/CSV), `bookmarks list/stats/remove/prune`,
+      `smartfolder sql/count` (generiertes SQL + Trefferzahlen inspizieren),
       `query filters/parse/run` (Suchsyntax-Debugger), `bugreport list/show/fix/reopen`.
 
 **Nächste Schritte:**
@@ -309,7 +312,7 @@ Rezepte werden geteilt, Contributors kommen. Alles darüber ist Bonus, nicht Pfl
 
 ---
 
-## 12. Was JETZT konkret zu tun ist *(Stand v1.96)*
+## 12. Was JETZT konkret zu tun ist *(Stand v1.99)*
 
 1. ✅ Phasen 0–3 (Kern) abgeschlossen — die App ist ein funktionierender RAW-Editor
    mit Preset-System, Rezept-Sharing, People, ELO, Qualitätsanalyse und ~50 CLI-Befehlen.

@@ -339,6 +339,8 @@ iphoto-cli preset list|apply|save|export|import|delete [--name <name>] [--json]
 iphoto-cli rating <datei> [--set 0-5] [--flag pick|reject|none] [--color farbe] [--json]
 iphoto-cli rating list [--flag ...] [--min-rating N] [--json]
 iphoto-cli rating histogram [--json]
+iphoto-cli rating export [--output <datei.json|.csv>] [--format json|csv] [--include-unrated] [--json]
+iphoto-cli rating import <datei.json|.csv> [--skip-existing] [--dry-run] [--json]
 iphoto-cli rating batch-set <bild1> [...] [--set N] [--flag ...] [--json]
 iphoto-cli elo get|list|set|match|reset [<bildpfad>] [--winner left|right|draw] [--json]
 
@@ -350,8 +352,14 @@ iphoto-cli duplicate list|similar [--json]
 # Alben & Ordner
 iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export [--json]
 iphoto-cli albumfolder list|create|rename|delete [--json]
+iphoto-cli bookmarks list [--missing] [--json]
+iphoto-cli bookmarks stats|path [--json]
+iphoto-cli bookmarks remove <pfad|file-url> [...] [--json]
+iphoto-cli bookmarks prune [--dry-run] [--json]
 iphoto-cli watched list|add|remove|check [<pfad>] [--auto-sync] [--json]
 iphoto-cli smartfolder list|query|create|update|rename|delete|sync [<name>] [--json]
+iphoto-cli smartfolder sql <name> [--count] [--json]
+iphoto-cli smartfolder count [<name>] [--json]
 
 # Metadaten & EXIF
 iphoto-cli metadata get|set <bildpfad> [--title X] [--caption X] [--keywords X]
