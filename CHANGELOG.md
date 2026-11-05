@@ -2,6 +2,16 @@
 
 ---
 
+## 1.79.0
+**Bugfix — SIGILL bei RAF-Thumbnails + Auto-Enhance mit Bildanalyse**
+
+- Crash-Fix (Bug #40): `CGImageSourceCreateThumbnailAtIndex` lieferte ein lazy CGImage, das intern noch auf den JPEG-Datenpuffer zeigte — beim späteren Rendern durch SwiftUI (10–30 s nach dem Decode) SIGILL auf dem Main-Thread. Fix: Pixel sofort in einen eigenständigen Bitmap-Context rendern (`materialize`), bevor der Puffer freigegeben wird
+- AdjustmentsPanel: AUTO-Knopf analysiert jetzt das aktuelle Bild (32×32-Downscale, Luminanz-Histogramm) und berechnet Belichtung, Kontrast, Sättigung und Lebendigkeit bildindividuell
+- Neuer Zauberstab-Button (✨) im Anpassungen-Header: optimiert Licht + Farbe + Auflösung mit einem Klick
+- `ImageAutoEnhancer`: eigenständiges Utility für Luminanz- und Farbanalyse via CGBitmapContext-Downscale
+
+---
+
 ## 1.78.0
 **Feature — Thumbnail-Disk-Cache für schnelleres Laden**
 

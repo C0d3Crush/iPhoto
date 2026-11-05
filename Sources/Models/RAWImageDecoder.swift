@@ -223,9 +223,15 @@ struct RAWImageDecoder {
                 kCGImageSourceThumbnailMaxPixelSize: maxDim
             ]
             let t0 = Date()
-            let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary)
+            let lazyThumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary)
             Log.trace("CreateThumbnailAtIndex fertig: \(Int(Date().timeIntervalSince(t0) * 1000)) ms \(name)")
-            return thumb
+            // CGImageSourceCreateThumbnailAtIndex kann ein lazy CGImage zurückgeben,
+            // das intern noch auf jpegData zeigt. Sobald jpegData am Funktionsende
+            // freigegeben wird, greift SwiftUI beim späteren Rendern auf freigegebenen
+            // Speicher zu → SIGILL auf dem Main-Thread (Bug #40).
+            // Fix: Pixel sofort in einen neuen Bitmap-Context rendern — danach ist das
+            // CGImage vollständig eigenständig und unabhängig von der Quelldatei.
+            return lazyThumb.flatMap { materialize($0) }
         }
 
         // Vollbild-Pfad: volle Auflösung + manuelle EXIF-Rotation (für decode())
@@ -236,6 +242,21 @@ struct RAWImageDecoder {
         iphotoBreadcrumb("decodeEmbeddedJPEG: applyExifOrientation (\(name)) \(image.width)x\(image.height)")
         Log.trace("applyExifOrientation: \(image.width)×\(image.height) \(name)")
         return applyExifOrientation(image, source: source)
+    }
+
+    // Zwingt ein lazy CGImage (das intern noch auf den ImageIO-Datenpuffer zeigt)
+    // in einen eigenständigen Bitmap-Buffer. Verhindert SIGILL wenn der Quelldatei-
+    // Puffer freigegeben wird bevor SwiftUI das Bild rendert (Bug #40).
+    private static func materialize(_ image: CGImage) -> CGImage? {
+        let w = image.width, h = image.height
+        guard w > 0, h > 0 else { return image }
+        let space = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let ctx = CGContext(data: nil, width: w, height: h,
+                                  bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: space, bitmapInfo: bitmapInfo) else { return image }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return ctx.makeImage()
     }
 
     private static func applyExifOrientation(_ image: CGImage, source: CGImageSource) -> CGImage {

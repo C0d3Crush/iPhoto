@@ -90,6 +90,16 @@ struct AdjustmentsPanel: View {
                 .kerning(0.5)
                 .foregroundColor(.primary)
             Spacer()
+            Button(action: autoEnhanceAll) {
+                Image(systemName: "wand.and.sparkles")
+                    .font(.system(size: 13))
+                    .foregroundColor(.accentColor)
+                    .padding(4)
+                    .background(Color.accentColor.opacity(0.1))
+                    .cornerRadius(5)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("Automatisch optimieren (Licht + Farbe)")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -329,25 +339,47 @@ struct AdjustmentsPanel: View {
     }
 
     private func autoEnhanceSection(_ section: AdjSection) {
+        guard let cgImage = viewModel.currentImage else { return }
         switch section.id {
         case "licht":
-            viewModel.adj.adjustments.exposure    = 0.0
-            viewModel.adj.adjustments.brightness  = 0.05
-            viewModel.adj.adjustments.contrast    = 1.08
+            let r = ImageAutoEnhancer.analyzeLight(cgImage)
+            viewModel.adj.adjustments.exposure   = r.exposure
+            viewModel.adj.adjustments.brightness = r.brightness
+            viewModel.adj.adjustments.contrast   = r.contrast
         case "farbe":
-            viewModel.adj.adjustments.saturation  = 1.12
-            viewModel.adj.adjustments.vibrance    = 0.2
-            viewModel.adj.adjustments.hue         = 0.0
+            let r = ImageAutoEnhancer.analyzeColor(cgImage)
+            viewModel.adj.adjustments.saturation = r.saturation
+            viewModel.adj.adjustments.vibrance   = r.vibrance
+            viewModel.adj.adjustments.hue        = 0.0
         case "aufl":
-            viewModel.adj.adjustments.clarity     = 0.2
-            viewModel.adj.adjustments.texture     = 0.15
-            viewModel.adj.adjustments.dehaze      = 0.0
+            viewModel.adj.adjustments.clarity  = 0.2
+            viewModel.adj.adjustments.texture  = 0.1
+            viewModel.adj.adjustments.dehaze   = 0.0
         default: break
         }
-        // un-bypass section so the effect is visible
         section.rows.forEach { viewModel.adj.bypassedAdjustments.remove($0.key) }
-        // expand section so user sees the applied values
         expanded.insert(section.id)
+        viewModel.applyAdjustments(hiRes: true)
+    }
+
+    private func autoEnhanceAll() {
+        guard let cgImage = viewModel.currentImage else { return }
+        let light = ImageAutoEnhancer.analyzeLight(cgImage)
+        viewModel.adj.adjustments.exposure   = light.exposure
+        viewModel.adj.adjustments.brightness = light.brightness
+        viewModel.adj.adjustments.contrast   = light.contrast
+        let color = ImageAutoEnhancer.analyzeColor(cgImage)
+        viewModel.adj.adjustments.saturation = color.saturation
+        viewModel.adj.adjustments.vibrance   = color.vibrance
+        viewModel.adj.adjustments.hue        = 0.0
+        viewModel.adj.adjustments.clarity    = 0.2
+        viewModel.adj.adjustments.texture    = 0.1
+        // un-bypass all auto sections
+        ["licht", "farbe", "aufl"].flatMap { id in
+            sections.first(where: { $0.id == id })?.rows ?? []
+        }.forEach { viewModel.adj.bypassedAdjustments.remove($0.key) }
+        // expand auto sections
+        ["licht", "farbe", "aufl"].forEach { expanded.insert($0) }
         viewModel.applyAdjustments(hiRes: true)
     }
 }
