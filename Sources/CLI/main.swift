@@ -18,8 +18,12 @@ private func printUsage() {
                         [--exposure N] [--brightness N] [--contrast N] [--saturation N]
                         [--warmth N] [--tint N] [--vibrance N] [--hue N]
                         [--clarity N] [--sharpen N] [--preset <name>]
+                        [--crop x,y,w,h] [--rotate 90|180|270]
       iphoto-cli preset list [--json]
       iphoto-cli preset apply <datei> --name <name> --output <ziel> [--format jpeg] [--quality 0.9] [--json]
+      iphoto-cli preset save <bildpfad> --name <name> [--author <text>] [--json]
+      iphoto-cli preset export <name> --output <datei.iphotorecipe> [--json]
+      iphoto-cli preset import <datei.iphotorecipe> [--json]
       iphoto-cli preset delete <name>
       iphoto-cli analyse <datei|ordner> [--json] [--blur-threshold N] [--shadow N] [--highlight N]
       iphoto-cli inpaint <datei> --output <ziel> [--python /usr/bin/python3] [--cmt ~/cmt] [--checkpoint ~/cmt/checkpoints]
@@ -32,6 +36,8 @@ private func printUsage() {
       iphoto-cli people faces [--path <bildpfad>] [--json]
       iphoto-cli people cluster [--epsilon 0.12] [--json]
       iphoto-cli people rename <id> <name> [--json]
+      iphoto-cli people export-names [--output <datei.csv>] [--json]
+      iphoto-cli people import-names <datei.csv> [--json]
       iphoto-cli album list|create|delete|add|remove|images|reorder [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli version list|backup|restore|delete [--json]
@@ -115,6 +121,10 @@ private struct CLIArgs {
     var clarity: Double? = nil
     var sharpen: Double? = nil
     var presetName: String? = nil
+
+    // crop / rotate flags (for adjust command)
+    var cropRect: CGRect? = nil           // normalized 0-1 coords: x,y,w,h
+    var rotateTurns: Int? = nil           // 1=90°, 2=180°, 3=270°
 
     // analyse flags
     var blurThreshold: Double = 80.0
@@ -253,6 +263,25 @@ private func parseArgs(_ args: [String]) -> CLIArgs? {
             i += 1
             guard i < args.count else { fputs("Fehler: --checkpoint braucht einen Pfad\n", stderr); return nil }
             result.checkpointPath = args[i]
+        case "--crop":
+            i += 1
+            guard i < args.count else { fputs("Fehler: --crop braucht x,y,w,h (normalisiert 0-1)\n", stderr); return nil }
+            let parts = args[i].split(separator: ",").compactMap { Double($0) }
+            guard parts.count == 4 else {
+                fputs("Fehler: --crop Format: x,y,w,h (z.B. 0.1,0.1,0.8,0.8)\n", stderr); return nil
+            }
+            result.cropRect = CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3])
+        case "--rotate":
+            i += 1
+            guard i < args.count else { fputs("Fehler: --rotate braucht 90, 180 oder 270\n", stderr); return nil }
+            let deg = args[i]
+            switch deg {
+            case "90":  result.rotateTurns = 1
+            case "180": result.rotateTurns = 2
+            case "270": result.rotateTurns = 3
+            default:
+                fputs("Fehler: --rotate erlaubt: 90, 180, 270\n", stderr); return nil
+            }
         default:
             result.inputs.append(URL(fileURLWithPath: arg))
         }
@@ -688,6 +717,8 @@ private func buildAdjustmentState(_ args: CLIArgs) -> AdjustmentState? {
     if let v = args.hue         { state.hue         = v }
     if let v = args.clarity     { state.clarity     = v }
     if let v = args.sharpen     { state.sharpenAmount = v }
+    if let v = args.cropRect    { state.cropRect    = v }
+    if let v = args.rotateTurns { state.turns       = v }
 
     return state
 }
@@ -886,8 +917,110 @@ private func runPreset(_ subArgs: [String]) -> Int32 {
         }
         return 0
 
+    case "save":
+        // preset save <bildpfad> --name <name> [--author <text>] [--json]
+        let positionals = subArgs.dropFirst().filter { !$0.hasPrefix("-") }
+        var saveName: String? = nil
+        var saveAuthor: String? = nil
+        var savePath: String? = positionals.first
+        var si = 1
+        while si < subArgs.count {
+            switch subArgs[si] {
+            case "--name":   si += 1; if si < subArgs.count { saveName = subArgs[si] }
+            case "--author": si += 1; if si < subArgs.count { saveAuthor = subArgs[si] }
+            default: break
+            }
+            si += 1
+        }
+        let jsonSave = subArgs.contains("--json")
+        guard let imgPath = savePath else {
+            fputs("Verwendung: iphoto-cli preset save <bildpfad> --name <name>\n", stderr); return 1
+        }
+        guard let pName = saveName else {
+            fputs("Fehler: --name <name> ist erforderlich\n", stderr); return 1
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        let adj = catalog.loadAdjustments(path: imgPath) ?? AdjustmentState()
+        let newPreset = Preset(name: pName, author: saveAuthor, adjustments: adj)
+        catalog.savePreset(newPreset)
+        if jsonSave {
+            let obj: [String: Any] = ["name": pName, "id": newPreset.id.uuidString, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Preset gespeichert: \(pName) (\(newPreset.id.uuidString))")
+        }
+        return 0
+
+    case "export":
+        // preset export <name> --output <datei.iphotorecipe> [--json]
+        let exportPositionals = subArgs.dropFirst().filter { !$0.hasPrefix("-") }
+        var exportOutput: URL? = nil
+        var ei = 1
+        while ei < subArgs.count {
+            if subArgs[ei] == "--output", ei + 1 < subArgs.count {
+                exportOutput = URL(fileURLWithPath: subArgs[ei + 1]); ei += 2
+            } else { ei += 1 }
+        }
+        let jsonExport = subArgs.contains("--json")
+        guard let exportName = exportPositionals.first else {
+            fputs("Verwendung: iphoto-cli preset export <name> --output <datei.iphotorecipe>\n", stderr); return 1
+        }
+        guard let outFile = exportOutput else {
+            fputs("Fehler: --output <datei.iphotorecipe> ist erforderlich\n", stderr); return 1
+        }
+        let catalogE = CatalogStore(dbPath: envDBPath())
+        let allE = Preset.builtIn + catalogE.allUserPresets()
+        guard let found = allE.first(where: { $0.name.lowercased() == exportName.lowercased() }) else {
+            fputs("Fehler: Preset '\(exportName)' nicht gefunden\n", stderr); return 1
+        }
+        do {
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(found)
+            try data.write(to: outFile)
+        } catch {
+            fputs("Fehler beim Schreiben: \(error.localizedDescription)\n", stderr); return 1
+        }
+        if jsonExport {
+            let obj: [String: Any] = ["name": found.name, "output": outFile.path, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Preset exportiert: \(outFile.path)")
+        }
+        return 0
+
+    case "import":
+        // preset import <datei.iphotorecipe> [--json]
+        let importPositionals = subArgs.dropFirst().filter { !$0.hasPrefix("-") }
+        let jsonImport = subArgs.contains("--json")
+        guard let importFile = importPositionals.first else {
+            fputs("Verwendung: iphoto-cli preset import <datei.iphotorecipe>\n", stderr); return 1
+        }
+        let importURL = URL(fileURLWithPath: importFile)
+        guard FileManager.default.fileExists(atPath: importURL.path) else {
+            fputs("Fehler: Datei nicht gefunden: \(importURL.path)\n", stderr); return 1
+        }
+        do {
+            let data = try Data(contentsOf: importURL)
+            let decoded = try JSONDecoder().decode(Preset.self, from: data)
+            let importedPreset = Preset(name: decoded.name, author: decoded.author, adjustments: decoded.adjustments)
+            let catalogI = CatalogStore(dbPath: envDBPath())
+            catalogI.savePreset(importedPreset)
+            if jsonImport {
+                let obj: [String: Any] = ["name": importedPreset.name, "id": importedPreset.id.uuidString, "ok": true]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                print("Preset importiert: \(importedPreset.name) (\(importedPreset.id.uuidString))")
+            }
+        } catch {
+            fputs("Fehler beim Importieren: \(error.localizedDescription)\n", stderr); return 1
+        }
+        return 0
+
     default:
-        fputs("Fehler: Unbekannter preset-Unterbefehl '\(sub)'. Erlaubt: list, apply, delete\n", stderr)
+        fputs("Fehler: Unbekannter preset-Unterbefehl '\(sub)'. Erlaubt: list, apply, delete, save, export, import\n", stderr)
         return 1
     }
 }
@@ -1548,8 +1681,77 @@ private func runPeople(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "export-names":
+        // people export-names --output <datei.csv> [--json]
+        var exportOut: URL? = nil
+        var i = 1
+        while i < args.count {
+            if args[i] == "--output", i + 1 < args.count {
+                exportOut = URL(fileURLWithPath: args[i + 1]); i += 2
+            } else { i += 1 }
+        }
+        let people = catalog.allPeople()
+        let csv = "id,name\n" + people.map { p in
+            let name = (p.name ?? "").replacingOccurrences(of: "\"", with: "\"\"")
+            return "\(p.id),\"\(name)\""
+        }.joined(separator: "\n")
+        if let out = exportOut {
+            do { try csv.write(to: out, atomically: true, encoding: .utf8) }
+            catch { fputs("Fehler beim Schreiben: \(error.localizedDescription)\n", stderr); return 1 }
+            if jsonMode {
+                let obj: [String: Any] = ["output": out.path, "count": people.count, "ok": true]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                print("Exportiert: \(people.count) Person(en) → \(out.path)")
+            }
+        } else {
+            print(csv)
+        }
+        return 0
+
+    case "import-names":
+        // people import-names <datei.csv> [--json]
+        let importPath = args.dropFirst().first { !$0.hasPrefix("-") }
+        guard let importFile = importPath else {
+            fputs("Verwendung: iphoto-cli people import-names <datei.csv>\n", stderr); return 1
+        }
+        let importURL = URL(fileURLWithPath: importFile)
+        guard FileManager.default.fileExists(atPath: importURL.path) else {
+            fputs("Fehler: Datei nicht gefunden: \(importURL.path)\n", stderr); return 1
+        }
+        guard let content = try? String(contentsOf: importURL, encoding: .utf8) else {
+            fputs("Fehler: Datei konnte nicht gelesen werden\n", stderr); return 1
+        }
+        var lines = content.components(separatedBy: "\n").filter { !$0.isEmpty }
+        if lines.first?.lowercased().hasPrefix("id,") == true { lines.removeFirst() }
+        var updated = 0
+        for line in lines {
+            let cols = line.components(separatedBy: ",")
+            guard cols.count >= 2 else { continue }
+            let id   = cols[0].trimmingCharacters(in: .whitespaces)
+            var name = cols.dropFirst().joined(separator: ",").trimmingCharacters(in: .whitespaces)
+            if name.hasPrefix("\"") && name.hasSuffix("\"") {
+                name = String(name.dropFirst().dropLast()).replacingOccurrences(of: "\"\"", with: "\"")
+            }
+            let all = catalog.allPeople()
+            if let person = all.first(where: { $0.id == id }) {
+                var p = person; p.name = name.isEmpty ? nil : name
+                catalog.updatePerson(p)
+                updated += 1
+            }
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["updated": updated, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Namen aktualisiert: \(updated) Person(en)")
+        }
+        return 0
+
     default:
-        fputs("Fehler: Unbekannter people-Unterbefehl '\(sub)'. Erlaubt: list, faces, cluster, rename\n", stderr)
+        fputs("Fehler: Unbekannter people-Unterbefehl '\(sub)'. Erlaubt: list, faces, cluster, rename, export-names, import-names\n", stderr)
         return 1
     }
 }

@@ -2,6 +2,20 @@
 
 ---
 
+## 1.81.0
+**Feature — Neue CLI-Befehle: Preset-Import/Export, Crop/Rotate, People-Namens-CSV**
+
+- `iphoto-cli preset save <bild> --name <name>` speichert die Anpassungen eines Bildes als neues Nutzer-Preset im Katalog
+- `iphoto-cli preset export <name> --output <datei.iphotorecipe>` exportiert ein Preset (auch Built-in) als portables JSON
+- `iphoto-cli preset import <datei.iphotorecipe>` importiert ein Preset aus einer `.iphotorecipe`-Datei in den Katalog
+- `iphoto-cli adjust … --crop x,y,w,h` wendet einen Zuschnitt an (normalisierte 0–1-Koordinaten)
+- `iphoto-cli adjust … --rotate 90|180|270` rotiert das Bild vor dem Export
+- `iphoto-cli people export-names [--output datei.csv]` exportiert alle Personen-IDs und Namen als CSV
+- `iphoto-cli people import-names <datei.csv>` aktualisiert Personennamen aus einer CSV (z. B. nach Massenbearbeitung)
+- 11 neue Tests in `run_plugins.sh` — 39 Tests gesamt, alle grün
+
+---
+
 ## 1.80.0
 **Bugfix — SIGILL auch bei JPEG/HEIC-Thumbnails + Inspector-Status persistent**
 

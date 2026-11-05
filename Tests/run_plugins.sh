@@ -386,6 +386,127 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# preset save / export / import
+# ---------------------------------------------------------------------------
+echo "--- Preset save/export/import ---"
+
+RECIPE_FILE="$TMPDIR/test.iphotorecipe"
+
+# preset save: speichert Anpassungen eines Bildes als neues Preset
+PRESET_SAVE=$("$BIN" preset save "$INPUT_PNG" --name "TestPreset" --json 2>&1)
+PRESET_SAVE_EXIT=$?
+if [ $PRESET_SAVE_EXIT -eq 0 ] && echo "$PRESET_SAVE" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null; then
+    pass "preset save (Exitcode 0, JSON ok:true)"
+else
+    fail "preset save" "Exit $PRESET_SAVE_EXIT: $PRESET_SAVE"
+fi
+
+# preset list: TestPreset muss jetzt erscheinen
+PRESET_LIST=$("$BIN" preset list 2>&1)
+if echo "$PRESET_LIST" | grep -q "TestPreset"; then
+    pass "preset list zeigt gespeichertes Preset"
+else
+    fail "preset list" "TestPreset nicht gefunden: $PRESET_LIST"
+fi
+
+# preset export: exportiert Chrome (builtin) in eine Datei
+PRESET_EXPORT=$("$BIN" preset export Chrome --output "$RECIPE_FILE" --json 2>&1)
+PRESET_EXPORT_EXIT=$?
+if [ $PRESET_EXPORT_EXIT -eq 0 ] && [ -f "$RECIPE_FILE" ]; then
+    pass "preset export (Exitcode 0, Datei erstellt)"
+else
+    fail "preset export" "Exit $PRESET_EXPORT_EXIT: $PRESET_EXPORT"
+fi
+
+# preset import: importiert die exportierte Datei
+PRESET_IMPORT=$("$BIN" preset import "$RECIPE_FILE" --json 2>&1)
+PRESET_IMPORT_EXIT=$?
+if [ $PRESET_IMPORT_EXIT -eq 0 ] && echo "$PRESET_IMPORT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null; then
+    pass "preset import (Exitcode 0, JSON ok:true)"
+else
+    fail "preset import" "Exit $PRESET_IMPORT_EXIT: $PRESET_IMPORT"
+fi
+
+# preset import mit ungültiger Datei: muss Fehler liefern
+PRESET_IMPORT_BAD_EXIT=0
+"$BIN" preset import /nonexistent/file.iphotorecipe > /dev/null 2>&1 || PRESET_IMPORT_BAD_EXIT=$?
+if [ $PRESET_IMPORT_BAD_EXIT -ne 0 ]; then
+    pass "preset import ungültige Datei (Exitcode != 0)"
+else
+    fail "preset import ungültige Datei" "Hätte fehlschlagen sollen (Exitcode 0)"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# adjust --crop / --rotate
+# ---------------------------------------------------------------------------
+echo "--- Adjust crop/rotate ---"
+
+CROP_OUT="$TMPDIR/crop_out.png"
+CROP_RESULT=$("$BIN" adjust "$INPUT_PNG" --output "$CROP_OUT" --format png --crop 0.1,0.1,0.8,0.8 2>&1)
+CROP_EXIT=$?
+if [ $CROP_EXIT -eq 0 ] && [ -f "$CROP_OUT" ]; then
+    pass "adjust --crop (Exitcode 0, Datei erstellt)"
+else
+    fail "adjust --crop" "Exit $CROP_EXIT: $CROP_RESULT"
+fi
+
+ROTATE_OUT="$TMPDIR/rotate_out.png"
+ROTATE_RESULT=$("$BIN" adjust "$INPUT_PNG" --output "$ROTATE_OUT" --format png --rotate 90 2>&1)
+ROTATE_EXIT=$?
+if [ $ROTATE_EXIT -eq 0 ] && [ -f "$ROTATE_OUT" ]; then
+    pass "adjust --rotate 90 (Exitcode 0, Datei erstellt)"
+else
+    fail "adjust --rotate" "Exit $ROTATE_EXIT: $ROTATE_RESULT"
+fi
+
+ROTATE_BAD_EXIT=0
+"$BIN" adjust "$INPUT_PNG" --output "$TMPDIR/rot_bad.png" --format png --rotate 45 > /dev/null 2>&1 || ROTATE_BAD_EXIT=$?
+if [ $ROTATE_BAD_EXIT -ne 0 ]; then
+    pass "adjust --rotate ungültig (Exitcode != 0)"
+else
+    fail "adjust --rotate ungültig" "Hätte fehlschlagen sollen (Exitcode 0)"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# people export-names / import-names
+# ---------------------------------------------------------------------------
+echo "--- People export-names/import-names ---"
+
+NAMES_CSV="$TMPDIR/names.csv"
+
+EXPORT_NAMES=$("$BIN" people export-names --output "$NAMES_CSV" --json 2>&1)
+EXPORT_NAMES_EXIT=$?
+if [ $EXPORT_NAMES_EXIT -eq 0 ] && [ -f "$NAMES_CSV" ]; then
+    pass "people export-names (Exitcode 0, CSV erstellt)"
+else
+    fail "people export-names" "Exit $EXPORT_NAMES_EXIT: $EXPORT_NAMES"
+fi
+
+# import-names mit erzeugter CSV muss Exitcode 0 liefern
+IMPORT_NAMES=$("$BIN" people import-names "$NAMES_CSV" --json 2>&1)
+IMPORT_NAMES_EXIT=$?
+if [ $IMPORT_NAMES_EXIT -eq 0 ] && echo "$IMPORT_NAMES" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null; then
+    pass "people import-names (Exitcode 0, JSON ok:true)"
+else
+    fail "people import-names" "Exit $IMPORT_NAMES_EXIT: $IMPORT_NAMES"
+fi
+
+# import-names mit nicht-existenter Datei muss Fehler liefern
+IMPORT_NAMES_BAD_EXIT=0
+"$BIN" people import-names /nonexistent/names.csv > /dev/null 2>&1 || IMPORT_NAMES_BAD_EXIT=$?
+if [ $IMPORT_NAMES_BAD_EXIT -ne 0 ]; then
+    pass "people import-names ungültige Datei (Exitcode != 0)"
+else
+    fail "people import-names ungültige Datei" "Hätte fehlschlagen sollen (Exitcode 0)"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
