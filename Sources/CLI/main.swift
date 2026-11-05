@@ -45,7 +45,7 @@ private func printUsage() {
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
-      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove [--json]
+      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add [--json]
       iphoto-cli albumfolder list|create|rename|delete [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
@@ -97,6 +97,8 @@ private func printUsage() {
       iphoto-cli catalog backup-now [--json]
       iphoto-cli catalog list [--limit N] [--json]
       iphoto-cli catalog remove <pfad> [<pfad> ...] [--json]
+      iphoto-cli catalog get <pfad> [--json]
+      iphoto-cli catalog add <pfad> [<pfad> ...] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -3320,8 +3322,91 @@ private func runCatalog(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "get":
+        // catalog get <pfad> [--json] — einzelnen Katalog-Eintrag anzeigen
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli catalog get <pfad> [--json]\n", stderr); return 1
+        }
+        guard let img = catalog.image(forPath: path) else {
+            fputs("Fehler: Bild nicht im Katalog: \(path)\n", stderr); return 1
+        }
+        let cam = [img.cameraMake, img.cameraModel].compactMap { $0 }.joined(separator: " ")
+        if jsonMode {
+            var o: [String: Any] = ["path": img.path, "filename": img.filename,
+                                    "width": img.width, "height": img.height,
+                                    "is_raw": img.isRAW, "size_bytes": img.sizeBytes,
+                                    "imported_at": img.importedAt]
+            if let d = img.dateTaken { o["date_taken"] = d }
+            if !cam.isEmpty { o["camera"] = cam }
+            if let d = try? JSONSerialization.data(withJSONObject: o, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Pfad:       \(img.path)")
+            print("Maße:       \(img.width)x\(img.height)")
+            print("Größe:      \(img.sizeBytes) Bytes")
+            print("RAW:        \(img.isRAW)")
+            print("Aufnahme:   \(img.dateTaken ?? "—")")
+            print("Kamera:     \(cam.isEmpty ? "—" : cam)")
+            print("Importiert: \(img.importedAt)")
+        }
+        return 0
+
+    case "add":
+        // catalog add <pfad> [<pfad> ...] [--json]
+        // Registriert Bilder direkt im Katalog. Liest nur Header-Properties (kein Pixel-Decode),
+        // parallel über alle Dateien, dann ein einziger Batch-Insert in einer Transaktion.
+        let paths = Array(args.dropFirst().filter { !$0.hasPrefix("-") })
+        guard !paths.isEmpty else {
+            fputs("Verwendung: iphoto-cli catalog add <pfad> [<pfad> ...] [--json]\n", stderr); return 1
+        }
+        let fm = FileManager.default
+        let missing = paths.filter { !fm.fileExists(atPath: $0) }
+        guard missing.isEmpty else {
+            missing.forEach { fputs("Fehler: Datei nicht gefunden: \($0)\n", stderr) }
+            return 1
+        }
+        typealias Item = (path: String, filename: String, isRAW: Bool, width: Int, height: Int,
+                          sizeBytes: Int64, dateTaken: String?, cameraMake: String?, cameraModel: String?)
+        var items = [Item?](repeating: nil, count: paths.count)
+        let lock = NSLock()
+        DispatchQueue.concurrentPerform(iterations: paths.count) { idx in
+            let p = paths[idx]
+            let url = URL(fileURLWithPath: p)
+            let attrs = try? FileManager.default.attributesOfItem(atPath: p)
+            let size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
+            var w = 0, h = 0
+            var date: String? = nil, make: String? = nil, model: String? = nil
+            let opts = [kCGImageSourceShouldCache: false] as CFDictionary
+            if let src = CGImageSourceCreateWithURL(url as CFURL, opts),
+               let props = CGImageSourceCopyPropertiesAtIndex(src, 0, opts) as? [CFString: Any] {
+                w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue ?? 0
+                h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue ?? 0
+                if let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] {
+                    date = exif[kCGImagePropertyExifDateTimeOriginal] as? String
+                }
+                if let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] {
+                    make = tiff[kCGImagePropertyTIFFMake] as? String
+                    model = tiff[kCGImagePropertyTIFFModel] as? String
+                }
+            }
+            let item: Item = (path: p, filename: url.lastPathComponent,
+                              isRAW: ImageDocument.rawExtensions.contains(url.pathExtension.lowercased()),
+                              width: w, height: h, sizeBytes: size,
+                              dateTaken: date, cameraMake: make, cameraModel: model)
+            lock.lock(); items[idx] = item; lock.unlock()
+        }
+        catalog.batchUpsertImages(items.compactMap { $0 })
+        if jsonMode {
+            let obj: [String: Any] = ["added": paths, "count": paths.count, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Im Katalog registriert: \(paths.count) Bild(er)")
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add [--json]\n", stderr)
         return 1
     }
 }

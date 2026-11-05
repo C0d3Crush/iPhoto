@@ -2,6 +2,12 @@
 
 ---
 
+## 1.90.0
+**CLI: Katalog-Einträge anzeigen und direkt registrieren**
+- Neuer Befehl `iphoto-cli catalog get <pfad> [--json]` zeigt einen einzelnen Katalog-Eintrag (Maße, Größe, RAW, Kamera, Aufnahme- und Importdatum)
+- `iphoto-cli catalog add <pfad> [...] [--json]` registriert Bilder direkt im Katalog — liest nur Header-Metadaten (kein Pixel-Decode), parallel über alle Dateien, ein einziger SQLite-Batch-Insert in einer Transaktion
+- Tests in `Tests/run_plugins.sh` (Happy-Path, Upsert ohne Duplikate, unbekannte/fehlende Dateien, fehlende Argumente)
+
 ## 1.89.0
 **CLI: Katalog-Bilder auflisten/entfernen, Personen löschen/zurücksetzen**
 - Neuer Befehl `iphoto-cli catalog list [--limit N] [--json]` listet alle Bilder im Katalog (Pfad, Größe, Kamera, Aufnahmedatum)

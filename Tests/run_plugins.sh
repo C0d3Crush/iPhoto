@@ -1156,6 +1156,67 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# catalog get / add
+# ---------------------------------------------------------------------------
+echo "--- CATALOG GET / ADD ---"
+
+CGA_DB="$TMPDIR/cga_catalog.db"
+CGA_IMG_A="$TMPDIR/cga_a.png"
+CGA_IMG_B="$TMPDIR/cga_b.png"
+cp "$INPUT_PNG" "$CGA_IMG_A"
+cp "$INPUT_PNG" "$CGA_IMG_B"
+
+# add zwei Bilder (Maße aus Header)
+CGA_ADD_EXIT=0
+CGA_ADD=$(IPHOTO_CATALOG_DB="$CGA_DB" "$BIN" catalog add "$CGA_IMG_A" "$CGA_IMG_B" --json 2>&1) || CGA_ADD_EXIT=$?
+if [ $CGA_ADD_EXIT -eq 0 ] && echo "$CGA_ADD" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['count']==2" 2>/dev/null; then
+    pass "catalog add --json (2 Bilder)"
+else
+    fail "catalog add --json" "Exit $CGA_ADD_EXIT: $CGA_ADD"
+fi
+
+# list zeigt beide
+CGA_LIST=$(IPHOTO_CATALOG_DB="$CGA_DB" "$BIN" catalog list --json 2>&1) || true
+if echo "$CGA_LIST" | python3 -c "import sys,json; assert len(json.load(sys.stdin))==2" 2>/dev/null; then
+    pass "catalog add → list (2 Einträge)"
+else
+    fail "catalog add → list" "$CGA_LIST"
+fi
+
+# get liefert Maße 4x4 + Dateigröße
+CGA_GET_EXIT=0
+CGA_GET=$(IPHOTO_CATALOG_DB="$CGA_DB" "$BIN" catalog get "$CGA_IMG_A" --json 2>&1) || CGA_GET_EXIT=$?
+if [ $CGA_GET_EXIT -eq 0 ] && echo "$CGA_GET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['width']==4 and d['height']==4 and d['is_raw']==False and d['size_bytes']>0 and d['filename']=='cga_a.png'" 2>/dev/null; then
+    pass "catalog get --json (4x4, size_bytes > 0)"
+else
+    fail "catalog get --json" "Exit $CGA_GET_EXIT: $CGA_GET"
+fi
+
+# add ist idempotent (Upsert)
+IPHOTO_CATALOG_DB="$CGA_DB" "$BIN" catalog add "$CGA_IMG_A" > /dev/null 2>&1 || true
+CGA_LIST2=$(IPHOTO_CATALOG_DB="$CGA_DB" "$BIN" catalog list --json 2>&1) || true
+if echo "$CGA_LIST2" | python3 -c "import sys,json; assert len(json.load(sys.stdin))==2" 2>/dev/null; then
+    pass "catalog add erneut (Upsert, keine Duplikate)"
+else
+    fail "catalog add erneut" "$CGA_LIST2"
+fi
+
+# Fehlerpfade
+CGA_ERR=0
+IPHOTO_CATALOG_DB="$CGA_DB" "$BIN" catalog get "/nonexistent/none.jpg" > /dev/null 2>&1 || CGA_ERR=$?
+if [ $CGA_ERR -ne 0 ]; then pass "catalog get (nicht im Katalog → Fehler)"; else fail "catalog get (unbekannt)" "Hätte fehlschlagen sollen"; fi
+
+CGA_ERR=0
+IPHOTO_CATALOG_DB="$CGA_DB" "$BIN" catalog add "/nonexistent/none.jpg" > /dev/null 2>&1 || CGA_ERR=$?
+if [ $CGA_ERR -ne 0 ]; then pass "catalog add (Datei fehlt → Fehler)"; else fail "catalog add (Datei fehlt)" "Hätte fehlschlagen sollen"; fi
+
+CGA_ERR=0
+IPHOTO_CATALOG_DB="$CGA_DB" "$BIN" catalog add > /dev/null 2>&1 || CGA_ERR=$?
+if [ $CGA_ERR -ne 0 ]; then pass "catalog add (ohne Pfad → Fehler)"; else fail "catalog add (ohne Pfad)" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
