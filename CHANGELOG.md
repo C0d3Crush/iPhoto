@@ -2,6 +2,16 @@
 
 ---
 
+## 1.82.0
+**Feature — CLI: watched-Ordner-Verwaltung + Backup-Konfiguration**
+
+- `iphoto-cli watched list|add|remove|check` — überwachte Ordner auflisten, hinzufügen, entfernen und Verfügbarkeit prüfen; `--json`-Support für alle Unterkommandos
+- `iphoto-cli backup get|set` — Backup-Einstellungen (Qualität, Zielordner, Kollisionsmodus, Downscale) lesen und schreiben ohne App-Start
+- Bugfix `WatchedFolder`: Bookmark-Erstellung fällt auf `.minimalBookmark` zurück wenn `.withSecurityScope` im CLI-Kontext nicht verfügbar ist; `resolveURL()` ebenfalls abgesichert
+- 9 neue Tests in `run_plugins.sh` — 48 Tests gesamt, alle grün
+
+---
+
 ## 1.81.0
 **Feature — Neue CLI-Befehle: Preset-Import/Export, Crop/Rotate, People-Namens-CSV**
 

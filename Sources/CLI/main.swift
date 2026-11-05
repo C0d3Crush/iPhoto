@@ -48,6 +48,14 @@ private func printUsage() {
       iphoto-cli duplicate list|similar [--json]
       iphoto-cli config show|export [--path <pfad>]|import <pfad>
       iphoto-cli cache stats|clear [--json]
+      iphoto-cli watched list [--json]
+      iphoto-cli watched add <pfad> [--auto-sync] [--json]
+      iphoto-cli watched remove <name|id> [--json]
+      iphoto-cli watched check [<name|id>] [--json]
+      iphoto-cli backup get [--json]
+      iphoto-cli backup set [--quality 0.85] [--mode rename|skip|overwrite] [--dest <pfad>]
+                            [--downscale|--no-downscale] [--long-side 2560]
+                            [--metadata|--no-metadata] [--json]
       iphoto-cli rating list [--flag pick|reject] [--color farbe] [--min-rating N] [--json]
       iphoto-cli smartfolder list [--json]
       iphoto-cli smartfolder query <name> [--json]
@@ -1756,6 +1764,257 @@ private func runPeople(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - WatchedFolder
+
+private func watchedFoldersFileURL() -> URL {
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("iPhoto")
+        .appendingPathComponent("watchedFolders.json")
+}
+
+private func loadWatchedFoldersList() -> [WatchedFolder] {
+    guard let data = try? Data(contentsOf: watchedFoldersFileURL()) else { return [] }
+    return (try? JSONDecoder().decode([WatchedFolder].self, from: data)) ?? []
+}
+
+private func saveWatchedFoldersList(_ folders: [WatchedFolder]) {
+    let url = watchedFoldersFileURL()
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                             withIntermediateDirectories: true)
+    if let data = try? JSONEncoder().encode(folders) {
+        try? data.write(to: url)
+    }
+}
+
+private func runWatched(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "list"
+    let jsonMode = args.contains("--json")
+
+    switch sub {
+    case "list":
+        let folders = loadWatchedFoldersList()
+        if jsonMode {
+            let arr: [[String: Any]] = folders.map { f in
+                var d: [String: Any] = ["id": f.id.uuidString, "name": f.name]
+                if let p = f.bookmarkPath { d["path"] = p }
+                d["auto_sync"] = f.autoSync
+                d["available"] = f.isAvailable
+                d["removable"] = f.isRemovableMedia
+                if let dest = f.importDestinationPath { d["import_dest"] = dest }
+                return d
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let s = String(data: data, encoding: .utf8) { print(s) }
+        } else {
+            if folders.isEmpty {
+                print("Keine überwachten Ordner konfiguriert.")
+            } else {
+                for f in folders {
+                    let status = f.isAvailable ? "✓" : "✗"
+                    let sync   = f.autoSync ? " [auto-sync]" : ""
+                    let path   = f.bookmarkPath ?? "(unbekannt)"
+                    print("\(status) \(f.name)\(sync)")
+                    print("   Pfad: \(path)")
+                    print("   ID:   \(f.id.uuidString)")
+                }
+            }
+        }
+        return 0
+
+    case "add":
+        let positionals = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard let pathStr = positionals.first else {
+            fputs("Verwendung: iphoto-cli watched add <pfad> [--auto-sync] [--json]\n", stderr)
+            return 1
+        }
+        let url = URL(fileURLWithPath: pathStr).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            fputs("Fehler: Verzeichnis nicht gefunden: \(url.path)\n", stderr)
+            return 1
+        }
+        var folders = loadWatchedFoldersList()
+        guard !folders.contains(where: { $0.bookmarkPath == url.path }) else {
+            fputs("Fehler: Ordner wird bereits überwacht: \(url.path)\n", stderr)
+            return 1
+        }
+        guard let newFolder = try? WatchedFolder(url: url) else {
+            fputs("Fehler: Bookmark konnte nicht erstellt werden für: \(url.path)\n", stderr)
+            return 1
+        }
+        var added = newFolder
+        if args.contains("--auto-sync") {
+            // WatchedFolder is a struct; mutate via local copy
+            var mutable = added; mutable.autoSync = true; added = mutable
+        }
+        folders.append(added)
+        saveWatchedFoldersList(folders)
+        if jsonMode {
+            let obj: [String: Any] = ["id": added.id.uuidString, "name": added.name,
+                                      "path": url.path, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Ordner hinzugefügt: \(url.path)")
+        }
+        return 0
+
+    case "remove":
+        let positionals = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard let nameOrId = positionals.first else {
+            fputs("Verwendung: iphoto-cli watched remove <name|id> [--json]\n", stderr)
+            return 1
+        }
+        var folders = loadWatchedFoldersList()
+        guard let idx = folders.firstIndex(where: {
+            $0.id.uuidString.lowercased() == nameOrId.lowercased() ||
+            $0.name.lowercased() == nameOrId.lowercased() ||
+            $0.bookmarkPath == nameOrId
+        }) else {
+            fputs("Fehler: Ordner '\(nameOrId)' nicht gefunden\n", stderr)
+            return 1
+        }
+        let removed = folders.remove(at: idx)
+        saveWatchedFoldersList(folders)
+        if jsonMode {
+            let obj: [String: Any] = ["id": removed.id.uuidString, "name": removed.name, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Ordner entfernt: \(removed.name)")
+        }
+        return 0
+
+    case "check":
+        let positionals = args.dropFirst().filter { !$0.hasPrefix("-") }
+        let folders = loadWatchedFoldersList()
+        let toCheck = positionals.isEmpty ? folders : folders.filter {
+            $0.id.uuidString.lowercased() == positionals[0].lowercased() ||
+            $0.name.lowercased() == positionals[0].lowercased()
+        }
+        guard !toCheck.isEmpty else {
+            fputs("Fehler: Kein passender Ordner gefunden\n", stderr); return 1
+        }
+        if jsonMode {
+            let arr: [[String: Any]] = toCheck.map { f in
+                ["id": f.id.uuidString, "name": f.name,
+                 "path": f.bookmarkPath ?? "",
+                 "available": f.isAvailable, "removable": f.isRemovableMedia]
+            }
+            if let d = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            for f in toCheck {
+                let avail = f.isAvailable ? "verfügbar" : "nicht erreichbar"
+                let rem   = f.isRemovableMedia ? " (Wechselmedium)" : ""
+                print("\(f.name): \(avail)\(rem)")
+            }
+        }
+        return 0
+
+    default:
+        fputs("Fehler: Unbekannter watched-Unterbefehl '\(sub)'. Erlaubt: list, add, remove, check\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - BackupConfig
+
+private func runBackupConfig(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "get"
+    let jsonMode = args.contains("--json")
+    let d = UserDefaults.standard
+
+    switch sub {
+    case "get":
+        let quality   = (d.object(forKey: "backup.jpegQuality") as? Double) ?? 0.85
+        let metadata  = (d.object(forKey: "backup.copyMetadata") as? Bool) ?? true
+        let downscale = (d.object(forKey: "backup.downscaleEnabled") as? Bool) ?? false
+        let longSide  = (d.object(forKey: "backup.longSidePixels") as? Int) ?? 2560
+        let mode      = d.string(forKey: "backup.collisionMode") ?? "rename"
+        let destPath  = d.string(forKey: "backup.destinationDisplayPath")
+            ?? (FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("iPhoto/Backups").path)
+        if jsonMode {
+            let obj: [String: Any] = [
+                "jpeg_quality": quality,
+                "copy_metadata": metadata,
+                "downscale_enabled": downscale,
+                "long_side_pixels": longSide,
+                "collision_mode": mode,
+                "destination": destPath
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: data, encoding: .utf8) { print(s) }
+        } else {
+            print("Backup-Konfiguration:")
+            print("  Zielordner:    \(destPath)")
+            print("  JPEG-Qualität: \(Int(quality * 100))%")
+            print("  Metadaten:     \(metadata ? "ja" : "nein")")
+            print("  Herunterskal.: \(downscale ? "ja (\(longSide)px lange Seite)" : "nein")")
+            print("  Kollision:     \(mode)")
+        }
+        return 0
+
+    case "set":
+        var i = 1
+        while i < args.count {
+            switch args[i] {
+            case "--quality":
+                i += 1
+                if i < args.count, let v = Double(args[i]), v > 0, v <= 1 {
+                    d.set(v, forKey: "backup.jpegQuality")
+                } else {
+                    fputs("Fehler: --quality braucht eine Zahl 0.1–1.0\n", stderr); return 1
+                }
+            case "--mode":
+                i += 1
+                if i < args.count, ["rename","skip","overwrite"].contains(args[i]) {
+                    d.set(args[i], forKey: "backup.collisionMode")
+                } else {
+                    fputs("Fehler: --mode erlaubt: rename, skip, overwrite\n", stderr); return 1
+                }
+            case "--dest":
+                i += 1
+                if i < args.count {
+                    let url = URL(fileURLWithPath: args[i])
+                    d.set(url.path, forKey: "backup.destinationDisplayPath")
+                } else {
+                    fputs("Fehler: --dest braucht einen Pfad\n", stderr); return 1
+                }
+            case "--downscale":
+                d.set(true, forKey: "backup.downscaleEnabled")
+            case "--no-downscale":
+                d.set(false, forKey: "backup.downscaleEnabled")
+            case "--long-side":
+                i += 1
+                if i < args.count, let v = Int(args[i]), v >= 100 {
+                    d.set(v, forKey: "backup.longSidePixels")
+                } else {
+                    fputs("Fehler: --long-side braucht eine Zahl ≥ 100\n", stderr); return 1
+                }
+            case "--metadata":
+                d.set(true, forKey: "backup.copyMetadata")
+            case "--no-metadata":
+                d.set(false, forKey: "backup.copyMetadata")
+            default: break
+            }
+            i += 1
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["ok": true]
+            if let data = try? JSONSerialization.data(withJSONObject: obj),
+               let s = String(data: data, encoding: .utf8) { print(s) }
+        } else {
+            print("Backup-Konfiguration gespeichert.")
+        }
+        return 0
+
+    default:
+        fputs("Fehler: Unbekannter backup-Unterbefehl '\(sub)'. Erlaubt: get, set\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - SmartFolder
 
 private func smartFolderFileURL() -> URL {
@@ -3129,6 +3388,12 @@ if firstArg == "config" {
 }
 if firstArg == "cache" {
     exit(runCache(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "watched" {
+    exit(runWatched(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "backup" {
+    exit(runBackupConfig(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

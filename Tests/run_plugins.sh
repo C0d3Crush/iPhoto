@@ -507,6 +507,99 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# watched list / add / remove / check
+# ---------------------------------------------------------------------------
+echo "--- Watched Folders ---"
+
+WATCHED_LIST=$("$BIN" watched list 2>&1)
+if [ $? -eq 0 ]; then
+    pass "watched list (Exitcode 0)"
+else
+    fail "watched list" "Exitcode != 0: $WATCHED_LIST"
+fi
+
+WATCHED_LIST_JSON=$("$BIN" watched list --json 2>&1)
+if echo "$WATCHED_LIST_JSON" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+    pass "watched list --json (valides JSON-Array)"
+else
+    fail "watched list --json" "Kein valides JSON: $WATCHED_LIST_JSON"
+fi
+
+# add: Tmpdir ist ein gültiges Verzeichnis → Exitcode 0
+WATCHED_ADD=$("$BIN" watched add "$TMPDIR" --json 2>&1)
+WATCHED_ADD_EXIT=$?
+if [ $WATCHED_ADD_EXIT -eq 0 ] && echo "$WATCHED_ADD" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null; then
+    pass "watched add (Exitcode 0, JSON ok:true)"
+else
+    fail "watched add" "Exit $WATCHED_ADD_EXIT: $WATCHED_ADD"
+fi
+
+# check: Tmpdir ist erreichbar → available:true
+WATCHED_CHECK=$("$BIN" watched check --json 2>&1)
+if echo "$WATCHED_CHECK" | python3 -c "import sys,json; a=json.load(sys.stdin); assert any(e.get('available') for e in a)" 2>/dev/null; then
+    pass "watched check --json (Ordner verfügbar)"
+else
+    fail "watched check --json" "Kein verfügbarer Ordner: $WATCHED_CHECK"
+fi
+
+# remove: gerade hinzugefügten Ordner wieder entfernen
+WATCHED_ID=$(echo "$WATCHED_ADD" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null)
+if [ -n "$WATCHED_ID" ]; then
+    WATCHED_RM=$("$BIN" watched remove "$WATCHED_ID" --json 2>&1)
+    WATCHED_RM_EXIT=$?
+    if [ $WATCHED_RM_EXIT -eq 0 ] && echo "$WATCHED_RM" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null; then
+        pass "watched remove (Exitcode 0, JSON ok:true)"
+    else
+        fail "watched remove" "Exit $WATCHED_RM_EXIT: $WATCHED_RM"
+    fi
+else
+    fail "watched remove" "ID aus watched add konnte nicht gelesen werden"
+fi
+
+# add mit nicht-existentem Pfad → Fehler
+WATCHED_ADD_BAD_EXIT=0
+"$BIN" watched add /nonexistent/path/xyz > /dev/null 2>&1 || WATCHED_ADD_BAD_EXIT=$?
+if [ $WATCHED_ADD_BAD_EXIT -ne 0 ]; then
+    pass "watched add ungültiger Pfad (Exitcode != 0)"
+else
+    fail "watched add ungültiger Pfad" "Hätte fehlschlagen sollen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# backup config get / set
+# ---------------------------------------------------------------------------
+echo "--- Backup Config ---"
+
+BACKUP_GET=$("$BIN" backup get --json 2>&1)
+BACKUP_GET_EXIT=$?
+if [ $BACKUP_GET_EXIT -eq 0 ] && echo "$BACKUP_GET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'jpeg_quality' in d and 'collision_mode' in d" 2>/dev/null; then
+    pass "backup get --json (Exitcode 0, Felder vorhanden)"
+else
+    fail "backup get --json" "Exit $BACKUP_GET_EXIT: $BACKUP_GET"
+fi
+
+BACKUP_SET=$("$BIN" backup set --quality 0.9 --mode skip --json 2>&1)
+BACKUP_SET_EXIT=$?
+if [ $BACKUP_SET_EXIT -eq 0 ] && echo "$BACKUP_SET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null; then
+    pass "backup set --quality --mode (Exitcode 0, JSON ok:true)"
+else
+    fail "backup set" "Exit $BACKUP_SET_EXIT: $BACKUP_SET"
+fi
+
+# set ungültiger Mode → Fehler
+BACKUP_SET_BAD_EXIT=0
+"$BIN" backup set --mode invalidmode > /dev/null 2>&1 || BACKUP_SET_BAD_EXIT=$?
+if [ $BACKUP_SET_BAD_EXIT -ne 0 ]; then
+    pass "backup set ungültiger Mode (Exitcode != 0)"
+else
+    fail "backup set ungültiger Mode" "Hätte fehlschlagen sollen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
