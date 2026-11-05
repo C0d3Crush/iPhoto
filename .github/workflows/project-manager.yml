@@ -22,6 +22,9 @@ jobs:
       - name: Install dependencies
         run: pip install anthropic
 
+      - name: Syntax check
+        run: python -m py_compile .github/scripts/pm_scheduler.py && echo "OK"
+
       - name: Run PM Scheduler
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -33,6 +36,4 @@ jobs:
           git config user.name "ProjectManager[bot]"
           git config user.email "pm-bot@users.noreply.github.com"
           git add .github/actors.json
-          git diff --cached --quiet || \
-            git commit -m "chore: PM-Scheduler Akteure aktualisiert" && \
-            git push
+          git diff --cached --quiet || (git commit -m "chore: PM-Scheduler Akteure aktualisiert" && git push)
