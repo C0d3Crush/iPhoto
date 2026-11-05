@@ -1,9 +1,8 @@
 name: Project Manager Scheduler
 
 on:
-  schedule:
-    - cron: '0 */2 * * *'   # alle 2 Stunden
-  workflow_dispatch:          # manuell auslösbar
+  # Deaktiviert – PM läuft jetzt als Claude Code Geplante Aufgabe (GitHub-Ereignis: Issue erstellt)
+  workflow_dispatch:          # manuell auslösbar (Fallback)
 
 jobs:
   route-issues:
