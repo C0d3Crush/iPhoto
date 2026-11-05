@@ -1913,6 +1913,85 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# exif stats (Ausrüstungs-/Aufnahme-Verteilung)
+# ---------------------------------------------------------------------------
+echo "--- EXIF STATS ---"
+
+EXS_DB="$TMPDIR/exif_stats_catalog.db"
+EXS_A="$TMPDIR/exs_a.png"; EXS_B="$TMPDIR/exs_b.png"; EXS_C="$TMPDIR/exs_c.png"
+cp "$INPUT_PNG" "$EXS_A"; cp "$INPUT_PNG" "$EXS_B"; cp "$INPUT_PNG" "$EXS_C"
+
+# leerer Katalog → images 0, keine Werte
+EXS_EXIT=0
+EXS_OUT=$(IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif stats --json 2>&1) || EXS_EXIT=$?
+if [ $EXS_EXIT -eq 0 ] && echo "$EXS_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['images']==0 and d['fields']['lens']['values']==[] and len(d['fields'])==6" 2>/dev/null; then
+    pass "exif stats --json (leerer Katalog)"
+else
+    fail "exif stats (leer)" "Exit $EXS_EXIT: $EXS_OUT"
+fi
+
+IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif set "$EXS_A" --iso 400 --focal 35 --lens "XF35mmF1.4 R" > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif set "$EXS_B" --iso 400 --focal 23 --lens "XF23mmF2 R WR" > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif set "$EXS_C" --iso 800 --focal 35 --lens "XF35mmF1.4 R" > /dev/null 2>&1 || true
+
+# Verteilung: Objektiv XF35 ×2 zuerst, ISO 400 ×2, Brennweite "35" ohne Nachkomma
+EXS_EXIT=0
+EXS_OUT=$(IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif stats --json 2>&1) || EXS_EXIT=$?
+if [ $EXS_EXIT -eq 0 ] && echo "$EXS_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin); f=d['fields']
+assert d['images']==3, d['images']
+assert f['lens']['distinct']==2
+assert f['lens']['values'][0]=={'value':'XF35mmF1.4 R','count':2}, f['lens']
+assert f['iso']['values'][0]=={'value':'400','count':2}, f['iso']
+assert f['focal']['values'][0]=={'value':'35','count':2}, f['focal']
+" 2>/dev/null; then
+    pass "exif stats --json (Häufigkeiten Objektiv/ISO/Brennweite)"
+else
+    fail "exif stats --json" "Exit $EXS_EXIT: $EXS_OUT"
+fi
+
+# --by + --limit schränkt Felder und Zeilen ein
+EXS_EXIT=0
+EXS_OUT=$(IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif stats --by lens,iso --limit 1 --json 2>&1) || EXS_EXIT=$?
+if [ $EXS_EXIT -eq 0 ] && echo "$EXS_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin); f=d['fields']
+assert sorted(f.keys())==['iso','lens'], f.keys()
+assert len(f['lens']['values'])==1 and f['lens']['distinct']==2
+" 2>/dev/null; then
+    pass "exif stats --by lens,iso --limit 1"
+else
+    fail "exif stats --by/--limit" "Exit $EXS_EXIT: $EXS_OUT"
+fi
+
+# Textausgabe enthält Objektivnamen
+EXS_EXIT=0
+EXS_OUT=$(IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif stats --by lens 2>&1) || EXS_EXIT=$?
+if [ $EXS_EXIT -eq 0 ] && echo "$EXS_OUT" | grep -q "XF23mmF2 R WR"; then
+    pass "exif stats Textausgabe"
+else
+    fail "exif stats Text" "Exit $EXS_EXIT: $EXS_OUT"
+fi
+
+# unbekanntes Feld → Fehler
+EXS_ERR=0
+IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif stats --by shutter > /dev/null 2>&1 || EXS_ERR=$?
+if [ $EXS_ERR -ne 0 ]; then pass "exif stats --by shutter (→ Fehler)"; else fail "exif stats --by shutter" "Hätte fehlschlagen sollen"; fi
+
+# ungültiges Limit → Fehler
+EXS_ERR=0
+IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif stats --limit 0 > /dev/null 2>&1 || EXS_ERR=$?
+if [ $EXS_ERR -ne 0 ]; then pass "exif stats --limit 0 (→ Fehler)"; else fail "exif stats --limit 0" "Hätte fehlschlagen sollen"; fi
+
+# unbekannte Option → Fehler
+EXS_ERR=0
+IPHOTO_CATALOG_DB="$EXS_DB" "$BIN" exif stats --bogus > /dev/null 2>&1 || EXS_ERR=$?
+if [ $EXS_ERR -ne 0 ]; then pass "exif stats --bogus (→ Fehler)"; else fail "exif stats --bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
