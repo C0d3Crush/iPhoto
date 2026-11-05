@@ -33,7 +33,8 @@ jobs:
       - name: Zip app
         run: |
           VERSION=$(defaults read "$PWD/Resources/Info.plist" CFBundleShortVersionString)
-          zip -r "iPhoto-${VERSION}.zip" build/iPhoto.app
+          APP_NAME=$(sed -n 's/^APP_NAME="\(.*\)"$/\1/p' build.sh)
+          (cd build && zip -r "../iPhoto-${VERSION}.zip" "${APP_NAME}.app")
           echo "ZIP_NAME=iPhoto-${VERSION}.zip" >> $GITHUB_ENV
 
       - name: Upload artifact

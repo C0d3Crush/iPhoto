@@ -2,6 +2,10 @@
 
 ---
 
+## 1.87.3
+**CI nach App-Umbenennung repariert**
+- View-Smoke-Test, CI-Zip-Schritt und `notarize.sh` lesen den App-Namen jetzt aus `build.sh` (seit 1.86.1 „iPhoto Α“) statt fest `iPhoto.app` zu erwarten
+
 ## 1.87.2
 **Performance — Rust-Core: Waveform-Akkumulator + pHash-Similarity**
 - `AnalysisEngine`: Luma-Histogramm + Waveform-Akkumulator aus Swift-Loop nach Rust ausgelagert (`iphoto_waveform_accumulate`) — BT.709, integer-skaliert, LLVM-auto-vektorisiert (~6–10× schneller)

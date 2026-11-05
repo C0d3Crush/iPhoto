@@ -10,14 +10,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/build/iPhoto.app"
+# App-Name aus build.sh lesen (seit 1.86.1 „iPhoto Α“), damit Umbenennungen den Test nicht brechen.
+APP_NAME="$(sed -n 's/^APP_NAME="\(.*\)"$/\1/p' "$ROOT/build.sh")"
+APP_NAME="${APP_NAME:-iPhoto}"
+APP="$ROOT/build/$APP_NAME.app"
 
 if [ ! -d "$APP" ]; then
     echo "FAIL: $APP existiert nicht. Erst ./build.sh laufen lassen."
     exit 1
 fi
 
-BIN="$APP/Contents/MacOS/iPhoto"
+BIN="$APP/Contents/MacOS/$APP_NAME"
 LOG="$ROOT/build/viewsmoke.log"
 rm -f "$LOG"
 

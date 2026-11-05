@@ -40,7 +40,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP_BUNDLE="$ROOT/build/iPhoto.app"
+APP_NAME="$(sed -n 's/^APP_NAME="\(.*\)"$/\1/p' "$ROOT/build.sh")"
+APP_BUNDLE="$ROOT/build/${APP_NAME:-iPhoto}.app"
 KEYCHAIN_PROFILE="iPhoto-Notary"
 IDENTITY="${IDENTITY:-Developer ID Application}"
 
