@@ -7,7 +7,7 @@
 
 ---
 
-## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.92)*
+## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.96)*
 
 **Was steht (stark!):**
 - Produktionsreife App-Basis: SQLite-Katalog (WAL, Migration), vollständige CRUD für
@@ -24,8 +24,9 @@
 - **Qualitätsanalyse**: Blur, Belichtung, Closed-Eye — mit manuellen Overrides, CLI-Zugriff.
 - **Motiv-Tags**: manuelle Tags pro Bild, auswertbar via CLI (`motif stats/find`).
 - **ELO-Duelle**: paarweise Vergleiche (`elo match`), Reset, Ranglisten.
-- **CLI** (`iphoto-cli`) mit ~50 Subcommands — Export, Adjust, Rating, Catalog, People,
-  Motif, ELO, SmartFolder, Metadata, EXIF, Backup, Config, Plugins, Stacks, Trash u.v.m.
+- **CLI** (`iphoto-cli`) mit ~55 Subcommands — Export, Adjust, Rating, Catalog, People,
+  Motif, ELO, SmartFolder, Metadata, EXIF, Backup, Config, Plugins, Stacks, Trash,
+  `query filters/parse/run` (Suchsyntax-Debugger), `bugreport list/show/fix/reopen` u.v.m.
 - 3-Phasen-Ladelogik + ThumbnailDiskCache: Bild-Switching in Millisekunden.
 - Benchmark- + Skalierungstests bis 1000 Bilder, CI auf macOS-latest.
 
@@ -281,13 +282,14 @@ aber falls du es langfristig tragfähig willst, sind das die abo-freien Wege:
 
 ## 11. Meilensteine / Definition von Erfolg
 
-**Erreicht (v1.92):**
+**Erreicht (v1.96):**
 - [x] Phase 0: `AdjustmentState`-Refactor durch, verhaltensgleich.
 - [x] Phase 1: RAW-Pipeline, 3-Phasen-Laden, Rust-Core, ThumbnailDiskCache.
 - [x] Phase 2: Edits im Katalog, Preset-System, Undo/Redo, Batch-Export.
 - [x] Phase 3 (Kern): Rezept-Export/Import, Film-Simulation aus EXIF.
 - [x] People/Gesichtserkennung + ELO-Ranking + Qualitätsanalyse + Motiv-Tags.
-- [x] ~50 CLI-Subcommands für Scripting + CI-Tests.
+- [x] ~55 CLI-Subcommands: `catalog prune`, `trash mark-rejected`, `album rename/export`,
+      `query filters/parse/run` (Suchsyntax-Debugger), `bugreport list/show/fix/reopen`.
 
 **Nächste Schritte:**
 - [ ] Film-Look Starter-Presets kuratieren (Classic-Chrome-artig, Acros-artig …).
@@ -307,7 +309,7 @@ Rezepte werden geteilt, Contributors kommen. Alles darüber ist Bonus, nicht Pfl
 
 ---
 
-## 12. Was JETZT konkret zu tun ist *(Stand v1.92)*
+## 12. Was JETZT konkret zu tun ist *(Stand v1.96)*
 
 1. ✅ Phasen 0–3 (Kern) abgeschlossen — die App ist ein funktionierender RAW-Editor
    mit Preset-System, Rezept-Sharing, People, ELO, Qualitätsanalyse und ~50 CLI-Befehlen.

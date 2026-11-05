@@ -343,12 +343,12 @@ iphoto-cli rating batch-set <bild1> [...] [--set N] [--flag ...] [--json]
 iphoto-cli elo get|list|set|match|reset [<bildpfad>] [--winner left|right|draw] [--json]
 
 # Katalog & Suche
-iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add [--json]
+iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune [--json]
 iphoto-cli search <text> [--flag ...] [--rating N] [--color ...] [--camera ...] [--date ...] [--json]
 iphoto-cli duplicate list|similar [--json]
 
 # Alben & Ordner
-iphoto-cli album list|create|delete|add|remove|images|reorder [--json]
+iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export [--json]
 iphoto-cli albumfolder list|create|rename|delete [--json]
 iphoto-cli watched list|add|remove|check [<pfad>] [--auto-sync] [--json]
 iphoto-cli smartfolder list|query|create|update|rename|delete|sync [<name>] [--json]
@@ -373,13 +373,15 @@ iphoto-cli motif get|list|set|find|stats <bildpfad> [<tags>] [--json]
 # Weitere
 iphoto-cli hdr <ordner> --output-dir <ziel> [--json]
 iphoto-cli inpaint <datei> --output <ziel> [--python ...] [--cmt ...] [--json]
+iphoto-cli query filters|parse|run [<suchtext>] [--blur-threshold N] [--include-trashed] [--json]
 iphoto-cli stack list|query [<bildpfad>] [--json]
-iphoto-cli trash list|mark|restore|empty [--json]
+iphoto-cli trash list|mark|mark-rejected|restore|empty [--json]
 iphoto-cli version list|backup|restore|delete [--json]
 iphoto-cli cache stats|clear [--json]
 iphoto-cli backup get|set [--quality N] [--mode rename|skip|overwrite] [--json]
 iphoto-cli config show|get|set|export|import [<key>] [<wert>] [--json]
 iphoto-cli plugins list|dir [--json]
+iphoto-cli bugreport list|show|fix|reopen|path [--fixed|--all] [--json]
 iphoto-cli viewmode get|set <grid|list|columns|gallery> [--json]
 ```
 
