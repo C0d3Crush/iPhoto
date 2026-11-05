@@ -1827,6 +1827,88 @@ if [ $BM_ERR -ne 0 ]; then pass "bookmarks prune --bogus (→ Fehler)"; else fai
 BM_ERR=0
 bm bogus > /dev/null 2>&1 || BM_ERR=$?
 if [ $BM_ERR -ne 0 ]; then pass "bookmarks unbekannter Subcommand (→ Fehler)"; else fail "bookmarks bogus" "Hätte fehlschlagen sollen"; fi
+# smartfolder sql / count
+# ---------------------------------------------------------------------------
+echo "--- SmartFolder SQL / Count ---"
+
+SFQ_DIR="$TMPDIR/sfsql"; mkdir -p "$SFQ_DIR"
+SFQ_DB="$SFQ_DIR/catalog.db"   # smartFolders.json liegt neben der DB → isoliert
+sfq() { IPHOTO_CATALOG_DB="$SFQ_DB" "$BIN" "$@"; }
+SFQ_A="$SFQ_DIR/sfq_a.png"; SFQ_B="$SFQ_DIR/sfq_b.png"
+cp "$INPUT_PNG" "$SFQ_A"; cp "$INPUT_PNG" "$SFQ_B"
+sfq catalog add "$SFQ_A" "$SFQ_B" > /dev/null 2>&1 || true
+sfq rating "$SFQ_A" --flag pick > /dev/null 2>&1 || true
+sfq smartfolder create "SFQ Picks" --flag pick > /dev/null 2>&1 || true
+
+# count ohne Ordner-Namen → alle Ordner, Picks = 1
+SFQ_EXIT=0
+SFQ_OUT=$(sfq smartfolder count --json 2>&1) || SFQ_EXIT=$?
+if [ $SFQ_EXIT -eq 0 ] && echo "$SFQ_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['total']==1
+f=d['folders'][0]
+assert f['name']=='SFQ Picks' and f['count']==1 and f['runtimeOnly']==False
+" 2>/dev/null; then
+    pass "smartfolder count --json (Picks = 1)"
+else
+    fail "smartfolder count --json" "Exit $SFQ_EXIT: $SFQ_OUT"
+fi
+
+# count für einen benannten Ordner
+SFQ_EXIT=0
+SFQ_OUT=$(sfq smartfolder count "SFQ Picks" 2>&1) || SFQ_EXIT=$?
+if [ $SFQ_EXIT -eq 0 ] && echo "$SFQ_OUT" | grep -q "SFQ Picks: 1"; then
+    pass "smartfolder count <name> (Textausgabe)"
+else
+    fail "smartfolder count <name>" "Exit $SFQ_EXIT: $SFQ_OUT"
+fi
+
+# sql --json → SELECT mit flag-Klausel
+SFQ_EXIT=0
+SFQ_OUT=$(sfq smartfolder sql "SFQ Picks" --json 2>&1) || SFQ_EXIT=$?
+if [ $SFQ_EXIT -eq 0 ] && echo "$SFQ_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['kind']=='select' and d['criteria']==1 and d['runtimeOnly']==False
+assert 'SELECT DISTINCT i.path' in d['sql'] and 'FROM images i' in d['sql']
+" 2>/dev/null; then
+    pass "smartfolder sql --json (SELECT-Statement)"
+else
+    fail "smartfolder sql --json" "Exit $SFQ_EXIT: $SFQ_OUT"
+fi
+
+# sql --count → COUNT-Query ohne ORDER BY
+SFQ_EXIT=0
+SFQ_OUT=$(sfq smartfolder sql "SFQ Picks" --count 2>&1) || SFQ_EXIT=$?
+if [ $SFQ_EXIT -eq 0 ] && echo "$SFQ_OUT" | grep -q "SELECT COUNT(DISTINCT i.path)" && ! echo "$SFQ_OUT" | grep -q "ORDER BY"; then
+    pass "smartfolder sql --count (COUNT-Query)"
+else
+    fail "smartfolder sql --count" "Exit $SFQ_EXIT: $SFQ_OUT"
+fi
+
+# Fehlerpfade
+SFQ_ERR=0
+sfq smartfolder sql > /dev/null 2>&1 || SFQ_ERR=$?
+if [ $SFQ_ERR -ne 0 ]; then pass "smartfolder sql ohne Namen (→ Fehler)"; else fail "smartfolder sql ohne Namen" "Hätte fehlschlagen sollen"; fi
+
+SFQ_ERR=0
+sfq smartfolder sql "NichtVorhanden_SFQ_XYZ" > /dev/null 2>&1 || SFQ_ERR=$?
+if [ $SFQ_ERR -ne 0 ]; then pass "smartfolder sql unbekannter Name (→ Fehler)"; else fail "smartfolder sql unbekannter Name" "Hätte fehlschlagen sollen"; fi
+
+SFQ_ERR=0
+sfq smartfolder count "NichtVorhanden_SFQ_XYZ" > /dev/null 2>&1 || SFQ_ERR=$?
+if [ $SFQ_ERR -ne 0 ]; then pass "smartfolder count unbekannter Name (→ Fehler)"; else fail "smartfolder count unbekannter Name" "Hätte fehlschlagen sollen"; fi
+
+# leerer Ordner-Bestand → total 0
+SFQ_EXIT=0
+mkdir -p "$TMPDIR/sfq_empty"
+SFQ_OUT=$(IPHOTO_CATALOG_DB="$TMPDIR/sfq_empty/catalog.db" "$BIN" smartfolder count --json 2>&1) || SFQ_EXIT=$?
+if [ $SFQ_EXIT -eq 0 ] && echo "$SFQ_OUT" | python3 -c "import sys,json; assert json.load(sys.stdin)['total']==0" 2>/dev/null; then
+    pass "smartfolder count --json (keine Ordner → total 0)"
+else
+    fail "smartfolder count (leer)" "Exit $SFQ_EXIT: $SFQ_OUT"
+fi
 
 echo ""
 
