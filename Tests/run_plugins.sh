@@ -1495,6 +1495,74 @@ if [ $TR_ERR -ne 0 ]; then pass "trash mark-rejected --all (unbekannte Option �
 echo ""
 
 # ---------------------------------------------------------------------------
+# album rename / album export
+# ---------------------------------------------------------------------------
+echo "--- album rename / export ---"
+AL_DB="$TMPDIR/al_catalog.db"
+AL_SRC="$TMPDIR/al_src"
+AL_DST="$TMPDIR/al_dst"
+mkdir -p "$AL_SRC"
+printf 'a' > "$AL_SRC/al_a.jpg"
+printf 'b' > "$AL_SRC/al_b.jpg"
+AL_ID=$(IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album create "Urlaub" --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null || true)
+IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album add "$AL_ID" "$AL_SRC/al_a.jpg" "$AL_SRC/al_b.jpg" "$AL_SRC/al_missing.jpg" > /dev/null 2>&1 || true
+
+# rename per Name
+AL_EXIT=0
+AL_OUT=$(IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album rename "Urlaub" "Sommer 2026" --json 2>&1) || AL_EXIT=$?
+AL_LIST=$(IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album list --json 2>&1) || true
+if [ $AL_EXIT -eq 0 ] && echo "$AL_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['name']=='Sommer 2026' and d['old_name']=='Urlaub'" 2>/dev/null \
+   && echo "$AL_LIST" | python3 -c "import sys,json; d=json.load(sys.stdin); assert [a['name'] for a in d]==['Sommer 2026']" 2>/dev/null; then
+    pass "album rename --json (per Name, Bilder bleiben erhalten)"
+else
+    fail "album rename --json" "Exit $AL_EXIT: $AL_OUT | $AL_LIST"
+fi
+
+# rename unbekanntes Album → Fehler
+AL_ERR=0
+IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album rename "gibtsnicht" "X" > /dev/null 2>&1 || AL_ERR=$?
+if [ $AL_ERR -ne 0 ]; then pass "album rename unbekannt (→ Fehler)"; else fail "album rename unbekannt" "Hätte fehlschlagen sollen"; fi
+
+# export --dry-run → nichts kopiert
+AL_EXIT=0
+AL_OUT=$(IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album export "$AL_ID" --output-dir "$AL_DST" --dry-run --json 2>&1) || AL_EXIT=$?
+if [ $AL_EXIT -eq 0 ] && [ ! -e "$AL_DST" ] && echo "$AL_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['copied']==2 and d['missing']==1 and d['dry_run'] is True" 2>/dev/null; then
+    pass "album export --dry-run --json (2 kopierbar, 1 fehlend, nichts geschrieben)"
+else
+    fail "album export --dry-run" "Exit $AL_EXIT: $AL_OUT"
+fi
+
+# export echt
+AL_EXIT=0
+AL_OUT=$(IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album export "Sommer 2026" --output-dir "$AL_DST" --json 2>&1) || AL_EXIT=$?
+if [ $AL_EXIT -eq 0 ] && [ -f "$AL_DST/al_a.jpg" ] && [ -f "$AL_DST/al_b.jpg" ] \
+   && echo "$AL_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['copied']==2 and d['skipped']==0" 2>/dev/null; then
+    pass "album export --json (Dateien im Zielordner)"
+else
+    fail "album export" "Exit $AL_EXIT: $AL_OUT"
+fi
+
+# export erneut → vorhandene übersprungen
+AL_OUT=$(IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album export "$AL_ID" --output-dir "$AL_DST" --json 2>&1) || true
+if echo "$AL_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['copied']==0 and d['skipped']==2" 2>/dev/null; then
+    pass "album export erneut (vorhandene übersprungen)"
+else
+    fail "album export erneut" "$AL_OUT"
+fi
+
+# export ohne --output-dir → Fehler
+AL_ERR=0
+IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album export "$AL_ID" > /dev/null 2>&1 || AL_ERR=$?
+if [ $AL_ERR -ne 0 ]; then pass "album export ohne --output-dir (→ Fehler)"; else fail "album export ohne --output-dir" "Hätte fehlschlagen sollen"; fi
+
+# export unbekanntes Album → Fehler
+AL_ERR=0
+IPHOTO_CATALOG_DB="$AL_DB" "$BIN" album export "gibtsnicht" --output-dir "$AL_DST" > /dev/null 2>&1 || AL_ERR=$?
+if [ $AL_ERR -ne 0 ]; then pass "album export unbekannt (→ Fehler)"; else fail "album export unbekannt" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

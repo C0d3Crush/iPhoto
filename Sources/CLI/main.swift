@@ -41,6 +41,8 @@ private func printUsage() {
       iphoto-cli people export-names [--output <datei.csv>] [--json]
       iphoto-cli people import-names <datei.csv> [--json]
       iphoto-cli album list|create|delete|add|remove|images|reorder [--json]
+      iphoto-cli album rename <album-id|name> <neuer-name> [--json]
+      iphoto-cli album export <album-id|name> --output-dir <ordner> [--dry-run] [--overwrite] [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
@@ -117,7 +119,7 @@ private func printUsage() {
     analyse:  Analysiert Schärfe und Belichtung (Blur + Exposure)
     inpaint:  KI-basiertes Inpainting via CMT (benötigt Python + CMT-Installation); --json
     plugins:  Listet installierte Plugins/Panels auf oder zeigt den Plugin-Ordner; dir --json
-    album:    Alben erstellen, bearbeiten, Bilder hinzufügen/entfernen
+    album:    Alben erstellen, bearbeiten, umbenennen, Bilder hinzufügen/entfernen, in Ordner exportieren
     quality:  Qualitätsanalyse (Blur, Belichtung, Closed-Eye) scannen und lesen; list --sort blur|rating|elo
     version:  Versionshistorie eines Bildes sichern, anzeigen oder wiederherstellen
     search:   Bilder im Katalog nach Text, Flag (none/pick/reject), Rating (0-5), Farbe, Kamera, Datum
@@ -2757,8 +2759,102 @@ private func runAlbum(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "rename":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli album rename <album-id|name> <neuer-name> [--json]\n", stderr); return 1
+        }
+        let key = positional[0]
+        let newName = positional[1].trimmingCharacters(in: .whitespaces)
+        guard !newName.isEmpty else {
+            fputs("Fehler: Neuer Name darf nicht leer sein\n", stderr); return 1
+        }
+        let albums = catalog.allAlbums()
+        guard let album = albums.first(where: { $0.id == key }) ?? albums.first(where: { $0.name == key }) else {
+            fputs("Fehler: Album nicht gefunden: \(key)\n", stderr); return 1
+        }
+        catalog.saveAlbum(id: album.id, name: newName)
+        if jsonMode {
+            let obj: [String: Any] = ["id": album.id, "old_name": album.name, "name": newName, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Album umbenannt: \(album.name) → \(newName)")
+        }
+        return 0
+
+    case "export":
+        // Kopiert alle Bilder eines Albums (in Album-Reihenfolge) in einen Zielordner.
+        var key: String? = nil
+        var outDir: String? = nil
+        var dryRun = false
+        var overwrite = false
+        var i = 1
+        while i < args.count {
+            let a = args[i]
+            switch a {
+            case "--output-dir":
+                i += 1
+                guard i < args.count else { fputs("Fehler: --output-dir braucht einen Pfad\n", stderr); return 1 }
+                outDir = args[i]
+            case "--dry-run": dryRun = true
+            case "--overwrite": overwrite = true
+            case "--json": break
+            default:
+                if a.hasPrefix("-") { fputs("Fehler: Unbekannte Option: \(a)\n", stderr); return 1 }
+                if key == nil { key = a }
+                else { fputs("Fehler: Unerwartetes Argument: \(a)\n", stderr); return 1 }
+            }
+            i += 1
+        }
+        guard let albumKey = key, let dest = outDir, !dest.isEmpty else {
+            fputs("Verwendung: iphoto-cli album export <album-id|name> --output-dir <ordner> [--dry-run] [--overwrite] [--json]\n", stderr)
+            return 1
+        }
+        let albums = catalog.allAlbums()
+        guard let album = albums.first(where: { $0.id == albumKey }) ?? albums.first(where: { $0.name == albumKey }) else {
+            fputs("Fehler: Album nicht gefunden: \(albumKey)\n", stderr); return 1
+        }
+        let fm = FileManager.default
+        let destURL = URL(fileURLWithPath: (dest as NSString).expandingTildeInPath)
+        if !dryRun {
+            do { try fm.createDirectory(at: destURL, withIntermediateDirectories: true) }
+            catch {
+                fputs("Fehler: Zielordner kann nicht angelegt werden: \(error.localizedDescription)\n", stderr); return 1
+            }
+        }
+        var copied: [String] = []
+        var skipped: [String] = []
+        var missing: [String] = []
+        var failed: [String] = []
+        for p in catalog.images(inAlbum: album.id) {
+            guard fm.fileExists(atPath: p) else { missing.append(p); continue }
+            let target = destURL.appendingPathComponent((p as NSString).lastPathComponent)
+            if fm.fileExists(atPath: target.path) {
+                if !overwrite { skipped.append(p); continue }
+                if !dryRun { try? fm.removeItem(at: target) }
+            }
+            if dryRun { copied.append(p); continue }
+            do { try fm.copyItem(at: URL(fileURLWithPath: p), to: target); copied.append(p) }
+            catch { failed.append(p) }
+        }
+        if jsonMode {
+            let obj: [String: Any] = [
+                "album_id": album.id, "name": album.name, "output_dir": destURL.path,
+                "dry_run": dryRun, "copied": copied.count, "skipped": skipped.count,
+                "missing": missing.count, "failed": failed.count,
+                "paths": copied, "ok": failed.isEmpty
+            ]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            let verb = dryRun ? "würden kopiert" : "kopiert"
+            print("Album \(album.name): \(copied.count) \(verb), \(skipped.count) übersprungen, \(missing.count) fehlend, \(failed.count) Fehler → \(destURL.path)")
+        }
+        return failed.isEmpty ? 0 : 1
+
     default:
-        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images|reorder\n", stderr)
+        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export\n", stderr)
         return 1
     }
 }

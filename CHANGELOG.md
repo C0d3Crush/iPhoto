@@ -2,6 +2,12 @@
 
 ---
 
+## 1.94.0
+**CLI: Alben umbenennen und als Ordner exportieren**
+- Neuer Befehl `iphoto-cli album rename <album-id|name> <neuer-name> [--json]` benennt ein Album um — per ID oder Namen, Bildzuordnung und Reihenfolge bleiben erhalten
+- Neuer Befehl `iphoto-cli album export <album-id|name> --output-dir <ordner> [--dry-run] [--overwrite] [--json]` kopiert alle Bilder eines Albums in Album-Reihenfolge in einen Zielordner; vorhandene Dateien werden übersprungen (außer mit `--overwrite`), fehlende Originale gemeldet
+- Tests in `Tests/run_plugins.sh` (Umbenennen, Probelauf, echter Export, Idempotenz, Fehlerpfade)
+
 ## 1.93.0
 **CLI: Katalog bereinigen und abgelehnte Bilder gesammelt in den Papierkorb**
 - Neuer Befehl `iphoto-cli catalog prune [--dry-run] [--json]` entfernt Katalog-Einträge, deren Datei außerhalb der App gelöscht oder verschoben wurde — samt Bewertung, Gesichtern, Anpassungen und Album-Zuordnung; die Existenzprüfung läuft parallel, `--dry-run` zeigt nur an
