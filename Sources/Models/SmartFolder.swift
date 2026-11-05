@@ -66,6 +66,14 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
     case motif
     // Album
     case album
+    // Referenz auf anderen Intelligenten Ordner (Rule-Tree mit Zykluserkennung)
+    case smartFolderRef
+    // Farbkanal-Anteil in % (textValue = "R"|"G"|"B", numericValue = min%, numericValue2 = max%)
+    case colorRatio
+    // Fotos die keinem Album zugeordnet sind
+    case notInAlbum
+    // Qualitätsmerkmale (Analyse muss vorher gelaufen sein)
+    case blurScore, isUnderexposed, isOverexposed, hasClosedEyes
 
     var displayName: String {
         switch self {
@@ -87,32 +95,47 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .filmSimulation:   return "Filmsimulation"
         case .motif:            return "Motiv (KI)"
         case .album:            return "Album"
+        case .smartFolderRef:   return "iAlbum"
+        case .colorRatio:       return "Farbanteil (%)"
+        case .notInAlbum:       return "Nicht in Album"
+        case .blurScore:        return "Schärfewert"
+        case .isUnderexposed:   return "Unterbelichtet"
+        case .isOverexposed:    return "Überbelichtet"
+        case .hasClosedEyes:    return "Geschlossene Augen"
         }
     }
 
-    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType, motifType }
+    enum AttributeType { case enumType, numeric, dateType, text, albumType, filmSimType, motifType, smartFolderRefType, colorRatioType, noneType }
 
     var type: AttributeType {
         switch self {
-        case .flag, .colorLabel, .isRAW, .orientation, .hdr: return .enumType
+        case .flag, .colorLabel, .isRAW, .orientation, .hdr,
+             .isUnderexposed, .isOverexposed, .hasClosedEyes: return .enumType
+        case .blurScore: return .numeric
         case .rating, .iso, .focalLength, .aperture, .eloRating: return .numeric
         case .captureDate:                             return .dateType
         case .cameraMake, .cameraModel, .lens, .filename: return .text
         case .filmSimulation:                          return .filmSimType
         case .motif:                                   return .motifType
         case .album:                                   return .albumType
+        case .smartFolderRef:                          return .smartFolderRefType
+        case .colorRatio:                              return .colorRatioType
+        case .notInAlbum:                              return .noneType
         }
     }
 
     var defaultOperator: SmartFolderOperator {
         switch type {
-        case .enumType:     return .isExact
-        case .numeric:      return .greaterThan
-        case .dateType:     return .isDynamic
-        case .text:         return .contains
-        case .filmSimType:  return .isExact
-        case .motifType:    return .isExact
-        case .albumType:    return .isExact
+        case .enumType:           return .isExact
+        case .numeric:            return .greaterThan
+        case .dateType:           return .isDynamic
+        case .text:               return .contains
+        case .filmSimType:        return .isExact
+        case .motifType:          return .isExact
+        case .albumType:          return .isExact
+        case .smartFolderRefType: return .isExact
+        case .colorRatioType:     return .greaterThan
+        case .noneType:           return .isExact
         }
     }
 
@@ -122,9 +145,12 @@ enum SmartFolderAttribute: String, Codable, CaseIterable {
         case .numeric:      return [.isExact, .isNot, .greaterThan, .lessThan, .inRange]
         case .dateType:     return [.isDynamic, .isAfter, .isBefore, .inDateRange]
         case .text:         return [.contains, .notContains, .isExact, .isNot, .beginsWith, .endsWith]
-        case .filmSimType:  return [.isExact, .isNot]
-        case .motifType:    return [.isExact, .isNot]
-        case .albumType:    return [.isExact, .isNot]
+        case .filmSimType:        return [.isExact, .isNot]
+        case .motifType:          return [.isExact, .isNot]
+        case .albumType:          return [.isExact, .isNot]
+        case .smartFolderRefType: return [.isExact, .isNot]
+        case .colorRatioType:     return [.greaterThan, .lessThan, .inRange]
+        case .noneType:           return [.isExact]
         }
     }
 }

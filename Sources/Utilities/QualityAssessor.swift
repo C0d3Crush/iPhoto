@@ -55,8 +55,9 @@ struct PerceptualHash {
     }
 
     static func dHashPair(from image: CGImage) -> (UInt64, UInt64) {
-        // 9×9 Grauwertraster: aus einem einzigen Downscale beide Hashes ableiten.
-        // Vorher: zweimal getrennter Downscale → doppelter Rendering-Aufwand.
+        // 9×9 Grauwertraster rendern — CGContext bleibt in Swift (Apple-Framework).
+        // Bit-Arithmetik läuft in phash.rs (Rust). Bit-Reihenfolge identisch →
+        // bestehende SQLite-Werte bleiben gültig.
         let side = 9, n = side * side
         var gray = [UInt8](repeating: 0, count: n)
         guard let ctx = CGContext(
@@ -69,26 +70,8 @@ struct PerceptualHash {
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
 
         var hashH: UInt64 = 0
-        var bitH = 0
-        for y in 0..<8 {
-            for x in 0..<8 {
-                if gray[y * side + x] > gray[y * side + x + 1] {
-                    hashH |= (1 << bitH)
-                }
-                bitH += 1
-            }
-        }
-
         var hashV: UInt64 = 0
-        var bitV = 0
-        for x in 0..<8 {
-            for y in 0..<8 {
-                if gray[y * side + x] > gray[(y + 1) * side + x] {
-                    hashV |= (1 << bitV)
-                }
-                bitV += 1
-            }
-        }
+        iphoto_dhash_pair(gray, &hashH, &hashV)
         return (hashH, hashV)
     }
 

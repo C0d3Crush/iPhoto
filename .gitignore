@@ -2,3 +2,5 @@ build/
 *.zip
 .DS_Store
 Sources/.DS_Store
+.claude/worktrees/
+Tests/results/

@@ -22,16 +22,26 @@ echo "==> Kompiliere iphoto-catalog-test …"
     -target "$TARGET" \
     -sdk "$SDK" \
     -module-name iPhotoCatalogTest \
+    -framework AppKit \
     -Onone \
     "$ROOT/Sources/Utilities/CatalogStore.swift" \
     "$ROOT/Sources/Utilities/CatalogStore+Ratings.swift" \
     "$ROOT/Sources/Utilities/CatalogStore+Albums.swift" \
     "$ROOT/Sources/Utilities/CatalogStore+Adjustments.swift" \
     "$ROOT/Sources/Utilities/CatalogStore+Backup.swift" \
+    "$ROOT/Sources/Utilities/CatalogStore+Motifs.swift" \
+    "$ROOT/Sources/Utilities/CatalogStore+Quality.swift" \
+    "$ROOT/Sources/Utilities/CatalogStore+People.swift" \
+    "$ROOT/Sources/Utilities/SmartFolderSQLGenerator.swift" \
     "$ROOT/Sources/Utilities/Log.swift" \
     "$ROOT/Sources/Models/AdjustmentState.swift" \
     "$ROOT/Sources/Models/LocalAdjustment.swift" \
     "$ROOT/Sources/Models/Preset.swift" \
+    "$ROOT/Sources/Models/SmartFolder.swift" \
+    "$ROOT/Sources/Models/MetadataEntry.swift" \
+    "$ROOT/Sources/Models/ImageDocument.swift" \
+    "$ROOT/Sources/Models/RatingStore.swift" \
+    "$ROOT/Sources/Models/FaceRecord.swift" \
     "$ROOT/Tests/catalog/main.swift" \
     -o "$BIN"
 echo ""

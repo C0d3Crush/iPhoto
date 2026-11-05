@@ -1,77 +1,69 @@
 import SwiftUI
 
-enum InspectorPanel: String, CaseIterable {
-    case rating           = "Bewertung"
-    case metadata         = "Metadaten"
-    case adjustments      = "Anpassungen"
-    case localAdjustments = "Lokal"
-    case presets          = "Rezepte"
-    case analyse          = "Analyse"
-    case navigation       = "Navigation"
-    case hotpixel         = "Hotpixel"
-    case inpaint          = "Inpaint"
-
-    var storageKey: String { "plugin.\(rawValue.lowercased())" }
-}
-
 struct InspectorView: View {
     @EnvironmentObject var viewModel: ImageViewModel
-    @AppStorage("plugin.bewertung")   var ratingActive:           Bool = true
-    @AppStorage("plugin.metadata")    var metadataActive:         Bool = true
-    @AppStorage("plugin.anpassungen") var adjustmentsActive:      Bool = false
-    @AppStorage("plugin.lokal")       var localAdjustmentsActive: Bool = false
-    @AppStorage("plugin.rezepte")     var presetsActive:          Bool = false
-    @AppStorage("plugin.analyse")     var analyseActive:          Bool = false
-    @AppStorage("plugin.navigation")  var navigationActive:       Bool = false
-    @AppStorage("plugin.hotpixel")    var hotpixelActive:         Bool = false
-    @AppStorage("plugin.inpaint")     var inpaintActive:          Bool = false
+    @ObservedObject private var pluginStore = PluginStore.shared
 
-    @State private var panelOrder: [InspectorPanel] = InspectorView.loadOrder()
-    @State private var collapsed: Set<InspectorPanel> = Set(InspectorPanel.allCases)
-    @State private var draggingPanel: InspectorPanel?
+    @State private var pluginOrder: [Plugin] =
+        PluginStore.loadDisplayOrder(from: PluginStore.shared.plugins)
+    @State private var collapsed: Set<String> = {
+        if let saved = UserDefaults.standard.stringArray(forKey: "inspector.collapsed") {
+            return Set(saved)
+        }
+        return Set(PluginStore.shared.plugins.map(\.id))
+    }()
+    @State private var draggingPlugin: Plugin?
 
-    private var activePanels: Set<InspectorPanel> {
-        var s = Set<InspectorPanel>()
-        if ratingActive           { s.insert(.rating) }
-        if metadataActive         { s.insert(.metadata) }
-        if adjustmentsActive      { s.insert(.adjustments) }
-        if localAdjustmentsActive { s.insert(.localAdjustments) }
-        if presetsActive          { s.insert(.presets) }
-        if analyseActive          { s.insert(.analyse) }
-        if navigationActive       { s.insert(.navigation) }
-        if hotpixelActive         { s.insert(.hotpixel) }
-        if inpaintActive          { s.insert(.inpaint) }
-        return s
-    }
-
-    private var orderedActive: [InspectorPanel] {
-        panelOrder.filter { activePanels.contains($0) }
+    private var orderedActive: [Plugin] {
+        pluginOrder.filter { pluginStore.isEnabled($0.id) }
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            // Header with expand toggle
+            HStack(spacing: 0) {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.inspectorExpanded.toggle()
+                    }
+                }) {
+                    Image(systemName: viewModel.inspectorExpanded
+                          ? "arrow.down.right.and.arrow.up.left"
+                          : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .padding(.leading, 10)
+                        .padding(.top, 14)
+                        .padding(.bottom, 10)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(viewModel.inspectorExpanded ? "Inspector verkleinern" : "Inspector vergrößern")
+                Spacer()
+            }
+            Divider()
+
             if orderedActive.isEmpty {
                 Spacer()
-                Text("Kein Plugin aktiv")
+                Text("Kein Panel aktiv")
                     .foregroundColor(.secondary)
                     .font(.callout)
                 Spacer()
             } else {
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(spacing: 0) {
-                        ForEach(orderedActive, id: \.self) { panel in
-                            InspectorBlock(
-                                panel: panel,
-                                isCollapsed: collapsed.contains(panel),
-                                draggingPanel: $draggingPanel,
-                                onToggleCollapse: { toggle(panel) }
+                        ForEach(orderedActive, id: \.id) { plugin in
+                            PluginBlock(
+                                plugin: plugin,
+                                isCollapsed: collapsed.contains(plugin.id),
+                                draggingPlugin: $draggingPlugin,
+                                onToggleCollapse: { toggleCollapsed(plugin.id) }
                             )
-                            .opacity(draggingPanel == panel ? 0.4 : 1.0)
+                            .opacity(draggingPlugin == plugin ? 0.4 : 1.0)
                             .onDrop(of: ["public.text"],
-                                    delegate: PanelDropDelegate(
-                                        target: panel,
-                                        order: $panelOrder,
-                                        dragging: $draggingPanel))
+                                    delegate: PluginDropDelegate(
+                                        target: plugin,
+                                        order: $pluginOrder,
+                                        dragging: $draggingPlugin))
                             Divider()
                         }
                     }
@@ -117,53 +109,44 @@ struct InspectorView: View {
                 .background(Color(NSColor.windowBackgroundColor))
             }
         }
-        .frame(width: 280)
+        .frame(width: viewModel.inspectorExpanded ? 480 : 280)
         .clipped()
         .background(Color(NSColor.windowBackgroundColor))
         .sheet(isPresented: $viewModel.versions.showHistory) {
             VersionHistorySheet(isPresented: $viewModel.versions.showHistory)
                 .environmentObject(viewModel)
         }
-        .onChange(of: panelOrder) { InspectorView.saveOrder($0) }
+        .onChange(of: pluginOrder) { PluginStore.saveDisplayOrder($0) }
+        .onChange(of: pluginStore.plugins) { newPlugins in
+            pluginOrder = PluginStore.loadDisplayOrder(from: newPlugins)
+        }
     }
 
-
-    private func toggle(_ panel: InspectorPanel) {
-        if collapsed.contains(panel) { collapsed.remove(panel) }
-        else { collapsed.insert(panel) }
-    }
-
-    // MARK: - Order persistence
-
-    private static func loadOrder() -> [InspectorPanel] {
-        let raw = UserDefaults.standard.string(forKey: "inspector.panelOrder") ?? ""
-        let saved = raw.split(separator: ",").compactMap { InspectorPanel(rawValue: String($0)) }
-        return Set(saved) == Set(InspectorPanel.allCases) ? saved : InspectorPanel.allCases
-    }
-
-    private static func saveOrder(_ order: [InspectorPanel]) {
-        UserDefaults.standard.set(order.map(\.rawValue).joined(separator: ","),
-                                  forKey: "inspector.panelOrder")
+    private func toggleCollapsed(_ id: String) {
+        if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
+        UserDefaults.standard.set(Array(collapsed), forKey: "inspector.collapsed")
     }
 }
 
-// MARK: - Block
+// MARK: - Unified Plugin Block
 
-private struct InspectorBlock: View {
-    let panel: InspectorPanel
-    let isCollapsed: Bool
-    @Binding var draggingPanel: InspectorPanel?
-    let onToggleCollapse: () -> Void
+private struct PluginBlock: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    let plugin: Plugin
+    let isCollapsed: Bool
+    @Binding var draggingPlugin: Plugin?
+    let onToggleCollapse: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            // Draggable header
             HStack(spacing: 6) {
                 Image(systemName: "line.3.horizontal")
                     .font(.caption)
                     .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                Text(panel.rawValue)
+                Image(systemName: plugin.icon)
+                    .font(.caption)
+                    .foregroundColor(plugin.isBuiltin ? .secondary : .accentColor)
+                Text(plugin.name)
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(.secondary)
@@ -181,13 +164,12 @@ private struct InspectorBlock: View {
             .contentShape(Rectangle())
             .onTapGesture { onToggleCollapse() }
             .onDrag {
-                DispatchQueue.main.async { draggingPanel = panel }
-                return NSItemProvider(object: panel.rawValue as NSString)
+                DispatchQueue.main.async { draggingPlugin = plugin }
+                return NSItemProvider(object: plugin.id as NSString)
             }
 
-            // Content
             if !isCollapsed {
-                panelContent
+                pluginContent
                     .frame(maxWidth: .infinity)
                     .clipShape(Rectangle())
             }
@@ -195,41 +177,47 @@ private struct InspectorBlock: View {
     }
 
     @ViewBuilder
-    private var panelContent: some View {
-        switch panel {
-        case .rating:
-            RatingPanel()
-        case .metadata:
-            MetadataPanel()
-        case .adjustments:
-            AdjustmentsPanel()
-        case .localAdjustments:
-            LocalAdjustmentsPanel()
-        case .presets:
-            PresetsPanel()
-        case .analyse:
-            AnalysePanel()
-        case .navigation:
-            NavigationPanel()
-        case .hotpixel:
-            HotPixelPanel()
-        case .inpaint:
-            InpaintPanel()
+    private var pluginContent: some View {
+        if let key = plugin.builtin {
+            builtinView(for: key)
+        } else {
+            PluginPanelView(plugin: plugin)
+                .environmentObject(viewModel)
+        }
+    }
+
+    @ViewBuilder
+    private func builtinView(for key: String) -> some View {
+        switch key {
+        case "compare":     ComparePanel()
+        case "rating":      RatingPanel()
+        case "metadata":    MetadataPanel()
+        case "adjustments": AdjustmentsPanel()
+        case "local":       LocalAdjustmentsPanel()
+        case "presets":     PresetsPanel()
+        case "analyse":     AnalysePanel()
+        case "navigation":  NavigationPanel()
+        case "hotpixel":    HotPixelPanel()
+        case "inpaint":     InpaintPanel()
+        case "toolbox":     ToolboxPanel()
+        case "similar":     SimilarPanel()
+        case "people":      PeoplePanel()
+        default:            EmptyView()
         }
     }
 }
 
 // MARK: - Drop delegate
 
-private struct PanelDropDelegate: DropDelegate {
-    let target: InspectorPanel
-    @Binding var order: [InspectorPanel]
-    @Binding var dragging: InspectorPanel?
+private struct PluginDropDelegate: DropDelegate {
+    let target: Plugin
+    @Binding var order: [Plugin]
+    @Binding var dragging: Plugin?
 
     func dropEntered(info: DropInfo) {
-        guard let src = dragging, src != target,
-              let from = order.firstIndex(of: src),
-              let to   = order.firstIndex(of: target) else { return }
+        guard let src = dragging, src.id != target.id,
+              let from = order.firstIndex(where: { $0.id == src.id }),
+              let to   = order.firstIndex(where: { $0.id == target.id }) else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
             order.move(fromOffsets: IndexSet(integer: from),
                        toOffset: to > from ? to + 1 : to)

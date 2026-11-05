@@ -21,6 +21,20 @@ extension ImageViewModel {
         library.saveSmartFolders()
     }
 
+    func deleteSelectedSidebarSmartFolders() {
+        let ids = sidebarSelectedSmartFolderIDs
+        guard ids.count > 1 else { return }
+        let toDelete = library.smartFolders.filter { ids.contains($0.id) }
+        DispatchQueue.global(qos: .utility).async {
+            toDelete.forEach { SmartFolderFileSync.remove($0) }
+        }
+        library.smartFolders.removeAll { ids.contains($0.id) }
+        if case .smartFolder(let id) = navSelection, ids.contains(id) { navSelection = .library }
+        library.saveSmartFolders()
+        sidebarSelectedSmartFolderIDs = []
+        sidebarAnchorSmartFolderID = nil
+    }
+
     func updateSmartFolder(_ sf: SmartFolder) {
         guard let idx = library.smartFolders.firstIndex(where: { $0.id == sf.id }) else { return }
         let old = library.smartFolders[idx]

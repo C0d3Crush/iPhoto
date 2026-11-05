@@ -145,9 +145,6 @@ extension ImageViewModel {
                         self.activity.completedImports.insert(folderID)
                     }
                 }
-                if self.activity.importProgress.isEmpty {
-                    self.loadThumbnails()
-                }
             }
         }
     }
@@ -225,7 +222,7 @@ extension ImageViewModel {
             foldersToLoad = []
         case .trash:
             foldersToLoad = []
-        case .duplicates, .similar, .similarGroup, .blurry, .underexposed, .overexposed, .closedEyes:
+        case .duplicates, .similar, .similarGroup, .blurry, .underexposed, .overexposed, .closedEyes, .eloRange, .people, .personDetail:
             foldersToLoad = []
         }
         for folder in foldersToLoad {

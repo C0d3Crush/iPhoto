@@ -26,7 +26,6 @@ extension ImageViewModel {
                     .map { ImageDocument(url: $0) }
                 if !newDocs.isEmpty {
                     self.collection.appendDocuments(newDocs)
-                    self.loadThumbnails()
                 }
             }
 
@@ -56,6 +55,21 @@ extension ImageViewModel {
         CatalogStore.shared.deleteAlbum(id: album.id.uuidString)
     }
 
+    func deleteSelectedSidebarAlbums() {
+        let ids = sidebarSelectedAlbumIDs
+        guard ids.count > 1 else { return }
+        let toDelete = library.albums.filter { ids.contains($0.id) }
+        for album in toDelete {
+            removeAlbumFromFilesystem(album)
+            CatalogStore.shared.deleteAlbum(id: album.id.uuidString)
+        }
+        library.albums.removeAll { ids.contains($0.id) }
+        if case .album(let id) = navSelection, ids.contains(id) { navSelection = .library }
+        library.saveAlbums()
+        sidebarSelectedAlbumIDs = []
+        sidebarAnchorAlbumID = nil
+    }
+
     func renameAlbum(_ album: Album, to name: String) {
         guard let idx = library.albums.firstIndex(where: { $0.id == album.id }) else { return }
         let oldDir = albumSystemPath(for: album)
@@ -63,6 +77,25 @@ extension ImageViewModel {
         library.saveAlbums()
         CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: name)
         syncAlbumToFilesystem(library.albums[idx], removingOldAt: oldDir)
+    }
+
+    func setCoverPhoto(_ url: URL, forAlbum album: Album) {
+        guard let idx = library.albums.firstIndex(where: { $0.id == album.id }) else { return }
+        library.albums[idx].coverPhotoURL = url
+        library.saveAlbums()
+    }
+
+    func updateAlbum(_ album: Album, name: String, description: String?) {
+        guard let idx = library.albums.firstIndex(where: { $0.id == album.id }) else { return }
+        let nameChanged = library.albums[idx].name != name
+        let oldDir = nameChanged ? albumSystemPath(for: library.albums[idx]) : nil
+        library.albums[idx].name = name
+        library.albums[idx].albumDescription = description?.isEmpty == false ? description : nil
+        library.saveAlbums()
+        if nameChanged {
+            CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: name)
+            syncAlbumToFilesystem(library.albums[idx], removingOldAt: oldDir)
+        }
     }
 
     func addToAlbum(_ document: ImageDocument, albumID: UUID) {
@@ -95,6 +128,26 @@ extension ImageViewModel {
         library.saveAlbums()
         CatalogStore.shared.removeImage(path: document.url.path, fromAlbum: albumID.uuidString)
         syncAlbumToFilesystem(library.albums[idx])
+    }
+
+    func removeURLsFromAllAlbums(_ urls: Set<URL>) {
+        var changed = false
+        for idx in library.albums.indices {
+            let before = library.albums[idx].photoURLs.count
+            library.albums[idx].photoURLs.removeAll { urls.contains($0) }
+            if library.albums[idx].photoURLs.count != before { changed = true }
+        }
+        if changed { library.saveAlbums() }
+    }
+
+    func purgeStaleAlbumReferences() {
+        var changed = false
+        for idx in library.albums.indices {
+            let before = library.albums[idx].photoURLs.count
+            library.albums[idx].photoURLs.removeAll { !FileManager.default.fileExists(atPath: $0.path) }
+            if library.albums[idx].photoURLs.count != before { changed = true }
+        }
+        if changed { library.saveAlbums() }
     }
 
     // MARK: - Album Filesystem Sync

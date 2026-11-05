@@ -19,6 +19,13 @@ extension CatalogStore {
         }
     }
 
+    func exportTo(path: String) -> Bool {
+        queue.sync {
+            let escaped = path.replacingOccurrences(of: "'", with: "''")
+            return exec("VACUUM INTO '\(escaped)'")
+        }
+    }
+
     private func performBackup() {
         guard let backupsDir = backupsDirectory() else { return }
         let stamp = timestampForFilename()

@@ -1,22 +1,85 @@
 import SwiftUI
 
 private let kSmartFolderIDType = "com.c0d3cru5h.iphoto.smartfolder-id"
+private let kNavSectionDragType = "com.c0d3cru5h.iphoto.navsection"
+
+enum NavSidebarSection: String, CaseIterable, Hashable {
+    case library, albums, smartFolders, volumes, trash, duplicates, blurry, people
+
+    static func loadOrder() -> [NavSidebarSection] {
+        guard let raw = UserDefaults.standard.string(forKey: "nav.sectionOrder") else {
+            return NavSidebarSection.allCases
+        }
+        let saved = raw.split(separator: ",").compactMap { NavSidebarSection(rawValue: String($0)) }
+        let missing = NavSidebarSection.allCases.filter { !saved.contains($0) }
+        return saved + missing
+    }
+
+    static func saveOrder(_ order: [NavSidebarSection]) {
+        UserDefaults.standard.set(order.map(\.rawValue).joined(separator: ","), forKey: "nav.sectionOrder")
+    }
+
+    static func isVisible(_ section: NavSidebarSection) -> Bool {
+        let key = "sidebar.section.\(section.rawValue)"
+        return UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+
+    static func setVisible(_ section: NavSidebarSection, _ visible: Bool) {
+        UserDefaults.standard.set(visible, forKey: "sidebar.section.\(section.rawValue)")
+    }
+
+    var displayName: String {
+        switch self {
+        case .library:      return "Bibliothek"
+        case .albums:       return "Alben"
+        case .smartFolders: return "iAlben"
+        case .volumes:      return "Wechseldatenträger"
+        case .trash:        return "Papierkorb"
+        case .duplicates:   return "Duplikate"
+        case .blurry:       return "Qualität"
+        case .people:       return "Menschen"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .library:      return "photo.on.rectangle.angled"
+        case .albums:       return "rectangle.stack"
+        case .smartFolders: return "folder.badge.gearshape"
+        case .volumes:      return "externaldrive"
+        case .trash:        return "trash"
+        case .duplicates:   return "doc.on.doc"
+        case .blurry:       return "eye.trianglebadge.exclamationmark"
+        case .people:       return "person.2"
+        }
+    }
+}
 
 struct NavSidebarView: View {
     @EnvironmentObject var viewModel: ImageViewModel
+    @ObservedObject private var pluginStore = PluginStore.shared
     @State private var showCreateAlbum = false
     @State private var newAlbumName = ""
     @State private var renamingAlbum: Album? = nil
     @State private var renameText = ""
+    @State private var albumDetailItem: Album? = nil
     @State private var smartFolderSheetItem: SmartFolderSheetItem? = nil
     @State private var albumsCollapsed = false
     @State private var smartFoldersCollapsed = false
+    @State private var volumesCollapsed = false
+    @State private var trashCollapsed = false
+    @State private var duplicatesCollapsed = false
+    @State private var qualityCollapsed = false
+    @State private var peopleCollapsed = false
     @State private var collapsedGroups: Set<String> = []
     @State private var movingFolder: SmartFolder? = nil
     @State private var renamingGroupName: String? = nil
     @State private var renameGroupText = ""
     @State private var dropTargetGroups: Set<String> = []
     @State private var dropOnUngrouped: Bool = false
+    @State private var sectionOrder: [NavSidebarSection] = NavSidebarSection.loadOrder()
+    @State private var draggingSection: NavSidebarSection?
+
     private func loadSmartFolderID(from providers: [NSItemProvider], completion: @escaping (SmartFolder?) -> Void) {
         providers.first?.loadDataRepresentation(forTypeIdentifier: kSmartFolderIDType) { data, _ in
             guard let data = data,
@@ -30,6 +93,24 @@ struct NavSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Expand button row
+            HStack(spacing: 0) {
+                Spacer()
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.sidebarAlbumExpanded.toggle()
+                    }
+                }) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .padding(.trailing, 10)
+                        .padding(.top, 14)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Alben als Symbole anzeigen")
+            }
+
             if viewModel.isStartupLoading {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -49,29 +130,22 @@ struct NavSidebarView: View {
 
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
-                    sectionHeader("Bibliothek")
-                    navRow(
-                        label: "Library",
-                        icon: "photo.stack",
-                        isSelected: viewModel.navSelection == .library || viewModel.navSelection == nil
-                    ) {
-                        viewModel.navSelection = .library
+                    ForEach(sectionOrder.filter { NavSidebarSection.isVisible($0) }, id: \.self) { section in
+                        sectionView(for: section)
+                            .onDrag {
+                                DispatchQueue.main.async { self.draggingSection = section }
+                                return NSItemProvider(object: section.rawValue as NSString)
+                            }
+                            .onDrop(of: ["public.text"],
+                                    delegate: NavSectionDropDelegate(
+                                        target: section,
+                                        order: $sectionOrder,
+                                        dragging: $draggingSection))
+                            .opacity(draggingSection == section ? 0.4 : 1.0)
                     }
-                    navRow(
-                        label: "Bildvergleich",
-                        icon: "arrow.left.arrow.right",
-                        isSelected: viewModel.compare.active
-                    ) {
-                        viewModel.toggleCompareMode()
-                    }
-                    albumsSection
-                    smartFoldersSection
-                    volumesSection
-                    trashSection
-                    duplicatesSection
-                    blurrySection
                 }
                 .padding(.vertical, 8)
+                .padding(.trailing, 12)
             }
 
             if !viewModel.activity.loadingQueue.isEmpty {
@@ -94,9 +168,19 @@ struct NavSidebarView: View {
                 .background(Color(NSColor.windowBackgroundColor))
                 .transition(.opacity)
             }
+
+            VerboseLogView()
+                .environmentObject(viewModel)
         }
-        .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
+        .frame(maxWidth: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
+        .sheet(item: $albumDetailItem) { album in
+            AlbumDetailSheet(album: album, isPresented: Binding(
+                get: { albumDetailItem != nil },
+                set: { if !$0 { albumDetailItem = nil } }
+            ))
+            .environmentObject(viewModel)
+        }
         .sheet(item: $smartFolderSheetItem) { item in
             SmartFolderSheet(editing: item.folder)
                 .environmentObject(viewModel)
@@ -142,6 +226,29 @@ struct NavSidebarView: View {
         }
     }
 
+
+    // MARK: - Section dispatcher
+
+    @ViewBuilder
+    private func sectionView(for section: NavSidebarSection) -> some View {
+        switch section {
+        case .library:
+            Group {
+                sectionHeader("Bibliothek")
+                libraryCompactRow
+            }
+        case .albums:        albumsSection
+        case .smartFolders:  smartFoldersSection
+        case .volumes:       volumesSection
+        case .trash:         trashSection
+        case .duplicates:    duplicatesSection
+        case .blurry:        blurrySection
+        case .people:        peopleSection
+        }
+    }
+
+    // MARK: - Smart folder helpers
+
     @ViewBuilder
     private func smartFolderRow(_ sf: SmartFolder, indented: Bool = false) -> some View {
         let count = viewModel.smartFolderCounts[sf.id] ?? 0
@@ -160,11 +267,14 @@ struct NavSidebarView: View {
         }
         .padding(.horizontal, indented ? 24 : 10)
         .padding(.vertical, 5)
-        .background(viewModel.navSelection == .smartFolder(sf.id) ? Color.accentColor.opacity(0.2) : Color.clear)
+        .background((viewModel.navSelection == .smartFolder(sf.id) || viewModel.sidebarSelectedSmartFolderIDs.contains(sf.id)) ? Color.accentColor.opacity(0.2) : Color.clear)
         .cornerRadius(6)
         .contentShape(Rectangle())
         .padding(.horizontal, 4)
-        .onTapGesture { viewModel.navSelection = .smartFolder(sf.id) }
+        .onTapGesture {
+            let shift = viewModel.lastClickModifiers.contains(.shift)
+            viewModel.sidebarSelectSmartFolder(sf, extending: shift)
+        }
         .onDrag {
             let provider = NSItemProvider()
             let idData = sf.id.uuidString.data(using: .utf8) ?? Data()
@@ -176,10 +286,19 @@ struct NavSidebarView: View {
             return provider
         }
         .contextMenu {
-            Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
-            Button("In Gruppe verschieben") { movingFolder = sf }
-            Divider()
-            Button("Löschen") { viewModel.deleteSmartFolder(sf) }
+            let multiSel = viewModel.sidebarSelectedSmartFolderIDs.count > 1
+                && viewModel.sidebarSelectedSmartFolderIDs.contains(sf.id)
+            if !multiSel {
+                Button("Bearbeiten") { smartFolderSheetItem = SmartFolderSheetItem(folder: sf) }
+                Button("In Gruppe verschieben") { movingFolder = sf }
+                Divider()
+            }
+            Button(multiSel
+                   ? "\(viewModel.sidebarSelectedSmartFolderIDs.count) iAlben löschen"
+                   : "Löschen") {
+                if multiSel { viewModel.deleteSelectedSidebarSmartFolders() }
+                else { viewModel.deleteSmartFolder(sf) }
+            }
         }
     }
 
@@ -194,32 +313,36 @@ struct NavSidebarView: View {
             ))
         if !albumsCollapsed {
             ForEach(viewModel.library.albums) { album in
+                let multiSel = viewModel.sidebarSelectedAlbumIDs.count > 1
+                    && viewModel.sidebarSelectedAlbumIDs.contains(album.id)
                 AlbumRow(album: album, isSelected: viewModel.navSelection == .album(album.id))
                     .environmentObject(viewModel)
                     .contextMenu {
-                        Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
-                        Divider()
-                        Button("Album löschen") { viewModel.deleteAlbum(album) }
+                        if !multiSel {
+                            Button("Informationen…") { albumDetailItem = album }
+                            Divider()
+                            Button("Umbenennen") { renameText = album.name; renamingAlbum = album }
+                            Divider()
+                        }
+                        Button(multiSel
+                               ? "\(viewModel.sidebarSelectedAlbumIDs.count) Alben löschen"
+                               : "Album löschen") {
+                            if multiSel { viewModel.deleteSelectedSidebarAlbums() }
+                            else { viewModel.deleteAlbum(album) }
+                        }
                     }
             }
         }
     }
 
     @ViewBuilder private var smartFoldersSection: some View {
-        collapsibleSectionHeader("Intelligente Ordner", isCollapsed: smartFoldersCollapsed,
+        collapsibleSectionHeader("iAlben", isCollapsed: smartFoldersCollapsed,
             onToggle: { withAnimation(.easeInOut(duration: 0.18)) { smartFoldersCollapsed.toggle() } },
             trailing: AnyView(
-                HStack(spacing: 4) {
-                    Button(action: { viewModel.createFilmSimulationSmartFolders() }) {
-                        Image(systemName: "camera.filters").font(.caption)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Filmsimulationsordner automatisch erstellen")
-                    Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
-                        Image(systemName: "plus").font(.caption)
-                    }
-                    .buttonStyle(PlainButtonStyle())
+                Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
+                    Image(systemName: "plus").font(.caption)
                 }
+                .buttonStyle(PlainButtonStyle())
             ))
             .background(dropOnUngrouped ? Color.accentColor.opacity(0.15) : Color.clear)
             .cornerRadius(6)
@@ -298,10 +421,13 @@ struct NavSidebarView: View {
 
     @ViewBuilder private var volumesSection: some View {
         if !viewModel.library.detectedVolumes.isEmpty {
-            sectionHeader("Wechseldatenträger")
-            ForEach(viewModel.library.detectedVolumes) { volume in
-                VolumeRow(volume: volume, isSelected: viewModel.navSelection == .volume(volume.id))
-                    .environmentObject(viewModel)
+            collapsibleSectionHeader("Wechseldatenträger", isCollapsed: volumesCollapsed,
+                onToggle: { withAnimation(.easeInOut(duration: 0.18)) { volumesCollapsed.toggle() } })
+            if !volumesCollapsed {
+                ForEach(viewModel.library.detectedVolumes) { volume in
+                    VolumeRow(volume: volume, isSelected: viewModel.navSelection == .volume(volume.id))
+                        .environmentObject(viewModel)
+                }
             }
         }
     }
@@ -329,6 +455,7 @@ struct NavSidebarView: View {
         .padding(.horizontal, 10)
         .padding(.top, 12)
         .padding(.bottom, 2)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -344,10 +471,13 @@ struct NavSidebarView: View {
         .padding(.horizontal, 10)
         .padding(.top, 12)
         .padding(.bottom, 2)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder private var trashSection: some View {
-        sectionHeader("Papierkorb")
+        collapsibleSectionHeader("Papierkorb", isCollapsed: trashCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { trashCollapsed.toggle() } })
+        if !trashCollapsed {
         Button(action: { viewModel.navSelection = .trash }) {
             HStack(spacing: 4) {
                 Label("Papierkorb", systemImage: viewModel.trashedCount > 0 ? "trash.fill" : "trash")
@@ -370,6 +500,7 @@ struct NavSidebarView: View {
             Button("Papierkorb leeren…") { viewModel.emptyTrash() }
                 .disabled(viewModel.trashedCount == 0)
         }
+        } // !trashCollapsed
     }
 
     // Sidebar-Highlight bleibt auf "Ähnliche Bilder", auch wenn der Nutzer in eine
@@ -382,7 +513,9 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var duplicatesSection: some View {
-        sectionHeader("Duplikate")
+        collapsibleSectionHeader("Duplikate", isCollapsed: duplicatesCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { duplicatesCollapsed.toggle() } })
+        if !duplicatesCollapsed {
         Button(action: { viewModel.navSelection = .duplicates }) {
             HStack(spacing: 4) {
                 Label("Duplikate", systemImage: "doc.on.doc")
@@ -408,36 +541,13 @@ struct NavSidebarView: View {
         .contextMenu {
             Button("Neu scannen") { viewModel.detectDuplicates() }
         }
-
-        Button(action: { viewModel.navSelection = .similar }) {
-            HStack(spacing: 4) {
-                Label("Ähnliche Bilder", systemImage: "square.on.square.dashed")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.quality.similarGroups.isEmpty {
-                    Text("\(viewModel.quality.similarGroups.count)")
-                        .font(.caption2)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Color.blue)
-                        .cornerRadius(4)
-                        .padding(.trailing, 2)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(isSimilarSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .padding(.horizontal, 4)
-        .contextMenu {
-            Button("Neu gruppieren") { viewModel.detectSimilarImages() }
-        }
+        } // !duplicatesCollapsed
     }
 
     @ViewBuilder private var blurrySection: some View {
-        sectionHeader("Qualität")
+        collapsibleSectionHeader("Qualität", isCollapsed: qualityCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { qualityCollapsed.toggle() } })
+        if !qualityCollapsed {
         Button(action: { viewModel.navSelection = .blurry }) {
             HStack(spacing: 4) {
                 Label("Unscharf", systemImage: "drop.triangle")
@@ -520,6 +630,114 @@ struct NavSidebarView: View {
         }
         .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
         .contextMenu { Button("Neu scannen") { viewModel.detectClosedEyes() } }
+        } // !qualityCollapsed
+    }
+
+    @ViewBuilder private var peopleSection: some View {
+        collapsibleSectionHeader("Menschen", isCollapsed: peopleCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { peopleCollapsed.toggle() } })
+        if !peopleCollapsed {
+        Button(action: { viewModel.navSelection = .people }) {
+            HStack(spacing: 4) {
+                Label("Personen", systemImage: "person.2")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                let count = viewModel.people.people.count
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(viewModel.navSelection == .people ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .contextMenu {
+            Button("Scannen") { viewModel.scanFacesForLibrary() }
+        }
+        } // !peopleCollapsed
+    }
+
+    private var libraryCompactRow: some View {
+        let isSelected = viewModel.navSelection == .library || viewModel.navSelection == nil
+        let docs = Array(viewModel.collection.documents.prefix(4))
+        let images = docs.compactMap { $0.thumbnailImage ?? $0.placeholderThumbnailImage }
+        return Button(action: { viewModel.navSelection = .library }) {
+            HStack(spacing: 8) {
+                libraryMiniMosaic(images: images)
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Library")
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+                    Text("\(viewModel.collection.documents.count) Fotos")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+        .onAppear {
+            for (i, _) in docs.enumerated() {
+                viewModel.requestVisibleThumbnail(at: i)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func libraryMiniMosaic(images: [NSImage]) -> some View {
+        if images.isEmpty {
+            ZStack {
+                Color(NSColor.separatorColor).opacity(0.3)
+                Image(systemName: "photo.stack")
+                    .font(.system(size: 16))
+                    .foregroundColor(.secondary)
+            }
+        } else if images.count == 1 {
+            GeometryReader { geo in
+                Image(nsImage: images[0]).resizable().scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height).clipped()
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
+        } else {
+            GeometryReader { geo in
+                let half = geo.size.width / 2
+                VStack(spacing: 0.5) {
+                    HStack(spacing: 0.5) {
+                        miniTile(images.count > 0 ? images[0] : nil, size: half)
+                        miniTile(images.count > 1 ? images[1] : nil, size: half)
+                    }
+                    HStack(spacing: 0.5) {
+                        miniTile(images.count > 2 ? images[2] : nil, size: half)
+                        miniTile(images.count > 3 ? images[3] : nil, size: half)
+                    }
+                }
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
+        }
+    }
+
+    private func miniTile(_ image: NSImage?, size: CGFloat) -> some View {
+        Group {
+            if let img = image {
+                Image(nsImage: img).resizable().scaledToFill()
+                    .frame(width: size, height: size).clipped()
+            } else {
+                Color(NSColor.separatorColor).opacity(0.2)
+                    .frame(width: size, height: size)
+            }
+        }
     }
 
     private func navRow(label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -536,14 +754,280 @@ struct NavSidebarView: View {
     }
 }
 
+// MARK: - Search Bar
+
+struct SearchBarView: View {
+    @Binding var query: String
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isEditing = false
+
+    private var currentWord: String { query.components(separatedBy: " ").last ?? "" }
+    private var activeFilters: [SearchToken] { SearchQuery.parse(query).filters }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                TextField("Suchen…", text: $query, onEditingChanged: { editing in
+                    withAnimation(.easeInOut(duration: 0.1)) { isEditing = editing }
+                })
+                .font(.system(size: 12))
+                .textFieldStyle(PlainTextFieldStyle())
+                if !query.isEmpty {
+                    Button(action: { query = ""; isEditing = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(6)
+            .overlay(RoundedRectangle(cornerRadius: 6)
+                .stroke(isEditing ? Color.accentColor.opacity(0.6) : Color.clear, lineWidth: 1))
+            .padding(.horizontal, 8)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+
+            if !activeFilters.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(activeFilters, id: \.key) { filterChip($0) }
+                    }
+                    .padding(.horizontal, 10)
+                }
+                .padding(.bottom, 2)
+                if let summary = viewModel.searchResultSummary {
+                    Text(summary)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 4)
+                }
+            }
+
+            if isEditing { dropdownView }
+        }
+    }
+
+    @ViewBuilder
+    private var dropdownView: some View {
+        let word = currentWord
+        if let ci = word.firstIndex(of: ":"), ci != word.startIndex {
+            let key = String(word[..<ci]).lowercased()
+            let partial = String(word[word.index(after: ci)...]).lowercased()
+            if let def = FilterDefinition.all.first(where: { $0.key == key }) {
+                let staticVals = def.valueSuggestions.filter { partial.isEmpty || $0.hasPrefix(partial) }
+                let dynVals = dynamicValues(key: key, partial: partial)
+                let allVals = Array((staticVals + dynVals).prefix(8))
+                if !allVals.isEmpty {
+                    valueDropdown(def: def, values: allVals, key: key)
+                }
+            }
+        } else {
+            let matchDefs: [FilterDefinition] = word.isEmpty
+                ? FilterDefinition.all
+                : FilterDefinition.all.filter { $0.key.hasPrefix(word.lowercased()) || $0.label.lowercased().hasPrefix(word.lowercased()) }
+            let textSuggs = textSuggestions
+            if !matchDefs.isEmpty || !textSuggs.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(matchDefs.prefix(6)), id: \.key) { def in
+                        filterKeyRow(def)
+                        if def.key != matchDefs.prefix(6).last?.key { Divider() }
+                    }
+                    if !textSuggs.isEmpty && !word.isEmpty {
+                        if !matchDefs.isEmpty { Divider() }
+                        ForEach(textSuggs.prefix(4), id: \.self) { textSuggRow($0) }
+                    }
+                }
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+                .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+            }
+        }
+    }
+
+    private func filterKeyRow(_ def: FilterDefinition) -> some View {
+        Button(action: {
+            var parts = query.components(separatedBy: " ")
+            if let li = parts.indices.last, !parts[li].contains(":") {
+                parts[li] = def.key + ":"
+            } else {
+                parts.append(def.key + ":")
+            }
+            query = parts.joined(separator: " ")
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: def.icon)
+                    .font(.system(size: 11))
+                    .foregroundColor(.accentColor)
+                    .frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(def.key + ":")
+                        .font(.system(size: 11, weight: .medium))
+                    Text(def.hint)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    @ViewBuilder
+    private func valueDropdown(def: FilterDefinition, values: [String], key: String) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: def.icon).font(.system(size: 10)).foregroundColor(.accentColor)
+                Text(key + ":").font(.system(size: 10, weight: .semibold)).foregroundColor(.accentColor)
+                Text(def.hint).font(.system(size: 10)).foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            Divider()
+            ForEach(values, id: \.self) { value in
+                Button(action: {
+                    var parts = query.components(separatedBy: " ")
+                    if let li = parts.indices.last { parts[li] = key + ":" + value }
+                    query = parts.joined(separator: " ") + " "
+                }) {
+                    HStack {
+                        Text(value).font(.system(size: 11))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 4).contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(6)
+        .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
+        .padding(.horizontal, 8).padding(.bottom, 4)
+    }
+
+    private func textSuggRow(_ s: String) -> some View {
+        Button(action: {
+            let filters = query.components(separatedBy: " ").filter { $0.contains(":") }
+            query = (filters + [s]).joined(separator: " ")
+            isEditing = false
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundColor(.secondary).frame(width: 16)
+                Text(s).font(.system(size: 11)).lineLimit(1)
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4).contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func filterChip(_ token: SearchToken) -> some View {
+        HStack(spacing: 3) {
+            Text(token.key + ":").font(.system(size: 10, weight: .semibold)).foregroundColor(.accentColor)
+            Text(token.value).font(.system(size: 10))
+            Button(action: {
+                let parts = query.components(separatedBy: " ").filter { !$0.hasPrefix(token.key + ":") }
+                query = parts.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            }) {
+                Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundColor(.secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.horizontal, 6).padding(.vertical, 3)
+        .background(Color.accentColor.opacity(0.12))
+        .cornerRadius(4)
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.accentColor.opacity(0.25), lineWidth: 0.5))
+    }
+
+    private var textSuggestions: [String] {
+        let q = SearchQuery.parse(query).freeText.lowercased()
+        guard q.count >= 2 else { return [] }
+        var results = Set<String>()
+        for doc in viewModel.collection.documents.prefix(500) {
+            let name = doc.url.lastPathComponent
+            if name.lowercased().contains(q) { results.insert(name) }
+        }
+        return Array(results.sorted()).prefix(6).map { $0 }
+    }
+
+    private func dynamicValues(key: String, partial: String) -> [String] {
+        switch key {
+        case "kamera":
+            var set = Set<String>()
+            for doc in viewModel.collection.documents.prefix(300) {
+                for e in doc.metadata where e.category == .camera && !e.value.isEmpty { set.insert(e.value) }
+            }
+            return set.filter { partial.isEmpty || $0.lowercased().hasPrefix(partial) }.sorted().prefix(6).map { $0 }
+        case "album":
+            return viewModel.library.albums.map { $0.name }
+                .filter { partial.isEmpty || $0.lowercased().hasPrefix(partial) }.sorted().prefix(6).map { $0 }
+        case "motiv":
+            var set = Set<String>()
+            for doc in viewModel.collection.documents.prefix(300) {
+                for t in doc.motifTags ?? [] { set.insert(t) }
+            }
+            return set.filter { partial.isEmpty || $0.lowercased().hasPrefix(partial) }.sorted().prefix(6).map { $0 }
+        default: return []
+        }
+    }
+}
+
+// MARK: - Drop delegate for section reordering
+
+private struct NavSectionDropDelegate: DropDelegate {
+    let target: NavSidebarSection
+    @Binding var order: [NavSidebarSection]
+    @Binding var dragging: NavSidebarSection?
+
+    func dropEntered(info: DropInfo) {
+        guard let src = dragging, src != target,
+              let from = order.firstIndex(of: src),
+              let to   = order.firstIndex(of: target) else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            order.move(fromOffsets: IndexSet(integer: from),
+                       toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
+    }
+}
+
+// MARK: - AlbumRow
+
 private struct AlbumRow: View {
     let album: Album
     let isSelected: Bool
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var isTargeted = false
 
+    private var isMultiSelected: Bool {
+        viewModel.sidebarSelectedAlbumIDs.contains(album.id)
+    }
+
     var body: some View {
-        Button(action: { viewModel.selectAlbum(album) }) {
+        Button(action: {
+            let shift = viewModel.lastClickModifiers.contains(.shift)
+            viewModel.sidebarSelectAlbum(album, extending: shift)
+        }) {
             HStack(spacing: 4) {
                 Label(album.name, systemImage: isTargeted ? "rectangle.stack.fill" : "rectangle.stack")
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -557,7 +1041,7 @@ private struct AlbumRow: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(isSelected ? Color.accentColor.opacity(0.2) : (isTargeted ? Color.accentColor.opacity(0.1) : Color.clear))
+            .background((isSelected || isMultiSelected) ? Color.accentColor.opacity(0.2) : (isTargeted ? Color.accentColor.opacity(0.1) : Color.clear))
             .cornerRadius(6)
         }
         .buttonStyle(PlainButtonStyle())
@@ -744,7 +1228,7 @@ private struct VolumeRow: View {
     }
 }
 
-private struct AlbumNameSheet: View {
+struct AlbumNameSheet: View {
     let title: String
     let placeholder: String
     let confirmLabel: String
@@ -885,5 +1369,237 @@ private struct GroupRenameSheet: View {
             }
         }
         .padding(24)
+    }
+}
+
+// MARK: - Verbose Log + Console (Für Geeks)
+
+private enum GeekTab { case log, console }
+
+struct VerboseLogView: View {
+    @EnvironmentObject var viewModel: ImageViewModel
+    @AppStorage("settings.geekMode") private var geekMode = false
+    @State private var activeTab: GeekTab = .log
+    @State private var isExpanded = true
+
+    var body: some View {
+        if geekMode {
+            VStack(spacing: 0) {
+                Divider()
+                // Tab header row
+                HStack(spacing: 0) {
+                    geekTabButton(tab: .log,     icon: "ant",      label: "Log")
+                    geekTabButton(tab: .console, icon: "terminal", label: "Konsole")
+                    Spacer()
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+                    }) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(isExpanded ? "Einklappen" : "Ausklappen")
+                }
+                .background(Color(NSColor.windowBackgroundColor))
+
+                if isExpanded {
+                    Group {
+                        if activeTab == .log     { LogPanelView() }
+                        else                     { ConsolePanelView() }
+                    }
+                    .frame(height: 140)
+                }
+            }
+        }
+    }
+
+    private func geekTabButton(tab: GeekTab, icon: String, label: String) -> some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                if activeTab == tab { isExpanded.toggle() }
+                else { activeTab = tab; isExpanded = true }
+            }
+        }) {
+            HStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 9))
+                Text(label).font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(activeTab == tab && isExpanded ? .accentColor : .secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Log panel
+
+private struct LogPanelView: View {
+    @State private var lines: [String] = []
+    private let ticker = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
+                        Text(line)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(lineColor(line))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 1)
+                            .id(idx)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .background(Color(NSColor.textBackgroundColor))
+            .onChange(of: lines) { newLines in
+                withAnimation { proxy.scrollTo(newLines.count - 1, anchor: .bottom) }
+            }
+        }
+        .onReceive(ticker) { _ in reload() }
+        .onAppear { reload() }
+    }
+
+    private func lineColor(_ line: String) -> Color {
+        if line.contains("[ERROR]") { return Color(NSColor.systemRed) }
+        if line.contains("[WARN ]") { return Color(NSColor.systemOrange) }
+        if line.contains("PERF")   { return Color(NSColor.systemGreen) }
+        return Color(NSColor.secondaryLabelColor)
+    }
+
+    private func reload() {
+        let url = Log.shared.fileURL
+        DispatchQueue.global(qos: .utility).async {
+            guard let handle = try? FileHandle(forReadingFrom: url) else { return }
+            let size = handle.seekToEndOfFile()
+            let readBytes: UInt64 = min(size, 8192)
+            handle.seek(toFileOffset: size - readBytes)
+            let data = handle.readDataToEndOfFile()
+            handle.closeFile()
+            let parsed = (String(data: data, encoding: .utf8) ?? "")
+                .components(separatedBy: "\n")
+                .filter { !$0.isEmpty && !$0.contains(Log.sessionMarker) }
+                .suffix(50).map { String($0) }
+            DispatchQueue.main.async { self.lines = parsed }
+        }
+    }
+}
+
+// MARK: - Console panel
+
+private struct ConsoleLine: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+    let kind: Kind
+    enum Kind: Equatable { case command, output, error }
+}
+
+private struct ConsolePanelView: View {
+    @State private var input: String = ""
+    @State private var output: [ConsoleLine] = [
+        ConsoleLine(text: "iphoto-cli Konsole — Befehle ohne 'iphoto-cli' eingeben", kind: .output)
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(output) { line in
+                            Text(line.text)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundColor(lineColor(line))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 1)
+                                .id(line.id)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .background(Color(NSColor.textBackgroundColor))
+                .onChange(of: output) { lines in
+                    if let last = lines.last {
+                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
+                }
+            }
+
+            Divider()
+            HStack(spacing: 6) {
+                Text(">").font(.system(size: 10, design: .monospaced)).foregroundColor(.accentColor)
+                TextField("Befehl…", text: $input, onCommit: runInput)
+                    .font(.system(size: 10, design: .monospaced))
+                    .textFieldStyle(PlainTextFieldStyle())
+                Button(action: runInput) {
+                    Image(systemName: "return").font(.system(size: 9))
+                        .foregroundColor(.accentColor)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color(NSColor.windowBackgroundColor))
+        }
+    }
+
+    private func lineColor(_ line: ConsoleLine) -> Color {
+        switch line.kind {
+        case .command: return Color.accentColor
+        case .error:   return Color(NSColor.systemRed)
+        case .output:  return Color(NSColor.secondaryLabelColor)
+        }
+    }
+
+    private func runInput() {
+        let cmd = input.trimmingCharacters(in: .whitespaces)
+        guard !cmd.isEmpty else { return }
+        output.append(ConsoleLine(text: "> " + cmd, kind: .command))
+        input = ""
+
+        let args = cmd.components(separatedBy: " ").filter { !$0.isEmpty }
+        // Look for iphoto-cli next to the .app bundle
+        let cliURL = Bundle.main.bundleURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("iphoto-cli")
+
+        guard FileManager.default.fileExists(atPath: cliURL.path) else {
+            output.append(ConsoleLine(text: "Fehler: iphoto-cli nicht gefunden bei \(cliURL.path)", kind: .error))
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let proc = Process()
+            proc.executableURL = cliURL
+            proc.arguments = args
+            let outPipe = Pipe(); proc.standardOutput = outPipe
+            let errPipe = Pipe(); proc.standardError  = errPipe
+            do {
+                try proc.run(); proc.waitUntilExit()
+                let outStr = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let errStr = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                DispatchQueue.main.async {
+                    for line in outStr.components(separatedBy: "\n") where !line.isEmpty {
+                        self.output.append(ConsoleLine(text: line, kind: .output))
+                    }
+                    for line in errStr.components(separatedBy: "\n") where !line.isEmpty {
+                        self.output.append(ConsoleLine(text: line, kind: .error))
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.output.append(ConsoleLine(text: "Fehler: \(error.localizedDescription)", kind: .error))
+                }
+            }
+        }
     }
 }

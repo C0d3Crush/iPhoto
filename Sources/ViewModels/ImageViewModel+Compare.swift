@@ -72,6 +72,7 @@ extension ImageViewModel {
     /// 2) Als Gegner das nächstgelegene ELO — so ergeben sich aussagekräftige
     ///    Duelle statt einseitiger Blowouts.
     func nextComparePair() {
+        iphotoBreadcrumb("nextComparePair: start")
         let candidates = visibleDocuments.filter { !$0.isTrashed }
         guard candidates.count >= 2 else {
             compare.leftID = nil
@@ -109,7 +110,24 @@ extension ImageViewModel {
     /// ELO-Update beider Bilder nach dem Verdict. Sterne (rating) werden bewusst
     /// nicht angefasst — ELO ist ein separater Ranking-Score.
     func resolveCompare(_ verdict: CompareVerdict) {
-        defer { nextComparePair() }
+        iphotoBreadcrumb("resolveCompare: start (\(verdict))")
+        // Tageslimit prüfen (0 = unbegrenzt)
+        if compareDailyLimit > 0 {
+            let today = ComparisonState.todayString()
+            if UserDefaults.standard.string(forKey: "compare.dailyDate") != today {
+                compare.dailyCount = 0
+                UserDefaults.standard.set(today, forKey: "compare.dailyDate")
+            }
+            if compare.dailyCount >= compareDailyLimit {
+                stopCompareMode()
+                return
+            }
+        }
+
+        defer {
+            iphotoBreadcrumb("resolveCompare: nextComparePair")
+            nextComparePair()
+        }
         guard let left = compareLeftDocument,
               let right = compareRightDocument else { return }
 
@@ -125,17 +143,41 @@ extension ImageViewModel {
             rightRating: right.elo, rightMatches: right.eloMatches,
             leftScore: leftScore
         )
+        iphotoBreadcrumb("resolveCompare: applyEloUpdate left \(left.filename)")
         applyEloUpdate(newLeft, to: left.id)
+        iphotoBreadcrumb("resolveCompare: applyEloUpdate right \(right.filename)")
         applyEloUpdate(newRight, to: right.id)
+
+        if compareDailyLimit > 0 {
+            compare.dailyCount += 1
+            UserDefaults.standard.set(compare.dailyCount, forKey: "compare.dailyCount")
+        }
+        iphotoBreadcrumb("resolveCompare: done")
+    }
+
+    // MARK: ELO-Konvergenz
+
+    /// Konvergenz-Faktor 0.0–1.0: wie stabil ist das ELO-Ranking.
+    /// Zielwert: 20 Duelle pro Bild (K-Faktor stabilisiert sich ab ~30 Matches).
+    var eloConvergenceFactor: Double {
+        let docs = visibleDocuments.filter { !$0.isTrashed }
+        guard !docs.isEmpty else { return 0 }
+        let target: Double = 20
+        let sum = docs.reduce(0.0) { $0 + min(1.0, Double($1.eloMatches) / target) }
+        return sum / Double(docs.count)
     }
 
     private func applyEloUpdate(_ newElo: Double, to id: UUID) {
+        iphotoBreadcrumb("applyEloUpdate: firstIndex \(id)")
         guard let idx = collection.documents.firstIndex(where: { $0.id == id }) else { return }
+        guard idx < collection.documents.count else { return }
+        iphotoBreadcrumb("applyEloUpdate: write elo idx=\(idx)")
         collection.documents[idx].elo = newElo
         collection.documents[idx].eloMatches += 1
         let doc = collection.documents[idx]
         let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel,
                                 elo: doc.elo, eloMatches: doc.eloMatches)
+        iphotoBreadcrumb("applyEloUpdate: persist \(doc.filename)")
         RatingStore.shared.save(entry, for: doc.url)
         CatalogStore.shared.saveElo(path: doc.url.path, elo: doc.elo, eloMatches: doc.eloMatches)
     }

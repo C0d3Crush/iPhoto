@@ -24,10 +24,17 @@ let sharedSRGBCIContext = CIContext(options: [.useSoftwareRenderer: false])
 // Begrenzt gleichzeitige CIContext-Renders auf 2 (GPU-Schutz bei Vollbild-Decodes).
 private let ciSemaphore = DispatchSemaphore(value: 2)
 
-// Begrenzt gleichzeitige ImageIO-Thumbnail-Decodes auf 3.
-// CGImageSourceCreateThumbnailAtIndex ist auf macOS 11 nicht thread-safe
-// bei parallelem Zugriff auf viele RAF-embedded-JPEGs → SIGSEGV.
-private let imageIOSemaphore = DispatchSemaphore(value: 3)
+// Begrenzt gleichzeitige ImageIO-Thumbnail-Decodes.
+// CGImageSourceCreateThumbnailAtIndex UND CIContext.createCGImage sind auf macOS 11
+// nicht sicher bei parallelem RAF-Zugriff — SIGSEGV/SIGILL/SIGABRT wenn ≥2 Decodes
+// gleichzeitig laufen (auch 160px-Thumbnails vs. 1500px-Previews vs. Vollbild-CIContext).
+// Da imageIOSemaphore via defer bis zum Ende von decodeEmbeddedJPEG gehalten wird
+// (inklusive applyExifOrientation), serialisiert value=1 auf macOS 11 alle RAF-Ops.
+// macOS 12+ hat diesen Fehler nicht — dort sind 3 parallele Decodes sicher.
+private let imageIOSemaphore: DispatchSemaphore = {
+    if #available(macOS 12.0, *) { return DispatchSemaphore(value: 3) }
+    return DispatchSemaphore(value: 1)
+}()
 
 private func makeCIContext() -> CIContext { sharedSRGBCIContext }
 
@@ -101,8 +108,10 @@ struct RAWImageDecoder {
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxDimension
             ]
+            // materialize: Bug #40 gilt auch für JPEG/HEIC — lazy CGImage kann nach
+            // Source-Freigabe auf freien Speicher zeigen → SIGILL beim SwiftUI-Render.
             if let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
-                return thumb
+                return materialize(thumb) ?? thumb
             }
         }
 
@@ -116,13 +125,16 @@ struct RAWImageDecoder {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else {
             return nil
         }
-        let decodeOptions: [CFString: Any] = [
-            kCGImageSourceShouldCacheImmediately: true
-        ]
+        let decodeOptions: [CFString: Any] = [kCGImageSourceShouldCacheImmediately: true]
         guard let image = CGImageSourceCreateImageAtIndex(source, 0, decodeOptions as CFDictionary) else {
             return nil
         }
-        return applyExifOrientation(image, source: source)
+        // applyExifOrientation gibt bei .up-Rotation das Original-CGImage zurück,
+        // das intern noch auf ImageIOs Source-Cache zeigt. Nach source-Freigabe
+        // → SIGILL bei SwiftUI-Render (Bug #40, Vollbild-Pfad).
+        // materialize erzwingt eigenständigen Buffer unabhängig von source.
+        let oriented = applyExifOrientation(image, source: source)
+        return materialize(oriented) ?? oriented
     }
 
     // Liest den JPEG-Preview der im RAF-Dateiheader referenziert ist.
@@ -167,22 +179,30 @@ struct RAWImageDecoder {
         // JPEG-Offset und -Länge aus dem Verzeichnis lesen (Big-Endian)
         let jpegOffset = header.readUInt32BE(at: 0x54)
         let jpegLength = header.readUInt32BE(at: 0x58)
-        guard jpegOffset > 0, jpegLength > 0 else {
-            Log.error("RAF: kein eingebettetes JPEG referenziert (\(name)): offset=\(jpegOffset) length=\(jpegLength)")
+        guard jpegOffset >= 96, jpegLength >= 100, jpegLength <= 30_000_000 else {
+            Log.error("RAF: JPEG-Offset/Länge unrealistisch (\(name)): offset=\(jpegOffset) length=\(jpegLength)")
+            return nil
+        }
+
+        // Sicherstellen, dass der JPEG-Block innerhalb der Datei liegt
+        let fileSize = handle.seekToEndOfFile()
+        guard fileSize >= UInt64(jpegOffset) + UInt64(jpegLength) else {
+            Log.error("RAF: JPEG-Block übersteigt Dateigröße (\(name)): offset=\(jpegOffset)+\(jpegLength) > \(fileSize)")
             return nil
         }
 
         // JPEG-Bytes extrahieren
         iphotoBreadcrumb("decodeEmbeddedJPEG: JPEG-Bytes lesen @\(jpegOffset)+\(jpegLength) (\(name))")
-        Log.trace("JPEG-Bytes lesen: offset=\(jpegOffset) length=\(jpegLength) \(name)")
+        Log.trace("JPEG-Bytes lesen: offset=\(jpegOffset) length=\(jpegLength) fileSize=\(fileSize) \(name)")
         guard (try? handle.seek(toOffset: UInt64(jpegOffset))) != nil else {
             Log.error("RAF: Seek auf JPEG-Offset \(jpegOffset) fehlgeschlagen (\(name))")
             return nil
         }
         guard let jpegData = try? handle.read(upToCount: Int(jpegLength)),
+              jpegData.count == Int(jpegLength),
               jpegData.count >= 4,
               jpegData[0] == 0xFF, jpegData[1] == 0xD8 else {
-            Log.error("RAF: eingebettetes JPEG unlesbar oder ohne JPEG-Magic (\(name))")
+            Log.error("RAF: eingebettetes JPEG unlesbar, abgeschnitten oder ohne JPEG-Magic (\(name))")
             return nil
         }
 
@@ -208,9 +228,15 @@ struct RAWImageDecoder {
                 kCGImageSourceThumbnailMaxPixelSize: maxDim
             ]
             let t0 = Date()
-            let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary)
+            let lazyThumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary)
             Log.trace("CreateThumbnailAtIndex fertig: \(Int(Date().timeIntervalSince(t0) * 1000)) ms \(name)")
-            return thumb
+            // CGImageSourceCreateThumbnailAtIndex kann ein lazy CGImage zurückgeben,
+            // das intern noch auf jpegData zeigt. Sobald jpegData am Funktionsende
+            // freigegeben wird, greift SwiftUI beim späteren Rendern auf freigegebenen
+            // Speicher zu → SIGILL auf dem Main-Thread (Bug #40).
+            // Fix: Pixel sofort in einen neuen Bitmap-Context rendern — danach ist das
+            // CGImage vollständig eigenständig und unabhängig von der Quelldatei.
+            return lazyThumb.flatMap { materialize($0) }
         }
 
         // Vollbild-Pfad: volle Auflösung + manuelle EXIF-Rotation (für decode())
@@ -221,6 +247,21 @@ struct RAWImageDecoder {
         iphotoBreadcrumb("decodeEmbeddedJPEG: applyExifOrientation (\(name)) \(image.width)x\(image.height)")
         Log.trace("applyExifOrientation: \(image.width)×\(image.height) \(name)")
         return applyExifOrientation(image, source: source)
+    }
+
+    // Zwingt ein lazy CGImage (das intern noch auf den ImageIO-Datenpuffer zeigt)
+    // in einen eigenständigen Bitmap-Buffer. Verhindert SIGILL wenn der Quelldatei-
+    // Puffer freigegeben wird bevor SwiftUI das Bild rendert (Bug #40).
+    private static func materialize(_ image: CGImage) -> CGImage? {
+        let w = image.width, h = image.height
+        guard w > 0, h > 0 else { return image }
+        let space = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let ctx = CGContext(data: nil, width: w, height: h,
+                                  bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: space, bitmapInfo: bitmapInfo) else { return image }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return ctx.makeImage()
     }
 
     private static func applyExifOrientation(_ image: CGImage, source: CGImageSource) -> CGImage {

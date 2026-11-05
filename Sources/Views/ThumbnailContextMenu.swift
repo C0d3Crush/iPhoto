@@ -89,11 +89,11 @@ struct ThumbnailContextMenu: View {
             vm.backupDocuments(targets, deleteOriginal: false)
         } label: {
             if isInMultiSelection {
-                Label("\(n) Dateien als JPEG sichern", systemImage: "externaldrive.badge.checkmark")
+                Label("\(n) Dateien als Backup sichern", systemImage: "externaldrive.badge.checkmark")
             } else if let members = stackMembers {
-                Label("Stapel (\(members.count)) als JPEG sichern", systemImage: "externaldrive.badge.checkmark")
+                Label("Stapel (\(members.count)) als Backup sichern", systemImage: "externaldrive.badge.checkmark")
             } else {
-                Label("Als JPEG sichern", systemImage: "externaldrive.badge.checkmark")
+                Label("Als Backup sichern", systemImage: "externaldrive.badge.checkmark")
             }
         }
         Button {
@@ -104,7 +104,7 @@ struct ThumbnailContextMenu: View {
             } else if let members = stackMembers {
                 Label("Stapel (\(members.count)) sichern & Original in Papierkorb", systemImage: "externaldrive.badge.minus")
             } else {
-                Label("Sichern & Original in Papierkorb", systemImage: "externaldrive.badge.minus")
+                Label("Als Backup sichern & Original in Papierkorb", systemImage: "externaldrive.badge.minus")
             }
         }
     }

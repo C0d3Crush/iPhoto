@@ -13,9 +13,11 @@ final class VersionStore {
     static let shared = VersionStore()
 
     func versionDir(for url: URL) -> URL {
-        let hash = abs(url.path.hashValue)
+        // djb2 hash — stable across process runs (unlike Swift's hashValue which is randomized)
+        var h: UInt64 = 5381
+        for byte in url.path.utf8 { h = h &* 31 &+ UInt64(byte) }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("iPhoto/versions/\(hash)")
+            .appendingPathComponent("iPhoto/versions/\(h)")
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         return base
     }

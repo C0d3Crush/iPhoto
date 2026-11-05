@@ -32,7 +32,7 @@ struct SmartFolderSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(editing == nil ? "Intelligenter Ordner" : "Ordner bearbeiten")
+            Text(editing == nil ? "iAlbum" : "iAlbum bearbeiten")
                 .font(.headline)
 
             TextField("Name", text: $name)
@@ -82,10 +82,10 @@ struct SmartFolderSheet: View {
                                     criteria[i] = new
                                 }
                             }
-                        )
-                    ) {
-                        criteria.removeAll { $0.id == criterion.id }
-                    }
+                        ),
+                        onDelete: { criteria.removeAll { $0.id == criterion.id } },
+                        excludingSmartFolderID: editing?.id
+                    )
                 }
 
                 Button {
@@ -172,6 +172,7 @@ private struct CriterionRow: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @Binding var criterion: SmartFolderCriterion
     let onDelete: () -> Void
+    var excludingSmartFolderID: UUID? = nil
 
     var body: some View {
         HStack(spacing: 6) {
@@ -407,6 +408,84 @@ private struct CriterionRow: View {
                 .frame(width: 160)
                 .onAppear {
                     if criterion.textValue.isEmpty, let first = viewModel.library.albums.first {
+                        criterion.textValue = first.id.uuidString
+                    }
+                }
+            }
+
+        // --- Farbanteil ---
+        case .colorRatio:
+            HStack(spacing: 6) {
+                if criterion.op == .inRange {
+                    numericRangeInput(unit: "%")
+                } else {
+                    numericSingleInput(unit: "%")
+                }
+                Text("–").font(.caption).foregroundColor(.secondary)
+                Picker("", selection: $criterion.textValue) {
+                    Text("Rot (R)").tag("R")
+                    Text("Grün (G)").tag("G")
+                    Text("Blau (B)").tag("B")
+                }
+                .labelsHidden()
+                .pickerStyle(MenuPickerStyle())
+                .frame(width: 90)
+                .onAppear { if criterion.textValue.isEmpty { criterion.textValue = "R" } }
+            }
+
+        // --- Qualitätsmerkmale ---
+        case .blurScore:
+            if criterion.op == .inRange {
+                numericRangeInput(unit: "%")
+            } else {
+                numericSingleInput(unit: "%")
+            }
+
+        case .isUnderexposed:
+            Picker("", selection: $criterion.boolValue) {
+                Text("Unterbelichtet").tag(true)
+                Text("Nicht unterbelichtet").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 160)
+
+        case .isOverexposed:
+            Picker("", selection: $criterion.boolValue) {
+                Text("Überbelichtet").tag(true)
+                Text("Nicht überbelichtet").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 160)
+
+        case .hasClosedEyes:
+            Picker("", selection: $criterion.boolValue) {
+                Text("Augen geschlossen").tag(true)
+                Text("Augen offen").tag(false)
+            }
+            .labelsHidden().pickerStyle(MenuPickerStyle()).frame(width: 160)
+
+        // --- Nicht in Album ---
+        case .notInAlbum:
+            Text("Keinem Album zugeordnet")
+                .font(.caption).foregroundColor(.secondary)
+
+        // --- Intelligenter Ordner (Rule-Tree) ---
+        case .smartFolderRef:
+            let available = viewModel.library.smartFolders.filter { $0.id != excludingSmartFolderID }
+            if available.isEmpty {
+                Text("Keine anderen Ordner")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            } else {
+                Picker("", selection: $criterion.textValue) {
+                    Text("Bitte wählen").tag("")
+                    ForEach(available) { sf in
+                        Text(sf.name).tag(sf.id.uuidString)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(MenuPickerStyle())
+                .frame(width: 160)
+                .onAppear {
+                    if criterion.textValue.isEmpty, let first = available.first {
                         criterion.textValue = first.id.uuidString
                     }
                 }

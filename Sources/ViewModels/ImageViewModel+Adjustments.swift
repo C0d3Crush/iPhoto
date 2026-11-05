@@ -88,6 +88,11 @@ extension ImageViewModel {
         versions.pendingMetadataEntries = nil
     }
 
+    func revertAdjustments() {
+        adj.adjustments = adj.lastPersisted
+        applyAdjustments(hiRes: true)
+    }
+
     func undoAdjustments() {
         guard let prev = adj.history.undo() else { return }
         adj.isUndoRedoing = true
@@ -182,12 +187,16 @@ extension ImageViewModel {
         guard let doc = collection.currentDocument else { return }
         // Unverändert seit Laden/letztem Speichern → kein synchroner SQLite-Write pro Bildwechsel
         guard adj.adjustments != adj.lastPersisted else { return }
-        if adj.adjustments != AdjustmentState() {
+        let hasAdj = adj.adjustments != AdjustmentState()
+        if hasAdj {
             CatalogStore.shared.saveAdjustments(path: doc.url.path, adjustments: adj.adjustments)
         } else {
             CatalogStore.shared.deleteAdjustments(path: doc.url.path)
         }
         adj.lastPersisted = adj.adjustments
+        if let idx = collection.documents.firstIndex(where: { $0.id == doc.id }) {
+            collection.documents[idx].hasPersistedAdjustments = hasAdj
+        }
     }
 
     func adjustmentLabel() -> String {

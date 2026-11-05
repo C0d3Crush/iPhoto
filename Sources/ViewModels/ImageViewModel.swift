@@ -20,21 +20,62 @@ class ImageViewModel: ObservableObject {
     @Published var tetherMode: Bool = false
     @Published var hotPixelPhase: HotPixelPhase = .idle          { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var inspectorVisible: Bool = false
+    @Published var inspectorExpanded: Bool = false
     @Published var isSavingMetadata: Bool = false                { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var navSidebarVisible: Bool = true
+    @Published var sidebarAlbumExpanded: Bool = false
     @Published var navSelection: NavSelection? = .library
+    @Published var searchQuery: String = ""
+    @Published var searchResultSummary: String? = nil
+    @Published var toolbarSearchVisible: Bool = false
+    var searchStartTime: Date? = nil
     @Published var showingLibraryDetail: Bool = false
     @Published var showFullGrid: Bool = false
+    @Published var libraryViewMode: LibraryViewMode = {
+        let raw = UserDefaults.standard.string(forKey: "library.viewMode") ?? "gallery"
+        return LibraryViewMode(rawValue: raw) ?? .gallery
+    }() {
+        didSet { UserDefaults.standard.set(libraryViewMode.rawValue, forKey: "library.viewMode") }
+    }
     // Detail-Ansicht aus Qualitäts-Views (Unscharf/Belichtung) heraus: gleiche
     // Logik wie showingLibraryDetail, aber für navSelection = .blurry/.under-/.overexposed.
     @Published var qualityDetailActive: Bool = false
-    @Published var gridThumbnailSize: CGFloat = 160
+    @Published var compareFeatureEnabled: Bool = UserDefaults.standard.bool(forKey: "feature.compareEnabled") {
+        didSet { UserDefaults.standard.set(compareFeatureEnabled, forKey: "feature.compareEnabled") }
+    }
+    /// Maximale Duelle pro Tag. 0 = unbegrenzt. Erstes Starten: Default 50.
+    @Published var compareDailyLimit: Int = {
+        if UserDefaults.standard.object(forKey: "compare.dailyLimit") == nil { return 50 }
+        return UserDefaults.standard.integer(forKey: "compare.dailyLimit")
+    }() {
+        didSet { UserDefaults.standard.set(compareDailyLimit, forKey: "compare.dailyLimit") }
+    }
+    @Published var gridThumbnailSize: CGFloat = 120
+    /// Aktuelle Spaltenanzahl des 2D-Grids; wird von LibraryFullGridView aktualisiert.
+    var gridColumnCount: Int = 1
+    // Sidebar-Mehrfachauswahl (Alben / iAlben)
+    /// true = letzter Klick war in der Sidebar → Pfeiltasten navigieren Alben/iAlben
+    var sidebarNavigationFocused: Bool = false
+    @Published var sidebarSelectedAlbumIDs: Set<UUID> = []
+    var sidebarAnchorAlbumID: UUID? = nil
+    @Published var sidebarSelectedSmartFolderIDs: Set<UUID> = []
+    var sidebarAnchorSmartFolderID: UUID? = nil
     @Published var isStartupLoading: Bool = true                 { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
+    @Published var showModeSwitcher: Bool = false
+    @Published var modeSwitcherEnabled: Bool = UserDefaults.standard.object(forKey: "feature.modeSwitcherEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(modeSwitcherEnabled, forKey: "feature.modeSwitcherEnabled")
+            if !modeSwitcherEnabled { showModeSwitcher = false }
+        }
+    }
     /// Qualitätsanalyse-Ergebnisse (Duplikate, Unschärfe, Belichtung) + Schwellenwerte.
     /// Views greifen via `viewModel.quality.blurryDocuments` etc. zu.
     let quality = QualityDetectionState()
+
+    /// Gesichts-/Personen-Erkennung (Phase 1: Scan, Zuordnung, Benennung).
+    let people = PeopleState()
 
     /// Duell-/Vergleichsmodus (State + Load-Tracking). Änderungen laufen via
     /// objectWillChange-Forwarding an SwiftUI-Views weiter.
@@ -98,6 +139,7 @@ class ImageViewModel: ObservableObject {
         let shuffle: [UUID]
         let version: Int
         let expanded: Set<String>
+        let search: String
     }
     var visibleOrderCache: [UUID]? = nil
     var visibleOrderCacheKey: VisibleOrderKey? = nil
@@ -117,6 +159,7 @@ class ImageViewModel: ObservableObject {
     var stackCounts: [UUID: Int] = [:]
     var stackLeaderByMember: [UUID: UUID] = [:]
     var stackMembersByLeader: [UUID: [UUID]] = [:]
+    var bestInStackIDs: Set<UUID> = []
 
     // Smart-Folder-Zähler: Live-Filtern aller Dokumente (inkl. SQLite-Fallbacks)
     // kostete ~480 ms pro Render-Pass — daher debounced im Hintergrund berechnet.
@@ -146,6 +189,10 @@ class ImageViewModel: ObservableObject {
         library.loadWatchedFolders()
         // Backward compat: Filesystem-Verzeichnisse für bestehende Alben anlegen
         for album in library.albums { syncAlbumToFilesystem(album) }
+        // Verweise auf gelöschte Dateien beim Start bereinigen
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            self?.purgeStaleAlbumReferences()
+        }
         setupWatchedFolders()
 
         // CatalogStore.init() opens SQLite, runs schema migrations, and loads the full EXIF
@@ -167,7 +214,7 @@ class ImageViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // Kind-ViewModels: Änderungen an Views weiterleiten, die nur ImageViewModel beobachten
-        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange, inpaint.objectWillChange, compare.objectWillChange, quality.objectWillChange, backupSettings.objectWillChange] {
+        for child in [activity.objectWillChange, hdr.objectWillChange, versions.objectWillChange, adj.objectWillChange, inpaint.objectWillChange, compare.objectWillChange, quality.objectWillChange, backupSettings.objectWillChange, people.objectWillChange] {
             child
                 .sink { [weak self] _ in self?.objectWillChange.send() }
                 .store(in: &cancellables)
@@ -202,6 +249,16 @@ class ImageViewModel: ObservableObject {
                 .sink { [weak self] _ in self?.refreshQualityLists() }
                 .store(in: &cancellables)
         }
+
+        $searchQuery
+            .dropFirst()
+            .sink { [weak self] query in
+                self?.searchResultSummary = nil
+                self?.searchStartTime = query.isEmpty ? nil : Date()
+                self?.invalidateVisibleOrder()
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .importRequested)
             .receive(on: DispatchQueue.main)
@@ -242,7 +299,6 @@ class ImageViewModel: ObservableObject {
                     self.loadCurrentImage()
                 }
                 self.evictDistantImages()
-                self.loadThumbnails()
             }
             .store(in: &cancellables)
 
@@ -340,18 +396,54 @@ class ImageViewModel: ObservableObject {
                 }
             }
             switch event.keyCode {
-            case 123:
-                if mods.contains(.shift) {
+            case 123: // ←
+                if self.sidebarNavigationFocused {
+                    // in Sidebar: ignorieren
+                } else if realMods.isEmpty {
+                    // ← aus Bildbereich → Fokus zur Sidebar wechseln
+                    DispatchQueue.main.async { self.sidebarNavigationFocused = true }
+                } else if mods.contains(.shift) {
                     DispatchQueue.main.async { self.extendSelectionToPrevious() }
                 } else {
                     DispatchQueue.main.async { self.previous() }
                 }
                 return nil
-            case 124:
-                if mods.contains(.shift) {
+            case 124: // →
+                if self.sidebarNavigationFocused {
+                    // → aus Sidebar → Fokus zum Bildbereich wechseln
+                    DispatchQueue.main.async { self.sidebarNavigationFocused = false }
+                } else if mods.contains(.shift) {
                     DispatchQueue.main.async { self.extendSelectionToNext() }
                 } else {
                     DispatchQueue.main.async { self.next() }
+                }
+                return nil
+            case 126: // ↑
+                let ext126 = mods.contains(.shift)
+                if self.sidebarNavigationFocused {
+                    switch self.navSelection {
+                    case .album:
+                        DispatchQueue.main.async { self.navigateSidebarAlbum(forward: false, extending: ext126) }
+                    case .smartFolder:
+                        DispatchQueue.main.async { self.navigateSidebarSmartFolder(forward: false, extending: ext126) }
+                    default: break
+                    }
+                } else {
+                    DispatchQueue.main.async { ext126 ? self.extendSelectionByRow(forward: false) : self.navigateByRow(forward: false) }
+                }
+                return nil
+            case 125: // ↓
+                let ext125 = mods.contains(.shift)
+                if self.sidebarNavigationFocused {
+                    switch self.navSelection {
+                    case .album:
+                        DispatchQueue.main.async { self.navigateSidebarAlbum(forward: true, extending: ext125) }
+                    case .smartFolder:
+                        DispatchQueue.main.async { self.navigateSidebarSmartFolder(forward: true, extending: ext125) }
+                    default: break
+                    }
+                } else {
+                    DispatchQueue.main.async { ext125 ? self.extendSelectionByRow(forward: true) : self.navigateByRow(forward: true) }
                 }
                 return nil
             case 0 where onlyCmdDown:  DispatchQueue.main.async { self.selectAll()     }; return nil
@@ -406,6 +498,14 @@ class ImageViewModel: ObservableObject {
         memSource.setEventHandler { [weak self] in self?.evictDistantImages(keepRadius: 0) }
         memSource.resume()
         cancellables.insert(AnyCancellable { memSource.cancel() })
+
+        // $navSelection uses dropFirst() so the initial .library never fires loadContentForSelection.
+        // Trigger it explicitly so watched folders sync on startup.
+        loadContentForSelection(navSelection)
+
+        // Restore all previously imported images from the catalog that are not covered by
+        // watched folders (e.g. files dragged in from Desktop, Downloads, etc.).
+        restoreCatalogImages()
     }
 
     deinit {
@@ -424,6 +524,7 @@ class ImageViewModel: ObservableObject {
     }
 
     func importFiles(_ urls: [URL], selectFirst: Bool = true) {
+        let importStart = Date()
         let supported = urls.filter { isSupportedFormat($0) }
         guard !supported.isEmpty else { return }
 
@@ -438,6 +539,7 @@ class ImageViewModel: ObservableObject {
         }
         let catalogRatings = CatalogStore.shared.allRatings()
         let catalogElos = CatalogStore.shared.allElos()
+        let modifiedPaths = CatalogStore.shared.allModifiedPaths()
         let trashedPaths = CatalogStore.shared.trashedPaths()
         let qualityRecords = CatalogStore.shared.allQualityRecords()
         let newDocs = newURLs
@@ -445,6 +547,7 @@ class ImageViewModel: ObservableObject {
             .map { url -> ImageDocument in
                 var doc = ImageDocument(url: url)
                 doc.isTrashed = trashedPaths.contains(url.path)
+                doc.hasPersistedAdjustments = modifiedPaths.contains(url.path)
                 if let r = catalogRatings[url.path] {
                     doc.rating = r.rating
                     doc.flagStatus = FlagStatus(rawValue: r.flag) ?? .none
@@ -491,16 +594,40 @@ class ImageViewModel: ObservableObject {
         // (z. B. beim App-Neustart auf gleiche Library) sollen sofort sichtbar sein.
         refreshQualityLists()
         loadPersistedGroupsIfAvailable()
+        loadPeople()
         if selectFirst || collection.documents.count == newDocs.count {
             collection.select(index: firstNewIndex)
             loadCurrentImage()
         }
         let metaURLs = newDocs.map { $0.url }
-        activity.enqueueWork { [weak self] in self?.loadThumbnails() }
         activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
         activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
         activity.enqueueWork { [weak self] in self?.scanQualityForLibrary() }
         activity.enqueueWork { [weak self] in self?.scanMotifForLibrary() }
+        Log.perf(String(format: "IMPORT %d Dateien %.0f ms", newDocs.count, Date().timeIntervalSince(importStart) * 1000))
+    }
+
+    // Restores all catalog-known image paths that still exist on disk but are not yet
+    // in the in-memory collection (e.g. files imported in a previous session from outside
+    // any watched folder). Runs async; importFiles() deduplicates against watched-folder
+    // results that may arrive concurrently.
+    private func restoreCatalogImages() {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let fm = FileManager.default
+            let paths = CatalogStore.shared.allImages()
+                .map { $0.path }
+                .filter { fm.fileExists(atPath: $0) }
+            guard !paths.isEmpty else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                let existing = Set(self.collection.documents.map { $0.url.path })
+                let newURLs = paths
+                    .filter { !existing.contains($0) }
+                    .map { URL(fileURLWithPath: $0) }
+                guard !newURLs.isEmpty else { return }
+                self.importFiles(newURLs, selectFirst: false)
+            }
+        }
     }
 
     func clearAll() {
@@ -515,6 +642,7 @@ class ImageViewModel: ObservableObject {
 
     func selectDocument(at index: Int) {
         Log.trace("selectDocument(\(index)) — Klick angekommen")
+        sidebarNavigationFocused = false
         persistAdjustmentsForCurrent()
         collection.select(index: index)
         loadCurrentImage()

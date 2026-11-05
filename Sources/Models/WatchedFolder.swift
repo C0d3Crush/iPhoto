@@ -16,22 +16,29 @@ struct WatchedFolder: Identifiable, Codable {
     init(url: URL) throws {
         self.id = UUID()
         self.name = url.lastPathComponent
-        self.bookmarkData = try url.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        )
+        // .withSecurityScope requires a sandboxed app; fall back to minimal bookmark in CLI/non-sandboxed context
+        if let d = try? url.bookmarkData(options: .withSecurityScope,
+                                          includingResourceValuesForKeys: nil, relativeTo: nil) {
+            self.bookmarkData = d
+        } else {
+            self.bookmarkData = try url.bookmarkData(options: .minimalBookmark,
+                                                      includingResourceValuesForKeys: nil, relativeTo: nil)
+        }
     }
 
     /// Resolves the security-scoped URL. Caller must invoke the returned stop closure when done.
     func resolveURL() -> (url: URL, stop: () -> Void)? {
         var isStale = false
-        guard let url = try? URL(
-            resolvingBookmarkData: bookmarkData,
-            options: .withSecurityScope,
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        ) else { return nil }
+        // Try security-scoped first; fall back to plain resolution (minimal bookmarks)
+        let resolved: URL?
+        if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope,
+                               relativeTo: nil, bookmarkDataIsStale: &isStale) {
+            resolved = url
+        } else {
+            resolved = try? URL(resolvingBookmarkData: bookmarkData, options: [],
+                                relativeTo: nil, bookmarkDataIsStale: &isStale)
+        }
+        guard let url = resolved else { return nil }
         let didStart = url.startAccessingSecurityScopedResource()
         return (url, { if didStart { url.stopAccessingSecurityScopedResource() } })
     }

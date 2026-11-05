@@ -52,6 +52,14 @@ extension CatalogStore {
         }
     }
 
+    func setSortOrder(albumID: String, path: String, order: Int) {
+        queue.sync {
+            let stmt = prepare("UPDATE album_images SET sort_order=? WHERE album_id=? AND image_path=?")
+            sqlite3_bind_int(stmt, 1, Int32(order)); bind(stmt, 2, albumID); bind(stmt, 3, path)
+            step(stmt); sqlite3_finalize(stmt)
+        }
+    }
+
     func images(inAlbum albumID: String) -> [String] {
         queue.sync {
             let stmt = prepare("SELECT image_path FROM album_images WHERE album_id=? ORDER BY sort_order")
@@ -105,6 +113,55 @@ extension CatalogStore {
                 WHERE r.rating>=? ORDER BY r.rating DESC, i.filename
             """)
             sqlite3_bind_int(stmt, 1, Int32(minRating))
+            var out: [CatalogImage] = []
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
+    func images(withColorLabel color: String) -> [CatalogImage] {
+        queue.sync {
+            let stmt = prepare("""
+                SELECT i.id,i.path,i.filename,i.size_bytes,i.width,i.height,
+                       i.date_taken,i.camera_make,i.camera_model,i.is_raw,i.imported_at
+                FROM images i JOIN ratings r ON i.path=r.image_path
+                WHERE r.color_label=? ORDER BY i.filename
+            """)
+            bind(stmt, 1, color)
+            var out: [CatalogImage] = []
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
+    func vacuum() {
+        queue.sync { exec("VACUUM") }
+    }
+
+    func images(withCamera camera: String) -> [CatalogImage] {
+        queue.sync {
+            let like = "%\(camera)%"
+            let stmt = prepare("""
+                SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at
+                FROM images WHERE camera_make LIKE ? OR camera_model LIKE ?
+                ORDER BY filename
+            """)
+            bind(stmt, 1, like); bind(stmt, 2, like)
+            var out: [CatalogImage] = []
+            while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
+    func images(onDate datePrefix: String) -> [CatalogImage] {
+        queue.sync {
+            let like = "\(datePrefix)%"
+            let stmt = prepare("""
+                SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at
+                FROM images WHERE date_taken LIKE ?
+                ORDER BY date_taken
+            """)
+            bind(stmt, 1, like)
             var out: [CatalogImage] = []
             while step(stmt) == SQLITE_ROW { out.append(rowToImage(stmt)) }
             sqlite3_finalize(stmt); return out

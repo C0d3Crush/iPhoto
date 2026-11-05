@@ -11,6 +11,7 @@ extension ImageExporter {
         completion: @escaping (ExportResult) -> Void
     ) {
         DispatchQueue.global(qos: .userInitiated).async {
+            let exportStart = Date()
             var succeeded = 0
             var failed: [(String, String)] = []
             let total = documents.count
@@ -45,6 +46,8 @@ extension ImageExporter {
                 progressHandler(i + 1, total)
             }
 
+            Log.perf(String(format: "EXPORT %d Dateien %.0f ms (%d ok, %d fehler)",
+                           total, Date().timeIntervalSince(exportStart) * 1000, succeeded, failed.count))
             completion(ExportResult(total: total, succeeded: succeeded, failed: failed))
         }
     }

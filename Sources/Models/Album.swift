@@ -5,19 +5,23 @@ struct Album: Identifiable, Codable, Equatable {
     var name: String
     var photoURLs: [URL]
     /// Übergeordneter AlbumFolder — nil = auf Root-Ebene sichtbar.
-    /// Custom-Decoder unten macht das Feld rückwärtskompatibel: alte JSON-Dateien
-    /// ohne parentID landen automatisch auf Root, keine Migration nötig.
     var parentID: UUID?
+    /// Optional custom cover photo — shown first in mosaic. nil = erster Treffer aus photoURLs.
+    var coverPhotoURL: URL?
+    /// Optional free-text description shown in the detail sheet.
+    var albumDescription: String?
 
     init(name: String, parentID: UUID? = nil) {
         self.id = UUID()
         self.name = name
         self.photoURLs = []
         self.parentID = parentID
+        self.coverPhotoURL = nil
+        self.albumDescription = nil
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, photoURLs, parentID
+        case id, name, photoURLs, parentID, coverPhotoURL, albumDescription
     }
 
     init(from decoder: Decoder) throws {
@@ -26,6 +30,8 @@ struct Album: Identifiable, Codable, Equatable {
         self.name = try c.decode(String.self, forKey: .name)
         self.photoURLs = try c.decode([URL].self, forKey: .photoURLs)
         self.parentID = try c.decodeIfPresent(UUID.self, forKey: .parentID)
+        self.coverPhotoURL = try c.decodeIfPresent(URL.self, forKey: .coverPhotoURL)
+        self.albumDescription = try c.decodeIfPresent(String.self, forKey: .albumDescription)
     }
 }
 
@@ -61,4 +67,7 @@ enum NavSelection: Hashable {
     case underexposed
     case overexposed
     case closedEyes
+    case eloRange(Double, Double)   // min (inclusive) … max (inclusive)
+    case people
+    case personDetail(String)       // personID
 }

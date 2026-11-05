@@ -31,16 +31,17 @@ struct RatingPanel: View {
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 6) {
+            HStack(spacing: 0) {
                 ForEach(1...5, id: \.self) { star in
                     Image(systemName: starIcon(star))
                         .font(.system(size: 22))
                         .foregroundColor(starColor(star))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                         .onTapGesture {
                             let current = doc?.rating ?? 0
                             viewModel.setRating(current == star ? 0 : star)
                         }
-                        .contentShape(Rectangle())
                 }
 
                 if let rating = doc?.rating, rating > 0 {
@@ -50,8 +51,10 @@ struct RatingPanel: View {
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .padding(.leading, 4)
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 

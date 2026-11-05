@@ -114,6 +114,7 @@ final class CatalogStore {
         migrateExifColumns()
         migrateQualityColumns()
         migrateMotifColumns()
+        migrateFaceColumns()
 
         exec("""
         CREATE TABLE IF NOT EXISTS ratings (
@@ -340,6 +341,24 @@ final class CatalogStore {
         }
     }
 
+    func allImagesWithSeqNumbers() -> [(path: String, filename: String, seq: Int)] {
+        queue.sync {
+            let stmt = prepare("""
+                SELECT path, filename, sequence_number FROM images
+                WHERE sequence_number IS NOT NULL AND sequence_number > 0
+                ORDER BY filename
+            """)
+            var out: [(path: String, filename: String, seq: Int)] = []
+            while step(stmt) == SQLITE_ROW {
+                let p = String(cString: sqlite3_column_text(stmt, 0))
+                let f = String(cString: sqlite3_column_text(stmt, 1))
+                let s = Int(sqlite3_column_int(stmt, 2))
+                out.append((path: p, filename: f, seq: s))
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
     func removeImage(path: String) {
         queue.sync {
             let stmt = prepare("DELETE FROM images WHERE path=?")
@@ -536,6 +555,38 @@ final class CatalogStore {
             isRAW: sqlite3_column_int(s, 9) != 0,
             importedAt: str(10)
         )
+    }
+
+    // MARK: - SmartFolder SQL queries
+
+    /// Executes the SmartFolder SQL and returns matching paths in ORDER BY order.
+    /// Returns nil when the SmartFolder contains runtime-only criteria (colorRatio, smartFolderRef)
+    /// that cannot be expressed in SQL — caller should fall back to in-memory filtering.
+    func orderedPathsForSmartFolder(_ sf: SmartFolder) -> [String]? {
+        guard !SmartFolderSQLGenerator.hasRuntimeOnlyCriteria(sf) else { return nil }
+        let sql = SmartFolderSQLGenerator.generate(for: sf)
+        return queue.sync {
+            guard let stmt = prepare(sql) else { return [] }
+            var paths: [String] = []
+            while step(stmt) == SQLITE_ROW {
+                if let cstr = sqlite3_column_text(stmt, 0) {
+                    paths.append(String(cString: cstr))
+                }
+            }
+            sqlite3_finalize(stmt)
+            return paths
+        }
+    }
+
+    /// COUNT(*) query for sidebar badge — no LIMIT/ORDER BY, returns nil on runtime-only criteria.
+    func countForSmartFolder(_ sf: SmartFolder) -> Int? {
+        guard !SmartFolderSQLGenerator.hasRuntimeOnlyCriteria(sf) else { return nil }
+        let sql = SmartFolderSQLGenerator.generateCount(for: sf)
+        return queue.sync {
+            guard let stmt = prepare(sql) else { return nil }
+            defer { sqlite3_finalize(stmt) }
+            return step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : nil
+        }
     }
 }
 

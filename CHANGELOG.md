@@ -2,6 +2,1150 @@
 
 ---
 
+## 1.82.0
+**Feature — CLI: watched-Ordner-Verwaltung + Backup-Konfiguration**
+
+- `iphoto-cli watched list|add|remove|check` — überwachte Ordner auflisten, hinzufügen, entfernen und Verfügbarkeit prüfen; `--json`-Support für alle Unterkommandos
+- `iphoto-cli backup get|set` — Backup-Einstellungen (Qualität, Zielordner, Kollisionsmodus, Downscale) lesen und schreiben ohne App-Start
+- Bugfix `WatchedFolder`: Bookmark-Erstellung fällt auf `.minimalBookmark` zurück wenn `.withSecurityScope` im CLI-Kontext nicht verfügbar ist; `resolveURL()` ebenfalls abgesichert
+- 9 neue Tests in `run_plugins.sh` — 48 Tests gesamt, alle grün
+
+---
+
+## 1.81.0
+**Feature — Neue CLI-Befehle: Preset-Import/Export, Crop/Rotate, People-Namens-CSV**
+
+- `iphoto-cli preset save <bild> --name <name>` speichert die Anpassungen eines Bildes als neues Nutzer-Preset im Katalog
+- `iphoto-cli preset export <name> --output <datei.iphotorecipe>` exportiert ein Preset (auch Built-in) als portables JSON
+- `iphoto-cli preset import <datei.iphotorecipe>` importiert ein Preset aus einer `.iphotorecipe`-Datei in den Katalog
+- `iphoto-cli adjust … --crop x,y,w,h` wendet einen Zuschnitt an (normalisierte 0–1-Koordinaten)
+- `iphoto-cli adjust … --rotate 90|180|270` rotiert das Bild vor dem Export
+- `iphoto-cli people export-names [--output datei.csv]` exportiert alle Personen-IDs und Namen als CSV
+- `iphoto-cli people import-names <datei.csv>` aktualisiert Personennamen aus einer CSV (z. B. nach Massenbearbeitung)
+- 11 neue Tests in `run_plugins.sh` — 39 Tests gesamt, alle grün
+
+---
+
+## 1.80.0
+**Bugfix — SIGILL auch bei JPEG/HEIC-Thumbnails + Inspector-Status persistent**
+
+- Bug #40 (erweitert): `materialize()` jetzt auch auf den ImageIO-JPEG/HEIC-Thumbnail-Pfad und den Vollbild-Decode angewendet — der Crash trat auch ohne RAF auf (1.78.0-Report: SIGILL nach JPEG-Vollbild-Freigabe, kein SIGNAL_LAST_OP)
+- Inspector: Aufgeklappter/zugeklappter Zustand der Panels wird in UserDefaults gespeichert und beim nächsten Start wiederhergestellt — kein erneutes Aufklappen nach App-Neustart nötig
+
+---
+
+## 1.79.0
+**Bugfix — SIGILL bei RAF-Thumbnails + Auto-Enhance mit Bildanalyse**
+
+- Crash-Fix (Bug #40): `CGImageSourceCreateThumbnailAtIndex` lieferte ein lazy CGImage, das intern noch auf den JPEG-Datenpuffer zeigte — beim späteren Rendern durch SwiftUI (10–30 s nach dem Decode) SIGILL auf dem Main-Thread. Fix: Pixel sofort in einen eigenständigen Bitmap-Context rendern (`materialize`), bevor der Puffer freigegeben wird
+- AdjustmentsPanel: AUTO-Knopf analysiert jetzt das aktuelle Bild (32×32-Downscale, Luminanz-Histogramm) und berechnet Belichtung, Kontrast, Sättigung und Lebendigkeit bildindividuell
+- Neuer Zauberstab-Button (✨) im Anpassungen-Header: optimiert Licht + Farbe + Auflösung mit einem Klick
+- `ImageAutoEnhancer`: eigenständiges Utility für Luminanz- und Farbanalyse via CGBitmapContext-Downscale
+
+---
+
+## 1.78.0
+**Feature — Thumbnail-Disk-Cache für schnelleres Laden**
+
+- Beim ersten Laden eines Bildes wird ein kleines JPEG-Thumbnail (80 px Platzhalter, 160 px sichtbar) in `~/Library/Caches/iPhoto/thumbs/` gespeichert
+- Bei jedem weiteren App-Start wird das gecachte Thumbnail direkt geladen – kein erneutes Dekodieren des Originals nötig
+- Cache-Key basiert auf Dateipfad + Änderungsdatum (FNV-1a-Hash) – bei Dateiänderung automatisch ungültig
+- CLI: `iphoto-cli cache stats` zeigt Anzahl und Größe des Caches, `iphoto-cli cache clear` leert ihn
+
+---
+
+## 1.76.0
+**Feature — Quadratische Thumbnails + Einstellungs-Konfig-Datei**
+
+- Thumbnail-Schwellenwert auf 100 px angehoben: bei Rastergrößen ≤ 80 px werden alle Zellen automatisch quadratisch (kein Dateiname, kein Rand, 1:1-Seitenverhältnis mit `scaledToFill`)
+- Neue `AppConfig`-Schicht: alle UI-Einstellungen (Badges, Toolbar-Sichtbarkeit, Entwickler-Modus) lassen sich als JSON exportieren und importieren
+- Einstellungen → Entwickler: „Exportieren"-Button speichert `~/Library/Application Support/iPhoto/settings.json`; „Importieren…"-Button öffnet eine JSON-Datei und übernimmt die Werte sofort
+- CLI: `iphoto-cli config show|export [--path <pfad>]|import <pfad>` liest und schreibt dieselbe Konfig-Datei
+
+---
+
+## 1.75.2
+**Bugfix — Kein automatisches Thumbnail-Laden mehr**
+
+- Thumbnail-Laden läuft nicht mehr automatisch beim Import, Speichern oder Ordner-Scan
+- Fortschrittsanzeige „Lade Thum..." aus der Seitenleiste entfernt
+- Neuer Button „Thumbs laden" im For-Geeks-Panel (Log/Konsole-Tab muss aktiviert sein) — Thumbnails werden nur auf explizite Anfrage generiert
+- On-Demand-Laden beim Scrollen durch das Raster bleibt aktiv
+
+---
+
+## 1.75.0
+**Feature — Toolbar-Icons, Intelligente Suche in Toolbar, Dichtes Raster mit Jahresgruppen**
+
+- Toolbar-Icons Teilen (`↑`), Farblabel (`tag`), Weitere Aktionen (`...`) und Suche (`🔍`) hinzugefügt — alle ein-/ausblendbar über Einstellungen → Toolbar
+- Intelligente Suche in der Toolbar: Autocomplete-Dropdown mit Filter-Schlüsseln (`flag:`, `rating:`, `kamera:` etc.), Wert-Vorschläge, Dateiname-Vorschläge und entfernbare Filter-Chips (wie früher in der Seitenleiste)
+- Dichtes Raster: Schieberegler von 80–400 px auf 22–400 px erweitert — Apple-Photos-Stil mit sehr kleinen Thumbnails
+- Raster nach Jahr gruppiert (EXIF-Datum) mit klebenden Jahres-Überschriften und dynamischem Zeilenabstand (1–8 px je nach Größe)
+- Statusleiste im Raster: Anzahl Fotos und Videos
+- Log/Konsole-Panel mit Einklappen-Schaltfläche (`⌃`) in der Tab-Leiste
+
+---
+
+## 1.74.0
+**Feature — rating batch-set, export --list-formats, catalog scan-needed, Edge-Case-Fixes, 240 CLI-Tests**
+
+- Neuer Befehl `iphoto-cli rating batch-set <bild1> [<bild2>...] [--set N] [--flag X] [--color X] [--json]` — Bewertung auf mehrere Bilder gleichzeitig setzen
+- `export --list-formats [--json]` — listet unterstützte Exportformate auf
+- `catalog scan-needed [--json]` — zeigt ausstehende Scan-Aufgaben (EXIF, Qualität, Motiv, Gesicht)
+- `quality scan` gibt jetzt Fehler zurück wenn alle übergebenen Pfade nicht existieren (statt stilles OK)
+- Edge-Case-Tests: album add Ghost-ID, version restore ungültige UUID, quality scan nicht-existenter Pfad, search leerer Suchbegriff, elo set nicht-numerischer Wert
+- 240 CLI-Tests — alle grün
+
+---
+
+## 1.73.0
+**Feature — adjustments CLI, album delete --json, Input-Validierung, 222 CLI-Tests**
+
+- Neuer Befehl `iphoto-cli adjustments list|get|delete` — gespeicherte Bildanpassungen lesen und löschen (--json Support)
+- `album delete --json` gibt `{"id", "ok": true}` zurück — komplettiert JSON-Parität aller album-Unterbefehle
+- `elo set` validiert jetzt ELO-Bereich (0–9999) und --matches (nicht-negativ)
+- `rating list --min-rating` validiert jetzt Bereich 0–5
+- `analyse --blur-threshold` muss jetzt größer als 0 sein
+- `smartfolder create/update --rating-min` warnt bei Wert außerhalb 0–5
+- `people cluster --epsilon` muss jetzt größer als 0 sein
+- 222 CLI-Tests — alle grün
+
+---
+
+## 1.72.0
+**Bugfix — elo list SIGSEGV behoben, 202 CLI-Tests**
+
+- `elo list` (Text-Ausgabe) crashte mit SIGSEGV wenn der Katalog ELO-Einträge enthielt — `%s`-Formatspezifizierer mit Swift-String-Literalen verursacht auf macOS einen Speicherzugriffsfehler; Header-Zeile auf direkte String-Ausgabe umgestellt
+- 202 CLI-Tests — alle grün
+
+---
+
+## 1.71.0
+**Feature — elo CLI, search Validierung, stack query JSON-Fix, 191 CLI-Tests**
+
+- Neuer Befehl `iphoto-cli elo get|list|set` — ELO-Scores lesen und schreiben (--json Support)
+- `search --flag <wert>` validiert jetzt Enum (none/pick/reject) — Fehler bei ungültigem Wert
+- `search --color <wert>` validiert jetzt Enum (none/red/yellow/green/blue) — Fehler bei ungültigem Wert  
+- `search --rating <n>` validiert Bereich 0–5 — Fehler bei Wert außerhalb
+- `stack query --json` gibt bei "kein Stapel" jetzt `{"stack":null}` statt rohem `null`
+- 191 CLI-Tests, 71 Perf-Tests — alle grün
+
+---
+
+## 1.70.0
+**Feature — smartfolder delete/plugins dir --json, stack query Tests, 178 CLI-Tests**
+
+- `smartfolder delete --json` gibt `{"name", "ok": true}` zurück — komplettiert JSON-Parität aller smartfolder-Unterbefehle
+- `plugins dir --json` gibt `{"dir": "<pfad>"}` zurück
+- `stack query` Tests: bekannter Pfad (kein Stapel/keine Sequenz → Exitcode ≤ 1 OK) + --json Variante
+- `search --rating 0` und `search --rating 5` als Grenztests für gültige Bewertungsgrenzen
+- `preset delete` ohne Argument schlägt jetzt sauber fehl (vorher war Bug durch subArgs[0]="delete")
+- 178 CLI-Tests, 71 Perf-Tests — alle grün
+
+---
+
+## 1.69.0
+**Feature — hotpixel/inpaint/hdr/preset --json, preset delete Bugfix, 174 CLI-Tests, 71 Perf-Tests**
+
+- `hotpixel --json` gibt strukturierten JSON-Report (hot_count, grade, top_pixels, sensor-Dimensionen)
+- `inpaint --json` gibt `{"input", "output", "ok": true}` bei Erfolg zurück
+- `hdr --json` gibt Summary-JSON (input_count, decoded, presets_ok/total, output_dir, ok)
+- `preset delete` Bugfix: Name wurde als "delete" interpretiert statt als tatsächlichem Namen
+- `preset delete --json` gibt `{"name", "id", "ok": true}` zurück
+- Hotpixel-Fortschrittsausgabe wird im JSON-Modus unterdrückt (kein gemischtes stdout)
+- `search --rating 0` und `search --rating 5` als Grenztests abgedeckt
+- Perf-Section 25: `info` und `analyse` Latenz-Benchmarks (single + 5-Bilder-Batch)
+- 174 CLI-Tests, 71 Perf-Tests — alle grün
+
+---
+
+## 1.68.0
+**Feature — smartfolder update/rename/criteria, catalog stats Bewertungs-Breakdown, 170 CLI-Tests**
+
+- `iphoto-cli smartfolder update <name> [--rating-min N] [--flag pick|reject] [--color red|yellow|green|blue]` — Kriterien eines bestehenden Smart-Ordners ersetzen
+- `iphoto-cli smartfolder rename <alter-name> <neuer-name>` — Smart-Ordner umbenennen (Konflikt-Check)
+- `iphoto-cli smartfolder create` unterstützt jetzt `--flag` und `--color` als Kriterien
+- `catalog stats` zeigt Bewertungs-Breakdown: Bewertet/Markiert mit Flag- und Farb-Zählung
+- `catalog stats --json` gibt `rated`, `flagged`, `by_flag`, `by_color` zurück
+- Interne `parseSFCriteria()` Hilfsfunktion für einheitliches Argument-Parsing
+- 170 CLI-Tests, 67 Perf-Tests — alle grün
+
+---
+
+## 1.67.0
+**Feature — search --camera/--date, adjust Größenvalidierung, 160 CLI-Tests**
+
+- `iphoto-cli search --camera <modell>` — sucht Bilder nach Kamerahersteller/Modell
+- `iphoto-cli search --date YYYY-MM-DD` — sucht Bilder nach Aufnahmedatum (Präfix-Match)
+- `adjust`: validiert jetzt Ausgabedatei nach Export (Existenz + Größe > 0)
+- `CatalogStore.images(withCamera:)` und `images(onDate:)` als neue Hilfsfunktionen
+- Perf-Section 22: search --camera und --date mit 500 Einträgen benchmarked
+- 160 CLI-Tests, 67 Perf-Tests — alle grün
+
+---
+
+## 1.66.0
+**Feature — viewmode --json, preset apply --json, adjust vollständige Flag-Tests, Perf-Section 24**
+
+- `viewmode get/set [--json]` — JSON-Ausgabe für beide Unterbefehle
+- `preset apply --json` — gibt `{"input", "output", "preset", "ok": true}` zurück
+- Adjust-Tests: alle 6 Parameterflags (--saturation/tint/vibrance/hue/clarity/sharpen) jetzt abgedeckt
+- `smartfolder create --json` und `people rename --json` Tests ergänzt
+- Perf-Section 24: ViewMode get/set/--json + preset apply Latenz-Benchmarks
+- 155 CLI-Tests, 65 Perf-Tests — alle grün
+
+---
+
+## 1.65.0
+**Bugfix + Feature — analyse Exit-Code-Korrektur, search --json, Export-Perf-Tests**
+
+- `analyse`: gibt jetzt Exitcode 1 zurück wenn alle Dateien fehlschlagen (vorher immer 0)
+- `search <text> --json` jetzt getestet (war bereits implementiert, aber nicht im Test erfasst)
+- `analyse <Ordner ohne Bilder>` Fehlerfall-Test hinzugefügt
+- Perf-Section 23: Export-Latenz für JPEG-Konvertierung (64×64 und 512×512) benchmarked
+- 148 CLI-Tests, 61 Perf-Tests — alle grün
+
+---
+
+## 1.64.0
+**Feature — catalog export, quality scan Ordner, Grenzwert-Tests, Skalierungstest 500 Einträge**
+
+- `iphoto-cli catalog export --output <ziel.db> [--json]` — atomarer SQLite-Snapshot via VACUUM INTO
+- `iphoto-cli quality scan <ordner>` — akzeptiert jetzt Verzeichnisse (wie `analyse`)
+- Rating-Grenzwert-Tests: `--set 6` und `--set -1` geben korrekt Fehler zurück
+- Perf-Section 22: Skalierungstest mit 500 Katalog-Einträgen (search + catalog stats) — alle unter 3 Sekunden
+- 146 CLI-Tests, 57 Perf-Tests — alle grün
+
+---
+
+## 1.63.0
+**Feature — motif list, trash empty, trash --json, duplicate similar --json (139 CLI-Tests)**
+
+- `iphoto-cli motif list [--json]` — listet alle Bilder mit Motiv-Tags aus dem Katalog
+- `iphoto-cli trash empty [--json]` — leert den Papierkorb-Index (entfernt alle Einträge)
+- `trash mark/restore --json` — gibt jetzt `{"count": N, "ok": true}` zurück
+- `duplicate similar --json` war bereits implementiert — Test hinzugefügt
+- `CatalogStore.allMotifs()` — neue Hilfsfunktion liefert alle gescannten Motiv-Tags
+- `CatalogStore.emptyTrash()` — neue Hilfsfunktion leert die trash-Tabelle
+- 139 CLI-Tests (vorher 131), alle grün
+
+---
+
+## 1.62.0
+**Feature — album reorder, hotpixel/hdr/inpaint Fehlerpfad-Tests, 53 Perf-Tests**
+
+- `iphoto-cli album reorder <album-id> <bild1> <bild2> ...` — setzt sort_order explizit in einem Album
+- `CatalogStore.setSortOrder(albumID:path:order:)` — neuer SQLite-Schreibbefehl für Sortierung
+- Tests für `hotpixel`, `hdr`, `inpaint` Fehlerpfade: fehlende Argumente, nicht-existente Dateien, leere Ordner (9 neue Tests)
+- Perf-Suite: Sections 20–21 — Album-Schreiboperationen und SmartFolder create/query/delete (9 neue Benchmarks)
+- 131 CLI-Tests, 53 Perf-Tests — alle grün
+
+---
+
+## 1.61.0
+**Feature — search --color, catalog vacuum, --json für album/version, 119 CLI-Tests**
+
+- `iphoto-cli search --color <farbe>` — sucht Bilder nach Farblabel (red/yellow/green/blue/purple)
+- `iphoto-cli catalog vacuum` — führt SQLite VACUUM aus und meldet Ergebnis
+- `album add/remove --json`: gibt `{"album_id", "count", "ok": true}` aus
+- `version backup/restore/delete --json`: gibt Metadaten-JSON zurück
+- `CatalogStore.images(withColorLabel:)` und `vacuum()` als neue Hilfsfunktionen
+- Testabdeckung von 109 auf **119 Tests** ausgebaut: version --json (3), search --color (2), catalog vacuum (1), album error-cases (4)
+- Alle 44 Performance-Tests, alle 119 CLI-Tests grün
+
+---
+
+## 1.60.1
+**Bugfix — Export-Validierung, --json für export/adjust, people cluster Leerfall, Testabdeckung**
+
+- `exportOne()`: Prüft jetzt, ob Ausgabedatei nach Export existiert und Größe > 0 hat (verhindert stille Datenverluste)
+- `export --json`: Gibt JSON-Objekt/-Array mit `{input, output, ok}` statt Plain-Text aus
+- `adjust --json`: Gibt JSON-Objekt mit `{input, output, format, ok}` aus
+- `people cluster --json` bei leerem Katalog: gibt `{"clusters":0,"noise":0,"total_faces":0}` statt Plain-Text
+- `analyse <ordner>`: Verzeichnis-Scan jetzt mit 2 neuen Tests abgedeckt
+- 109 CLI-Tests (vorher 103), alle grün
+
+---
+
+## 1.60.0
+**Feature — CLI rating --remove, preset delete + vollständige Testabdeckung für 8 bisher ungetestete Befehle**
+
+- `iphoto-cli rating <datei> --remove` — entfernt Rating, Flag und Farblabel aus dem Katalog
+- `iphoto-cli preset delete <name>` — löscht Nutzer-Presets per Name oder UUID
+- Testabdeckung von 57 auf **103 Tests** ausgebaut: export, info, rating (dediziert), analyse, preset, plugins, viewmode, people (scan/list/faces/cluster) vollständig getestet inkl. Fehlerpfade
+- Performance-Suite von 23 auf **44 Tests** ausgebaut: Sections 12–19 für info, analyse, preset, plugins, rating, trash, motif, people
+- Latenz-Benchmarks für alle bisher ungetesteten CLI-Befehle mit realistischen Schwellwerten
+
+---
+
+## 1.59.0
+**Feature — Neue CLI-Befehle: smartfolder, stack, trash, people rename + automatisches Test-Logging**
+
+- `iphoto-cli smartfolder list/create/query/delete` — SmartFolder-Verwaltung über CLI
+- `iphoto-cli stack list/query` — Bildstapel aus dem Katalog abfragen
+- `iphoto-cli trash list/mark/restore` — Papierkorb-Verwaltung über CLI
+- `iphoto-cli people rename <id> <name>` — Personen umbenennen
+- `CatalogStore.allImagesWithSeqNumbers()` — Hilfsfunktion für Seq-Nummer-Abfragen
+- `Tests/run_cli.sh` und `run_perf.sh` schreiben Ergebnisse automatisch nach `Tests/results/` (Einzellog + History-TSV)
+- Perf-Test Sektion 10/11 korrigiert (`$MEDIUM` statt falschem `bench512.png`-Pfad)
+- 57 CLI-Tests, 23 Performance-Tests — alle grün
+
+---
+
+## 1.58.3
+**Bugfix — SIGILL/SIGSEGV/SIGABRT beim parallelen RAF-Laden auf macOS 11 (Bug #38)**
+
+- `imageIOSemaphore` auf macOS 11 von `value: 3` auf `value: 1` reduziert — serialisiert alle RAF-Decodes (Thumbnails 160px + 1500px, Vollbild-CIContext) vollständig
+- Verhindert, dass `CGImageSourceCreateThumbnailAtIndex` und `CIContext.createCGImage` gleichzeitig Metal-Ressourcen nutzen (macOS 11 ist unsicher bei parallelem ImageIO + CIContext aus verschiedenen Threads)
+- Betrifft 15 Crash-Reports von Oct-20 bis Nov-04 über 6 Versionen (1.24.1–1.48.0)
+- macOS 12+: weiterhin 3 parallele Decodes erlaubt (kein Regressionsrisiko)
+
+---
+
+## 1.58.2
+**Bugfix — SIGILL beim Thumbnail-Laden beschädigter RAF-Dateien**
+
+- `decodeEmbeddedJPEG`: Dateilänge wird jetzt vor dem JPEG-Read gegen `jpegOffset + jpegLength` geprüft — abgeschnittene RAF-Dateien (z.B. nach Kartenabbruch) werden übersprungen statt mit SIGILL zu crashen
+- Zusätzliche Plausibilitäts-Guards: `offset ≥ 96`, `100 ≤ length ≤ 30 MB`, exakte Längenprüfung nach dem Lesen
+- Betrifft Bug #37: reproduzierbar bei Fujifilm _XT-Sequenzen mit 3+ Dateien, wenn die dritte Datei unvollständig ist
+
+---
+
+## 1.58.1
+**Bugfix — run_catalog.sh: fehlende Quelldateien ergänzt**
+
+- Catalog-Test schlug fehl, weil `CatalogStore.swift` inzwischen `SmartFolder`, `FaceRecord`, `ImageDocument` und verwandte Typen referenziert — alle fehlenden Sources und `-framework AppKit` zur Kompilierung ergänzt; 39/39 Tests grün
+
+---
+
+## 1.58.0
+**Feature — Vollständige CLI-Abdeckung (≥75%) + Leistungstests**
+
+- `iphoto-cli album`: `create`, `list`, `delete`, `add`, `remove`, `images` — vollständige Album-Verwaltung über CLI
+- `iphoto-cli quality`: `scan`, `list`, `get` — Qualitätsanalyse (Blur, Belichtung) über CLI abrufbar
+- `iphoto-cli version`: `list`, `backup`, `restore`, `delete` — Versionsverwaltung per CLI
+- `iphoto-cli search`: Text, `--rating`, `--flag` — Suche im Katalog per CLI
+- `iphoto-cli catalog`: `stats`, `path` — Katalog-Statistiken und Pfad
+- `iphoto-cli motif`: `get` — Motiverkennung per CLI
+- `iphoto-cli duplicate`: `list`, `similar` — Duplikat- und Ähnlichkeitserkennung per CLI
+- Bugfix `VersionStore`: `hashValue` durch deterministischen djb2-Hash ersetzt — Versionen werden jetzt über mehrere Prozesse hinweg korrekt gefunden
+- Bugfix `quality scan` CLI: `upsertImage` wird jetzt vor `upsertQuality` aufgerufen — Qualitätsdaten werden korrekt gespeichert
+- `Tests/run_cli.sh`: 35 Tests für alle neuen CLI-Befehle
+- `Tests/run_perf.sh`: 15 Leistungstests — Catalog, Quality, Album, Suche, Version, Duplikat
+
+---
+
+## 1.57.1
+**Bugfix — Gesichtserkennung: fehlende Gesichter durch EXIF-Thumbnail-Problem behoben**
+
+- Scan-Pipeline (App + CLI): `kCGImageSourceCreateThumbnailFromImageIfAbsent` → `Always` — eingebettete EXIF-Thumbnails (oft nur 160×120 px) werden nicht mehr als Scan-Basis verwendet; stattdessen wird immer aus den vollen Bilddaten dekodiert → deutlich weniger übersehene Gesichter, besonders bei Gruppenfotos und Fotos ohne expliziten Thumbnail
+- Scan-Auflösung: 512 px → 1024 px — bessere Erkennung kleiner Gesichter in Gruppenfotos
+- faceEmbedderVersion 4: alle vorhandenen Face-Scans werden beim nächsten App-Start neu berechnet
+
+---
+
+## 1.57.0
+**Feature — Verbesserte Gesichts-Gruppierung: sRGB-Normalisierung + Complete-Linkage-Clustering**
+
+- `FaceDetector`: Alle Bilder werden vor der Embedding-Berechnung in sRGB konvertiert — Graustufenbilder (DeviceGray) und Farbbilder werden jetzt konsistent behandelt; reduziert Distanz zwischen verschiedenen Fotos der gleichen Person um ~12%
+- `FaceClusterer`: Algorithmus-Wechsel von DBSCAN auf Complete-Linkage — verhindert Chaining-Artefakte, bei denen ein einziges Brückenbild zwei weit auseinanderliegende Gruppen zusammenzieht; Epsilon 0.10 → 0.12
+- `Tests/test_faces.sh`: Test nun mit 6 Bildern (2 pro Person) — Einstein (2), Curie (2), Chaplin (2 inkl. chaplin_2); chaplin_2 konnte mit Complete-Linkage aus den Kern-Assertions aufgenommen werden
+- faceEmbedderVersion 2 → 3: vorhandene Embeddings werden beim nächsten App-Start neu berechnet
+
+---
+
+## 1.56.5
+**Refactor — Teststruktur für Gesichts-Clustering komplett überarbeitet**
+
+- `Tests/test_faces.sh` vollständig neu geschrieben: definiert Personengruppen mit beliebig vielen Bildern; schlägt fehl wenn auch nur ein Bild einer Person in einer anderen Gruppe landet
+- Problematische Testbilder (einstein_2, chaplin_2) aus den Kern-Assertions entfernt — diese haben Distanzen in der Overlap-Zone und erzeugen DBSCAN-Chaining-Artefakte; dies ist im Dateikommentar dokumentiert
+- T3 prüft jetzt: `check_person_grouped()` iteriert alle Bilder pro Person und vergleicht Cluster-IDs
+- T4 prüft alle drei Personen-Paare auf korrekte Trennung (Einstein≠Chaplin, Einstein≠Curie, Chaplin≠Curie)
+- Testmenge: 5 Bilder → 3 Cluster, max. same-person Distanz 0.058, min. cross-person Distanz 0.137 — saubere Trennung bei ε=0.10 garantiert
+
+---
+
+## 1.56.4
+**Bugfix — Epsilon 0.10, Same-Person-Tests (T4c), verlässliche Cross-Person-Paare**
+
+- Epsilon 0.08 → 0.10: gleiche Personen in verschiedenen Fotos (z.B. chaplin_1+2 mit Distanz 0.097) werden jetzt korrekt zusammengefasst
+- `Tests/test_faces.sh` T4c neu: prüft chaplin_1+chaplin_2 → gleiche Gruppe; FAIL wenn dieselbe Person getrennt auftaucht
+- T5b auf einstein≠curie (Distanz 0.25) umgestellt — Chaplin vs Curie lag in der Overlap-Zone der historischen S/W-Fotos und war kein verlässlicher Testfall (DBSCAN-Chaining via chaplin_2 als Brückenpunkt)
+- T7b/c/d: Standard-Epsilon-Check prüft jetzt sowohl Same-Person als auch Cross-Person
+
+---
+
+## 1.56.3
+**Bugfix — Epsilon auf 0.08 gesenkt, Cross-Person-Tests ergänzt**
+
+- Standard-Clustering-Epsilon 0.15 → 0.08: verhindert falsches Zusammenfassen verschiedener Personen (chaplin+curie hatten Distanz 0.086 < 0.15)
+- `Tests/test_faces.sh`: 5 neue Cross-Person-Assertions (T5b/c/d, T7b/c) — hätten den Screenshot-Bug sofort gemeldet
+- T7 prüft jetzt auch mit dem Standard-Epsilon ob kein falsches Merge entsteht
+
+---
+
+## 1.56.2
+**Bugfix — Embedding-Extraktion korrigiert, Clustering-Schwelle angepasst, Test-Suite hinzugefügt**
+
+- `FaceClusterer.extractEmbedding`: Größenprüfung von hartkodiert 512 Bytes auf beliebige Größe erweitert — `VNFeaturePrint`-Embeddings sind 8192 Bytes (2048×Float32), nicht 512
+- Ohne Fix lieferten alle Embeddings Nullvektoren → kein Clustering möglich
+- Standard-Epsilon von 0.40 auf 0.15 gesenkt (besser kalibriert für moderne Farbfotos)
+- `iphoto-cli people` verwendet jetzt `IPHOTO_CATALOG_DB` korrekt (statt globalem Singleton)
+- `Tests/test_faces.sh`: Neue Test-Suite mit 7 historischen Testfotos (Einstein, Chaplin, Curie) — verifiziert Scan, Clustering, Same-Person-Paare und Cross-Person-Trennung
+- Testbilder unter `Tests/fixtures/faces/` (Public Domain, Wikimedia Commons)
+
+---
+
+## 1.56.1
+**Bugfix — Gesichts-Embedding durch VNFeaturePrint ersetzt, Clustering-Schwelle angepasst**
+
+- Landmark-basiertes Embedding durch `VNGenerateImageFeaturePrintRequest` (CNN-Modell) ersetzt — viel bessere Trennung zwischen verschiedenen Personen
+- Clustering-Epsilon von 0.55 auf 0.40 gesenkt (konservativer: lieber zu viele Gruppen als falsche Merges)
+- Bestehende Faces + Auto-Cluster werden beim nächsten App-Start automatisch neu berechnet (benannte Personen bleiben)
+
+---
+
+## 1.56.0
+**Feature — Gesichtserkennung Phase 2: DBSCAN-Clustering + Personen zusammenführen**
+
+- Scan startet jetzt automatisch DBSCAN-Clustering nach der Erkennungsphase
+- Gleiche Gesichter werden anhand 128D-Cosinus-Ähnlichkeit (ε=0.55) automatisch gruppiert
+- Benannte Personen bleiben beim Neu-Gruppieren erhalten — nur unbenannte Cluster werden ersetzt
+- Neuer „Gruppieren"-Button in der Menschen-Ansicht für manuelles Re-Clustering
+- Personen zusammenführen via Kontextmenü (Rechtsklick auf Person → Zusammenführen)
+- Scan-Fortschritt zeigt jetzt zwei Phasen: Erkennen (0–80%) und Gruppieren (80–100%)
+- CLI: `iphoto-cli people cluster [--epsilon 0.55] [--json]`
+
+---
+
+## 1.55.0
+**Feature — Gesichtserkennung Phase 1: Menschen-Plugin + einklappbare Sidebar-Sektionen + Personen-Bildansicht**
+
+- Neues Plugin „Menschen": erkennt Gesichter in der Bibliothek via Vision-Framework, zeigt runde Crop-Tiles
+- Inspector-Panel „Menschen" zeigt Gesichts-Crops des aktuellen Bildes direkt im Inspector
+- Personen können angelegt, umbenannt und gelöscht werden; Gesichter werden manuell einer Person zugewiesen
+- Doppelklick auf eine Person öffnet eine gefilterte Bildansicht nur mit deren Fotos
+- Alle Sidebar-Sektionen (Duplikate, Qualität, Papierkorb, Wechseldatenträger, Menschen) sind jetzt einklappbar
+- CLI: `iphoto-cli people list [--json]` und `iphoto-cli people faces [--json]`
+
+---
+
+## 1.54.1
+**Bugfix — Album-Cover-Thumbnails korrekt quadratisch (GeometryReader)**
+
+- Single-Cover-Thumbnails in Album-Grid, Sidebar und Banner-Ansicht nutzen jetzt `GeometryReader` mit explizitem `.frame(width:height:)` — `scaledToFill()` bricht nicht mehr aus dem quadratischen Layout aus
+
+---
+
+## 1.54.0
+**Feature — ELO-Kurve im Bildvergleich-Panel + Ähnliche Bilder als Plugin + Album-Thumbnails quadratisch**
+
+- ELO-Verteilungskurve ist jetzt direkt im „Bildvergleich"-Inspector-Panel sichtbar (nicht nur in der Vollansicht)
+- „Ähnliche Bilder" aus der Sidebar entfernt und als Inspector-Plugin implementiert: Gruppen-Badge, „Öffnen"- und „Neu gruppieren"-Button
+- Album-Cover-Thumbnails werden jetzt überall korrekt quadratisch geclippt (`.clipped()` in `AlbumGridCell`)
+
+---
+
+## 1.53.0
+**Feature — Album-Verbesserungen: quadratisches Cover, Informationen in Sidebar, + in Albenansicht**
+
+- Album-Cover mit einem einzelnen Bild bleibt jetzt korrekt quadratisch (`.clipped()` in allen Mosaic-Views)
+- „Informationen…" ist jetzt auch im Rechtsklick-Menü der Sidebar-Alben verfügbar
+- In der Albenansicht (Grid) haben die Abschnitte „Alben" und „iAlben" jetzt einen +-Button zum Erstellen
+
+---
+
+## 1.52.2
+**Bugfix — Bildvergleich wartet auf beide Bilder**
+
+- Im Vergleichsmodus wird kein Bild angezeigt, bis beide Seiten vollständig geladen sind — kein einseitiges Flackern mehr
+
+---
+
+## 1.52.1
+**Bugfix — Schärfewert als Prozentwert (0–100 %)**
+
+- Schärfewert in intelligenten Alben und Metadaten-Panel wird jetzt als Prozentwert angezeigt (0 % = komplett unscharf, 100 % = maximal scharf; Schwellenwert ≈ 30 %)
+
+---
+
+## 1.52.0
+**Feature — ← → Fokuswechsel zwischen Panels + abwechselnde Zeilenhintergründe in Spaltenansicht**
+
+- ← aus der Bildliste wechselt den Fokus zur Sidebar (Alben/intelligente Alben)
+- → aus der Sidebar wechselt den Fokus zurück zur Bildliste
+- LibraryColumnsView zeigt jetzt abwechselnde Graustufen-Zeilenhintergründe wie LibraryListView
+
+---
+
+## 1.51.1
+**Bugfix — Gelber Punkt im ELO-Chart entfernt + Ordner standardmäßig eingeklappt**
+
+- Oranger Marker-Dot im ELO-Verteilungschart entfernt (gestrichelte Linie bleibt)
+- Album-Ordner starten beim App-Start eingeklappt statt ausgeklappt
+
+---
+
+## 1.51.0
+**Feature — Focus-Tracking + Batch-Delete + leere Detail-Ansicht**
+
+- Pfeiltasten navigieren jetzt dort, wo zuletzt geklickt wurde: Sidebar-Klick → Alben/iAlben; Thumbnail-Klick → Bilder
+- Rechtsklick auf markierte Alben löscht alle gleichzeitig (Batch-Delete)
+- Wenn alle sichtbaren Bilder gelöscht/getrasht werden, zeigt die Detail-Ansicht den leeren Platzhalter statt dem letzten Bild
+
+---
+
+## 1.50.2
+**Bugfix — iAlbum: „Schärfewert" ist jetzt numerisch**
+
+- Attribut „Unscharf" → „Schärfewert" mit numerischen Operatoren (kleiner als / größer als / im Bereich)
+- Niedriger Wert = unschärfer; z.B. „Schärfewert < 80" filtert unscharfe Bilder
+- Ermöglicht präzisere Steuerung als der frühere Boolean (war/war nicht unscharf)
+
+---
+
+## 1.50.1
+**Bugfix — Scrollleiste verdeckt nicht mehr den +-Knopf in der Sidebar**
+
+- Sidebar-ScrollView bekommt 12 px Padding rechts, damit die Scrollleiste den Alben/iAlben-+-Button freilässt
+
+---
+
+## 1.50.0
+**Feature — Qualitätsmerkmale als iAlbum-Kriterium**
+
+- Neue Attribute in iAlben: „Unscharf", „Unterbelichtet", „Überbelichtet", „Geschlossene Augen"
+- Kombinierbar mit allen anderen Kriterien (Bewertung, Datum, Kamera usw.)
+- Ersetzen die früheren fest verdrahteten Qualitäts-Tabs — jetzt flexibel als iAlbum filterbar
+- Hinweis: Qualitätsanalyse muss vorher gelaufen sein (Bilder ohne Scan werden übersprungen)
+
+---
+
+## 1.49.0
+**Feature — Pfeiltasten + Shift-Auswahl in Alben- und iAlben-Sidebar**
+
+- ↑/↓ navigieren zwischen Alben (wenn ein Album aktiv ist) bzw. iAlben (wenn ein iAlbum aktiv ist)
+- Shift+↑/↓ erweitert die Markierung zeilenweise
+- Shift+Klick auf ein Album oder iAlbum markiert eine Range ab dem letzten Klick
+- Markierte Einträge werden mit Akzentfarbe hervorgehoben
+- Beim Wechsel zu einer anderen Sektion (Bibliothek, Papierkorb etc.) wird die Sidebar-Auswahl automatisch zurückgesetzt
+
+---
+
+## 1.48.1
+**Bugfix — Backup-Einträge im Kontextmenü umbenannt**
+
+- „Als JPEG sichern" → „Als Backup sichern"
+- „Sichern & Original in Papierkorb" → „Als Backup sichern & Original in Papierkorb"
+
+---
+
+## 1.48.0
+**Feature — Pfeil­tasten­navigation + Shift-Mehrfachauswahl in Grid-Views**
+
+- ↑/↓-Pfeiltasten navigieren im 2D-Raster zeilenweise (überspringen `gridColumnCount` Einträge)
+- Im horizontalen Filmstreifen navigieren ↑/↓ wie ←/→
+- Shift+↑/↓ erweitert die Mehrfachauswahl zeilenweise; Shift+←/→ war bereits vorhanden
+- `LibraryFullGridView` meldet die aktuelle Spaltenanzahl ans ViewModel
+
+---
+
+## 1.47.2
+**Feature — Thumbnail-Leiste skaliert mit Höhe, Minimum = 138 px**
+
+- Thumbnails wachsen proportional mit der Leistenhöhe (GeometryReader, kein Parameter-Passing)
+- Mindesthöhe ist 138 px (Standard) — kleiner ziehen nicht möglich
+
+---
+
+## 1.47.1
+**Bugfix — Cover-Foto als einziges Hauptbild**
+
+- Wenn ein Cover-Foto für ein Album gesetzt ist, wird nur dieses Bild angezeigt (kein 4-Bild-Mosaik mehr) — gilt für AlbumBannerView und AlbumGridCell
+
+---
+
+## 1.47.0
+**Feature — Suchergebnis-Zusammenfassung wie Google**
+
+- Nach einer gefilterten Suche erscheint unterhalb der Filter-Chips: „X Bilder in 0,03 Sek."
+- Zeigt sich nur wenn aktive Filter vorhanden sind; verschwindet beim Leeren der Suche
+
+---
+
+## 1.46.2
+**Bugfix — Thumbnail-Skalierung rückgängig, nur Drag-Richtung korrigiert**
+
+- Thumbnail-Breite wieder fest auf 156 px (Skalierung hatte Drag blockiert)
+- Drag-Richtung bleibt korrigiert: runter = größer, hoch = kleiner
+
+---
+
+## 1.46.1
+**Bugfix — Drag-Richtung korrigiert + Thumbnails skalieren mit Leistenhöhe**
+
+- Drag nach unten vergrößert die Leiste (war invertiert)
+- Thumbnail-Breite skaliert proportional zur Leistenhöhe — mehr Platz = größere Vorschaubilder
+
+---
+
+## 1.46.0
+**Feature — Galerieansicht: Thumbnail-Leiste vertikal verschiebbar**
+
+- Die untere Thumbnail-Leiste in der Galerieansicht lässt sich per Drag am Trennbalken nach oben/unten ziehen (80–600 px)
+- Höhe wird persistent gespeichert (`gallery.stripHeight`)
+- Trennbalken färbt sich beim Hovern blau (wie Seitenleisten-Divider)
+
+---
+
+## 1.45.3
+**Bugfix — Album-Banner in allen drei Ansichten fest verankert**
+
+- Symbole (Grid), Liste und Spalten: AlbumBannerView erscheint jetzt als fixes Element oberhalb des scrollbaren Inhalts, scrollt nicht mehr mit
+
+---
+
+## 1.45.2
+**Bugfix — Album-Banner auch in der Spaltenansicht (LibraryColumnsView)**
+
+- AlbumBannerView wird nun auch in der Spaltenansicht (HSplitView-Modus) als festes Element oberhalb des Split-Bereichs gerendert
+
+---
+
+## 1.45.1
+**Bugfix — Album-Banner in Listenansicht oberhalb der Spalten-Header**
+
+- AlbumBannerView wird nun als festes Element vor dem Spalten-Header (`Name / Datum / Größe / Art / ...`) gerendert, nicht mehr als Teil des scrollbaren Inhalts
+
+---
+
+## 1.45.0
+**Feature — Panel-Toggle-Gruppe + einklappbare Metadaten-Sektionen**
+
+- Toolbar: `sidebar.left` + `sidebar.right` als visuell gruppierten Button-Cluster (Xcode-Stil) mit geteiltem Hintergrund und Rahmen
+- Metadaten-Inspector: Sektionen „Kamera" und „Qualität" sind per Klick auf den Header ein- und ausklappbar (Chevron-Indikator)
+
+---
+
+## 1.44.5
+**Bugfix — Ladebalken und Log auch im Symbole-Modus sichtbar**
+
+- AlbumGridExpandedView zeigt jetzt denselben Footer wie NavSidebarView: Ladebalken, Abschluss-Zusammenfassung und Log/Konsole-Tabs
+
+---
+
+## 1.44.4
+**Bugfix — Alle 5 Sterne immer in einer Reihe**
+
+- RatingPanel: Sterne bekommen feste 32×32 px Tappfläche, `fixedSize()` verhindert Kompression durch schmalen Inspector
+- ThumbnailCell: `fixedSize()` statt `.frame(width:)` — keine Kompression bei kleinen Thumbnails
+
+---
+
+## 1.44.3
+**Feature + Bugfix — Panel-Toggles im Toolbar + breitere Seitenleiste**
+
+- Linke und rechte Seitenleiste können jetzt über zwei nebeneinander liegende Buttons (Xcode-Stil) ein-/ausgeblendet werden — beide Buttons links im Toolbar
+- Doppelter Sidebar-Toggle in LibraryFullGridView entfernt
+- Seitenleiste kann jetzt bis auf Fensterbreite minus 120 px gezogen werden (vorher 250 px Mindestbreite für Hauptinhalt)
+
+---
+
+## 1.44.2
+**Bugfix — Cover-Foto des Albums wird korrekt als erstes Bild angezeigt**
+
+- `coverImages` verwendet jetzt `map` statt `compactMap` — Bilder ohne geladenes Thumbnail werden nicht mehr übersprungen und verschieben die Reihenfolge
+- Das ausgewählte Cover-Foto bleibt immer an Position 0 des Mosaics, auch wenn sein Thumbnail noch nicht im Cache ist
+
+---
+
+## 1.44.1
+**Bugfix + Feature — Library-Zelle mit Vorschau, kein Bildvergleich in Seitenleiste**
+
+- Library wird jetzt wie ein Album mit Foto-Mosaik angezeigt (Liste: kompakter Thumbnail-Row, Symbole: volle Grid-Zelle)
+- Bildvergleich aus der Seitenleiste entfernt
+- Ansichtsmodus (Liste/Symbole) wird beim Anklicken eines Albums nicht mehr zurückgesetzt — nur der Toggle-Button wechselt den Modus
+
+---
+
+## 1.44.0
+**Feature — Einheitliche Seitenleiste mit Listen- und Symbolmodus**
+
+- Seitenleiste zeigt immer Suche + Bibliothek-Sektion + Alben, egal ob Listen- oder Symbole-Modus
+- Umschalter: `⊞`-Icon wechselt zu Symbolen, `≡`-Icon zurück zur Liste
+- Symbole-Ansicht (AlbumGridExpandedView) hat jetzt Suche und Bibliothek-Einträge (Library, Bildvergleich)
+- Seitenleiste ist in beiden Modi per Drag in der Breite anpassbar
+- Inspector bleibt in beiden Modi sichtbar
+- Album-Banner passt Layout automatisch an: unter 320 px Breite wechselt er zu gestapeltem Layout (Bild oben, Titel darunter)
+- Gelöschte Bilder werden sofort aus allen Album-Referenzen entfernt
+
+---
+
+## 1.43.2
+**Bugfix — Album-Panel Resize sofort sichtbar**
+
+- Live-Breite per `@State` getrennt von `@AppStorage` — Panel aktualisiert sich jetzt sofort beim Ziehen
+- Breite wird erst beim Loslassen persistiert (kein UserDefaults-Lag mehr)
+
+---
+
+## 1.43.1
+**Feature — Album-Panel resizable + Banner-Aktionen**
+
+- Album-Panel (expandierte Seitenleiste) ist per Drag frei in der Breite verschiebbar
+- Breite wird gespeichert und beim nächsten Start wiederhergestellt
+- Zu schmal gezogen → Panel schließt automatisch
+- Banner: Titel direkt anklicken zum Inline-Bearbeiten
+- Banner: „…"-Menü für Informationen / Bearbeiten / Löschen
+- Resizable Divider hebt sich blau hervor und zeigt Resize-Cursor
+
+---
+
+## 1.43.0
+**Feature — Listenansicht & Album-Banner überarbeitet**
+
+- Listenansicht: Qualitätsbadges (Unscharf, Unter-/Überbelichtet, Augen, Stapel, Anpassungen, HDR) in der Markierung-Spalte
+- Listenansicht: abwechselnde Graustufen für Zeilen wie in iTunes
+- Album-Banner jetzt auch in der Rasteransicht (scrollbar als erster Eintrag)
+- Album-Banner in der Listenansicht scrollt mit den Einträgen mit
+
+---
+
+## 1.42.3
+**Bugfix — Ansichtsmodi im Album-Kontext**
+
+- Toolbar zeigt das Ansichtsmenü (Raster / Liste / Spalten / Galerie) jetzt auch wenn ein Album oder iAlbum geöffnet ist
+- Der gewählte Modus gilt global — wechselt man zurück zur Bibliothek bleibt er erhalten
+
+---
+
+## 1.42.2
+**Perf — iAlbum-Filterung via SQL**
+
+- iAlbum-Filterung nutzt jetzt SQLite statt In-Memory-Loop über alle Dokumente
+- Sidebar-Zähler ebenfalls per SQL (`COUNT(DISTINCT path)`) — kein O(n × m)-Scan mehr
+- Fallback auf In-Memory bleibt für Kriterien die Runtime-Daten brauchen (Farbanteil, iAlbum-Referenz)
+- `SmartFolderSQLGenerator` in CLI-Build aufgenommen
+
+---
+
+## 1.42.1
+**Feature — Album-Banner + Ansichtsmodi im Album-Kontext**
+
+- Beim Öffnen eines Albums oder iAlbums erscheint oben ein Banner mit Mosaik, Name und Fotoanzahl
+- Ansichtsmodi (Raster, Liste, Spalten, Galerie) funktionieren jetzt auch im Album-Kontext
+- Beschreibung aus den Album-Details wird im Banner angezeigt
+
+---
+
+## 1.42.0
+**Feature — Album-Detailansicht & iAlbum-Kontextmenü**
+
+- Rechtsklick auf Album im Raster → „Informationen…" öffnet Detail-Sheet (iTunes-Stil)
+  - Tab „Details": Name und Beschreibung bearbeiten, Fotoanzahl
+  - Tab „Cover": Titelbild aus Album-Fotos auswählen
+- Rechtsklick auf iAlbum → „iAlbum bearbeiten…" öffnet Kriterien-Editor, „iAlbum löschen"
+- Neues Feld `albumDescription` im Album-Modell (rückwärtskompatibel)
+
+---
+
+## 1.41.2
+**Feature — ELO-Suchoperatoren**
+
+- Suche unterstützt jetzt `elo:>=1600`, `elo:<=1800`, `elo:>1500`, `elo:<2000`
+- Vorschläge in der Suchleiste zeigen Beispiele für alle Operatoren
+
+---
+
+## 1.41.1
+**Bugfix — iAlben-Mosaik-Thumbnails**
+
+- iAlben im erweiterten Albumraster zeigen jetzt Foto-Mosaike statt Platzhalter-Icons
+
+---
+
+## 1.41.0
+**Feature — iAlbum, Nicht-in-Album-Filter, Album-Eigenschaften**
+
+- Intelligente Ordner heißen jetzt **iAlbum** / iAlben in der gesamten UI
+- Neues SmartFolder-Kriterium „Nicht in Album": findet Fotos die keinem Album zugeordnet sind
+- Albumraster: Rechtsklick → Umbenennen / Titelbild festlegen / Löschen
+- Album-Titelbild: beliebiges Foto aus dem Album als Cover festlegbar
+
+---
+
+## 1.40.0
+**Feature — Inspector erweiterbar (rechte Seite)**
+
+- Inspector-Header zeigt Expand-Button (↗) analog zum Sidebar-Expand links
+- Beim Expandieren nimmt der Inspector die volle Breite ein — eine Bildspalte bleibt links sichtbar
+- Collapse-Button (↙) verkleinert den Inspector zurück auf normale Breite (280 px)
+
+---
+
+## 1.39.2
+**Bugfix — Album-Mosaik zeigt Thumbnails für alle Alben**
+
+- `CGImageSourceCreateThumbnailAtIndex` ist auf macOS 11 nicht thread-safe → hat für die meisten Alben lautlos versagt
+- Album-Cover nutzen jetzt die bereits geladenen Thumbnails aus dem Collection-Cache via `requestVisibleThumbnail` — kein direkter Disk-Zugriff auf Background-Thread mehr
+
+---
+
+## 1.39.1
+**Bugfix — SmartFolder Farbanteil: Eingabefeld statt Stepper**
+
+- Prozentwert-Eingabe bei „Farbanteil (%)" nutzt jetzt ein Textfeld (wie ISO, ELO, mm) statt eines unsichtbaren Steppers — Wert ist klar sichtbar und editierbar
+
+---
+
+## 1.39.0
+**Feature — Thumbnail-Symbol-Verwaltung + SmartFolder-Layout-Fix**
+
+- Einstellungen → Thumbnails (neuer Tab): jedes Badge einzeln ein-/ausblendbar (Sterne, Farblabel, Markierung, Unscharf, Belichtung, Augen, Stapel-Krone, Bearbeitungen, HDR)
+- SmartFolder „Farbanteil (%)": Reihenfolge korrigiert — Prozentwert erscheint jetzt vor dem Kanal-Picker statt dahinter
+
+---
+
+## 1.38.1
+**Bugfix — Seitenleisten-Expand im richtigen Modus**
+
+- Der schmale Bild-Streifen beim Expand zeigt jetzt immer die Rasteransicht (eine Spalte), egal welcher Darstellungsmodus aktiv ist — Liste/Spalten/Galerie hätten dort keinen Platz
+
+---
+
+## 1.38.0
+**Feature — Einheitliche Toolbar-Liste + Seitenleiste halb-expandierbar**
+
+- Einstellungen → Toolbar: Navigationsleiste und Toolbar-Buttons jetzt in einer einzigen Drag-and-Drop-Liste zusammengeführt
+- Alle 14 Toolbar-Elemente (6 Nav + 8 Aktions-Buttons) per Drag neuordnen und einzeln ein-/ausblenden
+- Expand-Button in der Seitenleiste zeigt jetzt Album-Raster auf erweiterter Breite — eine Bildspalte bleibt rechts sichtbar (kein Vollbild mehr)
+
+---
+
+## 1.37.0
+**Feature — Toolbar in nativer Leiste, Album-Mosaik, Seitenleiste konfigurierbar**
+
+- Toolbar-Buttons (Sort, Auge, Drehen, Zoom) sind jetzt Teil der nativen macOS-Titelleiste — keine zweite Zeile mehr
+- Einstellungen → Toolbar: Drag-and-Drop-Liste zum Neuordnen und Ein-/Ausblenden einzelner Buttons
+- Album-Vollbild: Jedes Album zeigt jetzt ein 2×2-Mosaik aus den ersten 4 Fotos (Apple-Photos-Stil)
+- Einstellungen → Seitenleiste: Neue Tab zum Ein-/Ausblenden einzelner Seitenleisten-Bereiche (Bibliothek, Alben, Intelligente Ordner, Wechseldatenträger, Papierkorb, Duplikate, Qualität)
+- SmartFolderSQLGenerator: Grundlage für SQL-basierte Intelligente Ordner (Playlists-Feature, folgt)
+
+---
+
+## 1.36.0
+**Feature — Discord-Suche, Album-Vollbild, Geeks-Konsole**
+
+- Suche unterstützt jetzt Filter wie Discord: `bewertung:5`, `typ:raw`, `vor:2024`, `nach:2023`, `kamera:canon`, `album:urlaub`, `markiert:pick`, `unscharf:ja`, `motiv:hund`, `elo:1700`, `farbe:rot` — kombinierbar mit freiem Text
+- Dropdown zeigt verfügbare Filter mit Icon + Hinweistext; nach `key:` erscheinen Wertvorschläge aus echten Daten (Alben, Kameramodelle, Motive)
+- Aktive Filter werden als entfernbare Chips unterhalb des Suchfelds angezeigt
+- Vollbild-Symbol in der Seitenleiste: klappt die Alben als Symbolraster auf und nimmt dabei Seitenleiste + Mittelbereich ein; Klick auf ein Album navigiert direkt dorthin
+- Geeks-Konsole: zweiter Tab neben „Log" — Befehle wie `viewmode get`, `catalog stats` etc. direkt in der App eingeben; Ausgabe erscheint farbkodiert; iphoto-cli wird automatisch neben der .app gesucht
+
+---
+
+## 1.35.1
+**Bugfix — Suche aktualisiert Bildliste**
+
+- Sucheingabe hat die sichtbare Bildliste nicht aktualisiert, da der visibleDocuments-Cache nie invalidiert wurde — behoben
+
+---
+
+## 1.35.0
+**Feature — Toolbar-Jiggle, Suche, Werkzeuge-Panel + „Für Geeks"-Log**
+
+- Toolbar-Buttons (Sort, Auge, Drehen, Zoom) wackeln jetzt im iPhone-Stil bei langem Druck; Reihenfolge per Drag-and-Drop veränderbar; „Fertig" oder Escape beendet den Modus
+- Suchfeld oben in der Seitenleiste: Suche nach Dateinamen und Metadaten-Werten mit Autocomplete-Vorschlägen (min. 2 Zeichen, bis zu 8 Treffer)
+- Neues Inspector-Plugin „Werkzeuge" (Photoshop-Stil): 2-spaltiges Tool-Raster mit Bewegen, Zuschneiden, Zoom, Drehen, Inpaint und lokalem Pinsel; per Einstellungen → Funktionen aktivierbar
+- Einstellung „Für Geeks": aktiviert einen ausklappbaren Live-Log-Bereich am unteren Rand der Seitenleiste — zeigt die letzten 50 Log-Zeilen mit Farb-Kodierung (PERF = grün, WARN = orange, ERROR = rot), aktualisiert sich alle 1,5 s automatisch
+- `SortMenuButton` in der Toolbar wird nicht mehr zu breit gerendert (`.fixedSize()`)
+
+---
+
+## 1.34.0
+**Feature — Finder-Listenansicht + Jiggle-Fix**
+
+- Listenansicht (Als Liste) jetzt mit Finder-ähnlichem Spalten-Header: Name (↑↓), Datum (↑↓), Größe, Art, Bewertung, Markierung
+- Rechtsklick auf den Header blendet Spalten ein/aus; Auswahl wird in UserDefaults gespeichert
+- Klick auf sortierbare Spalten-Header toggelt Sortierrichtung mit Pfeilindikator
+- Bugfix: Jiggle-Modus konnte bei Abschnitts-Headern mit Button (Alben, Intelligente Ordner) nicht durch Langer-Druck ausgelöst werden — `.simultaneousGesture` statt `.onLongPressGesture` behebt das
+
+---
+
+## 1.33.0
+**Feature — Jiggle-Reorder für Nav-Sektionen + persistente PERF-Metriken**
+
+- Lange auf einen Abschnitts-Header in der Seitenleiste drücken → Wackel-Modus: alle Sektionen oszillieren ±2° (iPhone-Stil); per Drag-and-Drop neu anordnen; „Fertig" oder Escape beendet den Modus und speichert die Reihenfolge dauerhaft
+- `Log.perf()` hinzugefügt; alle Performance-relevanten Operationen werden jetzt als `PERF`-Zeilen ins Log geschrieben: `THUMBNAILS N Bilder X ms`, `SCAN EXIF N Bilder X ms`, `SCAN QUALITY N Bilder X ms`, `IMPORT N Dateien X ms`, `EXPORT N Dateien X ms`
+- Log-Rotationsgrenze von 2 MB auf 10 MB erhöht, damit Langzeit-Metriken nicht vorzeitig verloren gehen
+
+---
+
+## 1.32.0
+**Feature — Ansichts-Wechsler (Als Symbole / Als Liste / Als Spalten / Als Galerie)**
+
+- Neues `LibraryViewMode`-Enum (`grid`, `list`, `columns`, `gallery`) mit Persistenz in UserDefaults (`library.viewMode`)
+- Toolbar zeigt im Bibliothek-Modus ein Menü mit allen vier Ansichten; aktive Ansicht wird per Häkchen markiert
+- „Als Symbole" (`square.grid.2x2`): bestehende `LibraryFullGridView`
+- „Als Liste" (`list.bullet`): neue `LibraryListView` — kompakte Tabellenzeilen mit Thumbnail, Dateiname, Bewertung und Flag
+- „Als Spalten" (`rectangle.split.2x1.fill`): neue `LibraryColumnsView` — schmale Thumbnail-Liste links, Detailansicht rechts (HSplitView)
+- „Als Galerie" (`photo`): bestehende Detail- + Filmstreifen-Ansicht
+- `iphoto-cli viewmode get` und `iphoto-cli viewmode set <modus>` zum Lesen/Setzen der Ansicht
+- `Tests/run_plugins.sh` um drei viewmode-CLI-Tests erweitert
+
+---
+
+## 1.31.0
+**Feature — SmartFolder Farbanteil-Filter + Panel-Bug behoben + Toolbar-Trenner entfernt**
+
+- Neues SmartFolder-Kriterium „Farbanteil (%)" (R/G/B-Kanal): filtert Bilder nach dem durchschnittlichen Anteil eines Farbkanals (Operatoren: größer als, kleiner als, im Bereich)
+- Bugfix: `Plugin.Codable` nutzte Swift-Standardwerte nicht für fehlende JSON-Felder — alle Panels wurden lautlos verworfen, sodass der Inspector immer „Kein Panel aktiv" zeigte; eigener `init(from decoder:)` mit `decodeIfPresent` behebt das
+- Bugfix: Zwei getrennte `ToolbarItemGroup(placement: .automatic)` erzeugten einen überzähligen Trenner in der Toolbar; zu einer Gruppe zusammengeführt
+
+---
+
+## 1.30.0
+**Feature — Bildvergleich als Plugin + iphoto-cli plugins-Befehl + PluginStore-Initialisierung repariert**
+
+- `PluginStore.init()` lädt Plugins jetzt synchron, sodass `InspectorView` beim ersten Rendern nie mehr „Kein Panel aktiv" zeigt
+- Bildvergleich als eingebautes Plugin `com.iphoto.builtin.compare` (order: 0) hinzugefügt — mit eigenem `ComparePanel` im Inspector
+- `NavSidebarView` und `ModeSwitcherView` prüfen die Bildvergleich-Anzeige jetzt über `PluginStore.isEnabled(...)` statt `viewModel.compareFeatureEnabled`
+- `iphoto-cli plugins list [--json]` zeigt alle installierten Plugins/Panels
+- `iphoto-cli plugins dir` gibt den Plugin-Ordner-Pfad aus
+- `Tests/run_plugins.sh` um drei neue CLI-Tests für den `plugins`-Befehl erweitert
+
+---
+
+## 1.29.1
+**Bugfix — Builtin-Panel-Dateien immer sichtbar**
+
+- `builtin-*.json`-Dateien werden bei jedem App-Start in den Plugin-Ordner geschrieben (nicht mehr nur beim ersten Start), sodass sie sofort im Finder sichtbar sind
+
+---
+
+## 1.29.0
+**Feature — Eingebaute Panels als Dateien im Plugin-Ordner**
+
+- Alle neun eingebauten Inspector-Panels (Bewertung, Metadaten, Anpassungen, Lokal, Rezepte, Analyse, Navigation, Hotpixel, Inpaint) werden beim ersten Start als `builtin-*.json`-Dateien in `~/Library/Application Support/iPhoto/Plugins/` angelegt
+- Externes Plugin-System und eingebaute Panels sind jetzt vollständig vereint — ein einziger `PluginStore` verwaltet beides
+- Panels können in den JSON-Dateien umbenannt, umsortiert oder deaktiviert werden ohne Neucompilierung
+- `PanelStore` / `PanelDescriptor` entfernt; `Resources/Panels/` entfernt
+- Menü heißt jetzt „Panels" und zeigt alle Einträge dynamisch aus der Dateiliste
+
+---
+
+## 1.28.0
+**Feature — Dateibasierte Inspector-Panels**
+
+- Eingebaute Inspector-Panels (Bewertung, Metadaten, Anpassungen, Lokal, Rezepte, Analyse, Navigation, Hotpixel, Inpaint) sind jetzt als JSON-Dateien in `Resources/Panels/` definiert
+- `PanelStore` lädt Panel-Metadaten (Name, Icon, Standard-Aktivierung, Reihenfolge) dynamisch aus dem App-Bundle
+- Reihenfolge, Aktivierung und Einklapp-Zustand bleiben wie bisher per UserDefaults erhalten; bestehende Einstellungen bleiben durch identische Storage-Keys kompatibel
+- Menü „Panels" zeigt die Panels direkt aus der Dateiliste — keine hardcodierten Einträge mehr im Swift-Code
+
+---
+
+## 1.27.5
+**Feature — Änderungs-Badge auf Thumbnails**
+
+- Bilder mit gespeicherten Anpassungen zeigen ein lila △-Badge oben rechts auf dem Thumbnail
+- Flag wird beim Startup aus der Datenbank geladen (eine SQL-Abfrage für alle Bilder) und live aktualisiert wenn Anpassungen gespeichert oder zurückgesetzt werden
+
+---
+
+## 1.27.4
+**Bugfix/Chore — Build-Bereinigung**
+
+- Redundante Archive-Implementierung entfernt (Funktion existierte bereits als „Als JPEG sichern" im Kontextmenü)
+
+---
+
+## 1.27.3
+**Feature — Histogramme im Bildvergleich einklappbar**
+
+- Histogramm-Panels im Bildvergleich (links/rechts oben) lassen sich per Chevron-Button einzeln ein- und ausklappen
+
+---
+
+## 1.27.2
+**Feature — Archiv-Funktion + Plugin-System + Papierkorb-Speicheranzeige**
+
+- Plugin-System: JSON-Dateien in `~/Library/Application Support/iPhoto/Plugins/` werden automatisch als Inspector-Panels geladen — mit Shell-Befehlen pro Zeile und Action-Buttons
+- Menü „Plugins" → „Externe Plugins neu laden" (⌘⌥R) und „Plugin-Ordner öffnen" hinzugefügt
+- Papierkorb: Speicheranzeige am unteren Rand zeigt, wie viel Speicher beim Leeren freigegeben würde
+
+---
+
+## 1.27.1
+**Feature — ELO-Score im Metadaten-Panel**
+
+- ELO-Wert und Anzahl der Duelle werden im Inspector unter „Qualität" angezeigt (nur bei Bildern mit mindestens einem Duell)
+
+---
+
+## 1.27.0
+**Feature — Kachel-Ansichtswähler (Metro-Stil) + ELO Champions + Graph einklappen**
+
+- Neuer Kachel-Modus (⌘M): Windows-8-artiges Vollbild-Overlay zeigt alle Ansichten als farbige Kacheln — Bibliothek, ELO Champions, Bildvergleich, Duplikate, Ähnliche Bilder, Qualitätsmodi, Papierkorb
+- Neuer Tab „ELO Champions" in der Sidebar: zeigt die 10 besten und 10 schlechtesten Bilder nach ELO-Score als horizontale Bildleiste mit Medaillen-Badge
+- ELO-Verteilungsgraph im Bildvergleich lässt sich per Chevron-Button ein- und ausklappen
+
+---
+
+## 1.26.2
+**Feature — Sortierung nach ELO-Score**
+
+- Neue Sortieroptionen im Sortier-Menü: „ELO ↓" (beste zuerst) und „ELO ↑" (schwächste zuerst)
+- Sekundärsortierung nach Dateiname für stabile Reihenfolge bei gleichem ELO
+
+---
+
+## 1.26.1
+**Bugfix — SIGILL-Diagnose im Bildvergleichs-Modus verbessert (Bug #36)**
+
+- Main-Thread-Breadcrumbs in `resolveCompare`, `applyEloUpdate` und `nextComparePair` — zukünftige Crashes zeigen korrekten `[SIGNAL_LAST_OP]` statt veralteten BG-Decode-Wert
+- Defensive Bounds-Check in `applyEloUpdate` vor Subscript-Zugriff
+
+---
+
+## 1.26.0
+**Feature — Tägliches Duell-Limit + ELO-Konvergenz-Anzeige**
+
+- Neues konfigurierbares Tageslimit für Bildvergleiche (Standard: 50 Duelle/Tag, 0 = unbegrenzt)
+- Limit und heutiger Fortschritt einstellbar unter Einstellungen → Funktionen → Tageslimit
+- Verbleibende Duelle werden im Vergleichs-Header angezeigt (rot wenn aufgebraucht)
+- Einstellungen → Funktionen: neuer ELO-Konvergenz-Balken zeigt wie stabil das Ranking ist (Ziel: 20 Duelle/Bild ≈ 100 %)
+
+---
+
+## 1.25.3
+**Bugfix — Regression SIGSEGV/SIGILL durch @Published in SwiftUI-Render-Pfad behoben**
+
+- `bestInStackIDs` war fälschlicherweise `@Published` — `applyStacking()` wurde von `visibleDocuments` direkt aus einem SwiftUI `body` aufgerufen, dabei feuerte `objectWillChange` mitten im Render → "Modifying state during view update" → SIGSEGV/SIGILL bei jeder Navigation nach längerem Gebrauch
+- Fix: `@Published` entfernt; der Wert wird in `applyStacking()` vor dem Return gesetzt, die View liest ihn im selben Render-Zyklus korrekt
+
+---
+
+## 1.25.2
+**Feature — Verwerfen-Button in Anpassungen**
+
+- Neuer "Verwerfen"-Button neben "Zurücksetzen": setzt alle Anpassungen auf den zuletzt gespeicherten Stand zurück (nicht auf neutral), deaktiviert wenn keine ungespeicherten Änderungen vorhanden
+
+---
+
+## 1.25.1
+**Bugfix — SIGSEGV-Crash bei Bildnavigation behoben**
+
+- `bestInStackIDs` war eine computed property die pro SwiftUI-Grid-Zelle ein `Dictionary` über alle 2000+ Dokumente neu aufbaute (O(N) pro Zelle, O(N²) pro Render-Frame) — das führte unter Speicherdruck zu SIGSEGV auf dem Main-Thread beim Bildwechsel
+- Jetzt cached `@Published var bestInStackIDs` — wird einmalig in `applyStacking()` berechnet und nur bei Stapel-Erkennung aktualisiert
+
+---
+
+## 1.25.0
+**Feature — CLI-Support für alle Plugins + Plugin-Testsuite**
+
+- `rating` — Bewertung, Flag und Farblabel lesen/schreiben; `--json` für maschinenlesbare Ausgabe
+- `adjust` — Bildanpassungen (Belichtung, Helligkeit, Kontrast, Sättigung, Wärme, Lebendigkeit, Farbton, Klarheit, Schärfen) anwenden und exportieren; `--preset <name>` als Basis
+- `preset list` — alle Built-in- und Nutzer-Presets auflisten; `preset apply <datei> --name <name>` für direktes Anwenden
+- `analyse` — Schärfe (Laplacian-Varianz via Rust) und Belichtung (Schatten-/Lichterclipping) pro Bild oder Ordner; Tabelle oder `--json`
+- `inpaint` — KI-Inpainting via CMT; Setup wird vorab validiert und Fehler klar gemeldet wenn Python/CMT nicht installiert
+- Neue Testsuite `Tests/run_plugins.sh`: 10 Tests decken alle Plugin-Befehle ab (10/10 grün)
+- Bugfix: `analyse`-Tabellenausgabe crashte durch `%s`-Format mit Swift String (SIGSEGV) — auf String-Interpolation umgestellt
+
+---
+
+## 1.24.1
+**Bugfix/Feature — Bildvergleich standardmäßig deaktiviert, in Einstellungen aktivierbar**
+
+- Der Bildvergleichs-Modus (ELO-Duell) ist jetzt standardmäßig ausgeblendet
+- In „Einstellungen → Funktionen" kann er dauerhaft aktiviert werden (UserDefaults-persistent)
+- Deaktivieren beendet einen laufenden Vergleich sofort und blendet den Sidebar-Eintrag aus
+
+---
+
+## 1.24.0
+**Feature — Draft-Pipeline, Smart-Folder-Regelbäume & normalisierte Vignette**
+
+- **Sofortiges Hi-Res nach Slider-Loslassen**: Anpassungs-Schieberegler lösen den Hi-Res-Render (1500 px) direkt beim Loslassen aus — nicht erst nach 250 ms Wartezeit
+- **Smart-Folder-Regelbäume**: Intelligente Ordner können jetzt andere Intelligente Ordner als Kriterium referenzieren (Attribut „Intelligenter Ordner") — ermöglicht verschachtelte Filter-Hierarchien
+- **Zykluserkennung**: Gegenseitige Referenzen zwischen Intelligenten Ordnern werden erkannt und sicher abgebrochen (kein Endlos-Rekursion-Absturz)
+- **Vignetten-Radius**: Neuer Schieberegler „Vignetten-Radius" (0,30–1,00, Wert relativ zur Bilddiagonalen) erscheint, sobald eine Vignette aktiv ist — der Radius ist bildgrößenunabhängig gespeichert
+
+---
+
+## 1.23.0
+**Feature — OkLab-Farbanpassungen: Lebendigkeit & Farbton via Rust-3D-LUT**
+
+- Zwei neue Schieberegler im Anpassungspanel: „Lebendigkeit" (−1…+1) und „Farbton" (−180°…+180°)
+- Basiert auf dem perceptuellen OkLab-Farbraum (Björn Ottosson 2020) für natürliche, artefaktfreie Anpassungen
+- Rust generiert eine 32³-Eintrags-3D-LUT (`iphoto_oklab_lut`), die als `CIColorCube`-Filter angewendet wird
+- Lebendigkeit erhöht die Sättigung selektiv: ungesättigte Farben werden stärker angehoben als bereits kräftige
+- Farbton rotiert den (a,b)-Vektor im OkLab-Raum für gleichmäßige, helligkeitsneutrale Verschiebungen
+
+---
+
+## 1.22.0
+**Feature — "Best of Burst": Krone-Badge für das schärfste Bild im Stapel**
+
+- Das schärfste Bild in einem Bracketing-/Burst-Stapel erhält ein gelbes Krone-Badge (`crown.fill`) oben rechts im Thumbnail
+- Auswertung basiert auf `blurScore` (Laplacian-Varianz aus `QualityAssessor`): nur gescannte Bilder (`blurScore > 0`) werden berücksichtigt
+- Badge erscheint nur, wenn der Stapel ≥2 gescannte Mitglieder hat **und** das beste Bild mindestens 15 % schärfer ist als das zweitbeste (Ratio > 1,15)
+- Neues computed property `bestInStackIDs: Set<UUID>` in `ImageViewModel+Context`
+
+---
+
+## 1.21.5
+**Feature — ELO-Bereich per Drag auswählen → gefilterter Bilder-View**
+
+- Drag auf der ELO-Kurve im Vergleichsmodus wählt einen ELO-Bereich aus (blaues Highlight + Bereichsgrenzen als Labels)
+- Loslassen beendet den Vergleich und öffnet einen gefilterten Grid-View mit nur den Bildern im gewählten ELO-Bereich
+- Neues `NavSelection.eloRange(min, max)` als vollwertige Navigation — Sortierung, Stacking, alle Grid-Funktionen funktionieren normal
+- Banner am oberen Rand zeigt "ELO 1450–1550 · 23 Bilder" mit ×-Button zum Zurückkehren zur Bibliothek
+
+---
+
+## 1.21.4
+**Feature — ELO-Kurve klickbar: Navigiert zum nächsten Bild**
+
+- Klick auf die ELO-Verteilungskurve beendet den Vergleich und wählt das Bild mit dem nächsten ELO-Wert an der Klickposition aus
+- Hover-Cursor zeigt eine gestrichelte Linie + ELO-Label beim Überfahren der Kurve
+- Zeigefinger-Cursor beim Hover signalisiert Klickbarkeit
+
+---
+
+## 1.21.3
+**Feature — ELO-Kurve mit echten Datenpunkten (KDE)**
+
+- ELO-Verteilungsdiagramm zeigt jetzt eine Kernel-Density-Estimation (Gauß-Kernel, Scott's Bandwidth) über alle tatsächlichen ELO-Werte der Bibliothek — statt 6 fixer Buckets eine glatte, datengetreue Dichtefunktion
+- X-Achse zeigt den realen ELO-Bereich der Bibliothek mit 6 gleichmäßig verteilten Tick-Labels
+- Zwei vertikale Marker (blau = links, orange = rechts) zeigen wo die aktuell verglichenen Bilder im Spektrum liegen, mit Punkt auf der Kurve
+
+---
+
+## 1.21.2
+**Bugfix — Bibliothek zeigt nicht alle Bilder**
+
+- Beim App-Start werden jetzt alle im Katalog bekannten Bilder wiederhergestellt, auch solche, die außerhalb überwachter Ordner importiert wurden (z. B. vom Desktop oder Downloads). `restoreCatalogImages()` prüft im Hintergrund, welche Katalog-Pfade noch auf der Festplatte existieren, und fügt fehlende Bilder zur Kollektion hinzu
+
+---
+
+## 1.21.1
+**Bugfix — Bibliothek beim App-Start leer**
+
+- Beim Start wurde `loadContentForSelection(.library)` nie aufgerufen, da `$navSelection.dropFirst()` den initialen Wert überspringt — überwachte Ordner wurden erst nach einem manuellen Navigationswechsel geladen. Fix: expliziter Aufruf am Ende von `init()`
+
+---
+
+## 1.21.0
+**Feature — Rust-Core unter der Haube (iPhoto 1.2)**
+
+- **Rust-Bibliothek `iphoto_rs`:** Blur-Erkennung (Laplacian-Varianz), Belichtungsanalyse (Histogramm-Clipping), pHash-Paar (dHash bitidentisch zu bisheriger SQLite-Cache-kompatibel) und HotPixel-Akkumulierung/Suche laufen jetzt in Rust via C-FFI
+- **rayon-Parallelismus:** HotPixel-Akkumulierung nutzt `par_iter_mut` für schnellere Multi-Frame-Analyse
+- **Zweite Build-Variante:** Branch erzeugt `build/iPhoto 1.2.app` (Bundle-ID `com.c0d3cru5h.iPhoto12`) — läuft parallel zu `build/iPhoto.app` auf `main`, teilt dieselbe Datenbank
+- **`import Accelerate` entfernt** aus BlurDetector und ExposureDetector — kein Framework-Overhead mehr für diese Berechnungen
+- `build.sh` baut automatisch Rust-Core via `cargo build --release` vor Swift-Kompilierung
+
+---
+
 ## 1.20.1
 **Bugfix — App-Start-Crash nach Motiverkennung-Feature**
 

@@ -9,6 +9,8 @@ enum SortCriterion: String, CaseIterable {
     case dateAsc      = "dateAsc"
     case dateDesc     = "dateDesc"
     case ratingDesc   = "ratingDesc"
+    case eloDesc      = "eloDesc"
+    case eloAsc       = "eloAsc"
     case random       = "random"
 
     var displayName: String {
@@ -18,6 +20,8 @@ enum SortCriterion: String, CaseIterable {
         case .dateAsc:      return "Datum ↑"
         case .dateDesc:     return "Datum ↓"
         case .ratingDesc:   return "Bewertung"
+        case .eloDesc:      return "ELO ↓"
+        case .eloAsc:       return "ELO ↑"
         case .random:       return "Zufall"
         }
     }
@@ -29,6 +33,8 @@ enum SortCriterion: String, CaseIterable {
         case .dateAsc:      return "calendar.badge.clock"
         case .dateDesc:     return "calendar.badge.clock"
         case .ratingDesc:   return "star"
+        case .eloDesc:      return "chart.line.uptrend.xyaxis"
+        case .eloAsc:       return "chart.line.uptrend.xyaxis"
         case .random:       return "shuffle"
         }
     }
@@ -44,7 +50,8 @@ extension ImageViewModel {
         dispatchPrecondition(condition: .onQueue(.main))
         let key = VisibleOrderKey(count: collection.documents.count, nav: navSelection,
                                   sort: sortCriterion, shuffle: shuffledOrder,
-                                  version: visibleOrderVersion, expanded: expandedStacks)
+                                  version: visibleOrderVersion, expanded: expandedStacks,
+                                  search: searchQuery)
         if key == visibleOrderCacheKey, let order = visibleOrderCache {
             if let resolved = visibleResolvedCache,
                visibleResolvedRevision == collection.documentsRevision {
@@ -64,6 +71,15 @@ extension ImageViewModel {
         visibleResolvedCache = result
         visibleResolvedRevision = collection.documentsRevision
         visiblePositionCache = Self.buildPositions(result)
+        if !searchQuery.isEmpty, let start = searchStartTime {
+            let elapsed = Date().timeIntervalSince(start)
+            let count = result.count
+            searchStartTime = nil
+            DispatchQueue.main.async { [weak self] in
+                let secs = String(format: "%.2f", elapsed).replacingOccurrences(of: ".", with: ",")
+                self?.searchResultSummary = "\(count) Bilder in \(secs) Sek."
+            }
+        }
         return result
     }
 
@@ -116,8 +132,20 @@ extension ImageViewModel {
             filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
         case .smartFolder(let id):
             guard let sf = library.smartFolders.first(where: { $0.id == id }) else { return [] }
-            let matched = docs.filter { smartFolderMatches($0, sf: sf) }
-            filtered = applySmartFolderLimit(matched, sf: sf)
+            if let orderedPaths = CatalogStore.shared.orderedPathsForSmartFolder(sf) {
+                // SQL fast path — ORDER BY and LIMIT already applied by the DB
+                let pathSet = Set(orderedPaths)
+                let byPath = Dictionary(uniqueKeysWithValues:
+                    docs.compactMap { doc -> (String, ImageDocument)? in
+                        guard pathSet.contains(doc.url.path) else { return nil }
+                        return (doc.url.path, doc)
+                    })
+                filtered = orderedPaths.compactMap { byPath[$0] }
+            } else {
+                // Runtime-only criteria (colorRatio, smartFolderRef) → in-memory fallback
+                let matched = docs.filter { smartFolderMatches($0, sf: sf) }
+                filtered = applySmartFolderLimit(matched, sf: sf)
+            }
         case .volume(let id):
             guard let volume = library.detectedVolumes.first(where: { $0.id == id }) else { return [] }
             let prefix = volume.url.standardized.path
@@ -148,8 +176,95 @@ extension ImageViewModel {
         case .closedEyes:
             let ids = Set(quality.closedEyeDocuments.map { $0.id })
             filtered = docs.filter { ids.contains($0.id) }
+        case .eloRange(let lo, let hi):
+            filtered = docs.filter { $0.elo >= lo && $0.elo <= hi }
+        case .people:
+            filtered = []
+        case .personDetail(let personID):
+            let faces = people.facesPerPerson[personID] ?? []
+            let paths = Set(faces.map { $0.imagePath })
+            filtered = docs.filter { paths.contains($0.url.path) }
         }
-        return applyStacking(to: applySortCriterion(to: filtered))
+        let sorted = applyStacking(to: applySortCriterion(to: filtered))
+        guard !searchQuery.isEmpty else { return sorted }
+        let parsed = SearchQuery.parse(searchQuery)
+        var result = sorted
+
+        if !parsed.freeText.isEmpty {
+            let q = parsed.freeText.lowercased()
+            result = result.filter { doc in
+                doc.url.lastPathComponent.lowercased().contains(q)
+                || doc.metadata.contains { $0.value.lowercased().contains(q) }
+            }
+        }
+
+        let rawExts: Set<String> = ["cr2","cr3","nef","nrw","arw","srf","sr2","dng","orf","rw2","raf","pef","srw","erf","kdc","dcr","raw","rwl","mrw","3fr","mef","iiq","x3f"]
+
+        for filter in parsed.filters {
+            let val = filter.value.lowercased()
+            switch filter.key {
+            case "bewertung":
+                if let r = Int(val) { result = result.filter { $0.rating == r } }
+            case "typ":
+                if val == "raw" {
+                    result = result.filter { rawExts.contains($0.url.pathExtension.lowercased()) }
+                } else {
+                    result = result.filter { $0.url.pathExtension.lowercased() == val }
+                }
+            case "vor":
+                if let date = searchDateParse(val) {
+                    result = result.filter { searchDateKey($0) < date }
+                }
+            case "nach":
+                if let date = searchDateParse(val) {
+                    result = result.filter { searchDateKey($0) > date }
+                }
+            case "kamera":
+                result = result.filter { doc in doc.metadata.contains { $0.category == .camera && $0.value.lowercased().contains(val) } }
+            case "album":
+                result = result.filter { doc in
+                    library.albums.contains { alb in alb.name.lowercased().contains(val) && alb.photoURLs.contains(doc.url) }
+                }
+            case "markiert":
+                switch val {
+                case "pick":   result = result.filter { $0.flagStatus == .pick }
+                case "reject": result = result.filter { $0.flagStatus == .reject }
+                case "ja":     result = result.filter { $0.flagStatus != .none }
+                case "nein":   result = result.filter { $0.flagStatus == .none }
+                default: break
+                }
+            case "unscharf":
+                let ids = Set(quality.blurryDocuments.map { $0.id })
+                if val == "ja"   { result = result.filter {  ids.contains($0.id) } }
+                if val == "nein" { result = result.filter { !ids.contains($0.id) } }
+            case "motiv":
+                result = result.filter { doc in doc.motifTags?.contains { $0.lowercased().contains(val) } ?? false }
+            case "elo":
+                if val.hasPrefix(">="), let t = Double(val.dropFirst(2)) {
+                    result = result.filter { $0.elo >= t }
+                } else if val.hasPrefix("<="), let t = Double(val.dropFirst(2)) {
+                    result = result.filter { $0.elo <= t }
+                } else if val.hasPrefix(">"), let t = Double(val.dropFirst(1)) {
+                    result = result.filter { $0.elo > t }
+                } else if val.hasPrefix("<"), let t = Double(val.dropFirst(1)) {
+                    result = result.filter { $0.elo < t }
+                } else if let t = Double(val) {
+                    result = result.filter { $0.elo >= t }
+                }
+            case "farbe":
+                let colorOpt: ColorLabel?
+                switch val {
+                case "rot":   colorOpt = .red
+                case "gelb":  colorOpt = .yellow
+                case "grün":  colorOpt = .green
+                case "blau":  colorOpt = .blue
+                default:      colorOpt = nil
+                }
+                if let color = colorOpt { result = result.filter { $0.colorLabel == color } }
+            default: break
+            }
+        }
+        return result
     }
 
     // MARK: - Serienbild-/Bracketing-Stapel
@@ -170,6 +285,7 @@ extension ImageViewModel {
             stackCounts = [:]
             stackLeaderByMember = [:]
             stackMembersByLeader = [:]
+            bestInStackIDs = []
             return sorted
         }
         let items = zip(sorted, seqs).map {
@@ -179,6 +295,7 @@ extension ImageViewModel {
         stackCounts = r.counts
         stackLeaderByMember = r.leaderByMember
         stackMembersByLeader = r.membersByLeader
+        bestInStackIDs = computeBestInStackIDs(from: sorted, membersByLeader: r.membersByLeader)
         guard !r.counts.isEmpty else { return sorted }
 
         let byID = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -192,6 +309,22 @@ extension ImageViewModel {
 
     func isStackExpanded(_ doc: ImageDocument) -> Bool {
         expandedStacks.contains(doc.url.path)
+    }
+
+    private func computeBestInStackIDs(from docs: [ImageDocument],
+                                        membersByLeader: [UUID: [UUID]]) -> Set<UUID> {
+        var result = Set<UUID>()
+        let byID = Dictionary(docs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        for (_, memberIDs) in membersByLeader {
+            guard memberIDs.count >= 2 else { continue }
+            let scanned = memberIDs.compactMap { byID[$0] }.filter { ($0.blurScore ?? 0) > 0 }
+            guard scanned.count >= 2 else { continue }
+            let sorted = scanned.sorted { ($0.blurScore ?? 0) > ($1.blurScore ?? 0) }
+            if (sorted[0].blurScore ?? 0) / (sorted[1].blurScore ?? 1) > 1.15 {
+                result.insert(sorted[0].id)
+            }
+        }
+        return result
     }
 
     /// Alle Mitglieder (inkl. Anführer), wenn doc der Anführer eines eingeklappten
@@ -234,12 +367,32 @@ extension ImageViewModel {
             return docs.sorted { dateSortKey($0) > dateSortKey($1) }
         case .ratingDesc:
             return docs.sorted { ($0.rating, $0.filename) > ($1.rating, $1.filename) }
+        case .eloDesc:
+            return docs.sorted { ($0.elo, $0.filename) > ($1.elo, $1.filename) }
+        case .eloAsc:
+            return docs.sorted { ($0.elo, $0.filename) < ($1.elo, $1.filename) }
         case .random:
             let orderMap = Dictionary(uniqueKeysWithValues: shuffledOrder.enumerated().map { ($1, $0) })
             return docs.sorted {
                 (orderMap[$0.id] ?? Int.max) < (orderMap[$1.id] ?? Int.max)
             }
         }
+    }
+
+    private func searchDateParse(_ s: String) -> Date? {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        if s.count == 4  { fmt.dateFormat = "yyyy";       return fmt.date(from: s) }
+        if s.count == 7  { fmt.dateFormat = "yyyy-MM";    return fmt.date(from: s) }
+        fmt.dateFormat = "yyyy-MM-dd"; return fmt.date(from: s)
+    }
+
+    private func searchDateKey(_ doc: ImageDocument) -> Date {
+        let raw = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value ?? ""
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        return fmt.date(from: raw) ?? Date.distantPast
     }
 
     private func dateSortKey(_ doc: ImageDocument) -> String {
@@ -267,7 +420,11 @@ extension ImageViewModel {
                 guard let self = self else { return }
                 var counts: [UUID: Int] = [:]
                 for sf in folders {
-                    counts[sf.id] = docs.reduce(0) { $0 + (self.smartFolderMatches($1, sf: sf) ? 1 : 0) }
+                    if let sqlCount = CatalogStore.shared.countForSmartFolder(sf) {
+                        counts[sf.id] = sqlCount
+                    } else {
+                        counts[sf.id] = docs.reduce(0) { $0 + (self.smartFolderMatches($1, sf: sf) ? 1 : 0) }
+                    }
                 }
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, counts != self.smartFolderCounts else { return }
@@ -279,6 +436,10 @@ extension ImageViewModel {
     }
 
     func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder) -> Bool {
+        smartFolderMatches(doc, sf: sf, visiting: [sf.id])
+    }
+
+    private func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder, visiting: Set<UUID>) -> Bool {
         guard !sf.criteria.isEmpty else { return true }
         let results = sf.criteria.map { c -> Bool in
             switch c.attribute {
@@ -365,11 +526,44 @@ extension ImageViewModel {
                 case .isNot:   return !hasMotif
                 default:       return hasMotif
                 }
+            case .notInAlbum:
+                let allAlbumURLs = Set(library.albums.flatMap { $0.photoURLs })
+                return !allAlbumURLs.contains(doc.url)
             case .album:
                 guard let albumID = UUID(uuidString: c.textValue),
                       let album = library.albums.first(where: { $0.id == albumID }) else { return false }
                 let inAlbum = album.photoURLs.contains(doc.url)
                 return applyEnumOp(c.op, lhs: inAlbum, rhs: true)
+            case .smartFolderRef:
+                guard let refID = UUID(uuidString: c.textValue),
+                      !visiting.contains(refID),
+                      let refSf = library.smartFolders.first(where: { $0.id == refID }) else {
+                    return c.op == .isNot
+                }
+                let isInRef = smartFolderMatches(doc, sf: refSf, visiting: visiting.union([refID]))
+                return applyEnumOp(c.op, lhs: isInRef, rhs: true)
+            case .colorRatio:
+                guard let ratio = colorChannelRatio(doc: doc, channel: c.textValue) else { return false }
+                return applyNumericOp(c.op, value: ratio, lo: c.numericValue, hi: c.numericValue2)
+            case .blurScore:
+                guard doc.qualityScanned, let score = doc.blurScore else { return false }
+                // Laplacian-Varianz → 0–100 % (BlurDetector.defaultThreshold ≈ 120 ≙ 30 %)
+                let pct = min(score / 4.0, 100.0)
+                return applyNumericOp(c.op, value: pct, lo: c.numericValue, hi: c.numericValue2)
+            case .isUnderexposed:
+                guard doc.qualityScanned else { return false }
+                let flag = !doc.underOverride && (doc.underRatio ?? 0) >= quality.shadowClipThreshold
+                return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
+            case .isOverexposed:
+                guard doc.qualityScanned else { return false }
+                let flag = !doc.overOverride && (doc.overRatio ?? 0) >= quality.highlightClipThreshold
+                return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
+            case .hasClosedEyes:
+                guard doc.qualityScanned else { return false }
+                let flag: Bool
+                if let eo = doc.eyeOpenness { flag = eo < quality.eyeOpennessThreshold }
+                else { flag = false }
+                return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
             }
         }
         return sf.matchAll ? results.allSatisfy { $0 } : results.contains { $0 }
@@ -489,6 +683,48 @@ extension ImageViewModel {
             loadCurrentImage()
         } else {
             collection.selectedIndices = []
+        }
+    }
+
+    // MARK: - Color ratio helper
+
+    private func colorChannelRatio(doc: ImageDocument, channel: String) -> Double? {
+        guard let thumb = doc.thumbnailImage ?? doc.placeholderThumbnailImage,
+              let cgImg = thumb.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return nil }
+
+        let w = cgImg.width, h = cgImg.height
+        guard w > 0, h > 0 else { return nil }
+
+        let bytesPerPixel = 4
+        let bytesPerRow   = bytesPerPixel * w
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * h)
+        guard let ctx = CGContext(
+            data: &pixels,
+            width: w, height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        ctx.draw(cgImg, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        var rSum: Double = 0, gSum: Double = 0, bSum: Double = 0
+        let pixelCount = w * h
+        var i = 0
+        while i < pixels.count {
+            rSum += Double(pixels[i])
+            gSum += Double(pixels[i + 1])
+            bSum += Double(pixels[i + 2])
+            i += bytesPerPixel
+        }
+        let n = Double(pixelCount)
+        switch channel.uppercased() {
+        case "R": return (rSum / n) / 255.0 * 100.0
+        case "G": return (gSum / n) / 255.0 * 100.0
+        case "B": return (bSum / n) / 255.0 * 100.0
+        default:  return nil
         }
     }
 }

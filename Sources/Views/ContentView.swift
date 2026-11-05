@@ -5,31 +5,104 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
+    @AppStorage("actionBar.order")       private var actionBarOrderRaw: String = ""
+    @AppStorage("albumPanel.width")      private var albumPanelWidthStored: Double = 320
+    // Live width drives the frame; AppStorage is only written on drag end to avoid UserDefaults latency.
+    @State private var albumPanelLive: CGFloat = 320
+
+    @AppStorage("gallery.stripHeight")   private var stripHeightStored: Double = 138
+    @State private var stripHeightLive: CGFloat = 138
+
+    // Nav toolbar visibility
+    @AppStorage("navtoolbar.showSidebar")    private var navShowSidebar    = true
+    @AppStorage("navtoolbar.showViewMode")   private var navShowViewMode   = true
+    @AppStorage("navtoolbar.showNavigation") private var navShowNavigation = true
+    @AppStorage("navtoolbar.showInspector")  private var navShowInspector  = true
+    @AppStorage("navtoolbar.showShare")      private var navShowShare      = true
+    @AppStorage("navtoolbar.showTag")        private var navShowTag        = true
+    @AppStorage("navtoolbar.showMore")       private var navShowMore       = true
+    @AppStorage("navtoolbar.showSearch")     private var navShowSearch     = true
+    @AppStorage("navtoolbar.showSort")       private var navShowGridSort   = true
+    @AppStorage("navtoolbar.showSlider")     private var navShowSlider     = true
+
+    // Per-item action bar visibility
+    @AppStorage("toolbar.item.sort")        private var showSort        = true
+    @AppStorage("toolbar.item.eye")         private var showEye         = true
+    @AppStorage("toolbar.item.rotateLeft")  private var showRotateLeft  = true
+    @AppStorage("toolbar.item.rotateRight") private var showRotateRight = true
+    @AppStorage("toolbar.item.zoomOut")     private var showZoomOut     = true
+    @AppStorage("toolbar.item.fitToWindow") private var showFitToWindow = true
+    @AppStorage("toolbar.item.actualSize")  private var showActualSize  = true
+    @AppStorage("toolbar.item.zoomIn")      private var showZoomIn      = true
+
+    private var toolbarOrder: [ActionBarItem] {
+        if actionBarOrderRaw.isEmpty { return ActionBarItem.allCases }
+        let saved = actionBarOrderRaw.split(separator: ",")
+            .compactMap { ActionBarItem(rawValue: String($0)) }
+        let missing = ActionBarItem.allCases.filter { !saved.contains($0) }
+        return saved.isEmpty ? ActionBarItem.allCases : saved + missing
+    }
+
+    private var isGridViewActive: Bool {
+        if viewModel.showFullGrid { return true }
+        return viewModel.libraryViewMode == .grid
+    }
+
+    private static let gridSteps: [CGFloat] = [22, 50, 80, 120, 180, 280, 400]
+
+    private func snapGridSize(_ raw: CGFloat) {
+        let snapped = Self.gridSteps.min(by: { abs($0 - raw) < abs($1 - raw) }) ?? raw
+        if snapped != viewModel.gridThumbnailSize {
+            viewModel.gridThumbnailSize = snapped
+        }
+    }
+
+    private func toolbarItemVisible(_ item: ActionBarItem) -> Bool {
+        switch item {
+        case .sort:        return showSort
+        case .eye:         return showEye
+        case .rotateLeft:  return showRotateLeft
+        case .rotateRight: return showRotateRight
+        case .zoomOut:     return showZoomOut
+        case .fitToWindow: return showFitToWindow
+        case .actualSize:  return showActualSize
+        case .zoomIn:      return showZoomIn
+        }
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
-            if viewModel.navSidebarVisible {
-                NavSidebarView()
+        ZStack {
+            layoutArea
+            if viewModel.modeSwitcherEnabled && viewModel.showModeSwitcher {
+                ModeSwitcherView()
                     .environmentObject(viewModel)
-                Divider()
-            }
-
-            ZStack {
-                mainContent
-            }
-
-            if viewModel.inspectorVisible {
-                Divider()
-                InspectorView()
-                    .environmentObject(viewModel)
+                    .transition(.opacity)
+                    .zIndex(100)
             }
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                Button(action: { viewModel.navSidebarVisible.toggle() }) {
-                    Image(systemName: "sidebar.left")
-                        .opacity(viewModel.navSidebarVisible ? 1.0 : 0.5)
+                PanelToggleGroup(
+                    showSidebar: navShowSidebar,
+                    showInspector: navShowInspector,
+                    sidebarActive: viewModel.navSidebarVisible,
+                    inspectorActive: viewModel.inspectorVisible,
+                    onToggleSidebar: { viewModel.navSidebarVisible.toggle() },
+                    onToggleInspector: { viewModel.toggleInspector() }
+                )
+
+                if viewModel.modeSwitcherEnabled {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            viewModel.showModeSwitcher.toggle()
+                        }
+                    }) {
+                        Image(systemName: "square.grid.2x2")
+                            .opacity(viewModel.showModeSwitcher ? 1.0 : 0.6)
+                    }
+                    .help("Ansicht wählen (⌘M)")
+                    .keyboardShortcut("m", modifiers: .command)
                 }
-                .help("Navigation ein-/ausblenden")
 
                 if viewModel.showingLibraryDetail {
                     Button(action: { viewModel.showingLibraryDetail = false }) {
@@ -45,16 +118,35 @@ struct ContentView: View {
                     .help("Zurück zur Übersicht")
                 }
 
-                let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
-                if !isLibrary && !viewModel.compare.active {
-                    Button(action: { viewModel.showFullGrid.toggle() }) {
-                        Image(systemName: viewModel.showFullGrid ? "rectangle.split.2x1" : "square.grid.3x3")
-                            .opacity(viewModel.showFullGrid ? 1.0 : 0.6)
+                if case .personDetail = viewModel.navSelection {
+                    Button(action: { viewModel.navSelection = .people }) {
+                        Image(systemName: "person.2")
                     }
-                    .help(viewModel.showFullGrid ? "Detail-Ansicht" : "Rasteransicht")
+                    .help("Zurück zu Menschen")
                 }
 
-                if !viewModel.compare.active {
+                let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
+                let showModePicker = !viewModel.compare.active
+                    && (isLibrary ? navShowViewMode : true)
+                if showModePicker {
+                    Menu {
+                        ForEach(LibraryViewMode.allCases, id: \.self) { mode in
+                            Button(action: { viewModel.libraryViewMode = mode }) {
+                                Label(
+                                    mode.displayName,
+                                    systemImage: viewModel.libraryViewMode == mode ? "checkmark" : mode.icon
+                                )
+                            }
+                        }
+                    } label: {
+                        Image(systemName: viewModel.libraryViewMode.icon)
+                    }
+                    .help("Ansicht wählen")
+                    .menuStyle(BorderlessButtonMenuStyle())
+                    .fixedSize()
+                }
+
+                if !viewModel.compare.active && navShowNavigation {
                     Button(action: { viewModel.previous() }) {
                         Image(systemName: "chevron.left")
                     }
@@ -71,81 +163,103 @@ struct ContentView: View {
 
             ToolbarItemGroup(placement: .automatic) {
                 if !viewModel.compare.active {
-                    SortMenuButton()
-                        .environmentObject(viewModel)
-
-                    Button(action: { viewModel.adj.showOriginal.toggle() }) {
-                        Image(systemName: viewModel.adj.showOriginal ? "eye.slash" : "eye")
+                    if isGridViewActive {
+                        if navShowGridSort {
+                            SortMenuButton().environmentObject(viewModel).fixedSize()
+                        }
+                        if navShowSlider {
+                            HStack(spacing: 6) {
+                                Image(systemName: "square.grid.3x3")
+                                    .font(.system(size: 10)).foregroundColor(.secondary)
+                                Slider(value: $viewModel.gridThumbnailSize, in: 22...400)
+                                    .frame(width: 120)
+                                    .onChange(of: viewModel.gridThumbnailSize) { snapGridSize($0) }
+                                Image(systemName: "square.grid.2x2")
+                                    .font(.system(size: 10)).foregroundColor(.secondary)
+                            }
+                            .help("Rastergröße anpassen")
+                        }
                     }
-                    .help("Original / Anpassungen")
-                    .disabled(viewModel.currentImage == nil)
-                }
-            }
-
-            ToolbarItemGroup(placement: .automatic) {
-                if !viewModel.compare.active {
-                    Button(action: { viewModel.rotateLeft() }) {
-                        Image(systemName: "rotate.left")
+                    ForEach(toolbarOrder.filter { toolbarItemVisible($0) }, id: \.self) { item in
+                        toolbarButton(for: item)
                     }
-                    .help("90° links drehen (⌘[)")
-                    .keyboardShortcut("[", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
-
-                    Button(action: { viewModel.rotateRight() }) {
-                        Image(systemName: "rotate.right")
-                    }
-                    .help("90° rechts drehen (⌘])")
-                    .keyboardShortcut("]", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
-
-                    Button(action: { viewModel.zoomOut() }) {
-                        Image(systemName: "minus.magnifyingglass")
-                    }
-                    .help("Verkleinern")
-                    .keyboardShortcut("-", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
-
-                    Button(action: { viewModel.fitToWindow() }) {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    }
-                    .help("An Fenster anpassen")
-                    .disabled(viewModel.currentImage == nil)
-
-                    Button(action: { viewModel.actualSize() }) {
-                        Image(systemName: "1.magnifyingglass")
-                    }
-                    .help("Originalgröße")
-                    .keyboardShortcut("0", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
-
-                    Button(action: { viewModel.zoomIn() }) {
-                        Image(systemName: "plus.magnifyingglass")
-                    }
-                    .help("Vergrößern")
-                    .keyboardShortcut("=", modifiers: .command)
-                    .disabled(viewModel.currentImage == nil)
                 }
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: { viewModel.toggleInspector() }) {
-                    Image(systemName: "sidebar.right")
-                        .opacity(viewModel.inspectorVisible ? 1.0 : 0.5)
+                if viewModel.toolbarSearchVisible {
+                    ToolbarSearchField(query: $viewModel.searchQuery)
+                        .environmentObject(viewModel)
+                        .transition(.opacity)
                 }
-                .help("Inspector ein-/ausblenden")
-                .keyboardShortcut("i", modifiers: .command)
+
+                if navShowShare {
+                    Button(action: shareCurrentImage) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .help("Teilen")
+                    .disabled(viewModel.collection.currentDocument == nil)
+                }
+
+                if navShowTag {
+                    Menu {
+                        Button(action: { viewModel.setColorLabel(.red) })    { Label("Rot",  systemImage: "tag.fill").foregroundColor(.red) }
+                        Button(action: { viewModel.setColorLabel(.yellow) }) { Label("Gelb", systemImage: "tag.fill").foregroundColor(.yellow) }
+                        Button(action: { viewModel.setColorLabel(.green) })  { Label("Grün", systemImage: "tag.fill").foregroundColor(.green) }
+                        Button(action: { viewModel.setColorLabel(.blue) })   { Label("Blau", systemImage: "tag.fill").foregroundColor(.blue) }
+                        Divider()
+                        Button("Kein Label") { viewModel.setColorLabel(.none) }
+                    } label: {
+                        Image(systemName: "tag")
+                    }
+                    .help("Farblabel setzen")
+                    .disabled(viewModel.collection.currentDocument == nil)
+                    .menuStyle(BorderlessButtonMenuStyle())
+                    .fixedSize()
+                }
+
+                if navShowMore {
+                    Menu {
+                        Button("Exportieren…")        { viewModel.showExportSheet = true }
+                        Divider()
+                        Button("Im Finder zeigen")    { showInFinder() }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .help("Weitere Aktionen")
+                    .menuStyle(BorderlessButtonMenuStyle())
+                    .fixedSize()
+                }
+
+                if navShowSearch {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            viewModel.toolbarSearchVisible.toggle()
+                        }
+                        if !viewModel.toolbarSearchVisible { viewModel.searchQuery = "" }
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(viewModel.toolbarSearchVisible ? .accentColor : .primary)
+                    }
+                    .help("Suchen (⌘F)")
+                    .keyboardShortcut("f", modifiers: .command)
+                }
             }
         }
-        .onChange(of: viewModel.navSelection) { _ in
+        .onChange(of: viewModel.navSelection) { sel in
             viewModel.showingLibraryDetail = false
             viewModel.qualityDetailActive = false
             if viewModel.compare.active { viewModel.stopCompareMode() }
+            if case .album = sel {} else { viewModel.sidebarSelectedAlbumIDs = []; viewModel.sidebarAnchorAlbumID = nil }
+            if case .smartFolder = sel {} else { viewModel.sidebarSelectedSmartFolderIDs = []; viewModel.sidebarAnchorSmartFolderID = nil }
         }
         .onChange(of: viewModel.windowTitle) { title in
             NSApp.mainWindow?.title = title
         }
         .onAppear {
             NSApp.mainWindow?.title = viewModel.windowTitle
+            albumPanelLive = CGFloat(albumPanelWidthStored)
+            stripHeightLive = CGFloat(stripHeightStored)
         }
         .sheet(isPresented: $viewModel.hdr.showSheet, onDismiss: {
             viewModel.hdr.error = nil
@@ -174,9 +288,109 @@ struct ContentView: View {
         }
     }
 
+    private func shareCurrentImage() {
+        guard let url = viewModel.collection.currentDocument?.url else { return }
+        let picker = NSSharingServicePicker(items: [url as Any])
+        if let contentView = NSApp.mainWindow?.contentView {
+            picker.show(relativeTo: .zero, of: contentView, preferredEdge: .maxY)
+        }
+    }
+
+    private func showInFinder() {
+        guard let url = viewModel.collection.currentDocument?.url else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    @ViewBuilder
+    private func toolbarButton(for item: ActionBarItem) -> some View {
+        switch item {
+        case .sort:
+            SortMenuButton().environmentObject(viewModel).fixedSize()
+        case .eye:
+            Button(action: { viewModel.adj.showOriginal.toggle() }) {
+                Image(systemName: viewModel.adj.showOriginal ? "eye.slash" : "eye")
+            }
+            .help(item.helpText)
+            .disabled(viewModel.currentImage == nil)
+        case .rotateLeft:
+            Button(action: { viewModel.rotateLeft() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("[", modifiers: .command)
+        case .rotateRight:
+            Button(action: { viewModel.rotateRight() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("]", modifiers: .command)
+        case .zoomOut:
+            Button(action: { viewModel.zoomOut() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("-", modifiers: .command)
+        case .fitToWindow:
+            Button(action: { viewModel.fitToWindow() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+        case .actualSize:
+            Button(action: { viewModel.actualSize() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("0", modifiers: .command)
+        case .zoomIn:
+            Button(action: { viewModel.zoomIn() }) { Image(systemName: item.icon) }
+                .help(item.helpText).disabled(viewModel.currentImage == nil)
+                .keyboardShortcut("=", modifiers: .command)
+        }
+    }
+
+    // Minimum album-panel width; below the snap threshold we close the expanded view.
+    private let albumPanelMin: CGFloat = 200
+    private let albumPanelSnapClose: CGFloat = 160
+
+    @ViewBuilder private var layoutArea: some View {
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                if viewModel.navSidebarVisible {
+                    let maxW = max(albumPanelMin, geo.size.width - 120)
+                    let panelW = max(albumPanelMin, min(albumPanelLive, maxW))
+
+                    Group {
+                        if viewModel.sidebarAlbumExpanded {
+                            AlbumGridExpandedView()
+                                .environmentObject(viewModel)
+                        } else {
+                            NavSidebarView()
+                                .environmentObject(viewModel)
+                        }
+                    }
+                    .frame(width: panelW)
+                    .frame(maxHeight: .infinity)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+
+                    AlbumPanelDivider(
+                        currentWidth: panelW,
+                        minWidth: albumPanelMin,
+                        maxWidth: maxW,
+                        snapClose: albumPanelSnapClose,
+                        onDrag: { delta in
+                            albumPanelLive = max(albumPanelMin, min(albumPanelLive + delta, maxW))
+                        },
+                        onRelease: { finalW in
+                            albumPanelWidthStored = Double(albumPanelLive)
+                        }
+                    )
+                }
+
+                ZStack { mainContent }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if viewModel.inspectorVisible {
+                    Divider()
+                    InspectorView()
+                        .environmentObject(viewModel)
+                }
+            }
+        }
+    }
+
     @ViewBuilder private var mainContent: some View {
-        let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil
-        let showGrid = (isLibrary && !viewModel.showingLibraryDetail) || (!isLibrary && viewModel.showFullGrid)
+        let isPersonDetail: Bool = { if case .personDetail = viewModel.navSelection { return true }; return false }()
+        let isLibrary = viewModel.navSelection == .library || viewModel.navSelection == nil || isPersonDetail
         let inQualityOverview = !viewModel.qualityDetailActive
             && (viewModel.navSelection == .blurry
                 || viewModel.navSelection == .underexposed
@@ -185,6 +399,23 @@ struct ContentView: View {
 
         if viewModel.compare.active {
             CompareView()
+                .environmentObject(viewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.navSelection == .trash {
+            VStack(spacing: 0) {
+                if viewModel.showFullGrid {
+                    LibraryFullGridView()
+                        .environmentObject(viewModel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    detailWithStrip
+                }
+                TrashSizeBar()
+                    .environmentObject(viewModel)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.navSelection == .people {
+            PeopleView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.navSelection == .duplicates {
@@ -207,14 +438,45 @@ struct ContentView: View {
             ExposureView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if showGrid {
-            LibraryFullGridView()
-                .environmentObject(viewModel)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            detailWithStrip
+        } else if isLibrary && !viewModel.showingLibraryDetail {
+            switch viewModel.libraryViewMode {
+            case .grid:
+                LibraryFullGridView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .list:
+                LibraryListView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .columns:
+                LibraryColumnsView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .gallery:
+                detailWithStrip
+            }
+        } else if !isLibrary {
+            switch viewModel.libraryViewMode {
+            case .gallery:
+                detailWithStrip
+            case .grid:
+                LibraryFullGridView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .list:
+                LibraryListView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .columns:
+                LibraryColumnsView()
+                    .environmentObject(viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
+
+    private let stripMin: CGFloat = 138
+    private let stripMax: CGFloat = 600
 
     @ViewBuilder private var detailWithStrip: some View {
         VStack(spacing: 0) {
@@ -223,10 +485,17 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if !viewModel.collection.documents.isEmpty {
-                Divider()
+                StripDivider(
+                    onDrag: { delta in
+                        stripHeightLive = max(stripMin, min(stripHeightLive + delta, stripMax))
+                    },
+                    onRelease: {
+                        stripHeightStored = Double(stripHeightLive)
+                    }
+                )
                 LibraryGridView()
                     .environmentObject(viewModel)
-                    .frame(height: 138)
+                    .frame(height: stripHeightLive)
             }
         }
 
@@ -260,7 +529,8 @@ struct DetailView: View {
                     Text("Bild wird geladen…")
                         .foregroundColor(.secondary)
                 }
-            } else if let image = viewModel.adj.showOriginal ? viewModel.currentImage
+            } else if !viewModel.visibleDocuments.isEmpty,
+                      let image = viewModel.adj.showOriginal ? viewModel.currentImage
                         : (viewModel.inpaint.resultImage
                            ?? viewModel.adj.adjustedImage
                            ?? viewModel.currentImage) {
@@ -468,5 +738,598 @@ struct QueuePopover: View {
         }
         .padding(.bottom, 10)
         .frame(minWidth: 280)
+    }
+}
+
+// MARK: - Panel toggle group (Xcode-style)
+
+private struct PanelToggleGroup: View {
+    let showSidebar: Bool
+    let showInspector: Bool
+    let sidebarActive: Bool
+    let inspectorActive: Bool
+    let onToggleSidebar: () -> Void
+    let onToggleInspector: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if showSidebar {
+                panelButton(icon: "sidebar.left", active: sidebarActive, isFirst: true,
+                            isLast: !showInspector, action: onToggleSidebar)
+                    .help("Navigation ein-/ausblenden")
+            }
+            if showInspector {
+                panelButton(icon: "sidebar.right", active: inspectorActive,
+                            isFirst: !showSidebar, isLast: true, action: onToggleInspector)
+                    .help("Inspector ein-/ausblenden")
+                    .keyboardShortcut("i", modifiers: .command)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(NSColor.controlColor))
+                .shadow(color: .black.opacity(0.12), radius: 1, x: 0, y: 1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(Color(NSColor.separatorColor), lineWidth: 0.5)
+        )
+    }
+
+    private func panelButton(icon: String, active: Bool,
+                              isFirst: Bool, isLast: Bool,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: active ? .medium : .regular))
+                .foregroundColor(active ? Color.primary : Color.secondary)
+                .frame(width: 28, height: 22)
+                .background(
+                    active
+                        ? RoundedRectangle(cornerRadius: isFirst && isLast ? 6 : (isFirst ? 6 : (isLast ? 6 : 0)))
+                            .fill(Color(NSColor.selectedControlColor).opacity(0.35))
+                        : nil
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Resizable gallery strip divider
+
+private struct StripDivider: View {
+    let onDrag: (CGFloat) -> Void
+    let onRelease: () -> Void
+
+    @State private var hovered = false
+    @State private var dragStart: CGFloat = 0
+
+    var body: some View {
+        Rectangle()
+            .fill(hovered
+                  ? Color.accentColor.opacity(0.6)
+                  : Color(NSColor.separatorColor))
+            .frame(height: 4)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .onHover { hovered = $0 }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { v in
+                        let delta = v.translation.height - dragStart
+                        dragStart = v.translation.height
+                        onDrag(delta)
+                    }
+                    .onEnded { _ in
+                        dragStart = 0
+                        onRelease()
+                    }
+            )
+            .cursor(.resizeUpDown)
+    }
+}
+
+// MARK: - Resizable album-panel divider
+
+private struct AlbumPanelDivider: View {
+    let currentWidth: CGFloat
+    let minWidth: CGFloat
+    let maxWidth: CGFloat
+    let snapClose: CGFloat
+    let onDrag: (CGFloat) -> Void
+    let onRelease: (CGFloat) -> Void
+
+    @State private var hovered = false
+    @State private var dragStart: CGFloat = 0
+
+    var body: some View {
+        Rectangle()
+            .fill(hovered
+                  ? Color.accentColor.opacity(0.6)
+                  : Color(NSColor.separatorColor))
+            .frame(width: 4)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onHover { hovered = $0 }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { v in
+                        let delta = v.translation.width - dragStart
+                        dragStart = v.translation.width
+                        onDrag(delta)
+                    }
+                    .onEnded { _ in
+                        dragStart = 0
+                        onRelease(currentWidth)
+                    }
+            )
+            .cursor(.resizeLeftRight)
+    }
+}
+
+private extension View {
+    func cursor(_ cursor: NSCursor) -> some View {
+        self.onHover { inside in
+            if inside { cursor.push() } else { NSCursor.pop() }
+        }
+    }
+}
+
+// MARK: - Album Banner
+
+private struct BannerWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 400
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+struct AlbumBannerView: View {
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isEditingTitle = false
+    @State private var titleDraft = ""
+    @State private var showAlbumDetail = false
+    @State private var showSmartFolderSheet = false
+    @State private var bannerWidth: CGFloat = 400
+
+    var body: some View {
+        switch viewModel.navSelection {
+        case .album(let id):
+            if let album = viewModel.library.albums.first(where: { $0.id == id }) {
+                bannerContent(
+                    name: album.name,
+                    subtitle: "\(album.photoURLs.count) Fotos",
+                    description: album.albumDescription,
+                    isSmartFolder: false,
+                    docs: albumCoverDocs(album),
+                    saveTitle: { viewModel.updateAlbum(album, name: $0, description: album.albumDescription) },
+                    menu: { AnyView(Group {
+                        Button("Informationen…") { showAlbumDetail = true }
+                        Divider()
+                        Button("Album löschen") { viewModel.deleteAlbum(album) }
+                    }) }
+                )
+                .sheet(isPresented: $showAlbumDetail) {
+                    AlbumDetailSheet(album: album, isPresented: $showAlbumDetail)
+                        .environmentObject(viewModel)
+                }
+            }
+        case .smartFolder(let id):
+            if let sf = viewModel.library.smartFolders.first(where: { $0.id == id }) {
+                let count = viewModel.smartFolderCounts[id] ?? 0
+                bannerContent(
+                    name: sf.name,
+                    subtitle: "\(count) Fotos",
+                    description: nil,
+                    isSmartFolder: true,
+                    docs: smartFolderCoverDocs(sf),
+                    saveTitle: { newName in
+                        var updated = sf; updated.name = newName
+                        viewModel.updateSmartFolder(updated)
+                    },
+                    menu: { AnyView(Group {
+                        Button("iAlbum bearbeiten…") { showSmartFolderSheet = true }
+                        Divider()
+                        Button("iAlbum löschen") { viewModel.deleteSmartFolder(sf) }
+                    }) }
+                )
+                .sheet(isPresented: $showSmartFolderSheet) {
+                    SmartFolderSheet(editing: sf).environmentObject(viewModel)
+                }
+            }
+        case .albumFolder(let id):
+            if let folder = viewModel.library.albumFolders.first(where: { $0.id == id }) {
+                bannerContent(
+                    name: folder.name,
+                    subtitle: "Ordner",
+                    description: nil,
+                    isSmartFolder: false,
+                    docs: [],
+                    saveTitle: { viewModel.renameAlbumFolder(folder, to: $0) },
+                    menu: { AnyView(EmptyView()) }
+                )
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func bannerContent(name: String, subtitle: String, description: String?,
+                               isSmartFolder: Bool, docs: [ImageDocument],
+                               saveTitle: @escaping (String) -> Void,
+                               menu: @escaping () -> AnyView) -> some View {
+        let compact = bannerWidth < 320
+        let thumbSize: CGFloat = compact ? 80 : 110
+        Group {
+            if compact {
+                VStack(alignment: .center, spacing: 8) {
+                    mosaicView(docs: docs, isSmartFolder: isSmartFolder)
+                        .frame(width: thumbSize, height: thumbSize)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
+                    bannerTextBlock(name: name, subtitle: subtitle, description: description,
+                                    saveTitle: saveTitle, menu: menu, alignment: .center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+            } else {
+                HStack(spacing: 20) {
+                    mosaicView(docs: docs, isSmartFolder: isSmartFolder)
+                        .frame(width: thumbSize, height: thumbSize)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
+                    bannerTextBlock(name: name, subtitle: subtitle, description: description,
+                                    saveTitle: saveTitle, menu: menu, alignment: .leading)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            GeometryReader { geo in
+                Color(NSColor.windowBackgroundColor)
+                    .preference(key: BannerWidthKey.self, value: geo.size.width)
+            }
+        )
+        .onPreferenceChange(BannerWidthKey.self) { bannerWidth = $0 }
+        .onAppear {
+            isEditingTitle = false
+            for doc in docs {
+                if let idx = viewModel.collectionIndex(for: doc) {
+                    viewModel.requestVisibleThumbnail(at: idx)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func bannerTextBlock(name: String, subtitle: String, description: String?,
+                                 saveTitle: @escaping (String) -> Void,
+                                 menu: @escaping () -> AnyView,
+                                 alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 4) {
+            HStack(spacing: 6) {
+                if alignment == .center { Spacer() }
+                if isEditingTitle {
+                    TextField("", text: $titleDraft, onCommit: {
+                        let t = titleDraft.trimmingCharacters(in: .whitespaces)
+                        if !t.isEmpty { saveTitle(t) }
+                        isEditingTitle = false
+                    })
+                    .font(.system(size: alignment == .center ? 14 : 22, weight: .bold))
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .multilineTextAlignment(alignment == .center ? .center : .leading)
+                    .onExitCommand { isEditingTitle = false }
+                } else {
+                    Text(name)
+                        .font(.system(size: alignment == .center ? 14 : 22, weight: .bold))
+                        .lineLimit(2)
+                        .multilineTextAlignment(alignment == .center ? .center : .leading)
+                        .onTapGesture {
+                            titleDraft = name
+                            isEditingTitle = true
+                        }
+                }
+                Menu {
+                    menu()
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: alignment == .center ? 12 : 15))
+                        .foregroundColor(.secondary)
+                }
+                .menuStyle(BorderlessButtonMenuStyle())
+                .fixedSize()
+                if alignment == .center { Spacer() }
+            }
+            Text(subtitle)
+                .font(alignment == .center ? .caption : .callout)
+                .foregroundColor(.secondary)
+            if let desc = description, !desc.isEmpty {
+                Text(desc)
+                    .font(.caption)
+                    .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                    .lineLimit(2)
+                    .multilineTextAlignment(alignment == .center ? .center : .leading)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mosaicView(docs: [ImageDocument], isSmartFolder: Bool) -> some View {
+        let images = docs.compactMap { $0.thumbnailImage ?? $0.placeholderThumbnailImage }
+        if images.isEmpty {
+            ZStack {
+                Color(NSColor.separatorColor).opacity(0.3)
+                Image(systemName: isSmartFolder ? "folder.badge.gearshape" : "photo.on.rectangle")
+                    .font(.system(size: 32)).foregroundColor(.secondary)
+            }
+        } else if images.count == 1 {
+            GeometryReader { geo in
+                Image(nsImage: images[0]).resizable().scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height).clipped()
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
+        } else {
+            GeometryReader { geo in
+                let half = geo.size.width / 2
+                VStack(spacing: 1) {
+                    HStack(spacing: 1) {
+                        bannerTile(images[safe: 0], size: half)
+                        bannerTile(images[safe: 1], size: half)
+                    }
+                    HStack(spacing: 1) {
+                        bannerTile(images[safe: 2], size: half)
+                        bannerTile(images[safe: 3], size: half)
+                    }
+                }
+            }
+            .background(Color(NSColor.separatorColor).opacity(0.3))
+        }
+    }
+
+    private func bannerTile(_ image: NSImage?, size: CGFloat) -> some View {
+        Group {
+            if let img = image {
+                Image(nsImage: img).resizable().scaledToFill()
+                    .frame(width: size, height: size).clipped()
+            } else {
+                Color(NSColor.separatorColor).opacity(0.2).frame(width: size, height: size)
+            }
+        }
+    }
+
+    private func albumCoverDocs(_ album: Album) -> [ImageDocument] {
+        // Wenn ein Cover explizit gesetzt wurde, nur dieses eine Bild zeigen.
+        if let coverURL = album.coverPhotoURL,
+           let doc = viewModel.collection.documents.first(where: { $0.url == coverURL }) {
+            return [doc]
+        }
+        let urlSet = Set(album.photoURLs)
+        var pool: [ImageDocument] = []
+        for doc in viewModel.collection.documents {
+            if urlSet.contains(doc.url) { pool.append(doc) }
+            if pool.count == 4 { break }
+        }
+        return pool
+    }
+
+    private func smartFolderCoverDocs(_ sf: SmartFolder) -> [ImageDocument] {
+        var result: [ImageDocument] = []
+        for doc in viewModel.collection.documents {
+            if viewModel.smartFolderMatches(doc, sf: sf) {
+                result.append(doc)
+                if result.count == 4 { break }
+            }
+        }
+        return result
+    }
+}
+
+// MARK: - Toolbar Search Field
+
+struct ToolbarSearchField: View {
+    @Binding var query: String
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isEditing = false
+    @State private var showDropdown = false
+
+    private var currentWord: String { query.components(separatedBy: " ").last ?? "" }
+    private var activeFilters: [SearchToken] { SearchQuery.parse(query).filters }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            TextField("Suchen…", text: $query, onEditingChanged: { editing in
+                isEditing = editing
+                if editing { showDropdown = true }
+            })
+            .font(.system(size: 12))
+            .textFieldStyle(PlainTextFieldStyle())
+            .frame(minWidth: 120, maxWidth: 240)
+            if !activeFilters.isEmpty {
+                HStack(spacing: 3) {
+                    ForEach(activeFilters, id: \.key) { token in
+                        HStack(spacing: 2) {
+                            Text(token.key + ":").font(.system(size: 9, weight: .semibold)).foregroundColor(.accentColor)
+                            Text(token.value).font(.system(size: 9))
+                            Button(action: {
+                                let parts = query.components(separatedBy: " ").filter { !$0.hasPrefix(token.key + ":") }
+                                query = parts.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+                            }) {
+                                Image(systemName: "xmark").font(.system(size: 7, weight: .bold)).foregroundColor(.secondary)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.12))
+                        .cornerRadius(3)
+                    }
+                }
+            }
+            if !query.isEmpty {
+                Button(action: { query = ""; isEditing = false; showDropdown = false }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isEditing ? Color.accentColor.opacity(0.6) : Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+        )
+        .popover(isPresented: $showDropdown, arrowEdge: .bottom) {
+            dropdownContent
+                .frame(minWidth: 220, maxWidth: 320)
+                .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var dropdownContent: some View {
+        let word = currentWord
+        if let ci = word.firstIndex(of: ":"), ci != word.startIndex {
+            let key = String(word[..<ci]).lowercased()
+            let partial = String(word[word.index(after: ci)...]).lowercased()
+            if let def = FilterDefinition.all.first(where: { $0.key == key }) {
+                let staticVals = def.valueSuggestions.filter { partial.isEmpty || $0.hasPrefix(partial) }
+                let dynVals = dynamicValues(key: key, partial: partial)
+                let allVals = Array((staticVals + dynVals).prefix(8))
+                valueDropdown(def: def, values: allVals, key: key)
+            }
+        } else {
+            let matchDefs: [FilterDefinition] = word.isEmpty
+                ? FilterDefinition.all
+                : FilterDefinition.all.filter { $0.key.hasPrefix(word.lowercased()) || $0.label.lowercased().hasPrefix(word.lowercased()) }
+            let textSuggs = textSuggestions
+            VStack(spacing: 0) {
+                ForEach(Array(matchDefs.prefix(6)), id: \.key) { def in
+                    filterKeyRow(def)
+                    if def.key != matchDefs.prefix(6).last?.key { Divider() }
+                }
+                if !textSuggs.isEmpty && !word.isEmpty {
+                    if !matchDefs.isEmpty { Divider() }
+                    ForEach(textSuggs.prefix(4), id: \.self) { textSuggRow($0) }
+                }
+            }
+        }
+    }
+
+    private func filterKeyRow(_ def: FilterDefinition) -> some View {
+        Button(action: {
+            var parts = query.components(separatedBy: " ")
+            if let li = parts.indices.last, !parts[li].contains(":") {
+                parts[li] = def.key + ":"
+            } else {
+                parts.append(def.key + ":")
+            }
+            query = parts.joined(separator: " ")
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: def.icon)
+                    .font(.system(size: 11)).foregroundColor(.accentColor).frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(def.key + ":").font(.system(size: 11, weight: .medium))
+                    Text(def.hint).font(.system(size: 10)).foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5).contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    @ViewBuilder
+    private func valueDropdown(def: FilterDefinition, values: [String], key: String) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: def.icon).font(.system(size: 10)).foregroundColor(.accentColor)
+                Text(key + ":").font(.system(size: 10, weight: .semibold)).foregroundColor(.accentColor)
+                Text(def.hint).font(.system(size: 10)).foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            Divider()
+            ForEach(values, id: \.self) { value in
+                Button(action: {
+                    var parts = query.components(separatedBy: " ")
+                    if let li = parts.indices.last { parts[li] = key + ":" + value }
+                    query = parts.joined(separator: " ") + " "
+                    showDropdown = false
+                }) {
+                    HStack {
+                        Text(value).font(.system(size: 11))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 4).contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+
+    private func textSuggRow(_ s: String) -> some View {
+        Button(action: {
+            let filters = query.components(separatedBy: " ").filter { $0.contains(":") }
+            query = (filters + [s]).joined(separator: " ")
+            showDropdown = false
+            isEditing = false
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 10)).foregroundColor(.secondary).frame(width: 16)
+                Text(s).font(.system(size: 11)).lineLimit(1)
+                Spacer()
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4).contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private var textSuggestions: [String] {
+        let q = SearchQuery.parse(query).freeText.lowercased()
+        guard q.count >= 2 else { return [] }
+        var results = Set<String>()
+        for doc in viewModel.collection.documents.prefix(500) {
+            let name = doc.url.lastPathComponent
+            if name.lowercased().contains(q) { results.insert(name) }
+        }
+        return Array(results.sorted()).prefix(6).map { $0 }
+    }
+
+    private func dynamicValues(key: String, partial: String) -> [String] {
+        switch key {
+        case "kamera":
+            var set = Set<String>()
+            for doc in viewModel.collection.documents.prefix(300) {
+                for e in doc.metadata where e.category == .camera && !e.value.isEmpty { set.insert(e.value) }
+            }
+            return set.filter { partial.isEmpty || $0.lowercased().hasPrefix(partial) }.sorted().prefix(6).map { $0 }
+        case "album":
+            return viewModel.library.albums.map { $0.name }
+                .filter { partial.isEmpty || $0.lowercased().hasPrefix(partial) }.sorted().prefix(6).map { $0 }
+        case "motiv":
+            var set = Set<String>()
+            for doc in viewModel.collection.documents.prefix(300) {
+                for t in doc.motifTags ?? [] { set.insert(t) }
+            }
+            return set.filter { partial.isEmpty || $0.lowercased().hasPrefix(partial) }.sorted().prefix(6).map { $0 }
+        default: return []
+        }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

@@ -2,7 +2,7 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="iPhoto"
+APP_NAME="iPhoto 1.2"
 BUILD_DIR="$ROOT/build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
@@ -50,9 +50,12 @@ fi
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ]; then
     TARGET="arm64-apple-macosx11.0"
+    RUST_TARGET="aarch64-apple-darwin"
 else
     TARGET="x86_64-apple-macosx11.0"
+    RUST_TARGET="x86_64-apple-darwin"
 fi
+RUST_LIB="$ROOT/Rust/target/release/libiphoto_rs.a"
 
 echo "==> Baue $APP_NAME"
 echo "    Compiler    : $SWIFTC"
@@ -98,6 +101,16 @@ for o in "$OBJ_DIR"/*.o; do
     fi
 done
 
+# Rust-Core bauen (cargo ist inkrementell — bei unverändertem Code ~1s)
+echo "==> Baue Rust-Core (iphoto_rs)…"
+export PATH="$HOME/.cargo/bin:$PATH"
+export MACOSX_DEPLOYMENT_TARGET=11.0
+(cd "$ROOT/Rust" && cargo build --release 2>&1)
+if [ ! -f "$RUST_LIB" ]; then
+    echo "Fehler: Rust-Bibliothek nicht gefunden: $RUST_LIB"; exit 1
+fi
+echo ""
+
 # Kompilieren (inkrementell: nur geänderte Dateien)
 echo "==> Kompiliere…"
 "$SWIFTC" \
@@ -108,6 +121,7 @@ echo "==> Kompiliere…"
     -O \
     -incremental \
     -c \
+    -import-objc-header "$ROOT/Sources/Utilities/BridgingHeader.h" \
     -output-file-map "$OFM" \
     -j "$(sysctl -n hw.ncpu)" \
     $SOURCES
@@ -124,6 +138,8 @@ echo "==> Linke…"
     -framework Vision \
     -emit-executable \
     "$OBJ_DIR"/*.o \
+    "$RUST_LIB" \
+    -lc++ \
     -o "$MACOS_DIR/$APP_NAME"
 
 echo "==> Kopiere Ressourcen…"
@@ -151,12 +167,45 @@ CLI_SOURCES="\
     $ROOT/Sources/Models/HDRMerger.swift \
     $ROOT/Sources/Models/HotPixelResult.swift \
     $ROOT/Sources/Models/MetadataEntry.swift \
+    $ROOT/Sources/Models/AdjustmentState.swift \
+    $ROOT/Sources/Models/AdjustmentHistory.swift \
+    $ROOT/Sources/Models/LocalAdjustment.swift \
+    $ROOT/Sources/Models/Preset.swift \
+    $ROOT/Sources/Models/ImageDocument.swift \
+    $ROOT/Sources/Models/DetectedVolume.swift \
+    $ROOT/Sources/Models/WatchedFolder.swift \
+    $ROOT/Sources/Models/Album.swift \
+    $ROOT/Sources/Models/RatingStore.swift \
+    $ROOT/Sources/Models/StackDetector.swift \
+    $ROOT/Sources/Models/SmartFolder.swift \
     $ROOT/Sources/Utilities/Data+Extensions.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \
     $ROOT/Sources/Utilities/Log.swift \
     $ROOT/Sources/Utilities/BookmarkStore.swift \
     $ROOT/Sources/Utilities/HotPixelAnalyzer.swift \
     $ROOT/Sources/Utilities/MetadataService.swift \
+    $ROOT/Sources/Utilities/BlurDetector.swift \
+    $ROOT/Sources/Utilities/ExposureDetector.swift \
+    $ROOT/Sources/Utilities/ClosedEyeDetector.swift \
+    $ROOT/Sources/Utilities/QualityAssessor.swift \
+    $ROOT/Sources/Utilities/InpaintProcessor.swift \
+    $ROOT/Sources/Utilities/CatalogStore.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Adjustments.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Albums.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Backup.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Motifs.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Quality.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Ratings.swift \
+    $ROOT/Sources/Utilities/CatalogStore+People.swift \
+    $ROOT/Sources/Utilities/FaceDetector.swift \
+    $ROOT/Sources/Utilities/FaceClusterer.swift \
+    $ROOT/Sources/Models/FaceRecord.swift \
+    $ROOT/Sources/Utilities/SmartFolderFileSync.swift \
+    $ROOT/Sources/Utilities/SmartFolderSQLGenerator.swift \
+    $ROOT/Sources/Utilities/VersionStore.swift \
+    $ROOT/Sources/Utilities/EloRating.swift \
+    $ROOT/Sources/Utilities/AppConfig.swift \
+    $ROOT/Sources/Utilities/ThumbnailDiskCache.swift \
     $ROOT/Sources/CLI/main.swift"
 
 # Überspringen, wenn Binary aktueller als alle CLI-Quellen ist
@@ -180,9 +229,13 @@ fi
     -framework AppKit \
     -framework VideoToolbox \
     -framework CoreMedia \
+    -framework Vision \
+    -import-objc-header "$ROOT/Sources/Utilities/BridgingHeader.h" \
     -module-name iPhotoCLI \
     -O \
     $CLI_SOURCES \
+    "$RUST_LIB" \
+    -lc++ \
     -o "$BUILD_DIR/iphoto-cli"
 
 echo "Fertig: $BUILD_DIR/iphoto-cli"

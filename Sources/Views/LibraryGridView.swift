@@ -6,7 +6,9 @@ struct LibraryGridView: View {
     @StateObject private var scroller = AppKitScroller()
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: true) {
+        GeometryReader { geo in
+            let cellWidth = max(156, geo.size.height * (156.0 / 138.0))
+            ScrollView(.horizontal, showsIndicators: true) {
                 if viewModel.visibleDocuments.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "photo.on.rectangle.angled")
@@ -24,13 +26,14 @@ struct LibraryGridView: View {
                             let isSelected = viewModel.collection.selectedIndices.contains(actualIndex)
                             let q = viewModel.qualityFlags(for: doc)
                             ThumbnailCell(document: doc, isSelected: isSelected,
+                                          thumbnailWidth: cellWidth,
                                           stackCount: viewModel.stackCounts[doc.id] ?? 0,
                                           isStackExpanded: viewModel.isStackExpanded(doc),
                                           isStackMember: viewModel.stackLeaderByMember[doc.id].map { $0 != doc.id } ?? false,
                                           onStackToggle: { viewModel.toggleStack(leader: doc) },
                                           isBlurry: q.blur, isUnder: q.under, isOver: q.over,
                                           isEyesClosed: q.eyes)
-                                .frame(width: 156)
+                                .frame(width: cellWidth)
                                 .contentShape(Rectangle())
                                 .onAppear { viewModel.requestVisibleThumbnail(at: actualIndex) }
                                 .onTapGesture { handleTap(at: actualIndex) }
@@ -41,23 +44,24 @@ struct LibraryGridView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(ScrollViewGrabber(scroller: scroller))
+                }
             }
-        }
-        .background(Color(NSColor.controlBackgroundColor))
-        .onAppear {
-            DispatchQueue.main.async { scrollToCurrent() }
-        }
-        .onChange(of: viewModel.collection.currentIndex) { _ in
-            scrollToCurrent()
+            .background(Color(NSColor.controlBackgroundColor))
+            .onAppear {
+                DispatchQueue.main.async { scrollToCurrent(cellWidth: cellWidth) }
+            }
+            .onChange(of: viewModel.collection.currentIndex) { _ in
+                scrollToCurrent(cellWidth: cellWidth)
+            }
         }
     }
 
     // Kein ScrollViewProxy.scrollTo: hinterlässt auf macOS 11 ein persistentes
     // Scroll-Ziel, das nach Layout-Neuaufbau crasht (Bug #31) — AppKit-Scroll.
-    private func scrollToCurrent() {
+    private func scrollToCurrent(cellWidth: CGFloat) {
         guard let cur = viewModel.collection.currentDocument,
               let pos = viewModel.visiblePosition(for: cur.id) else { return }
-        scroller.centerHorizontally(position: pos, cellWidth: 156, spacing: 12, padding: 8)
+        scroller.centerHorizontally(position: pos, cellWidth: cellWidth, spacing: 12, padding: 8)
     }
 
     private func handleTap(at index: Int) {
