@@ -1912,6 +1912,96 @@ fi
 
 echo ""
 
+echo "--- catalog cameras / timeline ---"
+
+CT_DIR="$TMPDIR/cattl"; mkdir -p "$CT_DIR"
+CT_DB="$CT_DIR/catalog.db"
+ct() { IPHOTO_CATALOG_DB="$CT_DB" "$BIN" "$@"; }
+
+# leerer Katalog → leere Listen
+CT_EXIT=0
+CT_OUT=$(ct catalog cameras --json 2>&1) || CT_EXIT=$?
+if [ $CT_EXIT -eq 0 ] && echo "$CT_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin); assert d['cameras']==[] and d['total']==0 and d['unknown']==0
+" 2>/dev/null; then
+    pass "catalog cameras --json (leerer Katalog)"
+else
+    fail "catalog cameras --json (leer)" "Exit $CT_EXIT: $CT_OUT"
+fi
+
+CT_A="$CT_DIR/ct_a.png"; CT_B="$CT_DIR/ct_b.png"; CT_C="$CT_DIR/ct_c.png"
+cp "$INPUT_PNG" "$CT_A"; cp "$INPUT_PNG" "$CT_B"; cp "$INPUT_PNG" "$CT_C"
+ct catalog add "$CT_A" "$CT_B" "$CT_C" > /dev/null 2>&1 || true
+# Kamera + Datum direkt in die Test-DB schreiben (PNGs haben keine EXIF-Daten)
+python3 - "$CT_DB" "$CT_A" "$CT_B" <<'PY'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.execute("UPDATE images SET camera_make='FUJIFILM', camera_model='X-T5', date_taken='2024:05:17 10:00:00' WHERE path=?", (sys.argv[2],))
+c.execute("UPDATE images SET camera_make='FUJIFILM', camera_model='X-T5', date_taken='2024-06-01T08:30:00' WHERE path=?", (sys.argv[3],))
+c.commit()
+PY
+
+CT_EXIT=0
+CT_OUT=$(ct catalog cameras --json 2>&1) || CT_EXIT=$?
+if [ $CT_EXIT -eq 0 ] && echo "$CT_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['total']==3 and d['unknown']==1
+assert d['cameras']==[{'camera':'FUJIFILM X-T5','count':2,'raw':0,'size_bytes':d['cameras'][0]['size_bytes']}]
+" 2>/dev/null; then
+    pass "catalog cameras --json (2× X-T5, 1 unbekannt)"
+else
+    fail "catalog cameras --json" "Exit $CT_EXIT: $CT_OUT"
+fi
+
+CT_EXIT=0
+CT_OUT=$(ct catalog timeline --json 2>&1) || CT_EXIT=$?
+if [ $CT_EXIT -eq 0 ] && echo "$CT_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['by']=='month' and d['undated']==1 and d['total']==3
+assert d['periods']==[{'period':'2024-05','count':1},{'period':'2024-06','count':1}]
+" 2>/dev/null; then
+    pass "catalog timeline --json (Monate, EXIF + ISO-Datum)"
+else
+    fail "catalog timeline --json" "Exit $CT_EXIT: $CT_OUT"
+fi
+
+CT_EXIT=0
+CT_OUT=$(ct catalog timeline --by year --json 2>&1) || CT_EXIT=$?
+if [ $CT_EXIT -eq 0 ] && echo "$CT_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin); assert d['periods']==[{'period':'2024','count':2}]
+" 2>/dev/null; then
+    pass "catalog timeline --by year --json"
+else
+    fail "catalog timeline --by year" "Exit $CT_EXIT: $CT_OUT"
+fi
+
+CT_EXIT=0
+CT_OUT=$(ct catalog timeline --by day 2>&1) || CT_EXIT=$?
+if [ $CT_EXIT -eq 0 ] && echo "$CT_OUT" | grep -q "2024-05-17" && echo "$CT_OUT" | grep -q "ohne Datum"; then
+    pass "catalog timeline --by day (Textausgabe)"
+else
+    fail "catalog timeline --by day" "Exit $CT_EXIT: $CT_OUT"
+fi
+
+# Fehlerpfade
+CT_ERR=0
+ct catalog timeline --by week > /dev/null 2>&1 || CT_ERR=$?
+if [ $CT_ERR -ne 0 ]; then pass "catalog timeline --by week (→ Fehler)"; else fail "catalog timeline --by week" "Hätte fehlschlagen sollen"; fi
+
+CT_ERR=0
+ct catalog timeline --by > /dev/null 2>&1 || CT_ERR=$?
+if [ $CT_ERR -ne 0 ]; then pass "catalog timeline --by ohne Wert (→ Fehler)"; else fail "catalog timeline --by ohne Wert" "Hätte fehlschlagen sollen"; fi
+
+CT_ERR=0
+ct catalog cameras --force > /dev/null 2>&1 || CT_ERR=$?
+if [ $CT_ERR -ne 0 ]; then pass "catalog cameras --force (unbekannte Option → Fehler)"; else fail "catalog cameras --force" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------

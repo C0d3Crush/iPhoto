@@ -2,6 +2,13 @@
 
 ---
 
+## 1.100.0
+**CLI: Katalog-Statistik nach Kamera und Aufnahmezeitraum**
+- Neuer Befehl `iphoto-cli catalog cameras [--json]` zählt die Bilder pro Kamera (Hersteller + Modell) inkl. RAW-Anteil und Speicherbedarf; Bilder ohne Kamera-Angabe werden separat ausgewiesen
+- Neuer Befehl `iphoto-cli catalog timeline [--by year|month|day] [--json]` zeigt die Bilder pro Jahr, Monat oder Tag (versteht EXIF- und ISO-Datumsformate), als Balkendiagramm oder JSON; Bilder ohne Datum werden separat gezählt
+- Beide Befehle werten den Katalog in einem einzigen Durchlauf aus (O(N))
+- Tests in `Tests/run_plugins.sh` (leerer Katalog, Kamera-Gruppierung, Monats-/Jahres-/Tagesgruppierung, Fehlerpfade für ungültiges `--by` und unbekannte Optionen)
+
 ## 1.99.0
 **CLI: Smart-Ordner-SQL anzeigen und Treffer zählen**
 - Neuer Befehl `iphoto-cli smartfolder sql <name> [--count] [--json]` zeigt das SQL, das der Smart-Ordner gegen den Katalog ausführt (mit `--count` die Zähl-Abfrage der Seitenleiste); Laufzeit-Kriterien werden als Hinweis markiert
