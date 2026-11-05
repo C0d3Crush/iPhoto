@@ -2,6 +2,14 @@
 
 ---
 
+## 1.96.0
+**CLI: Bugreports auflisten, lesen und als behoben markieren**
+- Neuer Befehl `iphoto-cli bugreport list [--fixed|--all] [--json]` listet die Crash-Berichte aus `~/Documents/bugreports/` (neueste zuerst), optional auch die behobenen aus `fixed/`
+- Neuer Befehl `iphoto-cli bugreport show <name> [--json]` zeigt einen Bericht an — egal ob offen oder behoben
+- Neue Befehle `iphoto-cli bugreport fix <name>...` und `reopen <name>...` verschieben Berichte nach `fixed/` bzw. zurück; bereits vorhandene Ziele werden nicht überschrieben, Pfadangaben mit `/` werden abgelehnt
+- `iphoto-cli bugreport path [--json]` zeigt den Bugreport-Ordner; per `IPHOTO_BUGREPORT_DIR` überschreibbar (Tests/Skripte)
+- Tests in `Tests/run_plugins.sh` (Liste, Anzeige, fix/reopen-Rundlauf, Fehlerpfade inkl. Pfad-Traversal)
+
 ## 1.95.0
 **CLI: App-Suchsyntax parsen und gegen den Katalog ausführen**
 - Neuer Befehl `iphoto-cli query filters [--json]` listet alle Suchfilter der App (`bewertung:`, `typ:`, `vor:`, `nach:`, `kamera:`, `album:`, `markiert:`, `unscharf:`, `motiv:`, `elo:`, `farbe:`) mit Hinweis und Vorschlagswerten

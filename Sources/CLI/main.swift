@@ -111,6 +111,11 @@ private func printUsage() {
       iphoto-cli query filters [--json]
       iphoto-cli query parse <suchtext> [--json]
       iphoto-cli query run <suchtext> [--blur-threshold 80] [--include-trashed] [--json]
+      iphoto-cli bugreport list [--fixed|--all] [--json]
+      iphoto-cli bugreport show <name> [--json]
+      iphoto-cli bugreport fix <name> [<name>...] [--json]
+      iphoto-cli bugreport reopen <name> [<name>...] [--json]
+      iphoto-cli bugreport path [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -133,6 +138,8 @@ private func printUsage() {
     config:   Einstellungen anzeigen, lesen (get <key>), schreiben (set <key> <wert>), ex-/importieren
     query:    App-Suchsyntax (bewertung:5 typ:raw vor:2024 nach:2023-06 kamera:x album:x markiert:pick
               unscharf:ja motiv:x elo:>=1600 farbe:rot + Freitext) parsen oder gegen den Katalog ausführen
+    bugreport:Crash-Berichte aus ~/Documents/bugreports auflisten, anzeigen, nach fixed/ verschieben
+              (fix) oder wieder öffnen (reopen); Ordner per IPHOTO_BUGREPORT_DIR überschreibbar
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
     """)
 }
@@ -4688,6 +4695,157 @@ private func runQuery(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - bugreport (CrashReporter-Berichte in ~/Documents/bugreports verwalten)
+
+private func bugReportDir() -> URL {
+    if let override = ProcessInfo.processInfo.environment["IPHOTO_BUGREPORT_DIR"], !override.isEmpty {
+        return URL(fileURLWithPath: (override as NSString).expandingTildeInPath, isDirectory: true)
+    }
+    return FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Documents/bugreports", isDirectory: true)
+}
+
+private struct BugReportEntry {
+    let name: String
+    let url: URL
+    let fixed: Bool
+    let size: Int64
+    let modified: Date?
+}
+
+private func bugReportEntries(in dir: URL, fixed: Bool) -> [BugReportEntry] {
+    let fm = FileManager.default
+    let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+    guard let urls = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: keys,
+                                                 options: [.skipsHiddenFiles]) else { return [] }
+    var out: [BugReportEntry] = []
+    for u in urls {
+        guard let v = try? u.resourceValues(forKeys: Set(keys)), v.isRegularFile == true else { continue }
+        out.append(BugReportEntry(name: u.lastPathComponent, url: u, fixed: fixed,
+                                  size: Int64(v.fileSize ?? 0), modified: v.contentModificationDate))
+    }
+    // Dateinamen enthalten den Zeitstempel (iPhoto_Crash_yyyy-MM-dd_HHmmss) → neueste zuerst
+    return out.sorted { $0.name > $1.name }
+}
+
+private func bugReportJSON(_ e: BugReportEntry) -> [String: Any] {
+    var obj: [String: Any] = ["name": e.name, "path": e.url.path, "fixed": e.fixed, "size": e.size]
+    if let m = e.modified { obj["modified"] = ISO8601DateFormatter().string(from: m) }
+    return obj
+}
+
+private func printBugReportJSON(_ obj: Any) {
+    if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+       let s = String(data: d, encoding: .utf8) { print(s) }
+}
+
+/// Nur reine Dateinamen zulassen — kein Pfad-Traversal aus dem Bugreport-Ordner heraus.
+private func validBugReportName(_ name: String) -> Bool {
+    !name.isEmpty && !name.contains("/") && name != "." && name != ".." && !name.hasPrefix(".")
+}
+
+private func runBugReport(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let jsonMode = args.contains("--json")
+    let fm = FileManager.default
+    let openDir = bugReportDir()
+    let fixedDir = openDir.appendingPathComponent("fixed", isDirectory: true)
+    let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+
+    switch sub {
+    case "path":
+        if jsonMode { printBugReportJSON(["path": openDir.path, "fixed_path": fixedDir.path]) }
+        else { print(openDir.path) }
+        return 0
+
+    case "list":
+        for a in args.dropFirst() where a.hasPrefix("-") && !["--json", "--fixed", "--all"].contains(a) {
+            fputs("Fehler: Unbekannte Option: \(a)\n", stderr); return 1
+        }
+        let showFixed = args.contains("--fixed")
+        let showAll = args.contains("--all")
+        var entries: [BugReportEntry] = []
+        if !showFixed || showAll { entries += bugReportEntries(in: openDir, fixed: false) }
+        if showFixed || showAll { entries += bugReportEntries(in: fixedDir, fixed: true) }
+        if jsonMode {
+            printBugReportJSON(entries.map(bugReportJSON))
+        } else if entries.isEmpty {
+            print(showFixed && !showAll ? "(keine behobenen Bugreports)" : "(keine offenen Bugreports)")
+        } else {
+            for e in entries {
+                let kb = String(format: "%.1f KB", Double(e.size) / 1024)
+                print("\(e.fixed ? "[behoben] " : "")\(e.name)  \(kb)")
+            }
+        }
+        return 0
+
+    case "show":
+        guard let name = positional.first else {
+            fputs("Verwendung: iphoto-cli bugreport show <name> [--json]\n", stderr); return 1
+        }
+        guard validBugReportName(name) else {
+            fputs("Fehler: Ungültiger Bugreport-Name: \(name)\n", stderr); return 1
+        }
+        let candidates: [(URL, Bool)] = [(openDir.appendingPathComponent(name), false),
+                                         (fixedDir.appendingPathComponent(name), true)]
+        guard let hit = candidates.first(where: { fm.fileExists(atPath: $0.0.path) }) else {
+            fputs("Fehler: Bugreport nicht gefunden: \(name)\n", stderr); return 1
+        }
+        let url = hit.0
+        let isFixed = hit.1
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else {
+            fputs("Fehler: Bugreport nicht lesbar: \(url.path)\n", stderr); return 1
+        }
+        if jsonMode {
+            printBugReportJSON(["name": name, "path": url.path, "fixed": isFixed, "content": content])
+        } else {
+            print(content)
+        }
+        return 0
+
+    case "fix", "reopen":
+        let fixing = sub == "fix"
+        guard !positional.isEmpty else {
+            fputs("Verwendung: iphoto-cli bugreport \(sub) <name> [<name>...] [--json]\n", stderr); return 1
+        }
+        let src = fixing ? openDir : fixedDir
+        let dst = fixing ? fixedDir : openDir
+        var moved: [String] = []
+        var errors: [String] = []
+        for name in positional {
+            guard validBugReportName(name) else { errors.append("\(name): ungültiger Name"); continue }
+            let from = src.appendingPathComponent(name)
+            let to = dst.appendingPathComponent(name)
+            guard fm.fileExists(atPath: from.path) else {
+                errors.append("\(name): nicht gefunden in \(src.path)"); continue
+            }
+            if fm.fileExists(atPath: to.path) {
+                errors.append("\(name): existiert bereits in \(dst.path)"); continue
+            }
+            do {
+                try fm.createDirectory(at: dst, withIntermediateDirectories: true)
+                try fm.moveItem(at: from, to: to)
+                moved.append(name)
+            } catch {
+                errors.append("\(name): \(error.localizedDescription)")
+            }
+        }
+        if jsonMode {
+            printBugReportJSON(["action": sub, "moved": moved, "errors": errors,
+                                "ok": errors.isEmpty, "destination": dst.path])
+        } else {
+            let verb = fixing ? "als behoben markiert" : "wieder geöffnet"
+            for n in moved { print("\(n) \(verb)") }
+        }
+        for e in errors { fputs("Fehler: \(e)\n", stderr) }
+        return errors.isEmpty ? 0 : 1
+
+    default:
+        fputs("Verwendung: iphoto-cli bugreport list [--fixed|--all]|show <name>|fix <name>...|reopen <name>...|path [--json]\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -4788,6 +4946,9 @@ if firstArg == "exif" {
 }
 if firstArg == "query" {
     exit(runQuery(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "bugreport" {
+    exit(runBugReport(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

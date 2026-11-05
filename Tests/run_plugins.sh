@@ -1642,6 +1642,70 @@ if [ $QY_ERR -ne 0 ]; then pass "query unbekannter Subcommand (→ Fehler)"; els
 echo ""
 
 # ---------------------------------------------------------------------------
+# bugreport list/show/fix/reopen/path
+# ---------------------------------------------------------------------------
+echo "--- bugreport ---"
+BR_DIR="$TMPDIR/bugreports"
+mkdir -p "$BR_DIR"
+printf 'iPhoto Crash Report\nSIGSEGV alt\n' > "$BR_DIR/iPhoto_Crash_2026-01-01_120000.txt"
+printf 'iPhoto Crash Report\nSIGABRT neu\n' > "$BR_DIR/iPhoto_Crash_2026-02-01_120000.txt"
+br() { IPHOTO_BUGREPORT_DIR="$BR_DIR" "$BIN" bugreport "$@"; }
+br_names() { python3 -c "import sys,json; print(','.join(e['name'][13:23] + (':f' if e['fixed'] else '') for e in json.load(sys.stdin)))"; }
+
+BR_OUT=$(br path --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['path'].endswith('bugreports') and d['fixed_path'].endswith('bugreports/fixed'))" 2>&1) || true
+if [ "$BR_OUT" = "True" ]; then pass "bugreport path --json"; else fail "bugreport path --json" "$BR_OUT"; fi
+
+BR_OUT=$(br list --json 2>&1 | br_names) || true
+if [ "$BR_OUT" = "2026-02-01,2026-01-01" ]; then pass "bugreport list (neueste zuerst)"; else fail "bugreport list" "$BR_OUT"; fi
+
+BR_OUT=$(br show iPhoto_Crash_2026-02-01_120000.txt 2>&1) || true
+if echo "$BR_OUT" | grep -q "SIGABRT neu"; then pass "bugreport show"; else fail "bugreport show" "$BR_OUT"; fi
+
+BR_OUT=$(br fix iPhoto_Crash_2026-01-01_120000.txt --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['ok'], len(d['moved']))" 2>&1) || true
+if [ "$BR_OUT" = "True 1" ] && [ -f "$BR_DIR/fixed/iPhoto_Crash_2026-01-01_120000.txt" ]; then pass "bugreport fix → fixed/"; else fail "bugreport fix" "$BR_OUT"; fi
+
+BR_OUT=$(br list --json 2>&1 | br_names) || true
+if [ "$BR_OUT" = "2026-02-01" ]; then pass "bugreport list ohne behobene"; else fail "bugreport list nach fix" "$BR_OUT"; fi
+
+BR_OUT=$(br list --fixed --json 2>&1 | br_names) || true
+if [ "$BR_OUT" = "2026-01-01:f" ]; then pass "bugreport list --fixed"; else fail "bugreport list --fixed" "$BR_OUT"; fi
+
+BR_OUT=$(br show iPhoto_Crash_2026-01-01_120000.txt --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['fixed'], 'SIGSEGV' in d['content'])" 2>&1) || true
+if [ "$BR_OUT" = "True True" ]; then pass "bugreport show findet behobenen Report"; else fail "bugreport show (fixed)" "$BR_OUT"; fi
+
+BR_ERR=0
+br fix iPhoto_Crash_2026-01-01_120000.txt > /dev/null 2>&1 || BR_ERR=$?
+if [ $BR_ERR -ne 0 ]; then pass "bugreport fix doppelt (→ Fehler)"; else fail "bugreport fix doppelt" "Hätte fehlschlagen sollen"; fi
+
+BR_OUT=$(br reopen iPhoto_Crash_2026-01-01_120000.txt 2>&1) || true
+if [ -f "$BR_DIR/iPhoto_Crash_2026-01-01_120000.txt" ] && [ ! -f "$BR_DIR/fixed/iPhoto_Crash_2026-01-01_120000.txt" ]; then pass "bugreport reopen"; else fail "bugreport reopen" "$BR_OUT"; fi
+
+BR_OUT=$(br list --all --json 2>&1 | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>&1) || true
+if [ "$BR_OUT" = "2" ]; then pass "bugreport list --all"; else fail "bugreport list --all" "$BR_OUT"; fi
+
+BR_ERR=0
+br show gibtsnicht.txt > /dev/null 2>&1 || BR_ERR=$?
+if [ $BR_ERR -ne 0 ]; then pass "bugreport show unbekannt (→ Fehler)"; else fail "bugreport show unbekannt" "Hätte fehlschlagen sollen"; fi
+
+BR_ERR=0
+br show ../geheim.txt > /dev/null 2>&1 || BR_ERR=$?
+if [ $BR_ERR -ne 0 ]; then pass "bugreport show ../ (→ Fehler, kein Traversal)"; else fail "bugreport show ../" "Hätte fehlschlagen sollen"; fi
+
+BR_ERR=0
+br fix > /dev/null 2>&1 || BR_ERR=$?
+if [ $BR_ERR -ne 0 ]; then pass "bugreport fix ohne Name (→ Fehler)"; else fail "bugreport fix ohne Name" "Hätte fehlschlagen sollen"; fi
+
+BR_ERR=0
+br list --bogus > /dev/null 2>&1 || BR_ERR=$?
+if [ $BR_ERR -ne 0 ]; then pass "bugreport list --bogus (→ Fehler)"; else fail "bugreport list --bogus" "Hätte fehlschlagen sollen"; fi
+
+BR_ERR=0
+br bogus > /dev/null 2>&1 || BR_ERR=$?
+if [ $BR_ERR -ne 0 ]; then pass "bugreport unbekannter Subcommand (→ Fehler)"; else fail "bugreport bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
