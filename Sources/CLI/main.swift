@@ -118,6 +118,11 @@ private func printUsage() {
       iphoto-cli bugreport fix <name> [<name>...] [--json]
       iphoto-cli bugreport reopen <name> [<name>...] [--json]
       iphoto-cli bugreport path [--json]
+      iphoto-cli bookmarks list [--missing] [--json]
+      iphoto-cli bookmarks stats [--json]
+      iphoto-cli bookmarks remove <pfad|file-url> [...] [--json]
+      iphoto-cli bookmarks prune [--dry-run] [--json]
+      iphoto-cli bookmarks path [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -143,6 +148,8 @@ private func printUsage() {
               unscharf:ja motiv:x elo:>=1600 farbe:rot + Freitext) parsen oder gegen den Katalog ausführen
     bugreport:Crash-Berichte aus ~/Documents/bugreports auflisten, anzeigen, nach fixed/ verschieben
               (fix) oder wieder öffnen (reopen); Ordner per IPHOTO_BUGREPORT_DIR überschreibbar
+    bookmarks:Security-Scoped-Bookmarks (bookmarks.json) auflisten, Statistik, einzeln entfernen oder
+              verwaiste Einträge aufräumen (prune; offline-Volumes bleiben); Datei per IPHOTO_BOOKMARKS_FILE
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
     """)
 }
@@ -4925,6 +4932,190 @@ private func runQuery(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - bookmarks (Security-Scoped-Bookmarks in bookmarks.json verwalten)
+
+private func bookmarksFileURL() -> URL {
+    if let override = ProcessInfo.processInfo.environment["IPHOTO_BOOKMARKS_FILE"], !override.isEmpty {
+        return URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
+    }
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("iPhoto")
+        .appendingPathComponent("bookmarks.json")
+}
+
+/// Lädt bookmarks.json im selben Format wie `BookmarkStore` ([absoluteString: Data]).
+/// nil = Datei existiert, ist aber nicht dekodierbar; leeres Dict = Datei fehlt.
+private func loadBookmarksFile(_ url: URL) -> [String: Data]? {
+    guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
+    guard let data = try? Data(contentsOf: url),
+          let decoded = try? JSONDecoder().decode([String: Data].self, from: data) else { return nil }
+    return decoded
+}
+
+private func saveBookmarksFile(_ dict: [String: Data], to url: URL) -> Bool {
+    guard let data = try? JSONEncoder().encode(dict) else { return false }
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    return (try? data.write(to: url, options: .atomic)) != nil
+}
+
+/// Status eines Bookmark-Eintrags: ok, missing (Datei fehlt), offline (Volume nicht gemountet), invalid (kein file://-Key).
+private func bookmarkStatus(key: String) -> (path: String?, status: String) {
+    guard let u = URL(string: key), u.isFileURL else { return (nil, "invalid") }
+    let path = u.path
+    if FileManager.default.fileExists(atPath: path) { return (path, "ok") }
+    // Externe Volumes: nicht gemountet ≠ gelöscht — solche Einträge nie automatisch entfernen.
+    let comps = (path as NSString).pathComponents
+    if comps.count >= 3, comps[1] == "Volumes" {
+        let volRoot = "/Volumes/" + comps[2]
+        if !FileManager.default.fileExists(atPath: volRoot) { return (path, "offline") }
+    }
+    return (path, "missing")
+}
+
+private func runBookmarks(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let jsonMode = args.contains("--json")
+    let fileURL = bookmarksFileURL()
+    let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+    let flags = args.dropFirst().filter { $0.hasPrefix("-") }
+
+    func checkFlags(_ allowed: [String]) -> Bool {
+        for f in flags where !allowed.contains(f) {
+            fputs("Fehler: Unbekannte Option: \(f)\n", stderr); return false
+        }
+        return true
+    }
+    func load() -> [String: Data]? {
+        guard let d = loadBookmarksFile(fileURL) else {
+            fputs("Fehler: bookmarks.json nicht lesbar: \(fileURL.path)\n", stderr); return nil
+        }
+        return d
+    }
+
+    switch sub {
+    case "path":
+        guard checkFlags(["--json"]) else { return 1 }
+        if jsonMode { printBugReportJSON(["path": fileURL.path]) } else { print(fileURL.path) }
+        return 0
+
+    case "list":
+        guard checkFlags(["--json", "--missing"]) else { return 1 }
+        guard let dict = load() else { return 1 }
+        let onlyBroken = args.contains("--missing")
+        var rows: [[String: Any]] = []
+        for key in dict.keys.sorted() {
+            let st = bookmarkStatus(key: key)
+            if onlyBroken && st.status == "ok" { continue }
+            rows.append(["key": key, "path": st.path.map { $0 as Any } ?? NSNull(), "status": st.status,
+                         "bytes": dict[key]?.count ?? 0])
+        }
+        if jsonMode {
+            printBugReportJSON(rows)
+        } else if rows.isEmpty {
+            print(onlyBroken ? "(keine verwaisten Bookmarks)" : "(keine Bookmarks)")
+        } else {
+            for r in rows {
+                let label = (r["path"] as? String) ?? (r["key"] as? String ?? "")
+                print("[\(r["status"] as? String ?? "")] \(label)")
+            }
+        }
+        return 0
+
+    case "stats":
+        guard checkFlags(["--json"]) else { return 1 }
+        guard let dict = load() else { return 1 }
+        var counts: [String: Int] = ["ok": 0, "missing": 0, "offline": 0, "invalid": 0]
+        var totalBytes = 0
+        for (key, data) in dict {
+            counts[bookmarkStatus(key: key).status, default: 0] += 1
+            totalBytes += data.count
+        }
+        let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let fileSize = (attrs?[.size] as? NSNumber)?.intValue ?? 0
+        if jsonMode {
+            printBugReportJSON(["total": dict.count, "ok": counts["ok"]!, "missing": counts["missing"]!,
+                                "offline": counts["offline"]!, "invalid": counts["invalid"]!,
+                                "bookmark_bytes": totalBytes, "file_bytes": fileSize, "path": fileURL.path] as [String: Any])
+        } else {
+            print("Bookmarks gesamt: \(dict.count)")
+            print("  ok:       \(counts["ok"]!)")
+            print("  fehlend:  \(counts["missing"]!)")
+            print("  offline:  \(counts["offline"]!)")
+            print("  ungültig: \(counts["invalid"]!)")
+            print(String(format: "Dateigröße: %.1f KB", Double(fileSize) / 1024))
+        }
+        return 0
+
+    case "remove":
+        guard checkFlags(["--json"]) else { return 1 }
+        guard !positional.isEmpty else {
+            fputs("Verwendung: iphoto-cli bookmarks remove <pfad|file-url> [...] [--json]\n", stderr); return 1
+        }
+        guard var dict = load() else { return 1 }
+        var removed: [String] = []
+        var notFound: [String] = []
+        for p in positional {
+            // Pfad oder file://-URL akzeptieren; Key ist url.absoluteString wie im BookmarkStore.
+            let key: String
+            if p.hasPrefix("file://") { key = p }
+            else { key = URL(fileURLWithPath: (p as NSString).expandingTildeInPath).absoluteString }
+            if dict.removeValue(forKey: key) != nil { removed.append(key) }
+            else if dict.removeValue(forKey: key + "/") != nil { removed.append(key + "/") }
+            else { notFound.append(p) }
+        }
+        if !removed.isEmpty, !saveBookmarksFile(dict, to: fileURL) {
+            fputs("Fehler: bookmarks.json konnte nicht geschrieben werden\n", stderr); return 1
+        }
+        if jsonMode {
+            printBugReportJSON(["ok": notFound.isEmpty, "removed": removed, "not_found": notFound] as [String: Any])
+        } else {
+            for r in removed { print("Entfernt: \(r)") }
+            for n in notFound { fputs("Nicht gefunden: \(n)\n", stderr) }
+        }
+        return notFound.isEmpty ? 0 : 1
+
+    case "prune":
+        guard checkFlags(["--json", "--dry-run"]) else { return 1 }
+        guard var dict = load() else { return 1 }
+        let dryRun = args.contains("--dry-run")
+        var pruned: [String] = []
+        var offline = 0
+        for key in dict.keys.sorted() {
+            switch bookmarkStatus(key: key).status {
+            case "missing", "invalid": pruned.append(key)
+            case "offline": offline += 1
+            default: break
+            }
+        }
+        if !dryRun && !pruned.isEmpty {
+            for k in pruned { dict.removeValue(forKey: k) }
+            guard saveBookmarksFile(dict, to: fileURL) else {
+                fputs("Fehler: bookmarks.json konnte nicht geschrieben werden\n", stderr); return 1
+            }
+        }
+        if jsonMode {
+            printBugReportJSON(["dry_run": dryRun, "pruned": pruned.count, "kept": dict.count - (dryRun ? pruned.count : 0),
+                                "offline_kept": offline, "keys": pruned] as [String: Any])
+        } else {
+            for k in pruned { print("\(dryRun ? "Würde entfernen" : "Entfernt"): \(k)") }
+            print("\(pruned.count) verwaiste Bookmarks \(dryRun ? "gefunden" : "entfernt"); \(offline) offline (behalten)")
+        }
+        return 0
+
+    default:
+        fputs("""
+        Verwendung:
+          iphoto-cli bookmarks path [--json]
+          iphoto-cli bookmarks list [--missing] [--json]
+          iphoto-cli bookmarks stats [--json]
+          iphoto-cli bookmarks remove <pfad|file-url> [...] [--json]
+          iphoto-cli bookmarks prune [--dry-run] [--json]
+
+        """, stderr)
+        return 1
+    }
+}
+
 // MARK: - bugreport (CrashReporter-Berichte in ~/Documents/bugreports verwalten)
 
 private func bugReportDir() -> URL {
@@ -5185,6 +5376,9 @@ if firstArg == "query" {
 }
 if firstArg == "bugreport" {
     exit(runBugReport(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "bookmarks" {
+    exit(runBookmarks(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

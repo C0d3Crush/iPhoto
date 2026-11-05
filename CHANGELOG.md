@@ -2,6 +2,14 @@
 
 ---
 
+## 1.98.0
+**CLI: Security-Scoped-Bookmarks verwalten und aufräumen**
+- Neuer Befehl `iphoto-cli bookmarks list [--missing] [--json]` zeigt alle gespeicherten Datei-Bookmarks aus `bookmarks.json` mit Status (`ok`, `missing`, `offline`, `invalid`)
+- `iphoto-cli bookmarks stats [--json]` fasst Anzahl je Status und Dateigröße zusammen
+- `iphoto-cli bookmarks remove <pfad|file-url>...` entfernt einzelne Einträge
+- `iphoto-cli bookmarks prune [--dry-run] [--json]` entfernt verwaiste Bookmarks gelöschter Dateien — Einträge auf nicht gemounteten externen Volumes bleiben erhalten. Eine kleinere `bookmarks.json` verkürzt das Laden beim App-Start
+- Datei per `IPHOTO_BOOKMARKS_FILE` überschreibbar (Tests/Skripte); Tests in `Tests/run_plugins.sh`
+
 ## 1.97.0
 **CLI: Bewertungen als JSON/CSV exportieren und importieren**
 - Neuer Befehl `iphoto-cli rating export [--output <datei.json|.csv>] [--format json|csv] [--include-unrated] [--json]` sichert alle Sterne, Flags und Farblabels — ohne `--output` direkt auf stdout; Format wird aus der Dateiendung erkannt, Pfade mit Komma werden in CSV korrekt gequotet

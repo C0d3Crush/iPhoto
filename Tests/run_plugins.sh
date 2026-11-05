@@ -1770,6 +1770,67 @@ if [ $RX_ERR -ne 0 ]; then pass "rating export --bogus (→ Fehler)"; else fail 
 echo ""
 
 # ---------------------------------------------------------------------------
+# bookmarks path / list / stats / remove / prune
+# ---------------------------------------------------------------------------
+echo "--- bookmarks ---"
+BM_FILE="$TMPDIR/bookmarks.json"
+bm() { IPHOTO_BOOKMARKS_FILE="$BM_FILE" "$BIN" bookmarks "$@"; }
+touch "$TMPDIR/bm_ok.jpg"
+BM_OK_KEY="file://$TMPDIR/bm_ok.jpg"
+python3 - "$BM_FILE" "$BM_OK_KEY" <<'PYEOF'
+import sys, json, base64
+b = base64.b64encode(b"dummy-bookmark").decode()
+json.dump({sys.argv[2]: b,
+           "file:///tmp/iphoto_bm_missing_xyz.jpg": b,
+           "file:///tmp/iphoto_bm_missing_abc.jpg": b,
+           "file:///Volumes/iPhotoNoSuchVolume_xyz/a.jpg": b,
+           "not-a-url": b}, open(sys.argv[1], "w"))
+PYEOF
+
+BM_OUT=$(bm path 2>&1) || true
+if [ "$BM_OUT" = "$BM_FILE" ]; then pass "bookmarks path (IPHOTO_BOOKMARKS_FILE)"; else fail "bookmarks path" "$BM_OUT"; fi
+
+BM_OUT=$(bm stats --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['total'],d['ok'],d['missing'],d['offline'],d['invalid'])" 2>&1) || true
+if [ "$BM_OUT" = "5 1 2 1 1" ]; then pass "bookmarks stats --json"; else fail "bookmarks stats --json" "$BM_OUT"; fi
+
+BM_OUT=$(bm list --missing --json 2>&1 | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>&1) || true
+if [ "$BM_OUT" = "4" ]; then pass "bookmarks list --missing"; else fail "bookmarks list --missing" "$BM_OUT"; fi
+
+BM_OUT=$(bm remove /tmp/iphoto_bm_missing_abc.jpg --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['ok'], len(d['removed']))" 2>&1) || true
+if [ "$BM_OUT" = "True 1" ]; then pass "bookmarks remove <pfad>"; else fail "bookmarks remove" "$BM_OUT"; fi
+
+BM_OUT=$(bm prune --dry-run --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['pruned'], d['offline_kept'])" 2>&1) || true
+BM_AFTER=$(bm list --json 2>&1 | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>&1) || true
+if [ "$BM_OUT" = "2 1" ] && [ "$BM_AFTER" = "4" ]; then pass "bookmarks prune --dry-run (nichts geändert)"; else fail "bookmarks prune --dry-run" "$BM_OUT / $BM_AFTER"; fi
+
+BM_OUT=$(bm prune --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['pruned'], d['kept'])" 2>&1) || true
+BM_LEFT=$(bm list --json 2>&1 | python3 -c "import sys,json; print(','.join(sorted(r['status'] for r in json.load(sys.stdin))))" 2>&1) || true
+if [ "$BM_OUT" = "2 2" ] && [ "$BM_LEFT" = "offline,ok" ]; then pass "bookmarks prune (ok + offline bleiben)"; else fail "bookmarks prune" "$BM_OUT / $BM_LEFT"; fi
+
+BM_ERR=0
+bm remove /tmp/iphoto_bm_gibtsnicht.jpg > /dev/null 2>&1 || BM_ERR=$?
+if [ $BM_ERR -ne 0 ]; then pass "bookmarks remove unbekannt (→ Fehler)"; else fail "bookmarks remove unbekannt" "Hätte fehlschlagen sollen"; fi
+
+BM_ERR=0
+bm remove > /dev/null 2>&1 || BM_ERR=$?
+if [ $BM_ERR -ne 0 ]; then pass "bookmarks remove ohne Pfad (→ Fehler)"; else fail "bookmarks remove ohne Pfad" "Hätte fehlschlagen sollen"; fi
+
+echo "{kaputt" > "$TMPDIR/bm_broken.json"
+BM_ERR=0
+IPHOTO_BOOKMARKS_FILE="$TMPDIR/bm_broken.json" "$BIN" bookmarks list > /dev/null 2>&1 || BM_ERR=$?
+if [ $BM_ERR -ne 0 ]; then pass "bookmarks list kaputte Datei (→ Fehler)"; else fail "bookmarks list kaputte Datei" "Hätte fehlschlagen sollen"; fi
+
+BM_ERR=0
+bm prune --bogus > /dev/null 2>&1 || BM_ERR=$?
+if [ $BM_ERR -ne 0 ]; then pass "bookmarks prune --bogus (→ Fehler)"; else fail "bookmarks prune --bogus" "Hätte fehlschlagen sollen"; fi
+
+BM_ERR=0
+bm bogus > /dev/null 2>&1 || BM_ERR=$?
+if [ $BM_ERR -ne 0 ]; then pass "bookmarks unbekannter Subcommand (→ Fehler)"; else fail "bookmarks bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
