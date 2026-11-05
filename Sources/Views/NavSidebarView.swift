@@ -1380,7 +1380,7 @@ struct VerboseLogView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @AppStorage("settings.geekMode") private var geekMode = false
     @State private var activeTab: GeekTab = .log
-    @State private var isExpanded = false
+    @State private var isExpanded = true
 
     var body: some View {
         if geekMode {

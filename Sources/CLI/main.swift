@@ -41,6 +41,7 @@ private func printUsage() {
       iphoto-cli motif list [--json]
       iphoto-cli duplicate list|similar [--json]
       iphoto-cli config show|export [--path <pfad>]|import <pfad>
+      iphoto-cli cache stats|clear [--json]
       iphoto-cli rating list [--flag pick|reject] [--color farbe] [--min-rating N] [--json]
       iphoto-cli smartfolder list [--json]
       iphoto-cli smartfolder query <name> [--json]
@@ -2822,6 +2823,34 @@ private func runConfig(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - Cache
+
+private func runCache(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let cache = ThumbnailDiskCache.shared
+    switch sub {
+    case "stats":
+        let s = cache.stats
+        let mb = Double(s.bytes) / 1_048_576
+        if args.contains("--json") {
+            let obj: [String: Any] = ["count": s.count, "bytes": s.bytes,
+                                      "mb": String(format: "%.2f", mb)]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
+               let str = String(data: d, encoding: .utf8) { print(str) }
+        } else {
+            print("\(s.count) Thumbnails · \(String(format: "%.2f", mb)) MB")
+        }
+        return 0
+    case "clear":
+        cache.clearAll()
+        print("Thumbnail-Cache geleert.")
+        return 0
+    default:
+        fputs("Verwendung: iphoto-cli cache stats|clear [--json]\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -2895,6 +2924,9 @@ if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "batch-set" {
 }
 if firstArg == "config" {
     exit(runConfig(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "cache" {
+    exit(runCache(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

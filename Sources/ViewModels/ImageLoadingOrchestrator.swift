@@ -419,7 +419,14 @@ final class ImageLoadingOrchestrator {
                     let nsImage: NSImage?
                     var decodeError: String? = nil
                     do {
-                        let cg = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 80)
+                        let cg: CGImage
+                        if let cached = ThumbnailDiskCache.shared.load(for: accessURL, maxDimension: 80) {
+                            cg = cached
+                        } else {
+                            let decoded = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 80)
+                            ThumbnailDiskCache.shared.save(decoded, for: accessURL, maxDimension: 80)
+                            cg = decoded
+                        }
                         nsImage = NSImage(cgImage: cg, size: .zero)
                     } catch {
                         Log.error("Thumbnail-Decode fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
@@ -474,7 +481,13 @@ final class ImageLoadingOrchestrator {
                 defer { stopAccess() }
                 let thumb: CGImage
                 do {
-                    thumb = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 160)
+                    if let cached = ThumbnailDiskCache.shared.load(for: accessURL, maxDimension: 160) {
+                        thumb = cached
+                    } else {
+                        let decoded = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 160)
+                        ThumbnailDiskCache.shared.save(decoded, for: accessURL, maxDimension: 160)
+                        thumb = decoded
+                    }
                 } catch {
                     Log.error("Thumbnail-Decode (160px) fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
                     DispatchQueue.main.async {

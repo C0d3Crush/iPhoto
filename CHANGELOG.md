@@ -2,6 +2,16 @@
 
 ---
 
+## 1.78.0
+**Feature — Thumbnail-Disk-Cache für schnelleres Laden**
+
+- Beim ersten Laden eines Bildes wird ein kleines JPEG-Thumbnail (80 px Platzhalter, 160 px sichtbar) in `~/Library/Caches/iPhoto/thumbs/` gespeichert
+- Bei jedem weiteren App-Start wird das gecachte Thumbnail direkt geladen – kein erneutes Dekodieren des Originals nötig
+- Cache-Key basiert auf Dateipfad + Änderungsdatum (FNV-1a-Hash) – bei Dateiänderung automatisch ungültig
+- CLI: `iphoto-cli cache stats` zeigt Anzahl und Größe des Caches, `iphoto-cli cache clear` leert ihn
+
+---
+
 ## 1.76.0
 **Feature — Quadratische Thumbnails + Einstellungs-Konfig-Datei**
 

@@ -146,65 +146,68 @@ struct AdjustmentsPanel: View {
 
     @ViewBuilder
     private func sectionView(_ section: AdjSection) -> some View {
-        // Header row — tap anywhere to collapse / expand
-        Button(action: { toggle(section.id) }) {
+        // Header row — left area toggles expand; right buttons are independent
+        HStack(spacing: 7) {
+            // Expand/collapse tap area (chevron + icon + label)
             HStack(spacing: 7) {
                 Image(systemName: expanded.contains(section.id) ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(.secondary)
                     .frame(width: 12)
-
                 Image(systemName: section.icon)
                     .font(.system(size: 13))
                     .foregroundColor(isSectionBypassed(section) ? .secondary : .primary)
-
                 Text(section.label)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(isSectionBypassed(section) ? .secondary : .primary)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { toggle(section.id) }
 
-                Spacer()
+            Spacer()
 
-                // ↺ reset
-                Button(action: { resetSection(section) }) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 10))
-                        .foregroundColor(isSectionNeutral(section)
-                            ? Color(NSColor.disabledControlTextColor) : .secondary)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(isSectionNeutral(section))
-                .help("Abschnitt zurücksetzen")
+            // ↺ reset
+            Button(action: { resetSection(section) }) {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 10))
+                    .foregroundColor(isSectionNeutral(section)
+                        ? Color(NSColor.disabledControlTextColor) : .secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(isSectionNeutral(section))
+            .help("Abschnitt zurücksetzen")
 
-                // AUTO pill
-                if section.hasAuto {
+            // AUTO pill
+            if section.hasAuto {
+                Button(action: { autoEnhanceSection(section) }) {
                     Text("AUTO")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundColor(Color(NSColor.secondaryLabelColor))
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .overlay(Capsule().strokeBorder(Color(NSColor.secondaryLabelColor).opacity(0.7), lineWidth: 0.75))
                 }
+                .buttonStyle(PlainButtonStyle())
+                .help("Automatisch optimieren")
+            }
 
-                // ○ section enable toggle
-                Button(action: { toggleSectionBypass(section) }) {
-                    ZStack {
-                        Circle()
-                            .strokeBorder(
-                                isSectionBypassed(section) ? Color(NSColor.disabledControlTextColor) : Color.accentColor,
-                                lineWidth: 1.5)
-                            .frame(width: 17, height: 17)
-                        if !isSectionBypassed(section) {
-                            Circle().fill(Color.accentColor).frame(width: 9, height: 9)
-                        }
+            // ○ section enable toggle
+            Button(action: { toggleSectionBypass(section) }) {
+                ZStack {
+                    Circle()
+                        .strokeBorder(
+                            isSectionBypassed(section) ? Color(NSColor.disabledControlTextColor) : Color.accentColor,
+                            lineWidth: 1.5)
+                        .frame(width: 17, height: 17)
+                    if !isSectionBypassed(section) {
+                        Circle().fill(Color.accentColor).frame(width: 9, height: 9)
                     }
                 }
-                .buttonStyle(PlainButtonStyle())
-                .help(isSectionBypassed(section) ? "Abschnitt aktivieren" : "Abschnitt deaktivieren")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .contentShape(Rectangle())
+            .buttonStyle(PlainButtonStyle())
+            .help(isSectionBypassed(section) ? "Abschnitt aktivieren" : "Abschnitt deaktivieren")
         }
-        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
 
         // Expanded sliders
         if expanded.contains(section.id) {
@@ -323,5 +326,28 @@ struct AdjustmentsPanel: View {
     private func resetSection(_ section: AdjSection) {
         section.rows.forEach { viewModel.adj.adjustments[keyPath: $0.key] = $0.neutral }
         viewModel.applyAdjustments()
+    }
+
+    private func autoEnhanceSection(_ section: AdjSection) {
+        switch section.id {
+        case "licht":
+            viewModel.adj.adjustments.exposure    = 0.0
+            viewModel.adj.adjustments.brightness  = 0.05
+            viewModel.adj.adjustments.contrast    = 1.08
+        case "farbe":
+            viewModel.adj.adjustments.saturation  = 1.12
+            viewModel.adj.adjustments.vibrance    = 0.2
+            viewModel.adj.adjustments.hue         = 0.0
+        case "aufl":
+            viewModel.adj.adjustments.clarity     = 0.2
+            viewModel.adj.adjustments.texture     = 0.15
+            viewModel.adj.adjustments.dehaze      = 0.0
+        default: break
+        }
+        // un-bypass section so the effect is visible
+        section.rows.forEach { viewModel.adj.bypassedAdjustments.remove($0.key) }
+        // expand section so user sees the applied values
+        expanded.insert(section.id)
+        viewModel.applyAdjustments(hiRes: true)
     }
 }

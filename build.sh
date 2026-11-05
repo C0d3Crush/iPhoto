@@ -205,6 +205,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/VersionStore.swift \
     $ROOT/Sources/Utilities/EloRating.swift \
     $ROOT/Sources/Utilities/AppConfig.swift \
+    $ROOT/Sources/Utilities/ThumbnailDiskCache.swift \
     $ROOT/Sources/CLI/main.swift"
 
 # Überspringen, wenn Binary aktueller als alle CLI-Quellen ist

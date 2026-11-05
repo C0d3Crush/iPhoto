@@ -357,6 +357,35 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# cache — stats / clear
+# ---------------------------------------------------------------------------
+echo "--- Cache ---"
+
+CACHE_STATS=$("$BIN" cache stats 2>&1)
+CACHE_EXIT=$?
+if [ $CACHE_EXIT -eq 0 ]; then
+    pass "cache stats (Exitcode 0)"
+else
+    fail "cache stats" "Exitcode $CACHE_EXIT: $CACHE_STATS"
+fi
+
+CACHE_CLEAR=$("$BIN" cache clear 2>&1)
+if echo "$CACHE_CLEAR" | grep -qi "geleert"; then
+    pass "cache clear (Bestätigung in Ausgabe)"
+else
+    fail "cache clear" "Unerwartete Ausgabe: $CACHE_CLEAR"
+fi
+
+CACHE_JSON=$("$BIN" cache stats --json 2>&1)
+if echo "$CACHE_JSON" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+    pass "cache stats --json (valides JSON)"
+else
+    fail "cache stats --json" "Kein valides JSON: $CACHE_JSON"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
