@@ -1,0 +1,38 @@
+name: Project Manager Scheduler
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'   # alle 2 Stunden
+  workflow_dispatch:          # manuell auslösbar
+
+jobs:
+  route-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install anthropic
+
+      - name: Run PM Scheduler
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/pm_scheduler.py
+
+      - name: Commit actors.json if updated
+        run: |
+          git config user.name "ProjectManager[bot]"
+          git config user.email "pm-bot@users.noreply.github.com"
+          git add .github/actors.json
+          git diff --cached --quiet || \
+            git commit -m "chore: PM-Scheduler Akteure aktualisiert" && \
+            git push
