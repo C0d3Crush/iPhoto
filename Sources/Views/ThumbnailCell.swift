@@ -25,8 +25,8 @@ struct ThumbnailCell: View {
     @AppStorage("badge.adjustments") private var showAdjustments = true
     @AppStorage("badge.hdr")         private var showHDR         = true
 
-    private var thumbH: CGFloat { thumbnailWidth }
-    private var showDetails: Bool { thumbnailWidth >= 100 }
+    private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
+    private var showDetails: Bool { thumbnailWidth >= 50 }
     private var cornerR: CGFloat { showDetails ? 4 : 0 }
 
     var body: some View {
@@ -48,8 +48,8 @@ struct ThumbnailCell: View {
                 if let thumb = document.thumbnailImage ?? document.placeholderThumbnailImage {
                     Image(nsImage: thumb)
                         .resizable()
-                        .scaledToFill()
-                        .frame(width: thumbnailWidth, height: thumbnailWidth)
+                        .scaledToFit()
+                        .frame(width: thumbnailWidth, height: thumbH)
                         .clipShape(RoundedRectangle(cornerRadius: cornerR))
                         .animation(.easeIn(duration: 0.15), value: document.thumbnailImage != nil)
                 } else {
@@ -108,9 +108,8 @@ struct ThumbnailCell: View {
                 }.fixedSize()
             }
         }
-        .padding(2)
-        .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear))
-        .overlay(RoundedRectangle(cornerRadius: 6)
+        .background(RoundedRectangle(cornerRadius: 4).fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear))
+        .overlay(RoundedRectangle(cornerRadius: 4)
             .strokeBorder(isSelected ? Color.accentColor : (isStackMember ? Color.accentColor.opacity(0.35) : Color.clear),
                           lineWidth: isSelected ? 1.5 : 1))
     }

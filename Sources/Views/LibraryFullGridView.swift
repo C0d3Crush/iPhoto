@@ -10,10 +10,9 @@ private struct YearGroup: Identifiable {
 struct LibraryFullGridView: View {
     @EnvironmentObject var viewModel: ImageViewModel
 
-    private var cellSpacing: CGFloat { viewModel.gridThumbnailSize < 60 ? 0 : (viewModel.gridThumbnailSize < 100 ? 4 : 8) }
+    private var cellSpacing: CGFloat { 0 }
     private var columns: [GridItem] {
-        let sp = cellSpacing
-        return [GridItem(.adaptive(minimum: viewModel.gridThumbnailSize + sp))]
+        return [GridItem(.adaptive(minimum: viewModel.gridThumbnailSize), spacing: 0)]
     }
     private var cellWidth: CGFloat { viewModel.gridThumbnailSize }
     @StateObject private var scroller = AppKitScroller()
@@ -88,32 +87,28 @@ struct LibraryFullGridView: View {
                             if case .eloRange(let lo, let hi) = viewModel.navSelection {
                                 eloRangeBanner(lo: lo, hi: hi)
                             }
-                            let sp = cellSpacing
-                            let pad: CGFloat = cellWidth < 50 ? 4 : 12
+                            let pad: CGFloat = cellWidth < 50 ? 0 : 8
                             let useYears = yearGroups.count > 1 || (yearGroups.count == 1 && yearGroups[0].year != "Ohne Datum")
                             VStack(alignment: .leading, spacing: 0) {
                                 if useYears {
                                     ForEach(yearGroups) { group in
-                                        if pad > 0 {
-                                            yearSectionHeader(group.year)
-                                                .padding(.horizontal, pad)
-                                                .padding(.top, pad)
-                                        }
-                                        LazyVGrid(columns: columns, spacing: sp) {
+                                        yearSectionHeader(group.year)
+                                            .padding(.horizontal, pad)
+                                            .padding(.top, pad > 0 ? pad : 4)
+                                        LazyVGrid(columns: columns, spacing: 0) {
                                             ForEach(group.documents, id: \.id) { doc in
                                                 thumbnailCell(doc)
                                             }
                                         }
                                         .padding(.horizontal, pad)
-                                        .padding(.bottom, sp > 0 ? sp : 0)
                                     }
                                 } else {
-                                    LazyVGrid(columns: columns, spacing: sp) {
+                                    LazyVGrid(columns: columns, spacing: 0) {
                                         ForEach(viewModel.visibleDocuments, id: \.id) { doc in
                                             thumbnailCell(doc)
                                         }
                                     }
-                                    .padding(pad)
+                                    .padding(.horizontal, pad)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
