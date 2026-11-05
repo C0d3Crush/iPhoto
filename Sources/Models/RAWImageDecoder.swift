@@ -108,8 +108,10 @@ struct RAWImageDecoder {
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxDimension
             ]
+            // materialize: Bug #40 gilt auch für JPEG/HEIC — lazy CGImage kann nach
+            // Source-Freigabe auf freien Speicher zeigen → SIGILL beim SwiftUI-Render.
             if let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
-                return thumb
+                return materialize(thumb) ?? thumb
             }
         }
 
@@ -123,13 +125,16 @@ struct RAWImageDecoder {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else {
             return nil
         }
-        let decodeOptions: [CFString: Any] = [
-            kCGImageSourceShouldCacheImmediately: true
-        ]
+        let decodeOptions: [CFString: Any] = [kCGImageSourceShouldCacheImmediately: true]
         guard let image = CGImageSourceCreateImageAtIndex(source, 0, decodeOptions as CFDictionary) else {
             return nil
         }
-        return applyExifOrientation(image, source: source)
+        // applyExifOrientation gibt bei .up-Rotation das Original-CGImage zurück,
+        // das intern noch auf ImageIOs Source-Cache zeigt. Nach source-Freigabe
+        // → SIGILL bei SwiftUI-Render (Bug #40, Vollbild-Pfad).
+        // materialize erzwingt eigenständigen Buffer unabhängig von source.
+        let oriented = applyExifOrientation(image, source: source)
+        return materialize(oriented) ?? oriented
     }
 
     // Liest den JPEG-Preview der im RAF-Dateiheader referenziert ist.

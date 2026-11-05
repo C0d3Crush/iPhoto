@@ -6,7 +6,12 @@ struct InspectorView: View {
 
     @State private var pluginOrder: [Plugin] =
         PluginStore.loadDisplayOrder(from: PluginStore.shared.plugins)
-    @State private var collapsed: Set<String> = Set(PluginStore.shared.plugins.map(\.id))
+    @State private var collapsed: Set<String> = {
+        if let saved = UserDefaults.standard.stringArray(forKey: "inspector.collapsed") {
+            return Set(saved)
+        }
+        return Set(PluginStore.shared.plugins.map(\.id))
+    }()
     @State private var draggingPlugin: Plugin?
 
     private var orderedActive: [Plugin] {
@@ -119,6 +124,7 @@ struct InspectorView: View {
 
     private func toggleCollapsed(_ id: String) {
         if collapsed.contains(id) { collapsed.remove(id) } else { collapsed.insert(id) }
+        UserDefaults.standard.set(Array(collapsed), forKey: "inspector.collapsed")
     }
 }
 

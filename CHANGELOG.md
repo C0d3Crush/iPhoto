@@ -2,6 +2,14 @@
 
 ---
 
+## 1.80.0
+**Bugfix — SIGILL auch bei JPEG/HEIC-Thumbnails + Inspector-Status persistent**
+
+- Bug #40 (erweitert): `materialize()` jetzt auch auf den ImageIO-JPEG/HEIC-Thumbnail-Pfad und den Vollbild-Decode angewendet — der Crash trat auch ohne RAF auf (1.78.0-Report: SIGILL nach JPEG-Vollbild-Freigabe, kein SIGNAL_LAST_OP)
+- Inspector: Aufgeklappter/zugeklappter Zustand der Panels wird in UserDefaults gespeichert und beim nächsten Start wiederhergestellt — kein erneutes Aufklappen nach App-Neustart nötig
+
+---
+
 ## 1.79.0
 **Bugfix — SIGILL bei RAF-Thumbnails + Auto-Enhance mit Bildanalyse**
 
