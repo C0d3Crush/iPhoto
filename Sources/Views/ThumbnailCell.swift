@@ -25,7 +25,7 @@ struct ThumbnailCell: View {
     @AppStorage("badge.adjustments") private var showAdjustments = true
     @AppStorage("badge.hdr")         private var showHDR         = true
 
-    private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
+    private var thumbH: CGFloat { thumbnailWidth }
     private var showDetails: Bool { thumbnailWidth >= 100 }
     private var cornerR: CGFloat { showDetails ? 4 : 0 }
 
@@ -48,8 +48,8 @@ struct ThumbnailCell: View {
                 if let thumb = document.thumbnailImage ?? document.placeholderThumbnailImage {
                     Image(nsImage: thumb)
                         .resizable()
-                        .scaledToFit()
-                        .frame(width: thumbnailWidth, height: thumbH)
+                        .scaledToFill()
+                        .frame(width: thumbnailWidth, height: thumbnailWidth)
                         .clipShape(RoundedRectangle(cornerRadius: cornerR))
                         .animation(.easeIn(duration: 0.15), value: document.thumbnailImage != nil)
                 } else {
@@ -115,17 +115,17 @@ struct ThumbnailCell: View {
                           lineWidth: isSelected ? 1.5 : 1))
     }
 
-    // Compact cell: pure thumbnail only, no metadata
+    // Compact cell: pure square thumbnail, no metadata
     private var compactCell: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: cornerR)
-                .fill(Color(NSColor.quaternaryLabelColor))
+            Color(NSColor.quaternaryLabelColor)
 
             if let thumb = document.thumbnailImage ?? document.placeholderThumbnailImage {
                 Image(nsImage: thumb)
                     .resizable()
                     .scaledToFill()
-                    .clipShape(RoundedRectangle(cornerRadius: cornerR))
+                    .frame(width: thumbnailWidth, height: thumbnailWidth)
+                    .clipped()
                     .animation(.easeIn(duration: 0.15), value: document.thumbnailImage != nil)
             }
 
@@ -134,7 +134,8 @@ struct ThumbnailCell: View {
                     .strokeBorder(Color.accentColor, lineWidth: 1.5)
             }
         }
-        .aspectRatio(1, contentMode: .fit)
+        .frame(width: thumbnailWidth, height: thumbnailWidth)
+        .clipShape(RoundedRectangle(cornerRadius: cornerR))
     }
 
     private func qualityBadge(system: String, color: Color) -> some View {
