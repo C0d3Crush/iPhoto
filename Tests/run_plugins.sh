@@ -1706,6 +1706,70 @@ if [ $BR_ERR -ne 0 ]; then pass "bugreport unbekannter Subcommand (→ Fehler)";
 echo ""
 
 # ---------------------------------------------------------------------------
+# rating export/import
+# ---------------------------------------------------------------------------
+echo "--- rating export/import ---"
+RX_DB="$TMPDIR/rx_src.db"
+RX_DB2="$TMPDIR/rx_dst.db"
+rx() { IPHOTO_CATALOG_DB="$RX_DB" "$BIN" rating "$@"; }
+rx2() { IPHOTO_CATALOG_DB="$RX_DB2" "$BIN" rating "$@"; }
+rx batch-set "/fotos/a.raf" --set 5 --flag pick --color red > /dev/null 2>&1 || true
+rx batch-set "/fotos/b, mit komma.jpg" --set 2 > /dev/null 2>&1 || true
+rx batch-set "/fotos/c.jpg" --flag reject > /dev/null 2>&1 || true
+
+RX_OUT=$(rx export --output "$TMPDIR/ratings.json" --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['ok'], d['count'], d['format'])" 2>&1) || true
+if [ "$RX_OUT" = "True 3 json" ]; then pass "rating export --output .json (3 Einträge)"; else fail "rating export json" "$RX_OUT"; fi
+
+RX_OUT=$(python3 -c "import json; d=json.load(open('$TMPDIR/ratings.json')); e={r['path']:r for r in d['ratings']}; print(e['/fotos/a.raf']['rating'], e['/fotos/a.raf']['flag'], e['/fotos/a.raf']['color'], e['/fotos/c.jpg']['flag'])" 2>&1) || true
+if [ "$RX_OUT" = "5 pick red reject" ]; then pass "rating export JSON-Inhalt korrekt"; else fail "rating export Inhalt" "$RX_OUT"; fi
+
+RX_OUT=$(rx export --format csv 2>&1) || true
+if echo "$RX_OUT" | head -1 | grep -q "^path,rating,flag,color$" && echo "$RX_OUT" | grep -q '^"/fotos/b, mit komma.jpg",2,none,none$'; then
+    pass "rating export --format csv (stdout, Komma-Quoting)"
+else
+    fail "rating export csv" "$RX_OUT"
+fi
+rx export --output "$TMPDIR/ratings.csv" > /dev/null 2>&1 || true
+
+RX_OUT=$(rx2 import "$TMPDIR/ratings.json" --dry-run --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['ok'], d['imported'], d['dry_run'])" 2>&1) || true
+RX_CNT=$(rx2 list --json 2>&1 | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>&1) || true
+if [ "$RX_OUT" = "True 3 True" ] && [ "$RX_CNT" = "0" ]; then pass "rating import --dry-run schreibt nichts"; else fail "rating import --dry-run" "$RX_OUT / list=$RX_CNT"; fi
+
+RX_OUT=$(rx2 import "$TMPDIR/ratings.csv" --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['ok'], d['imported'])" 2>&1) || true
+RX_BACK=$(rx2 export --format csv 2>&1) || true
+RX_ORIG=$(rx export --format csv 2>&1) || true
+if [ "$RX_OUT" = "True 3" ] && [ "$RX_BACK" = "$RX_ORIG" ]; then pass "rating import CSV Roundtrip identisch"; else fail "rating import csv" "$RX_OUT / $RX_BACK"; fi
+
+rx2 batch-set "/fotos/a.raf" --set 1 > /dev/null 2>&1 || true
+RX_OUT=$(rx2 import "$TMPDIR/ratings.json" --skip-existing --json 2>&1 | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['imported'], d['skipped'])" 2>&1) || true
+RX_A=$(rx2 list --json 2>&1 | python3 -c "import sys,json; print({e['path']:e for e in json.load(sys.stdin)}['/fotos/a.raf']['rating'])" 2>&1) || true
+if [ "$RX_OUT" = "0 3" ] && [ "$RX_A" = "1" ]; then pass "rating import --skip-existing behält vorhandene"; else fail "rating import --skip-existing" "$RX_OUT / a=$RX_A"; fi
+
+printf '[{"path":"/x/ok.jpg","rating":3},{"path":"/x/bad.jpg","rating":9}]' > "$TMPDIR/ratings_bad.json"
+RX_ERR=0
+IPHOTO_CATALOG_DB="$TMPDIR/rx_bad.db" "$BIN" rating import "$TMPDIR/ratings_bad.json" > /dev/null 2>&1 || RX_ERR=$?
+RX_CNT=$(IPHOTO_CATALOG_DB="$TMPDIR/rx_bad.db" "$BIN" rating list --json 2>&1 | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>&1) || true
+if [ $RX_ERR -ne 0 ] && [ "$RX_CNT" = "0" ]; then pass "rating import ungültige Bewertung (→ Fehler, atomar)"; else fail "rating import ungültig" "Exit $RX_ERR, list=$RX_CNT"; fi
+
+RX_ERR=0
+rx import "$TMPDIR/gibtsnicht.json" > /dev/null 2>&1 || RX_ERR=$?
+if [ $RX_ERR -ne 0 ]; then pass "rating import fehlende Datei (→ Fehler)"; else fail "rating import fehlende Datei" "Hätte fehlschlagen sollen"; fi
+
+RX_ERR=0
+rx import > /dev/null 2>&1 || RX_ERR=$?
+if [ $RX_ERR -ne 0 ]; then pass "rating import ohne Datei (→ Fehler)"; else fail "rating import ohne Datei" "Hätte fehlschlagen sollen"; fi
+
+RX_ERR=0
+rx export --format xml > /dev/null 2>&1 || RX_ERR=$?
+if [ $RX_ERR -ne 0 ]; then pass "rating export --format xml (→ Fehler)"; else fail "rating export --format xml" "Hätte fehlschlagen sollen"; fi
+
+RX_ERR=0
+rx export --bogus > /dev/null 2>&1 || RX_ERR=$?
+if [ $RX_ERR -ne 0 ]; then pass "rating export --bogus (→ Fehler)"; else fail "rating export --bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

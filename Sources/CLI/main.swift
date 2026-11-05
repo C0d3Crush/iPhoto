@@ -80,6 +80,8 @@ private func printUsage() {
       iphoto-cli local-adjustments list <bildpfad> [--json]
       iphoto-cli local-adjustments clear <bildpfad> [--json]
       iphoto-cli rating histogram [--json]
+      iphoto-cli rating export [--output <datei.json|.csv>] [--format json|csv] [--include-unrated] [--json]
+      iphoto-cli rating import <datei.json|.csv> [--skip-existing] [--dry-run] [--json]
       iphoto-cli exif get <bildpfad> [--json]
       iphoto-cli exif set <bildpfad> [--iso N] [--focal MM] [--aperture F] [--lens NAME]
                           [--film NAME] [--hdr true|false] [--json]
@@ -121,7 +123,8 @@ private func printUsage() {
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
     hdr:      Erzeugt 6 Preset-Varianten aus allen RAWs im Ordner (Vergleich); --json
     info:     Gibt alle EXIF/IPTC/GPS-Metadaten aus; --json für maschinenlesbare Ausgabe
-    rating:   Liest/schreibt Bewertung, Flag und Farblabel; 'list' zeigt alle bewerteten Bilder
+    rating:   Liest/schreibt Bewertung, Flag und Farblabel; 'list' zeigt alle bewerteten Bilder;
+              export/import sichert Bewertungen als JSON/CSV (Import validiert atomar)
     adjust:   Wendet Bildanpassungen an und exportiert das Ergebnis
     preset:   Zeigt Built-in-Presets oder wendet einen an
     analyse:  Analysiert Schärfe und Belichtung (Blur + Exposure)
@@ -3786,20 +3789,247 @@ private func runRatingBatchSet(_ args: [String]) -> Int32 {
     }
     let catalog = CatalogStore(dbPath: envDBPath())
     var results: [[String: Any]] = []
+    var batch: [(path: String, rating: Int, flag: String, colorLabel: String)] = []
+    batch.reserveCapacity(paths.count)
     for path in paths {
         let existing = catalog.rating(forPath: path)
         let r = ratingValue ?? (existing?.rating ?? 0)
         let f = flagValue != "none" ? flagValue : (existing?.flag ?? "none")
         let c = colorValue != "none" ? colorValue : (existing?.colorLabel ?? "none")
-        catalog.saveRating(path: path, rating: r, flag: f, colorLabel: c)
+        batch.append((path, r, f, c))
         results.append(["path": path, "rating": r, "flag": f, "color": c])
     }
+    catalog.saveRatings(batch)   // eine Transaktion statt N Commits
     if jsonMode {
         let obj: [String: Any] = ["count": paths.count, "results": results, "ok": true]
         if let d = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
            let s = String(data: d, encoding: .utf8) { print(s) }
     } else {
         print("\(paths.count) Bild(er) bewertet")
+    }
+    return 0
+}
+
+// MARK: - Rating Export / Import CLI
+
+private func ratingCSVField(_ s: String) -> String {
+    if s.contains(",") || s.contains("\"") || s.contains("\n") {
+        return "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    }
+    return s
+}
+
+/// Minimaler RFC-4180-Zeilenparser (Anführungszeichen, verdoppelte Quotes).
+private func ratingCSVParseLine(_ line: String) -> [String] {
+    var fields: [String] = []
+    var cur = ""
+    var inQuotes = false
+    var chars = Array(line)
+    var i = 0
+    if chars.last == "\r" { chars.removeLast() }
+    while i < chars.count {
+        let c = chars[i]
+        if inQuotes {
+            if c == "\"" {
+                if i + 1 < chars.count, chars[i + 1] == "\"" { cur.append("\""); i += 1 }
+                else { inQuotes = false }
+            } else { cur.append(c) }
+        } else {
+            if c == "\"" { inQuotes = true }
+            else if c == "," { fields.append(cur); cur = "" }
+            else { cur.append(c) }
+        }
+        i += 1
+    }
+    fields.append(cur)
+    return fields
+}
+
+private func printRatingJSON(_ obj: [String: Any]) {
+    if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+       let s = String(data: d, encoding: .utf8) { print(s) }
+}
+
+private func runRatingExport(_ args: [String]) -> Int32 {
+    var jsonMode = false
+    var outputPath: String? = nil
+    var format: String? = nil
+    var includeUnrated = false
+    var i = 0
+    while i < args.count {
+        switch args[i] {
+        case "--json": jsonMode = true; i += 1
+        case "--include-unrated": includeUnrated = true; i += 1
+        case "--output", "-o":
+            guard i + 1 < args.count else { fputs("Fehler: --output braucht einen Pfad\n", stderr); return 1 }
+            outputPath = args[i + 1]; i += 2
+        case "--format":
+            guard i + 1 < args.count else { fputs("Fehler: --format braucht json|csv\n", stderr); return 1 }
+            format = args[i + 1].lowercased(); i += 2
+        default:
+            fputs("Fehler: Unbekannte Option '\(args[i])'\n", stderr)
+            fputs("Verwendung: iphoto-cli rating export [--output <datei.json|.csv>] [--format json|csv] [--include-unrated] [--json]\n", stderr)
+            return 1
+        }
+    }
+    let fmt = format ?? ((outputPath?.lowercased().hasSuffix(".csv") ?? false) ? "csv" : "json")
+    guard fmt == "json" || fmt == "csv" else {
+        fputs("Fehler: Ungültiges Format '\(fmt)'. Erlaubt: json, csv\n", stderr); return 1
+    }
+
+    let catalog = CatalogStore(dbPath: envDBPath())
+    let all = catalog.allRatings()
+    let entries = all
+        .filter { includeUnrated || $0.value.rating > 0 || $0.value.flag != "none" || $0.value.colorLabel != "none" }
+        .sorted { $0.key < $1.key }
+
+    let content: String
+    if fmt == "csv" {
+        var lines = ["path,rating,flag,color"]
+        lines.reserveCapacity(entries.count + 1)
+        for (p, v) in entries {
+            lines.append("\(ratingCSVField(p)),\(v.rating),\(v.flag),\(v.colorLabel)")
+        }
+        content = lines.joined(separator: "\n") + "\n"
+    } else {
+        let arr = entries.map { (path, e) -> [String: Any] in
+            ["path": path, "rating": e.rating, "flag": e.flag, "color": e.colorLabel]
+        }
+        let obj: [String: Any] = ["version": 1, "count": arr.count, "ratings": arr]
+        guard let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+              let s = String(data: d, encoding: .utf8) else {
+            fputs("Fehler: JSON-Serialisierung fehlgeschlagen\n", stderr); return 1
+        }
+        content = s + "\n"
+    }
+
+    guard let out = outputPath else {
+        // Ohne --output: Inhalt direkt auf stdout (für Pipes)
+        print(content, terminator: "")
+        return 0
+    }
+    do {
+        try content.write(toFile: out, atomically: true, encoding: .utf8)
+    } catch {
+        fputs("Fehler: Konnte '\(out)' nicht schreiben: \(error.localizedDescription)\n", stderr); return 1
+    }
+    if jsonMode {
+        printRatingJSON(["ok": true, "count": entries.count, "format": fmt, "output": out])
+    } else {
+        print("\(entries.count) Bewertung(en) exportiert nach \(out) (\(fmt))")
+    }
+    return 0
+}
+
+private func runRatingImport(_ args: [String]) -> Int32 {
+    var jsonMode = false
+    var dryRun = false
+    var skipExisting = false
+    var inputPath: String? = nil
+    for a in args {
+        switch a {
+        case "--json": jsonMode = true
+        case "--dry-run": dryRun = true
+        case "--skip-existing": skipExisting = true
+        default:
+            if a.hasPrefix("-") {
+                fputs("Fehler: Unbekannte Option '\(a)'\n", stderr); return 1
+            }
+            if inputPath != nil { fputs("Fehler: Nur eine Eingabedatei erlaubt\n", stderr); return 1 }
+            inputPath = a
+        }
+    }
+    guard let input = inputPath else {
+        fputs("Verwendung: iphoto-cli rating import <datei.json|.csv> [--skip-existing] [--dry-run] [--json]\n", stderr)
+        return 1
+    }
+    guard let data = FileManager.default.contents(atPath: input),
+          let text = String(data: data, encoding: .utf8) else {
+        fputs("Fehler: Datei nicht lesbar: \(input)\n", stderr); return 1
+    }
+
+    // Rohe Einträge sammeln (JSON oder CSV, per Inhalt erkannt)
+    var raw: [(line: Int, path: String, rating: String, flag: String, color: String)] = []
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) else {
+            fputs("Fehler: Ungültiges JSON in \(input)\n", stderr); return 1
+        }
+        let list: [Any]
+        if let arr = obj as? [Any] { list = arr }
+        else if let dict = obj as? [String: Any], let arr = dict["ratings"] as? [Any] { list = arr }
+        else { fputs("Fehler: JSON braucht ein Array oder {\"ratings\": [...]}\n", stderr); return 1 }
+        for (idx, item) in list.enumerated() {
+            guard let d = item as? [String: Any] else {
+                raw.append((idx + 1, "", "", "", "")); continue
+            }
+            let r: String
+            if let s = d["rating"] as? String { r = s }
+            else if let v = d["rating"] { r = "\(v)" }   // NSNumber → "4" bzw. "4.5" (→ ungültig)
+            else { r = "0" }
+            raw.append((idx + 1, d["path"] as? String ?? "", r,
+                        (d["flag"] as? String) ?? "none",
+                        (d["color"] as? String) ?? (d["colorLabel"] as? String) ?? "none"))
+        }
+    } else {
+        let lines = text.components(separatedBy: "\n")
+        var lineNo = 0
+        for line in lines {
+            lineNo += 1
+            if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            let f = ratingCSVParseLine(line)
+            if lineNo == 1, f.first?.lowercased() == "path" { continue }  // Header
+            raw.append((lineNo, f.count > 0 ? f[0] : "", f.count > 1 ? f[1] : "0",
+                        f.count > 2 && !f[2].isEmpty ? f[2] : "none",
+                        f.count > 3 && !f[3].isEmpty ? f[3] : "none"))
+        }
+    }
+
+    // Validieren — bei Fehlern wird nichts geschrieben (atomar)
+    var valid: [(path: String, rating: Int, flag: String, colorLabel: String)] = []
+    var errors: [String] = []
+    var seen: [String: Int] = [:]
+    for e in raw {
+        let flag = e.flag.lowercased(), color = e.color.lowercased()
+        if e.path.isEmpty { errors.append("Eintrag \(e.line): Pfad fehlt"); continue }
+        guard let r = Int(e.rating.trimmingCharacters(in: .whitespaces)), (0...5).contains(r) else {
+            errors.append("Eintrag \(e.line): ungültige Bewertung '\(e.rating)' (0–5)"); continue
+        }
+        guard FlagStatus(rawValue: flag) != nil else {
+            errors.append("Eintrag \(e.line): ungültiges Flag '\(e.flag)'"); continue
+        }
+        guard ColorLabel(rawValue: color) != nil else {
+            errors.append("Eintrag \(e.line): ungültige Farbe '\(e.color)'"); continue
+        }
+        // Doppelte Pfade: letzter gewinnt (O(1) via Dictionary statt firstIndex)
+        if let idx = seen[e.path] { valid[idx] = (e.path, r, flag, color) }
+        else { seen[e.path] = valid.count; valid.append((e.path, r, flag, color)) }
+    }
+    if !errors.isEmpty {
+        if jsonMode {
+            printRatingJSON(["ok": false, "errors": errors, "imported": 0, "skipped": 0])
+        }
+        for err in errors { fputs("Fehler: \(err)\n", stderr) }
+        fputs("Import abgebrochen — keine Bewertung geschrieben\n", stderr)
+        return 1
+    }
+
+    let catalog = CatalogStore(dbPath: envDBPath())
+    var toWrite = valid
+    var skipped = 0
+    if skipExisting {
+        let existing = catalog.allRatings()   // ein Query statt N Einzel-Lookups
+        toWrite = valid.filter { existing[$0.path] == nil }
+        skipped = valid.count - toWrite.count
+    }
+    if !dryRun { catalog.saveRatings(toWrite) }
+
+    if jsonMode {
+        printRatingJSON(["ok": true, "imported": toWrite.count, "skipped": skipped,
+                         "dry_run": dryRun, "errors": [String]()])
+    } else {
+        let prefix = dryRun ? "[Probelauf] " : ""
+        print("\(prefix)\(toWrite.count) Bewertung(en) importiert, \(skipped) übersprungen")
     }
     return 0
 }
@@ -4937,6 +5167,12 @@ if firstArg == "metadata" {
 }
 if firstArg == "local-adjustments" {
     exit(runLocalAdjustments(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "export" {
+    exit(runRatingExport(Array(rawArgs.dropFirst(3))))
+}
+if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "import" {
+    exit(runRatingImport(Array(rawArgs.dropFirst(3))))
 }
 if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "histogram" {
     exit(runRatingHistogram(Array(rawArgs.dropFirst(3))))

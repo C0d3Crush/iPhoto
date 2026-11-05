@@ -2,6 +2,13 @@
 
 ---
 
+## 1.97.0
+**CLI: Bewertungen als JSON/CSV exportieren und importieren**
+- Neuer Befehl `iphoto-cli rating export [--output <datei.json|.csv>] [--format json|csv] [--include-unrated] [--json]` sichert alle Sterne, Flags und Farblabels — ohne `--output` direkt auf stdout; Format wird aus der Dateiendung erkannt, Pfade mit Komma werden in CSV korrekt gequotet
+- Neuer Befehl `iphoto-cli rating import <datei> [--skip-existing] [--dry-run] [--json]` liest JSON- oder CSV-Exporte wieder ein; alle Einträge werden vorab geprüft — bei einem ungültigen Wert wird nichts geschrieben
+- Schneller: Import und `rating batch-set` schreiben alle Bewertungen in einer einzigen SQLite-Transaktion statt einem Commit pro Bild
+- Tests in `Tests/run_plugins.sh` (JSON/CSV-Export, Roundtrip, Probelauf, `--skip-existing`, Fehlerpfade)
+
 ## 1.96.0
 **CLI: Bugreports auflisten, lesen und als behoben markieren**
 - Neuer Befehl `iphoto-cli bugreport list [--fixed|--all] [--json]` listet die Crash-Berichte aus `~/Documents/bugreports/` (neueste zuerst), optional auch die behobenen aus `fixed/`
