@@ -11,7 +11,12 @@ import anthropic
 ACTORS_FILE = ".github/actors.json"
 DRY_RUN = "--dry-run" in sys.argv
 
-client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+if not api_key:
+    print("FEHLER: ANTHROPIC_API_KEY ist nicht gesetzt.", file=sys.stderr)
+    sys.exit(1)
+print(f"API-Key: {api_key[:8]}… (Länge {len(api_key)})")
+client = anthropic.Anthropic(api_key=api_key)
 
 
 def gh(*args: str) -> str:
@@ -161,7 +166,7 @@ def main() -> None:
         try:
             assignment = route_issue(issue, actors)
         except Exception as exc:
-            print(f"  FEHLER (Claude): {exc}", file=sys.stderr)
+            print(f"  FEHLER (Claude) [{type(exc).__name__}]: {exc}", file=sys.stderr)
             continue
 
         # Persist new actor immediately so it's not lost on later failure
