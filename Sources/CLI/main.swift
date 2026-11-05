@@ -40,6 +40,7 @@ private func printUsage() {
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
       iphoto-cli duplicate list|similar [--json]
+      iphoto-cli config show|export [--path <pfad>]|import <pfad>
       iphoto-cli rating list [--flag pick|reject] [--color farbe] [--min-rating N] [--json]
       iphoto-cli smartfolder list [--json]
       iphoto-cli smartfolder query <name> [--json]
@@ -2771,6 +2772,56 @@ private func runDuplicate(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - Config
+
+private func runConfig(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    switch sub {
+    case "show":
+        let settings = AppConfig.currentSettings()
+        if settings.isEmpty {
+            print("{}")
+            return 0
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: settings,
+                                                   options: [.prettyPrinted, .sortedKeys]),
+           let str = String(data: data, encoding: .utf8) {
+            print(str)
+        }
+        return 0
+
+    case "export":
+        let pathIdx = args.firstIndex(of: "--path").map { $0 + 1 }
+        let url = pathIdx.flatMap { $0 < args.count ? URL(fileURLWithPath: args[$0]) : nil }
+        do {
+            let target = try AppConfig.exportToFile(url)
+            print("Einstellungen exportiert nach: \(target.path)")
+            return 0
+        } catch {
+            fputs("Fehler beim Exportieren: \(error.localizedDescription)\n", stderr)
+            return 1
+        }
+
+    case "import":
+        guard let p = args.dropFirst().first else {
+            fputs("config import: Pfad fehlt\n", stderr)
+            return 1
+        }
+        do {
+            try AppConfig.importFromFile(URL(fileURLWithPath: p))
+            print("Einstellungen importiert aus: \(p)")
+            return 0
+        } catch {
+            fputs("Fehler beim Importieren: \(error.localizedDescription)\n", stderr)
+            return 1
+        }
+
+    default:
+        fputs("Verwendung: iphoto-cli config show|export [--path <pfad>]|import <pfad>\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -2841,6 +2892,9 @@ if firstArg == "export", rawArgs.contains("--list-formats") {
 // rating batch-set intercept before CLIArgs parsing
 if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "batch-set" {
     exit(runRatingBatchSet(Array(rawArgs.dropFirst(3))))
+}
+if firstArg == "config" {
+    exit(runConfig(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

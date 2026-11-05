@@ -264,6 +264,10 @@ struct SettingsView: View {
         .padding(.vertical, 3)
     }
 
+    @State private var showConfigAlert = false
+    @State private var configAlertTitle = ""
+    @State private var configAlertMsg = ""
+
     private var featuresTab: some View {
         Form {
             Section(header: Text("Experimentelle Funktionen").font(.headline)) {
@@ -353,6 +357,45 @@ struct SettingsView: View {
                     }
                 }
                 .padding(.vertical, 2)
+
+                Divider().padding(.vertical, 2)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Einstellungen exportieren")
+                        Text("Speichert alle Einstellungen als JSON unter ~/Library/Application Support/iPhoto/settings.json")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Exportieren") {
+                        do {
+                            let url = try AppConfig.exportToFile()
+                            configAlertTitle = "Exportiert"
+                            configAlertMsg = url.path
+                        } catch {
+                            configAlertTitle = "Fehler"
+                            configAlertMsg = error.localizedDescription
+                        }
+                        showConfigAlert = true
+                    }
+                }
+                .padding(.vertical, 2)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Einstellungen importieren")
+                        Text("Lädt Einstellungen aus einer JSON-Datei und überschreibt aktuelle Werte.")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Importieren…") { importConfigFile() }
+                }
+                .padding(.vertical, 2)
+            }
+            .alert(isPresented: $showConfigAlert) {
+                Alert(title: Text(configAlertTitle),
+                      message: Text(configAlertMsg),
+                      dismissButton: .default(Text("OK")))
             }
 
             Divider().padding(.vertical, 4)
@@ -374,6 +417,25 @@ struct SettingsView: View {
             }
         }
         .padding(20)
+    }
+
+    private func importConfigFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedFileTypes = ["json"]
+        panel.title = "Einstellungen importieren"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try AppConfig.importFromFile(url)
+            configAlertTitle = "Importiert"
+            configAlertMsg = "Einstellungen wurden übernommen. Bitte App neu starten."
+        } catch {
+            configAlertTitle = "Fehler"
+            configAlertMsg = error.localizedDescription
+        }
+        showConfigAlert = true
     }
 
     private func pickBackupDestination() {

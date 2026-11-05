@@ -318,6 +318,45 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# config — export / show / import
+# ---------------------------------------------------------------------------
+echo "--- Config ---"
+
+CONFIG_OUT="$TMPDIR/settings_export.json"
+
+# config export --path <file>
+CONFIG_EXPORT=$("$BIN" config export --path "$CONFIG_OUT" 2>&1)
+CONFIG_EXIT=$?
+if [ $CONFIG_EXIT -eq 0 ] && [ -f "$CONFIG_OUT" ]; then
+    pass "config export --path (Exitcode 0, Datei erstellt)"
+else
+    fail "config export --path" "Exitcode $CONFIG_EXIT: $CONFIG_EXPORT"
+fi
+
+# config show — valid JSON (may be empty object if no settings stored)
+if [ -f "$CONFIG_OUT" ]; then
+    CONFIG_SHOW=$("$BIN" config show 2>&1)
+    if python3 -c "import sys,json; json.loads(sys.stdin.read())" <<< "$CONFIG_SHOW" 2>/dev/null; then
+        pass "config show (valides JSON)"
+    else
+        fail "config show" "Kein valides JSON: $CONFIG_SHOW"
+    fi
+fi
+
+# config import — round-trip the exported file
+if [ -f "$CONFIG_OUT" ]; then
+    CONFIG_IMPORT=$("$BIN" config import "$CONFIG_OUT" 2>&1)
+    CONFIG_IMPORT_EXIT=$?
+    if [ $CONFIG_IMPORT_EXIT -eq 0 ]; then
+        pass "config import (Exitcode 0)"
+    else
+        fail "config import" "Exitcode $CONFIG_IMPORT_EXIT: $CONFIG_IMPORT"
+    fi
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

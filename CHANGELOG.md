@@ -2,6 +2,16 @@
 
 ---
 
+## 1.76.0
+**Feature — Quadratische Thumbnails + Einstellungs-Konfig-Datei**
+
+- Thumbnail-Schwellenwert auf 100 px angehoben: bei Rastergrößen ≤ 80 px werden alle Zellen automatisch quadratisch (kein Dateiname, kein Rand, 1:1-Seitenverhältnis mit `scaledToFill`)
+- Neue `AppConfig`-Schicht: alle UI-Einstellungen (Badges, Toolbar-Sichtbarkeit, Entwickler-Modus) lassen sich als JSON exportieren und importieren
+- Einstellungen → Entwickler: „Exportieren"-Button speichert `~/Library/Application Support/iPhoto/settings.json`; „Importieren…"-Button öffnet eine JSON-Datei und übernimmt die Werte sofort
+- CLI: `iphoto-cli config show|export [--path <pfad>]|import <pfad>` liest und schreibt dieselbe Konfig-Datei
+
+---
+
 ## 1.75.2
 **Bugfix — Kein automatisches Thumbnail-Laden mehr**
 

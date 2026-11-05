@@ -26,7 +26,7 @@ struct ThumbnailCell: View {
     @AppStorage("badge.hdr")         private var showHDR         = true
 
     private var thumbH: CGFloat { (thumbnailWidth * 2 / 3).rounded() }
-    private var showDetails: Bool { thumbnailWidth >= 60 }
+    private var showDetails: Bool { thumbnailWidth >= 100 }
     private var cornerR: CGFloat { showDetails ? 4 : 0 }
 
     var body: some View {
