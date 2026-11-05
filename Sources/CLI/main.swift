@@ -42,7 +42,8 @@ private func printUsage() {
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
-      iphoto-cli catalog stats|path|vacuum|export [--json]
+      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now [--json]
+      iphoto-cli albumfolder list|create|rename|delete [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
       iphoto-cli duplicate list|similar [--json]
@@ -2386,6 +2387,141 @@ private func runTrash(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - AlbumFolder
+
+private func albumFoldersFileURL() -> URL {
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("iPhoto")
+        .appendingPathComponent("albumFolders.json")
+}
+
+private func loadAlbumFoldersList() -> [AlbumFolder] {
+    guard let data = try? Data(contentsOf: albumFoldersFileURL()) else { return [] }
+    return (try? JSONDecoder().decode([AlbumFolder].self, from: data)) ?? []
+}
+
+private func saveAlbumFoldersList(_ folders: [AlbumFolder]) {
+    let url = albumFoldersFileURL()
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                             withIntermediateDirectories: true)
+    if let data = try? JSONEncoder().encode(folders) { try? data.write(to: url) }
+}
+
+private func runAlbumFolder(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "list"
+    let jsonMode = args.contains("--json")
+
+    switch sub {
+    case "list":
+        let folders = loadAlbumFoldersList()
+        if jsonMode {
+            let arr: [[String: Any]] = folders.map { f in
+                var d: [String: Any] = ["id": f.id.uuidString, "name": f.name]
+                if let p = f.parentID { d["parent_id"] = p.uuidString }
+                return d
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let s = String(data: data, encoding: .utf8) { print(s) }
+        } else {
+            if folders.isEmpty { print("Keine Album-Ordner vorhanden.") }
+            for f in folders {
+                let parent = f.parentID.map { " (in: \($0.uuidString.prefix(8))…)" } ?? ""
+                print("[\(f.id.uuidString.prefix(8))…]  \(f.name)\(parent)")
+            }
+        }
+        return 0
+
+    case "create":
+        let positionals = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard let name = positionals.first else {
+            fputs("Verwendung: iphoto-cli albumfolder create <name> [--parent <id>] [--json]\n", stderr); return 1
+        }
+        var parentID: UUID? = nil
+        if let pIdx = args.firstIndex(of: "--parent"), pIdx + 1 < args.count {
+            parentID = UUID(uuidString: args[pIdx + 1])
+        }
+        let newFolder = AlbumFolder(name: name, parentID: parentID)
+        var folders = loadAlbumFoldersList()
+        folders.append(newFolder)
+        saveAlbumFoldersList(folders)
+        if jsonMode {
+            let obj: [String: Any] = ["id": newFolder.id.uuidString, "name": newFolder.name, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Ordner erstellt: \(newFolder.name) (\(newFolder.id.uuidString))")
+        }
+        return 0
+
+    case "rename":
+        let positionals = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positionals.count >= 2 else {
+            fputs("Verwendung: iphoto-cli albumfolder rename <id|name> <neuer-name> [--json]\n", stderr); return 1
+        }
+        let query = positionals[0]; let newName = positionals[1]
+        var folders = loadAlbumFoldersList()
+        guard let idx = folders.firstIndex(where: {
+            $0.id.uuidString.lowercased() == query.lowercased() ||
+            $0.name.lowercased() == query.lowercased()
+        }) else {
+            fputs("Fehler: Album-Ordner '\(query)' nicht gefunden\n", stderr); return 1
+        }
+        let oldName = folders[idx].name
+        folders[idx].name = newName
+        saveAlbumFoldersList(folders)
+        if jsonMode {
+            let obj: [String: Any] = ["id": folders[idx].id.uuidString, "name": newName, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Ordner umbenannt: \(oldName) → \(newName)")
+        }
+        return 0
+
+    case "delete":
+        let positionals = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard let query = positionals.first else {
+            fputs("Verwendung: iphoto-cli albumfolder delete <id|name> [--json]\n", stderr); return 1
+        }
+        var folders = loadAlbumFoldersList()
+        guard let idx = folders.firstIndex(where: {
+            $0.id.uuidString.lowercased() == query.lowercased() ||
+            $0.name.lowercased() == query.lowercased()
+        }) else {
+            fputs("Fehler: Album-Ordner '\(query)' nicht gefunden\n", stderr); return 1
+        }
+        let removed = folders.remove(at: idx)
+        // Promote children to parent (match app behaviour)
+        let newParent = removed.parentID
+        for i in folders.indices where folders[i].parentID == removed.id {
+            folders[i].parentID = newParent
+        }
+        saveAlbumFoldersList(folders)
+        // Also promote albums
+        let albumsURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto/albums.json")
+        if let data = try? Data(contentsOf: albumsURL),
+           var albums = try? JSONDecoder().decode([Album].self, from: data) {
+            for i in albums.indices where albums[i].parentID == removed.id {
+                albums[i].parentID = newParent
+            }
+            if let out = try? JSONEncoder().encode(albums) { try? out.write(to: albumsURL) }
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["id": removed.id.uuidString, "name": removed.name, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Ordner gelöscht: \(removed.name)")
+        }
+        return 0
+
+    default:
+        fputs("Fehler: Unbekannter albumfolder-Unterbefehl '\(sub)'. Erlaubt: list, create, rename, delete\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Album
 
 private func runAlbum(_ args: [String]) -> Int32 {
@@ -2931,8 +3067,23 @@ private func runCatalog(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "backup-now":
+        if let path = catalog.backupNow() {
+            if jsonMode {
+                let obj: [String: Any] = ["backup": path, "ok": true]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                print("Backup erstellt: \(path)")
+            }
+            return 0
+        } else {
+            fputs("Fehler: Backup fehlgeschlagen\n", stderr)
+            return 1
+        }
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now [--json]\n", stderr)
         return 1
     }
 }
@@ -3394,6 +3545,9 @@ if firstArg == "watched" {
 }
 if firstArg == "backup" {
     exit(runBackupConfig(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "albumfolder" {
+    exit(runAlbumFolder(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

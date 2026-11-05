@@ -2,6 +2,15 @@
 
 ---
 
+## 1.83.0
+**Feature — CLI: catalog backup-now + albumfolder-Verwaltung**
+
+- `iphoto-cli catalog backup-now` — erstellt sofort ein SQLite-Backup unter `Application Support/iPhoto/backups/` (wie App-Start-Backup, aber manuell auslösbar)
+- `iphoto-cli albumfolder list|create|rename|delete` — Album-Ordner-Hierarchie aus CLI verwalten; `delete` hebt Kind-Elemente auf den Parent hoch (kein Datenverlust)
+- `CatalogStore.backupNow()` als öffentliche Methode für headless-Zugriff
+
+---
+
 ## 1.82.0
 **Feature — CLI: watched-Ordner-Verwaltung + Backup-Konfiguration**
 
