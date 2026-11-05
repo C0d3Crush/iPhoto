@@ -600,6 +600,108 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# config get / set
+# ---------------------------------------------------------------------------
+echo "--- Config Get/Set ---"
+
+# show returns JSON object
+CONFIG_SHOW=$("$BIN" config show 2>&1)
+CONFIG_SHOW_EXIT=$?
+if [ $CONFIG_SHOW_EXIT -eq 0 ]; then
+    pass "config show (Exitcode 0)"
+else
+    fail "config show" "Exit $CONFIG_SHOW_EXIT: $CONFIG_SHOW"
+fi
+
+# set a known badge key to true
+CONFIG_SET=$("$BIN" config set badge.rating true 2>&1)
+CONFIG_SET_EXIT=$?
+if [ $CONFIG_SET_EXIT -eq 0 ]; then
+    pass "config set badge.rating true (Exitcode 0)"
+else
+    fail "config set badge.rating true" "Exit $CONFIG_SET_EXIT: $CONFIG_SET"
+fi
+
+# get the key back and verify it contains "1" or "true"
+CONFIG_GET=$("$BIN" config get badge.rating 2>&1)
+CONFIG_GET_EXIT=$?
+if [ $CONFIG_GET_EXIT -eq 0 ] && (echo "$CONFIG_GET" | grep -qE "^(1|true)$"); then
+    pass "config get badge.rating (Wert '1' oder 'true' erwartet)"
+else
+    fail "config get badge.rating" "Exit $CONFIG_GET_EXIT, Ausgabe: $CONFIG_GET"
+fi
+
+# get unknown key → error
+CONFIG_GET_BAD_EXIT=0
+"$BIN" config get badge.unknownkey > /dev/null 2>&1 || CONFIG_GET_BAD_EXIT=$?
+if [ $CONFIG_GET_BAD_EXIT -ne 0 ]; then
+    pass "config get unbekannter Schlüssel (Exitcode != 0)"
+else
+    fail "config get unbekannter Schlüssel" "Hätte fehlschlagen sollen"
+fi
+
+# set unknown key → error
+CONFIG_SET_BAD_EXIT=0
+"$BIN" config set badge.nonexistent true > /dev/null 2>&1 || CONFIG_SET_BAD_EXIT=$?
+if [ $CONFIG_SET_BAD_EXIT -ne 0 ]; then
+    pass "config set unbekannter Schlüssel (Exitcode != 0)"
+else
+    fail "config set unbekannter Schlüssel" "Hätte fehlschlagen sollen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# metadata get / set
+# ---------------------------------------------------------------------------
+echo "--- Metadata Get/Set ---"
+
+# metadata get on test PNG → returns JSON with editable keys
+META_GET=$("$BIN" metadata get "$INPUT_PNG" --json 2>&1)
+META_GET_EXIT=$?
+if [ $META_GET_EXIT -eq 0 ] && echo "$META_GET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert isinstance(d, dict)" 2>/dev/null; then
+    pass "metadata get --json (Exitcode 0, JSON-Objekt)"
+else
+    fail "metadata get --json" "Exit $META_GET_EXIT: $META_GET"
+fi
+
+# metadata set title + caption on JPEG copy of PNG (PNG supports IPTC via ImageIO)
+META_JPEG="$TMPDIR/meta_test.jpg"
+"$BIN" export "$INPUT_PNG" --format jpeg --output "$META_JPEG" > /dev/null 2>&1 || true
+if [ -f "$META_JPEG" ]; then
+    META_SET=$("$BIN" metadata set "$META_JPEG" --title "TestTitel" --caption "TestBeschreibung" --json 2>&1)
+    META_SET_EXIT=$?
+    if [ $META_SET_EXIT -eq 0 ] && echo "$META_SET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null; then
+        pass "metadata set --title --caption --json (Exitcode 0, ok:true)"
+    else
+        fail "metadata set" "Exit $META_SET_EXIT: $META_SET"
+    fi
+
+    # read back title
+    META_GET2=$("$BIN" metadata get "$META_JPEG" --json 2>&1)
+    if echo "$META_GET2" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('iptc.ObjectName','') == 'TestTitel'" 2>/dev/null; then
+        pass "metadata get nach set (Titel korrekt gelesen)"
+    else
+        fail "metadata get nach set" "Titel nicht gefunden in: $META_GET2"
+    fi
+else
+    fail "metadata set" "JPEG-Testbild konnte nicht erstellt werden"
+fi
+
+# metadata set on RAW (raf extension) → error expected
+META_RAW="$TMPDIR/fake.raf"
+cp "$INPUT_PNG" "$META_RAW"
+META_SET_RAF_EXIT=0
+"$BIN" metadata set "$META_RAW" --title "x" > /dev/null 2>&1 || META_SET_RAF_EXIT=$?
+if [ $META_SET_RAF_EXIT -ne 0 ]; then
+    pass "metadata set auf RAW-Datei (Exitcode != 0)"
+else
+    fail "metadata set auf RAW-Datei" "Hätte fehlschlagen sollen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

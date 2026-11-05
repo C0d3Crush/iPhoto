@@ -2,6 +2,17 @@
 
 ---
 
+## 1.85.0
+**Feature — CLI: metadata get/set + config get/set**
+
+- `iphoto-cli metadata get <bildpfad> [--json]` — liest editierbare IPTC/EXIF/GPS-Felder eines Bildes aus (Titel, Beschreibung, Stichwörter, Copyright, Urheber, Aufnahmedatum, GPS-Koordinaten)
+- `iphoto-cli metadata set <bildpfad> [--title X] [--caption X] [--keywords X] [--copyright X] [--creator X] [--date X] [--lat N] [--lon N] [--json]` — schreibt IPTC/GPS-Metadaten direkt in JPEG/PNG/TIFF-Dateien via `MetadataService`; RAW-Formate werden abgelehnt
+- `iphoto-cli config get <schlüssel>` — liest einen einzelnen AppConfig-Schlüssel aus UserDefaults
+- `iphoto-cli config set <schlüssel> <wert>` — setzt einen einzelnen AppConfig-Schlüssel (badge, navtoolbar, settings.geekMode) ohne Export/Import-Umweg; bool-Werte `true`/`false` werden automatisch erkannt
+- 9 neue Tests in `run_plugins.sh`
+
+---
+
 ## 1.84.0
 **Feature — Sicherungskopie vor dem Löschen**
 

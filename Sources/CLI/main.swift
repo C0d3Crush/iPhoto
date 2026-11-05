@@ -47,7 +47,11 @@ private func printUsage() {
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
       iphoto-cli duplicate list|similar [--json]
-      iphoto-cli config show|export [--path <pfad>]|import <pfad>
+      iphoto-cli config show|get <key>|set <key> <wert>|export [--path <pfad>]|import <pfad>
+      iphoto-cli metadata get <bildpfad> [--json]
+      iphoto-cli metadata set <bildpfad> [--title X] [--caption X] [--keywords X]
+                              [--copyright X] [--creator X] [--date "YYYY:MM:DD HH:MM:SS"]
+                              [--lat N] [--lon N] [--json]
       iphoto-cli cache stats|clear [--json]
       iphoto-cli watched list [--json]
       iphoto-cli watched add <pfad> [--auto-sync] [--json]
@@ -79,6 +83,7 @@ private func printUsage() {
       iphoto-cli rating batch-set <bild1> [<bild2>...] [--set N] [--flag pick|reject|none] [--color farbe] [--json]
       iphoto-cli export --list-formats [--json]
       iphoto-cli catalog scan-needed [--json]
+      iphoto-cli catalog backup-now [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -98,6 +103,8 @@ private func printUsage() {
     motif:    Motiv-Tags eines Bildes anzeigen
     elo:      ELO-Scores lesen, auflisten (nach Score sortiert) und setzen
     duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
+    config:   Einstellungen anzeigen, lesen (get <key>), schreiben (set <key> <wert>), ex-/importieren
+    metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
     """)
 }
 
@@ -3429,8 +3436,120 @@ private func runConfig(_ args: [String]) -> Int32 {
             return 1
         }
 
+    case "get":
+        guard let key = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli config get <schlüssel>\n", stderr); return 1
+        }
+        guard AppConfig.knownKeys.contains(key) else {
+            fputs("Fehler: Unbekannter Schlüssel '\(key)'\nBekannte Schlüssel: \(AppConfig.knownKeys.joined(separator: ", "))\n", stderr); return 1
+        }
+        if let v = AppConfig.defaults.object(forKey: key) {
+            print("\(v)")
+        } else {
+            print("(nicht gesetzt)")
+        }
+        return 0
+
+    case "set":
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli config set <schlüssel> <wert>\n", stderr); return 1
+        }
+        let key = positional[0], rawValue = positional[1]
+        guard AppConfig.knownKeys.contains(key) else {
+            fputs("Fehler: Unbekannter Schlüssel '\(key)'\nBekannte Schlüssel: \(AppConfig.knownKeys.joined(separator: ", "))\n", stderr); return 1
+        }
+        if rawValue.lowercased() == "true" {
+            AppConfig.defaults.set(true, forKey: key)
+        } else if rawValue.lowercased() == "false" {
+            AppConfig.defaults.set(false, forKey: key)
+        } else if let n = Int(rawValue) {
+            AppConfig.defaults.set(n, forKey: key)
+        } else {
+            AppConfig.defaults.set(rawValue, forKey: key)
+        }
+        AppConfig.defaults.synchronize()
+        print("Gesetzt: \(key) = \(rawValue)")
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli config show|export [--path <pfad>]|import <pfad>\n", stderr)
+        fputs("Verwendung: iphoto-cli config show|get <key>|set <key> <wert>|export [--path <pfad>]|import <pfad>\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Metadata
+
+private func runMetadata(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let jsonMode = args.contains("--json")
+    let svc = MetadataService()
+
+    switch sub {
+    case "get":
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli metadata get <bildpfad> [--json]\n", stderr); return 1
+        }
+        let url = URL(fileURLWithPath: path)
+        let entries = svc.readPhotoMetadata(from: url)
+        let editable = entries.filter { $0.isEditable }
+        if jsonMode {
+            var dict: [String: String] = [:]
+            for e in editable { dict[e.key] = e.value }
+            if let d = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if editable.isEmpty { print("(keine editierbaren Felder)") }
+            for e in editable { print("\(e.displayName): \(e.value)") }
+        }
+        return 0
+
+    case "set":
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli metadata set <bildpfad> [--title X] [--caption X] [--keywords X] [--copyright X] [--creator X] [--date X] [--lat N] [--lon N]\n", stderr); return 1
+        }
+        let url = URL(fileURLWithPath: path)
+        let ext = url.pathExtension.lowercased()
+        guard ["jpg","jpeg","png","tiff","tif"].contains(ext) else {
+            fputs("Fehler: metadata set unterstützt nur JPEG/PNG/TIFF-Dateien (nicht '\(ext)')\n", stderr); return 1
+        }
+        var entries = svc.defaultEntries()
+        func setEntry(key: String, value: String) {
+            if let i = entries.firstIndex(where: { $0.key == key }) { entries[i].value = value }
+        }
+        var i = 1
+        while i < args.count {
+            let a = args[i]
+            func next() -> String? { guard i + 1 < args.count else { return nil }; i += 1; return args[i] }
+            switch a {
+            case "--title":    if let v = next() { setEntry(key: "iptc.ObjectName", value: v) }
+            case "--caption":  if let v = next() { setEntry(key: "iptc.Caption", value: v) }
+            case "--keywords": if let v = next() { setEntry(key: "iptc.Keywords", value: v) }
+            case "--copyright":if let v = next() { setEntry(key: "iptc.Copyright", value: v) }
+            case "--creator":  if let v = next() { setEntry(key: "iptc.Creator", value: v) }
+            case "--date":     if let v = next() { setEntry(key: "exif.DateTimeOriginal", value: v) }
+            case "--lat":      if let v = next() { setEntry(key: "gps.Latitude", value: v) }
+            case "--lon":      if let v = next() { setEntry(key: "gps.Longitude", value: v) }
+            default: break
+            }
+            i += 1
+        }
+        do {
+            try svc.writePhotoMetadataSync(url: url, entries: entries)
+            if jsonMode {
+                let obj: [String: Any] = ["path": path, "ok": true]
+                if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                print("Metadaten gespeichert: \(path)")
+            }
+        } catch {
+            fputs("Fehler beim Schreiben: \(error.localizedDescription)\n", stderr); return 1
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli metadata get|set\n", stderr)
         return 1
     }
 }
@@ -3548,6 +3667,9 @@ if firstArg == "backup" {
 }
 if firstArg == "albumfolder" {
     exit(runAlbumFolder(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "metadata" {
+    exit(runMetadata(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }
