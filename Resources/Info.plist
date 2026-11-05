@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>iPhoto 1.2</string>
+	<string>iPhoto Α</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -64,11 +64,11 @@
 		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
-	<string>iPhoto 1.2</string>
+	<string>iPhoto Α</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.c0d3cru5h.iPhoto12</string>
 	<key>CFBundleName</key>
-	<string>iPhoto 1.2</string>
+	<string>iPhoto Α</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

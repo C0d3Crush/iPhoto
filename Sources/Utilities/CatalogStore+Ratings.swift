@@ -69,6 +69,25 @@ extension CatalogStore {
         }
     }
 
+    func eloCount() -> Int {
+        queue.sync {
+            let stmt = prepare("SELECT COUNT(*) FROM ratings WHERE elo > 0")
+            let n = step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : 0
+            sqlite3_finalize(stmt); return n
+        }
+    }
+
+    func ratingDistribution() -> [Int: Int] {
+        queue.sync {
+            let stmt = prepare("SELECT rating, COUNT(*) FROM ratings WHERE rating > 0 GROUP BY rating ORDER BY rating")
+            var out: [Int: Int] = [:]
+            while step(stmt) == SQLITE_ROW {
+                out[Int(sqlite3_column_int(stmt, 0))] = Int(sqlite3_column_int(stmt, 1))
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
     // MARK: - ELO (Bildvergleich)
 
     /// Persistiert nur die ELO-Spalten — bewusst getrennt von saveRating(), damit

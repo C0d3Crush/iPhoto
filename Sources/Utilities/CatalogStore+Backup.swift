@@ -37,17 +37,6 @@ extension CatalogStore {
         }
     }
 
-    /// Triggers an on-demand backup. Returns the backup file path on success, nil on failure.
-    func backupNow() -> String? {
-        guard let backupsDir = backupsDirectory() else { return nil }
-        let stamp = timestampForFilename()
-        let target = backupsDir.appendingPathComponent("catalog-\(stamp).db").path
-        let escaped = target.replacingOccurrences(of: "'", with: "''")
-        guard exec("VACUUM INTO '\(escaped)'") else { return nil }
-        pruneOldBackups()
-        return target
-    }
-
     private func performBackup() {
         guard let backupsDir = backupsDirectory() else { return }
         let stamp = timestampForFilename()
