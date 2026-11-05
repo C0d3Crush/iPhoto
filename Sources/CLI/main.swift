@@ -88,6 +88,7 @@ private func printUsage() {
       iphoto-cli exif set <bildpfad> [--iso N] [--focal MM] [--aperture F] [--lens NAME]
                           [--film NAME] [--hdr true|false] [--json]
       iphoto-cli exif films [--json]
+      iphoto-cli exif stats [--by lens|iso|aperture|focal|film|camera] [--limit N] [--json]
       iphoto-cli stack list [--json]
       iphoto-cli stack query <bildpfad> [--json]
       iphoto-cli trash list [--json]
@@ -3390,7 +3391,7 @@ private func runCatalog(_ args: [String]) -> Int32 {
     switch sub {
     case "stats":
         let dbPath = envDBPath() ?? "(Standard: ~/Library/Application Support/iPhoto/catalog.db)"
-        let imageCount  = catalog.allImages().count
+        let imageCount  = catalog.imageCount()
         let albumCount  = catalog.allAlbums().count
         let faceCount   = catalog.allFaces().count
         let peopleCount = catalog.allPeople().count
@@ -4787,8 +4788,72 @@ private func runExif(_ args: [String]) -> Int32 {
         else { films.forEach { print($0) } }
         return 0
 
+    case "stats":
+        // Ausrüstungs-/Aufnahme-Statistik: Häufigkeiten je EXIF-Feld per GROUP BY.
+        let fieldMap: [(key: String, column: String, label: String)] = [
+            ("camera", "camera_model", "Kamera"), ("lens", "lens_model", "Objektiv"),
+            ("focal", "focal_length", "Brennweite"), ("aperture", "aperture", "Blende"),
+            ("iso", "iso", "ISO"), ("film", "film_simulation", "Filmsimulation")]
+        var selected = fieldMap
+        var limit = 0
+        var i = 0
+        while i < rest.count {
+            let a = rest[i]
+            switch a {
+            case "--by":
+                guard i + 1 < rest.count else { fputs("Fehler: --by braucht einen Wert\n", stderr); return 1 }
+                let keys = rest[i + 1].lowercased().split(separator: ",").map { String($0) }
+                let unknown = keys.filter { k in !fieldMap.contains { $0.key == k } }
+                if keys.isEmpty || !unknown.isEmpty {
+                    fputs("Fehler: Unbekanntes Feld '\(unknown.joined(separator: ","))' — erlaubt: \(fieldMap.map { $0.key }.joined(separator: ", "))\n", stderr)
+                    return 1
+                }
+                selected = fieldMap.filter { keys.contains($0.key) }
+                i += 2
+            case "--limit":
+                guard i + 1 < rest.count, let n = Int(rest[i + 1]), n > 0 else {
+                    fputs("Fehler: --limit erwartet eine positive Zahl\n", stderr); return 1
+                }
+                limit = n; i += 2
+            default:
+                fputs("Fehler: Unbekannte Option '\(a)'\n", stderr)
+                fputs("Verwendung: iphoto-cli exif stats [--by lens|iso|aperture|focal|film|camera] [--limit N] [--json]\n", stderr)
+                return 1
+            }
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        let total = catalog.imageCount()
+        // REAL-Spalten liefern "35.0" — ganzzahlige Werte ohne Nachkomma ausgeben.
+        func tidy(_ v: String) -> String { v.hasSuffix(".0") ? String(v.dropLast(2)) : v }
+        var results: [(key: String, label: String, rows: [(value: String, count: Int)], distinct: Int)] = []
+        for f in selected {
+            let all = catalog.exifDistribution(column: f.column).map { (value: tidy($0.value), count: $0.count) }
+            results.append((key: f.key, label: f.label, rows: limit > 0 ? Array(all.prefix(limit)) : all, distinct: all.count))
+        }
+        if jsonMode {
+            var fields: [String: Any] = [:]
+            for r in results {
+                fields[r.key] = ["distinct": r.distinct,
+                                 "values": r.rows.map { ["value": $0.value, "count": $0.count] as [String: Any] }] as [String: Any]
+            }
+            printExifJSON(["images": total, "fields": fields] as [String: Any])
+        } else {
+            print("Bilder im Katalog: \(total)")
+            for r in results {
+                print("")
+                print("\(r.label) (\(r.distinct) verschiedene):")
+                if r.rows.isEmpty { print("  (keine Daten)"); continue }
+                let width = r.rows.map { $0.value.count }.max() ?? 0
+                for row in r.rows {
+                    let pct = total > 0 ? Double(row.count) * 100 / Double(total) : 0
+                    print("  \(row.value.padding(toLength: width, withPad: " ", startingAt: 0))  \(String(format: "%5d", row.count))  \(String(format: "%5.1f%%", pct))")
+                }
+            }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli exif get|set|films ... [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli exif get|set|films|stats ... [--json]\n", stderr)
         return 1
     }
 }

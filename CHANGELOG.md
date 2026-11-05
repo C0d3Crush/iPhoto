@@ -9,6 +9,12 @@
 - Akteure werden in `.github/actors.json` persistiert und bei neuen Akteur-Erfindungen automatisch committed
 - Jeder zugewiesene Issue erhält ein GitHub-Label `actor:<id>` und einen Kommentar mit einer konkreten Direktive (Aufgabe, Kontext, erwartetes Ergebnis)
 
+**CLI: Ausrüstungs- und Aufnahme-Statistik aus dem Katalog**
+- Neuer Befehl `iphoto-cli exif stats [--by lens|iso|aperture|focal|film|camera] [--limit N] [--json]` zeigt, wie oft welche Kamera, welches Objektiv, welche Brennweite, Blende, ISO-Stufe und Filmsimulation im Katalog vorkommt — absteigend sortiert, mit Prozentanteil
+- Je Feld eine einzige GROUP-BY-Abfrage statt Einzelabfragen pro Bild
+- `catalog stats` zählt Bilder jetzt per `COUNT(*)`, statt alle Katalogzeilen zu laden — schneller bei großen Bibliotheken
+- Tests in `Tests/run_plugins.sh` (leerer Katalog, Häufigkeiten, `--by`/`--limit`, Textausgabe, Fehlerpfade)
+
 ## 1.99.0
 **CLI: Smart-Ordner-SQL anzeigen und Treffer zählen**
 - Neuer Befehl `iphoto-cli smartfolder sql <name> [--count] [--json]` zeigt das SQL, das der Smart-Ordner gegen den Katalog ausführt (mit `--count` die Zähl-Abfrage der Seitenleiste); Laufzeit-Kriterien werden als Hinweis markiert

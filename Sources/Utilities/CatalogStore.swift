@@ -451,6 +451,34 @@ final class CatalogStore {
         }
     }
 
+    /// Anzahl Bilder im Katalog per COUNT(*) — ohne alle Zeilen zu materialisieren.
+    func imageCount() -> Int {
+        queue.sync {
+            let stmt = prepare("SELECT COUNT(*) FROM images")
+            var n = 0
+            if step(stmt) == SQLITE_ROW { n = Int(sqlite3_column_int64(stmt, 0)) }
+            sqlite3_finalize(stmt); return n
+        }
+    }
+
+    /// Spalten, die `exifDistribution(column:)` gruppieren darf (Whitelist gegen SQL-Injection).
+    static let exifDistributionColumns: Set<String> = ["lens_model", "iso", "aperture", "focal_length", "film_simulation", "camera_model"]
+
+    /// Häufigkeitsverteilung einer EXIF-Spalte, absteigend nach Anzahl. Ein einziger
+    /// GROUP-BY-Query statt N per-Bild-Lookups. Leere/NULL-Werte werden ausgelassen.
+    func exifDistribution(column: String) -> [(value: String, count: Int)] {
+        guard CatalogStore.exifDistributionColumns.contains(column) else { return [] }
+        return queue.sync {
+            let stmt = prepare("SELECT CAST(\(column) AS TEXT), COUNT(*) FROM images WHERE \(column) IS NOT NULL AND CAST(\(column) AS TEXT) != '' GROUP BY \(column) ORDER BY COUNT(*) DESC, \(column)")
+            var out: [(value: String, count: Int)] = []
+            while step(stmt) == SQLITE_ROW {
+                guard let c = sqlite3_column_text(stmt, 0) else { continue }
+                out.append((value: String(cString: c), count: Int(sqlite3_column_int64(stmt, 1))))
+            }
+            sqlite3_finalize(stmt); return out
+        }
+    }
+
     func pathsNeedingExifScan() -> [String] {
         queue.sync {
             let stmt = prepare("SELECT path FROM images WHERE exif_scanned=0 ORDER BY filename")
