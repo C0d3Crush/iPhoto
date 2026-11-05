@@ -2,6 +2,16 @@
 
 ---
 
+## 1.86.0
+**Feature — CLI: local-adjustments + smartfolder sync**
+
+- `iphoto-cli local-adjustments list <bildpfad> [--json]` — listet alle lokalen Masken (Gradient-/Radial-Masken mit Deltas) aus der gespeicherten `AdjustmentState` eines Bildes auf; gibt count + Masken-Details zurück
+- `iphoto-cli local-adjustments clear <bildpfad> [--json]` — entfernt alle lokalen Masken eines Bildes aus dem Katalog und behält globale Anpassungen (Belichtung, Kontrast usw.) erhalten
+- `iphoto-cli smartfolder sync [<name>] [--json]` — synchronisiert die Symlink-Verzeichnisse unter `~/Pictures/iPhoto/Intelligente Ordner` mit aktuellen Katalog-Treffern; ohne Namen werden alle SQL-auswertbaren Smart-Ordner synct
+- 6 neue Tests in `run_plugins.sh`
+
+---
+
 ## 1.85.0
 **Feature — CLI: metadata get/set + config get/set**
 

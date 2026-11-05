@@ -68,6 +68,9 @@ private func printUsage() {
       iphoto-cli smartfolder update <name> [--rating-min N] [--flag pick|reject] [--color farbe]
       iphoto-cli smartfolder rename <alter-name> <neuer-name>
       iphoto-cli smartfolder delete <name> [--json]
+      iphoto-cli smartfolder sync [<name>] [--json]
+      iphoto-cli local-adjustments list <bildpfad> [--json]
+      iphoto-cli local-adjustments clear <bildpfad> [--json]
       iphoto-cli stack list [--json]
       iphoto-cli stack query <bildpfad> [--json]
       iphoto-cli trash list [--json]
@@ -2226,8 +2229,38 @@ private func runSmartFolder(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "sync":
+        let catalog = CatalogStore(dbPath: envDBPath())
+        let targetName = subArgs.first(where: { !$0.hasPrefix("--") })
+        let folders = loadSmartFolders()
+        let toSync = targetName.map { n in folders.filter { $0.name == n } } ?? folders
+        if let name = targetName, toSync.isEmpty {
+            fputs("Fehler: Smart-Ordner '\(name)' nicht gefunden\n", stderr)
+            return 1
+        }
+        var synced: [[String: Any]] = []
+        for sf in toSync {
+            guard let paths = catalog.orderedPathsForSmartFolder(sf) else { continue }
+            let urls = paths.map { URL(fileURLWithPath: $0) }
+            SmartFolderFileSync.sync(sf, matchingURLs: urls)
+            synced.append(["name": sf.name, "count": paths.count])
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["synced": synced, "total": synced.count, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if synced.isEmpty { print("(keine synchronisierbaren Smart-Ordner)") }
+            else {
+                for s in synced { print("Sync: \(s["name"]!)  (\(s["count"]!) Bilder)") }
+                let dir = SmartFolderFileSync.root.path
+                print("Symlinks unter: \(dir)")
+            }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli smartfolder list|query|create|update|rename|delete [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli smartfolder list|query|create|update|rename|delete|sync [opts]\n", stderr)
         return 1
     }
 }
@@ -3582,6 +3615,105 @@ private func runCache(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - Local Adjustments CLI
+
+private func runLocalAdjustments(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let jsonMode = args.contains("--json")
+    let catalog = CatalogStore(dbPath: envDBPath())
+
+    switch sub {
+    case "list":
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli local-adjustments list <bildpfad> [--json]\n", stderr); return 1
+        }
+        guard let adj = catalog.loadAdjustments(path: path) else {
+            if jsonMode {
+                let d: [String: Any] = ["path": path, "count": 0, "masks": [Any]()]
+                if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
+                   let s = String(data: dd, encoding: .utf8) { print(s) }
+            } else {
+                print("Keine lokalen Anpassungen für: \(path)")
+            }
+            return 0
+        }
+        let masks = adj.localAdjustments
+        if jsonMode {
+            var items: [[String: Any]] = []
+            for m in masks {
+                var maskInfo: [String: Any] = [
+                    "id": m.id.uuidString, "label": m.label,
+                    "intensity": m.intensity, "inverted": m.inverted
+                ]
+                switch m.mask {
+                case .linearGradient(let sx, let sy, let ex, let ey):
+                    maskInfo["mask_type"] = "linear"
+                    maskInfo["startX"] = sx; maskInfo["startY"] = sy
+                    maskInfo["endX"] = ex;   maskInfo["endY"] = ey
+                case .radialGradient(let cx, let cy, let r, let f):
+                    maskInfo["mask_type"] = "radial"
+                    maskInfo["centerX"] = cx; maskInfo["centerY"] = cy
+                    maskInfo["radius"] = r;   maskInfo["feather"] = f
+                }
+                maskInfo["delta"] = [
+                    "exposure": m.delta.exposure, "brightness": m.delta.brightness,
+                    "contrast": m.delta.contrast, "saturation": m.delta.saturation,
+                    "warmth": m.delta.warmth, "tint": m.delta.tint
+                ]
+                items.append(maskInfo)
+            }
+            let obj: [String: Any] = ["path": path, "count": masks.count, "masks": items]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if masks.isEmpty { print("Keine lokalen Anpassungen für: \(path)") }
+            else {
+                print("\(masks.count) lokale Maske(n) für: \(path)")
+                for (i, m) in masks.enumerated() {
+                    let typeStr: String
+                    switch m.mask {
+                    case .linearGradient: typeStr = "linear"
+                    case .radialGradient: typeStr = "radial"
+                    }
+                    let label = m.label.isEmpty ? "(ohne Label)" : m.label
+                    print("  \(i+1). [\(typeStr)] \(label)  Intensität: \(m.intensity)")
+                }
+            }
+        }
+        return 0
+
+    case "clear":
+        guard let path = args.dropFirst().first(where: { !$0.hasPrefix("-") }) else {
+            fputs("Verwendung: iphoto-cli local-adjustments clear <bildpfad> [--json]\n", stderr); return 1
+        }
+        guard var adj = catalog.loadAdjustments(path: path) else {
+            if jsonMode {
+                let d: [String: Any] = ["path": path, "cleared": 0, "ok": true]
+                if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
+                   let s = String(data: dd, encoding: .utf8) { print(s) }
+            } else {
+                print("Keine Anpassungen gefunden für: \(path)")
+            }
+            return 0
+        }
+        let count = adj.localAdjustments.count
+        adj.localAdjustments = []
+        catalog.saveAdjustments(path: path, adjustments: adj)
+        if jsonMode {
+            let d: [String: Any] = ["path": path, "cleared": count, "ok": true]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print("\(count) lokale Maske(n) entfernt: \(path)")
+        }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli local-adjustments list|clear <bildpfad> [--json]\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -3670,6 +3802,9 @@ if firstArg == "albumfolder" {
 }
 if firstArg == "metadata" {
     exit(runMetadata(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "local-adjustments" {
+    exit(runLocalAdjustments(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

@@ -702,6 +702,74 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# local-adjustments list / clear
+# ---------------------------------------------------------------------------
+echo "--- Local Adjustments ---"
+
+# list on unknown path → 0 exit, reports no adjustments
+LA_LIST=$("$BIN" local-adjustments list "/nonexistent/no_adj.jpg" --json 2>&1)
+LA_LIST_EXIT=$?
+if [ $LA_LIST_EXIT -eq 0 ] && echo "$LA_LIST" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('count',1) == 0" 2>/dev/null; then
+    pass "local-adjustments list (kein Eintrag → count 0)"
+else
+    fail "local-adjustments list" "Exit $LA_LIST_EXIT: $LA_LIST"
+fi
+
+# clear on path that has no adjustments stored → ok:true, cleared:0
+LA_CLEAR=$("$BIN" local-adjustments clear "/nonexistent/no_adj.jpg" --json 2>&1)
+LA_CLEAR_EXIT=$?
+if [ $LA_CLEAR_EXIT -eq 0 ] && echo "$LA_CLEAR" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True and d.get('cleared',1) == 0" 2>/dev/null; then
+    pass "local-adjustments clear (kein Eintrag → cleared 0, ok true)"
+else
+    fail "local-adjustments clear" "Exit $LA_CLEAR_EXIT: $LA_CLEAR"
+fi
+
+# missing subcommand → error exit
+LA_BAD_EXIT=0
+"$BIN" local-adjustments 2>/dev/null || LA_BAD_EXIT=$?
+if [ $LA_BAD_EXIT -ne 0 ]; then
+    pass "local-adjustments (kein Subbefehl → Fehler)"
+else
+    fail "local-adjustments (kein Subbefehl)" "Hätte fehlschlagen sollen"
+fi
+
+# list without path argument → error exit
+LA_NOPATH_EXIT=0
+"$BIN" local-adjustments list 2>/dev/null || LA_NOPATH_EXIT=$?
+if [ $LA_NOPATH_EXIT -ne 0 ]; then
+    pass "local-adjustments list (kein Pfad → Fehler)"
+else
+    fail "local-adjustments list (kein Pfad)" "Hätte fehlschlagen sollen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# smartfolder sync
+# ---------------------------------------------------------------------------
+echo "--- SmartFolder Sync ---"
+
+# sync with no smart folders defined → succeeds, reports 0 synced entries
+SF_SYNC=$("$BIN" smartfolder sync --json 2>&1)
+SF_SYNC_EXIT=$?
+if [ $SF_SYNC_EXIT -eq 0 ] && echo "$SF_SYNC" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null; then
+    pass "smartfolder sync (keine Ordner → ok true)"
+else
+    fail "smartfolder sync" "Exit $SF_SYNC_EXIT: $SF_SYNC"
+fi
+
+# sync a non-existent named folder → error exit
+SF_SYNC_BAD_EXIT=0
+"$BIN" smartfolder sync "NichtVorhanden_TestFolder_XYZ" 2>/dev/null || SF_SYNC_BAD_EXIT=$?
+if [ $SF_SYNC_BAD_EXIT -ne 0 ]; then
+    pass "smartfolder sync (unbekannter Name → Fehler)"
+else
+    fail "smartfolder sync (unbekannter Name)" "Hätte fehlschlagen sollen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
