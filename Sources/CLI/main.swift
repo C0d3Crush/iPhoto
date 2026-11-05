@@ -49,6 +49,9 @@ private func printUsage() {
       iphoto-cli albumfolder list|create|rename|delete [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
+      iphoto-cli motif set <bildpfad> <tag1,tag2,...> [--json]
+      iphoto-cli motif find <tag> [--json]
+      iphoto-cli motif stats [--json]
       iphoto-cli duplicate list|similar [--json]
       iphoto-cli config show|get <key>|set <key> <wert>|export [--path <pfad>]|import <pfad>
       iphoto-cli metadata get <bildpfad> [--json]
@@ -3660,8 +3663,73 @@ private func runMotif(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "set":
+        // motif set <bildpfad> <tag1,tag2,...> — manuelle Korrektur der Motiv-Tags.
+        let positional = args.dropFirst().filter { !$0.hasPrefix("--") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli motif set <bildpfad> <tag1,tag2,...> [--json]\n", stderr); return 1
+        }
+        let path = positional[positional.startIndex]
+        guard catalog.image(forPath: path) != nil else {
+            fputs("Fehler: Bild nicht im Katalog: \(path)\n", stderr); return 1
+        }
+        // Normalisieren: trimmen, lowercase, leere entfernen, Reihenfolge-stabil deduplizieren.
+        var seen = Set<String>()
+        let tags = positional.dropFirst()
+            .flatMap { $0.split(separator: ",") }
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+        catalog.upsertMotifs(path: path, tags: tags)
+        if jsonMode {
+            let d: [String: Any] = ["path": path, "motifs": tags, "ok": true]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print(tags.isEmpty ? "Motiv-Tags geleert: \(path)" : "Motiv-Tags gesetzt: \(tags.joined(separator: ", "))")
+        }
+        return 0
+
+    case "find":
+        guard let tag = args.dropFirst().first(where: { !$0.hasPrefix("-") })?
+                .trimmingCharacters(in: .whitespaces).lowercased(), !tag.isEmpty else {
+            fputs("Verwendung: iphoto-cli motif find <tag> [--json]\n", stderr); return 1
+        }
+        // Ein einziger SELECT über alle Motive, Filter in-memory (O(N)).
+        let paths = catalog.allMotifs().filter { $0.tags.contains(tag) }.map { $0.path }
+        if jsonMode {
+            let d: [String: Any] = ["tag": tag, "count": paths.count, "paths": paths]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            if paths.isEmpty { print("(keine Bilder mit Motiv '\(tag)')") }
+            else { paths.forEach { print($0) } }
+        }
+        return 0
+
+    case "stats":
+        var counts: [String: Int] = [:]
+        let all = catalog.allMotifs()
+        for entry in all { for t in entry.tags { counts[t, default: 0] += 1 } }
+        let sorted = counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+        if jsonMode {
+            let arr = sorted.map { ["tag": $0.key, "count": $0.value] as [String: Any] }
+            let d: [String: Any] = ["images": all.count, "tags": arr]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            if sorted.isEmpty { print("(keine Motiv-Tags im Katalog)") }
+            else {
+                print("\(all.count) Bild(er) mit Motiv-Tags")
+                sorted.forEach { e in
+                    let n = String(e.value)
+                    print(String(repeating: " ", count: max(0, 6 - n.count)) + n + "  " + e.key)
+                }
+            }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli motif get|list [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli motif get|list|set|find|stats [--json]\n", stderr)
         return 1
     }
 }

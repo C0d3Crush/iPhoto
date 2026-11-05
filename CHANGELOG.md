@@ -2,6 +2,14 @@
 
 ---
 
+## 1.91.0
+**CLI: Motiv-Tags setzen, suchen und auswerten**
+- Neuer Befehl `iphoto-cli motif set <bildpfad> <tag1,tag2,...> [--json]` setzt die Motiv-Tags eines Bildes manuell (z. B. zur Korrektur der automatischen Erkennung) — Tags werden getrimmt, kleingeschrieben und dedupliziert
+- Neuer Befehl `iphoto-cli motif find <tag> [--json]` listet alle Bilder mit einem bestimmten Motiv (Groß-/Kleinschreibung egal)
+- Neuer Befehl `iphoto-cli motif stats [--json]` zeigt die Häufigkeit aller Motiv-Tags im Katalog, absteigend sortiert
+- Alle drei Befehle nutzen einen einzigen SQLite-Zugriff; Filter und Zählung laufen im Speicher
+- Tests in `Tests/run_plugins.sh` (Normalisierung, Roundtrip, Suche, Statistik, leerer Katalog, Fehlerpfade)
+
 ## 1.90.0
 **CLI: Katalog-Einträge anzeigen und direkt registrieren**
 - Neuer Befehl `iphoto-cli catalog get <pfad> [--json]` zeigt einen einzelnen Katalog-Eintrag (Maße, Größe, RAW, Kamera, Aufnahme- und Importdatum)

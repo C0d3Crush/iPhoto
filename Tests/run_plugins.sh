@@ -1217,6 +1217,88 @@ if [ $CGA_ERR -ne 0 ]; then pass "catalog add (ohne Pfad → Fehler)"; else fail
 echo ""
 
 # ---------------------------------------------------------------------------
+# motif set / find / stats
+# ---------------------------------------------------------------------------
+echo "--- MOTIF SET / FIND / STATS ---"
+
+MOT_DB="$TMPDIR/motif_catalog.db"
+MOT_IMG_A="$TMPDIR/motif_a.png"
+MOT_IMG_B="$TMPDIR/motif_b.png"
+cp "$INPUT_PNG" "$MOT_IMG_A"
+cp "$INPUT_PNG" "$MOT_IMG_B"
+IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" catalog add "$MOT_IMG_A" "$MOT_IMG_B" > /dev/null 2>&1 || true
+
+# set normalisiert (trim, lowercase, dedupe)
+MOT_SET_EXIT=0
+MOT_SET=$(IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" motif set "$MOT_IMG_A" "Sky, cloud,sky" --json 2>&1) || MOT_SET_EXIT=$?
+if [ $MOT_SET_EXIT -eq 0 ] && echo "$MOT_SET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['motifs']==['sky','cloud']" 2>/dev/null; then
+    pass "motif set --json (normalisiert)"
+else
+    fail "motif set --json" "Exit $MOT_SET_EXIT: $MOT_SET"
+fi
+IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" motif set "$MOT_IMG_B" sky,beach > /dev/null 2>&1 || true
+
+# get liest die gesetzten Tags zurück
+MOT_GET=$(IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" motif get "$MOT_IMG_A" --json 2>&1) || true
+if echo "$MOT_GET" | python3 -c "import sys,json; assert json.load(sys.stdin)['motifs']==['sky','cloud']" 2>/dev/null; then
+    pass "motif set → get (Roundtrip)"
+else
+    fail "motif set → get" "$MOT_GET"
+fi
+
+# find
+MOT_FIND_EXIT=0
+MOT_FIND=$(IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" motif find SKY --json 2>&1) || MOT_FIND_EXIT=$?
+if [ $MOT_FIND_EXIT -eq 0 ] && echo "$MOT_FIND" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['tag']=='sky' and d['count']==2" 2>/dev/null; then
+    pass "motif find --json (2 Treffer, case-insensitive)"
+else
+    fail "motif find --json" "Exit $MOT_FIND_EXIT: $MOT_FIND"
+fi
+MOT_FIND2=$(IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" motif find beach --json 2>&1) || true
+if echo "$MOT_FIND2" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==1 and d['paths'][0].endswith('motif_b.png')" 2>/dev/null; then
+    pass "motif find beach (1 Treffer)"
+else
+    fail "motif find beach" "$MOT_FIND2"
+fi
+
+# stats: sky=2 zuerst, dann beach/cloud je 1 (alphabetisch)
+MOT_STATS_EXIT=0
+MOT_STATS=$(IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" motif stats --json 2>&1) || MOT_STATS_EXIT=$?
+if [ $MOT_STATS_EXIT -eq 0 ] && echo "$MOT_STATS" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['images']==2
+assert [(t['tag'],t['count']) for t in d['tags']]==[('sky',2),('beach',1),('cloud',1)]
+" 2>/dev/null; then
+    pass "motif stats --json (Häufigkeit sortiert)"
+else
+    fail "motif stats --json" "Exit $MOT_STATS_EXIT: $MOT_STATS"
+fi
+
+# stats auf leerem Katalog
+MOT_EMPTY=$(IPHOTO_CATALOG_DB="$TMPDIR/motif_empty.db" "$BIN" motif stats --json 2>&1) || true
+if echo "$MOT_EMPTY" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['images']==0 and d['tags']==[]" 2>/dev/null; then
+    pass "motif stats (leerer Katalog)"
+else
+    fail "motif stats (leer)" "$MOT_EMPTY"
+fi
+
+# Fehlerpfade
+MOT_ERR=0
+IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" motif set "/nonexistent/none.jpg" sky > /dev/null 2>&1 || MOT_ERR=$?
+if [ $MOT_ERR -ne 0 ]; then pass "motif set (nicht im Katalog → Fehler)"; else fail "motif set (unbekannt)" "Hätte fehlschlagen sollen"; fi
+
+MOT_ERR=0
+IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" motif set "$MOT_IMG_A" > /dev/null 2>&1 || MOT_ERR=$?
+if [ $MOT_ERR -ne 0 ]; then pass "motif set (ohne Tags → Fehler)"; else fail "motif set (ohne Tags)" "Hätte fehlschlagen sollen"; fi
+
+MOT_ERR=0
+IPHOTO_CATALOG_DB="$MOT_DB" "$BIN" motif find > /dev/null 2>&1 || MOT_ERR=$?
+if [ $MOT_ERR -ne 0 ]; then pass "motif find (ohne Tag → Fehler)"; else fail "motif find (ohne Tag)" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
