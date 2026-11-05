@@ -39,6 +39,10 @@ final class BackupSettings: ObservableObject {
     @Published var collisionMode: CollisionMode {
         didSet { UserDefaults.standard.set(collisionMode.rawValue, forKey: Keys.collisionMode) }
     }
+    /// Wenn aktiv: Bild wird vor dem endgültigen Löschen automatisch gesichert.
+    @Published var backupBeforeDelete: Bool {
+        didSet { UserDefaults.standard.set(backupBeforeDelete, forKey: Keys.backupBeforeDelete) }
+    }
     /// Security-Scoped Bookmark auf den gewählten Zielordner. Wird direkt in UserDefaults
     /// gespeichert (keine BookmarkStore-Doppelhaltung nötig — der Zielordner ist einmalig,
     /// nicht per-Bild).
@@ -67,8 +71,9 @@ final class BackupSettings: ObservableObject {
         self.downscaleEnabled  = (d.object(forKey: Keys.downscaleEnabled) as? Bool) ?? false
         self.longSidePixels    = (d.object(forKey: Keys.longSidePixels) as? Int) ?? Self.defaultLongSide
         let mode = d.string(forKey: Keys.collisionMode).flatMap(CollisionMode.init(rawValue:))
-        self.collisionMode     = mode ?? .rename
-        self.destinationBookmark    = d.data(forKey: Keys.destinationBookmark)
+        self.collisionMode        = mode ?? .rename
+        self.backupBeforeDelete   = (d.object(forKey: Keys.backupBeforeDelete) as? Bool) ?? false
+        self.destinationBookmark  = d.data(forKey: Keys.destinationBookmark)
         self.destinationDisplayPath = d.string(forKey: Keys.destinationDisplayPath)
             ?? Self.defaultDestinationURL.path
     }
@@ -119,7 +124,8 @@ final class BackupSettings: ObservableObject {
         static let downscaleEnabled      = "backup.downscaleEnabled"
         static let longSidePixels        = "backup.longSidePixels"
         static let collisionMode         = "backup.collisionMode"
-        static let destinationBookmark   = "backup.destinationBookmark"
+        static let destinationBookmark    = "backup.destinationBookmark"
         static let destinationDisplayPath = "backup.destinationDisplayPath"
+        static let backupBeforeDelete     = "backup.backupBeforeDelete"
     }
 }
