@@ -126,6 +126,9 @@ private func printUsage() {
       iphoto-cli bookmarks remove <pfad|file-url> [...] [--json]
       iphoto-cli bookmarks prune [--dry-run] [--json]
       iphoto-cli bookmarks path [--json]
+      iphoto-cli gear summary [--json]
+      iphoto-cli gear cameras|lenses [--limit N] [--json]
+      iphoto-cli gear focal|iso|aperture [--limit N] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -153,6 +156,8 @@ private func printUsage() {
               (fix) oder wieder öffnen (reopen); Ordner per IPHOTO_BUGREPORT_DIR überschreibbar
     bookmarks:Security-Scoped-Bookmarks (bookmarks.json) auflisten, Statistik, einzeln entfernen oder
               verwaiste Einträge aufräumen (prune; offline-Volumes bleiben); Datei per IPHOTO_BOOKMARKS_FILE
+    gear:     Kamera-/Objektiv-Statistik aus dem Katalog: Rangliste nach Häufigkeit (cameras/lenses),
+              Histogramme für Brennweite/ISO/Blende, summary mit Min/Max/Median
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
     """)
 }
@@ -5405,6 +5410,189 @@ private func runBugReport(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - gear (Kamera-/Objektiv-/Belichtungsstatistik aus dem Katalog)
+
+/// Zahl ohne überflüssige Nachkommastellen: 35.0 → "35", 2.8 → "2.8".
+private func gearNumberLabel(_ v: Double) -> String {
+    if v == v.rounded() && abs(v) < 1e9 { return String(Int(v)) }
+    return String(format: "%.1f", v)
+}
+
+private func runGear(_ args: [String]) -> Int32 {
+    let usage = "Verwendung: iphoto-cli gear summary|cameras|lenses|focal|iso|aperture [--limit N] [--json]\n"
+    let jsonMode = args.contains("--json")
+    let sub = args.first ?? "summary"
+    let valid: Set<String> = ["summary", "cameras", "lenses", "focal", "iso", "aperture"]
+    guard valid.contains(sub) else {
+        fputs("Fehler: Unbekannter gear-Befehl '\(sub)'\n", stderr); fputs(usage, stderr); return 1
+    }
+
+    // Optionen parsen
+    var limit: Int? = nil
+    let opts = Array(args.dropFirst())
+    var i = 0
+    while i < opts.count {
+        let key = opts[i]
+        switch key {
+        case "--json": i += 1
+        case "--limit":
+            guard i + 1 < opts.count, let n = Int(opts[i + 1]), n > 0 else {
+                fputs("Fehler: --limit erwartet eine positive Ganzzahl\n", stderr); return 1
+            }
+            limit = n; i += 2
+        default:
+            fputs("Fehler: Unbekannte Option '\(key)'\n", stderr); fputs(usage, stderr); return 1
+        }
+    }
+
+    let catalog = CatalogStore(dbPath: envDBPath())
+    // Ein einziger SELECT für die Bilder; EXIF kommt aus dem beim Öffnen geladenen
+    // In-Memory-Cache (kein SQLite-Query pro Bild).
+    let images = catalog.allImages()
+    let unknown = "(unbekannt)"
+
+    var cameras: [String: Int] = [:]
+    var lenses: [String: Int] = [:]
+    var focal: [Double: Int] = [:]
+    var iso: [Int: Int] = [:]
+    var aperture: [Double: Int] = [:]
+    var withExif = 0
+    for img in images {
+        let make = img.cameraMake?.trimmingCharacters(in: .whitespaces) ?? ""
+        let model = img.cameraModel?.trimmingCharacters(in: .whitespaces) ?? ""
+        let cam: String
+        if model.isEmpty { cam = make.isEmpty ? unknown : make }
+        else if make.isEmpty || model.lowercased().hasPrefix(make.lowercased()) { cam = model }
+        else { cam = "\(make) \(model)" }
+        cameras[cam, default: 0] += 1
+
+        guard let e = catalog.exif(forPath: img.path) else {
+            lenses[unknown, default: 0] += 1
+            continue
+        }
+        if e.focalLength != nil || e.iso != nil || e.aperture != nil || e.lensModel != nil { withExif += 1 }
+        let lens = e.lensModel?.trimmingCharacters(in: .whitespaces) ?? ""
+        lenses[lens.isEmpty ? unknown : lens, default: 0] += 1
+        if let f = e.focalLength, f > 0 { focal[(f * 10).rounded() / 10, default: 0] += 1 }
+        if let n = e.iso, n > 0 { iso[n, default: 0] += 1 }
+        if let a = e.aperture, a > 0 { aperture[(a * 10).rounded() / 10, default: 0] += 1 }
+    }
+
+    /// Nach Anzahl absteigend, bei Gleichstand alphabetisch; "(unbekannt)" immer zuletzt.
+    func ranked(_ d: [String: Int]) -> [(name: String, count: Int)] {
+        let sorted = d.map { (name: $0.key, count: $0.value) }.sorted {
+            if ($0.name == unknown) != ($1.name == unknown) { return $1.name == unknown }
+            return $0.count != $1.count ? $0.count > $1.count : $0.name < $1.name
+        }
+        if let l = limit { return Array(sorted.prefix(l)) }
+        return sorted
+    }
+    func histogram<K: Comparable & Hashable>(_ d: [K: Int], label: (K) -> String, value: (K) -> Any) -> [[String: Any]] {
+        var rows = d.keys.sorted().map { k -> [String: Any] in ["value": value(k), "label": label(k), "count": d[k] ?? 0] }
+        if let l = limit {
+            // Bei Limit die häufigsten Werte behalten, Ausgabe bleibt aufsteigend sortiert.
+            let top = Set(d.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+                           .prefix(l).map { label($0.key) })
+            rows = rows.filter { top.contains($0["label"] as? String ?? "") }
+        }
+        return rows
+    }
+    func median<K: Comparable & Hashable>(_ d: [K: Int]) -> K? {
+        let total = d.values.reduce(0, +)
+        guard total > 0 else { return nil }
+        var acc = 0
+        for k in d.keys.sorted() {
+            acc += d[k] ?? 0
+            if acc * 2 >= total { return k }
+        }
+        return nil
+    }
+    func printRows(_ rows: [[String: Any]], unit: String) {
+        if rows.isEmpty { print("(keine Daten im Katalog)"); return }
+        let maxCount = rows.compactMap { $0["count"] as? Int }.max() ?? 1
+        for r in rows {
+            let c = r["count"] as? Int ?? 0
+            let bar = String(repeating: "█", count: max(1, c * 30 / max(1, maxCount)))
+            let lbl = (r["label"] as? String ?? "") + unit
+            let num = String(c)
+            let numPadded = String(repeating: " ", count: max(0, 6 - num.count)) + num
+            print(lbl.padding(toLength: 12, withPad: " ", startingAt: 0) + " " + numPadded + "  " + bar)
+        }
+    }
+
+    switch sub {
+    case "cameras", "lenses":
+        let rows = ranked(sub == "cameras" ? cameras : lenses)
+        let key = sub == "cameras" ? "camera" : "lens"
+        if jsonMode {
+            printExifJSON(rows.map { [key: $0.name, "count": $0.count] as [String: Any] })
+        } else if rows.isEmpty {
+            print("(keine Bilder im Katalog)")
+        } else {
+            let width = min(40, max(10, rows.map { $0.name.count }.max() ?? 10))
+            for r in rows { print("\(r.name.padding(toLength: width, withPad: " ", startingAt: 0))  \(r.count)") }
+        }
+        return 0
+
+    case "focal":
+        let rows = histogram(focal, label: gearNumberLabel, value: { $0 as Any })
+        if jsonMode { printExifJSON(rows) } else { printRows(rows, unit: " mm") }
+        return 0
+
+    case "iso":
+        let rows = histogram(iso, label: { String($0) }, value: { $0 as Any })
+        if jsonMode { printExifJSON(rows) } else { printRows(rows, unit: "") }
+        return 0
+
+    case "aperture":
+        let rows = histogram(aperture, label: { "f/" + gearNumberLabel($0) }, value: { $0 as Any })
+        if jsonMode { printExifJSON(rows) } else { printRows(rows, unit: "") }
+        return 0
+
+    default: // summary
+        func orNull(_ v: Any?) -> Any { v ?? NSNull() }
+        let topCam = ranked(cameras).first { $0.name != unknown }
+        let topLens = ranked(lenses).first { $0.name != unknown }
+        let obj: [String: Any] = [
+            "images": images.count,
+            "with_exif": withExif,
+            "cameras": cameras.keys.filter { $0 != unknown }.count,
+            "lenses": lenses.keys.filter { $0 != unknown }.count,
+            "top_camera": orNull(topCam?.name),
+            "top_lens": orNull(topLens?.name),
+            "focal_min": orNull(focal.keys.min()), "focal_max": orNull(focal.keys.max()),
+            "focal_median": orNull(median(focal)),
+            "iso_min": orNull(iso.keys.min()), "iso_max": orNull(iso.keys.max()),
+            "iso_median": orNull(median(iso)),
+            "aperture_min": orNull(aperture.keys.min()), "aperture_max": orNull(aperture.keys.max()),
+            "aperture_median": orNull(median(aperture))
+        ]
+        if jsonMode { printExifJSON(obj); return 0 }
+        func range<T>(_ lo: T?, _ hi: T?, _ med: T?, _ fmt: (T) -> String) -> String {
+            guard let lo = lo, let hi = hi else { return "—" }
+            let m = med.map { " (Median \(fmt($0)))" } ?? ""
+            return "\(fmt(lo)) – \(fmt(hi))\(m)"
+        }
+        print("Bilder:        \(images.count)")
+        print("Mit EXIF:      \(withExif)")
+        let camCount = cameras.keys.filter { $0 != unknown }.count
+        let lensCount = lenses.keys.filter { $0 != unknown }.count
+        var camLine = "Kameras:       \(camCount)"
+        if let t = topCam { camLine += "  (meist: \(t.name), \(t.count)×)" }
+        var lensLine = "Objektive:     \(lensCount)"
+        if let t = topLens { lensLine += "  (meist: \(t.name), \(t.count)×)" }
+        print(camLine)
+        print(lensLine)
+        let focalLine = range(focal.keys.min(), focal.keys.max(), median(focal), { (v: Double) -> String in gearNumberLabel(v) + " mm" })
+        let isoLine = range(iso.keys.min(), iso.keys.max(), median(iso), { (v: Int) -> String in String(v) })
+        let apLine = range(aperture.keys.min(), aperture.keys.max(), median(aperture), { (v: Double) -> String in "f/" + gearNumberLabel(v) })
+        print("Brennweite:    \(focalLine)")
+        print("ISO:           \(isoLine)")
+        print("Blende:        \(apLine)")
+        return 0
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -5517,6 +5705,9 @@ if firstArg == "bugreport" {
 }
 if firstArg == "bookmarks" {
     exit(runBookmarks(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "gear" {
+    exit(runGear(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

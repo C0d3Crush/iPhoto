@@ -10,10 +10,17 @@
 - Jeder zugewiesene Issue erhält ein GitHub-Label `actor:<id>` und einen Kommentar mit einer konkreten Direktive (Aufgabe, Kontext, erwartetes Ergebnis)
 
 **CLI: Ausrüstungs- und Aufnahme-Statistik aus dem Katalog**
-- Neuer Befehl `iphoto-cli exif stats [--by lens|iso|aperture|focal|film|camera] [--limit N] [--json]` zeigt, wie oft welche Kamera, welches Objektiv, welche Brennweite, Blende, ISO-Stufe und Filmsimulation im Katalog vorkommt — absteigend sortiert, mit Prozentanteil
+- Neuer Befehl `iphoto-cli exif stats [--by lens|iso|aperture|focal|film|camera] [--limit N] [--json]` zeigt Verteilungen nach Kamera, Objektiv, Brennweite, Blende, ISO und Filmsimulation
 - Je Feld eine einzige GROUP-BY-Abfrage statt Einzelabfragen pro Bild
-- `catalog stats` zählt Bilder jetzt per `COUNT(*)`, statt alle Katalogzeilen zu laden — schneller bei großen Bibliotheken
+- `catalog stats` zählt Bilder jetzt per `COUNT(*)` — schneller bei großen Bibliotheken
 - Tests in `Tests/run_plugins.sh` (leerer Katalog, Häufigkeiten, `--by`/`--limit`, Textausgabe, Fehlerpfade)
+
+**CLI: Ausrüstungs-Statistik aus dem Katalog (`gear`)**
+- Neuer Befehl `iphoto-cli gear summary [--json]` fasst die Bibliothek zusammen: Anzahl Kameras/Objektive, meistgenutztes Objektiv und Kamera sowie Min/Max/Median von Brennweite, ISO und Blende
+- `iphoto-cli gear cameras|lenses [--limit N] [--json]` zeigt eine Rangliste nach Häufigkeit (unbekannte Einträge immer zuletzt)
+- `iphoto-cli gear focal|iso|aperture [--limit N] [--json]` liefert Histogramme (Textausgabe mit Balken)
+- Liest Bilder mit einer einzigen Katalog-Abfrage, EXIF-Werte aus dem In-Memory-Cache — kein SQLite-Query pro Bild
+- Tests in `Tests/run_plugins.sh` (leerer Katalog, Ranglisten, Histogramme, Median, Fehlerpfade)
 
 ## 1.99.0
 **CLI: Smart-Ordner-SQL anzeigen und Treffer zählen**
