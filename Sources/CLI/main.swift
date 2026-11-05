@@ -91,6 +91,8 @@ private func printUsage() {
       iphoto-cli elo get <bildpfad> [--json]
       iphoto-cli elo list [--json]
       iphoto-cli elo set <bildpfad> <wert> [--matches N] [--json]
+      iphoto-cli elo match <links> <rechts> [--winner left|right|draw] [--json]
+      iphoto-cli elo reset <bildpfad> [<bildpfad>...] | --all [--json]
       iphoto-cli adjustments list [--json]
       iphoto-cli adjustments get <bildpfad> [--json]
       iphoto-cli adjustments delete <bildpfad> [--json]
@@ -3485,8 +3487,80 @@ private func runElo(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "match":
+        // Duell zwischen zwei Bildern — nutzt dieselbe EloRating.update-Logik wie der Duell-Modus der App.
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        let usage = "Verwendung: iphoto-cli elo match <links> <rechts> [--winner left|right|draw] [--json]\n"
+        guard positional.count >= 2 else { fputs(usage, stderr); return 1 }
+        let leftPath = positional[0], rightPath = positional[1]
+        guard leftPath != rightPath else {
+            fputs("Fehler: Ein Bild kann nicht gegen sich selbst antreten\n", stderr); return 1
+        }
+        var winner = "left"
+        if let wi = args.firstIndex(of: "--winner") {
+            guard wi + 1 < args.count else { fputs(usage, stderr); return 1 }
+            winner = args[wi + 1].lowercased()
+        }
+        let leftScore: Double
+        switch winner {
+        case "left":  leftScore = 1.0
+        case "right": leftScore = 0.0
+        case "draw":  leftScore = 0.5
+        default:
+            fputs("Fehler: Ungültiger --winner '\(winner)'. Erlaubt: left, right, draw\n", stderr); return 1
+        }
+        let l = catalog.elo(forPath: leftPath) ?? (elo: EloRating.initial, matches: 0)
+        let r = catalog.elo(forPath: rightPath) ?? (elo: EloRating.initial, matches: 0)
+        let res = EloRating.update(leftRating: l.elo, leftMatches: l.matches,
+                                   rightRating: r.elo, rightMatches: r.matches,
+                                   leftScore: leftScore)
+        catalog.saveElo(path: leftPath, elo: res.left, eloMatches: l.matches + 1)
+        catalog.saveElo(path: rightPath, elo: res.right, eloMatches: r.matches + 1)
+        if jsonMode {
+            let d: [String: Any] = [
+                "winner": winner,
+                "left":  ["path": leftPath,  "before": l.elo, "elo": res.left,  "matches": l.matches + 1] as [String: Any],
+                "right": ["path": rightPath, "before": r.elo, "elo": res.right, "matches": r.matches + 1] as [String: Any],
+                "ok": true
+            ]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print(String(format: "Links:  %.1f → %.1f  %@", l.elo, res.left, leftPath))
+            print(String(format: "Rechts: %.1f → %.1f  %@", r.elo, res.right, rightPath))
+        }
+        return 0
+
+    case "reset":
+        let resetAll = args.contains("--all")
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        var targets: [String]
+        if resetAll {
+            targets = Array(catalog.allElos().keys).sorted()
+        } else {
+            guard !positional.isEmpty else {
+                fputs("Verwendung: iphoto-cli elo reset <bildpfad> [<bildpfad>...] | --all [--json]\n", stderr); return 1
+            }
+            targets = []
+            for p in positional {
+                guard catalog.elo(forPath: p) != nil else {
+                    fputs("Fehler: Kein ELO-Eintrag für '\(p)'\n", stderr); return 1
+                }
+                targets.append(p)
+            }
+        }
+        for p in targets { catalog.saveElo(path: p, elo: EloRating.initial, eloMatches: 0) }
+        if jsonMode {
+            let d: [String: Any] = ["reset": targets.count, "paths": targets, "elo": EloRating.initial, "ok": true]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: []),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print("\(targets.count) ELO-Eintrag/Einträge auf \(Int(EloRating.initial)) zurückgesetzt")
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli elo get|list|set [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli elo get|list|set|match|reset [opts]\n", stderr)
         return 1
     }
 }

@@ -1299,6 +1299,85 @@ if [ $MOT_ERR -ne 0 ]; then pass "motif find (ohne Tag → Fehler)"; else fail "
 echo ""
 
 # ---------------------------------------------------------------------------
+# elo match / elo reset
+# ---------------------------------------------------------------------------
+echo "--- elo match/reset ---"
+ELO_DB="$TMPDIR/elo_match_catalog.db"
+ELO_A="/tmp/elo_test_a.jpg"
+ELO_B="/tmp/elo_test_b.jpg"
+
+ELO_OUT=$(IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo match "$ELO_A" "$ELO_B" --json 2>/dev/null) || true
+if echo "$ELO_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['ok'] and d['winner']=='left'
+assert abs(d['left']['elo']-1520)<0.01 and abs(d['right']['elo']-1480)<0.01
+assert d['left']['matches']==1 and d['right']['matches']==1
+" 2>/dev/null; then
+    pass "elo match (neue Bilder, links gewinnt → 1520/1480)"
+else
+    fail "elo match (links gewinnt)" "$ELO_OUT"
+fi
+
+ELO_GET=$(IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo get "$ELO_B" --json 2>/dev/null) || true
+if echo "$ELO_GET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert abs(d['elo']-1480)<0.01 and d['matches']==1" 2>/dev/null; then
+    pass "elo match persistiert (elo get)"
+else
+    fail "elo match persistiert" "$ELO_GET"
+fi
+
+ELO_OUT=$(IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo match "$ELO_A" "$ELO_B" --winner right --json 2>/dev/null) || true
+if echo "$ELO_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['left']['elo']<1520 and d['right']['elo']>1480
+assert d['left']['matches']==2 and d['right']['matches']==2
+" 2>/dev/null; then
+    pass "elo match --winner right (ELO verschiebt sich zum Gewinner)"
+else
+    fail "elo match --winner right" "$ELO_OUT"
+fi
+
+ELO_OUT=$(IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo reset "$ELO_A" --json 2>/dev/null) || true
+ELO_GET=$(IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo get "$ELO_A" --json 2>/dev/null) || true
+if echo "$ELO_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['reset']==1" 2>/dev/null \
+   && echo "$ELO_GET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['elo']==1500 and d['matches']==0" 2>/dev/null; then
+    pass "elo reset <pfad> (1500 / 0 Duelle)"
+else
+    fail "elo reset <pfad>" "$ELO_OUT / $ELO_GET"
+fi
+
+ELO_OUT=$(IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo reset --all --json 2>/dev/null) || true
+ELO_LIST=$(IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo list --json 2>/dev/null) || true
+if echo "$ELO_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['reset']==2" 2>/dev/null \
+   && echo "$ELO_LIST" | python3 -c "import sys,json; a=json.load(sys.stdin); assert len(a)==2 and all(e['elo']==1500 and e['matches']==0 for e in a)" 2>/dev/null; then
+    pass "elo reset --all"
+else
+    fail "elo reset --all" "$ELO_OUT / $ELO_LIST"
+fi
+
+# Fehlerpfade
+ELO_ERR=0
+IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo match "$ELO_A" > /dev/null 2>&1 || ELO_ERR=$?
+if [ $ELO_ERR -ne 0 ]; then pass "elo match (nur ein Bild → Fehler)"; else fail "elo match (ein Bild)" "Hätte fehlschlagen sollen"; fi
+
+ELO_ERR=0
+IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo match "$ELO_A" "$ELO_A" > /dev/null 2>&1 || ELO_ERR=$?
+if [ $ELO_ERR -ne 0 ]; then pass "elo match (gegen sich selbst → Fehler)"; else fail "elo match (selbst)" "Hätte fehlschlagen sollen"; fi
+
+ELO_ERR=0
+IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo match "$ELO_A" "$ELO_B" --winner both > /dev/null 2>&1 || ELO_ERR=$?
+if [ $ELO_ERR -ne 0 ]; then pass "elo match (ungültiger --winner → Fehler)"; else fail "elo match (--winner both)" "Hätte fehlschlagen sollen"; fi
+
+ELO_ERR=0
+IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo reset "/nonexistent/none.jpg" > /dev/null 2>&1 || ELO_ERR=$?
+if [ $ELO_ERR -ne 0 ]; then pass "elo reset (unbekannter Pfad → Fehler)"; else fail "elo reset (unbekannt)" "Hätte fehlschlagen sollen"; fi
+
+ELO_ERR=0
+IPHOTO_CATALOG_DB="$ELO_DB" "$BIN" elo reset > /dev/null 2>&1 || ELO_ERR=$?
+if [ $ELO_ERR -ne 0 ]; then pass "elo reset (ohne Argument → Fehler)"; else fail "elo reset (leer)" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

@@ -2,6 +2,12 @@
 
 ---
 
+## 1.92.0
+**CLI: ELO-Duelle austragen und zurücksetzen**
+- Neuer Befehl `iphoto-cli elo match <links> <rechts> [--winner left|right|draw] [--json]` trägt ein Duell zwischen zwei Bildern aus — gleiche ELO-Formel und K-Faktor-Decay wie der Duell-Modus der App; beide Werte und Duell-Zähler werden gespeichert
+- Neuer Befehl `iphoto-cli elo reset <bildpfad> [...] | --all [--json]` setzt ELO auf 1500 und die Duell-Anzahl auf 0 zurück; unbekannte Pfade werden mit Fehler abgelehnt, ohne etwas zu ändern
+- Tests in `Tests/run_plugins.sh` (Erstduell 1520/1480, Persistenz, Gewinner rechts, Reset einzeln/alle, Fehlerpfade)
+
 ## 1.91.0
 **CLI: Motiv-Tags setzen, suchen und auswerten**
 - Neuer Befehl `iphoto-cli motif set <bildpfad> <tag1,tag2,...> [--json]` setzt die Motiv-Tags eines Bildes manuell (z. B. zur Korrektur der automatischen Erkennung) — Tags werden getrimmt, kleingeschrieben und dedupliziert
