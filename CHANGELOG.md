@@ -2,6 +2,14 @@
 
 ---
 
+## 1.87.0
+**CLI: Bewertungs-Histogramm und EXIF-Katalogbefehle**
+- Neu: `iphoto-cli rating histogram [--json]` — Sterneverteilung (0–5), Anzahl bewerteter Bilder und Durchschnittsbewertung
+- Neu: `iphoto-cli exif get <bild> [--json]` — zeigt die im Katalog gespeicherten EXIF-Werte (Brennweite, ISO, Blende, Objektiv, Filmsimulation, HDR, Sequenz)
+- Neu: `iphoto-cli exif set <bild> [--iso N] [--focal MM] [--aperture F] [--lens NAME] [--film NAME] [--hdr true|false]` — korrigiert EXIF-Werte im Katalog (nicht angegebene Felder bleiben erhalten)
+- Neu: `iphoto-cli exif films [--json]` — listet alle Filmsimulationen im Katalog
+- Tests für alle neuen Befehle in `Tests/run_plugins.sh`
+
 ## 1.86.1
 **CI-Fix, fehlende Methoden, App-Umbenennung**
 - App heißt jetzt **iPhoto Α** (griechisches großes Alpha)

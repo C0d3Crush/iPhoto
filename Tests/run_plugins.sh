@@ -770,6 +770,140 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# rating histogram
+# ---------------------------------------------------------------------------
+echo "--- Rating Histogram ---"
+
+HIST_DB="$TMPDIR/hist_catalog.db"
+HIST_A="$TMPDIR/hist_a.png"; HIST_B="$TMPDIR/hist_b.png"
+cp "$INPUT_PNG" "$HIST_A"; cp "$INPUT_PNG" "$HIST_B"
+IPHOTO_CATALOG_DB="$HIST_DB" "$BIN" rating "$HIST_A" --set 5 > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$HIST_DB" "$BIN" rating "$HIST_B" --set 3 > /dev/null 2>&1 || true
+
+HIST_EXIT=0
+HIST_OUT=$(IPHOTO_CATALOG_DB="$HIST_DB" "$BIN" rating histogram --json 2>&1) || HIST_EXIT=$?
+if [ $HIST_EXIT -eq 0 ] && echo "$HIST_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+b=d['byStars']
+assert sorted(b.keys())==['0','1','2','3','4','5']
+assert b['5']==1 and b['3']==1 and d['rated']==2
+assert abs(d['average']-4.0)<0.01
+" 2>/dev/null; then
+    pass "rating histogram --json (★5=1, ★3=1, Ø 4.0)"
+else
+    fail "rating histogram --json" "Exit $HIST_EXIT: $HIST_OUT"
+fi
+
+# leerer Katalog → rated 0
+HIST_EMPTY_EXIT=0
+HIST_EMPTY=$(IPHOTO_CATALOG_DB="$TMPDIR/hist_empty.db" "$BIN" rating histogram --json 2>&1) || HIST_EMPTY_EXIT=$?
+if [ $HIST_EMPTY_EXIT -eq 0 ] && echo "$HIST_EMPTY" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['rated']==0 and d['average']==0" 2>/dev/null; then
+    pass "rating histogram (leerer Katalog → rated 0)"
+else
+    fail "rating histogram (leer)" "Exit $HIST_EMPTY_EXIT: $HIST_EMPTY"
+fi
+
+# unbekanntes Argument → Fehler
+HIST_BAD_EXIT=0
+"$BIN" rating histogram --bogus > /dev/null 2>&1 || HIST_BAD_EXIT=$?
+if [ $HIST_BAD_EXIT -ne 0 ]; then
+    pass "rating histogram --bogus (Fehler)"
+else
+    fail "rating histogram --bogus" "Hätte fehlschlagen sollen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# exif get / set / films
+# ---------------------------------------------------------------------------
+echo "--- EXIF ---"
+
+EXIF_DB="$TMPDIR/exif_catalog.db"
+EXIF_IMG="$TMPDIR/exif_test.png"
+cp "$INPUT_PNG" "$EXIF_IMG"
+
+# get auf unbekanntes Bild → Fehler
+EXIF_GET_MISS_EXIT=0
+IPHOTO_CATALOG_DB="$EXIF_DB" "$BIN" exif get "/nonexistent/none.jpg" --json > /dev/null 2>&1 || EXIF_GET_MISS_EXIT=$?
+if [ $EXIF_GET_MISS_EXIT -ne 0 ]; then
+    pass "exif get (nicht im Katalog → Fehler)"
+else
+    fail "exif get (nicht im Katalog)" "Hätte fehlschlagen sollen"
+fi
+
+# set registriert Bild und speichert Werte
+EXIF_SET_EXIT=0
+EXIF_SET=$(IPHOTO_CATALOG_DB="$EXIF_DB" "$BIN" exif set "$EXIF_IMG" --iso 400 --focal 35 --aperture 2.8 --lens "XF35mmF1.4 R" --film "Classic Chrome" --hdr true --json 2>&1) || EXIF_SET_EXIT=$?
+if [ $EXIF_SET_EXIT -eq 0 ] && echo "$EXIF_SET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['iso']==400 and d['hdr']==True" 2>/dev/null; then
+    pass "exif set --json (ok, iso 400, hdr true)"
+else
+    fail "exif set --json" "Exit $EXIF_SET_EXIT: $EXIF_SET"
+fi
+
+# get liest persistierte Werte (neuer Prozess)
+EXIF_GET_EXIT=0
+EXIF_GET=$(IPHOTO_CATALOG_DB="$EXIF_DB" "$BIN" exif get "$EXIF_IMG" --json 2>&1) || EXIF_GET_EXIT=$?
+if [ $EXIF_GET_EXIT -eq 0 ] && echo "$EXIF_GET" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['iso']==400 and abs(d['focalLength']-35)<0.01 and abs(d['aperture']-2.8)<0.01
+assert d['lens']=='XF35mmF1.4 R' and d['film']=='Classic Chrome'
+" 2>/dev/null; then
+    pass "exif get nach set (Werte persistiert)"
+else
+    fail "exif get nach set" "Exit $EXIF_GET_EXIT: $EXIF_GET"
+fi
+
+# partielles set behält andere Felder
+IPHOTO_CATALOG_DB="$EXIF_DB" "$BIN" exif set "$EXIF_IMG" --iso 800 > /dev/null 2>&1 || true
+EXIF_GET2=$(IPHOTO_CATALOG_DB="$EXIF_DB" "$BIN" exif get "$EXIF_IMG" --json 2>&1) || true
+if echo "$EXIF_GET2" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['iso']==800 and d['film']=='Classic Chrome'" 2>/dev/null; then
+    pass "exif set partiell (iso 800, Film unverändert)"
+else
+    fail "exif set partiell" "$EXIF_GET2"
+fi
+
+# films listet Filmsimulation
+EXIF_FILMS_EXIT=0
+EXIF_FILMS=$(IPHOTO_CATALOG_DB="$EXIF_DB" "$BIN" exif films --json 2>&1) || EXIF_FILMS_EXIT=$?
+if [ $EXIF_FILMS_EXIT -eq 0 ] && echo "$EXIF_FILMS" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d==['Classic Chrome']" 2>/dev/null; then
+    pass "exif films --json (['Classic Chrome'])"
+else
+    fail "exif films --json" "Exit $EXIF_FILMS_EXIT: $EXIF_FILMS"
+fi
+
+# ungültiger ISO-Wert → Fehler
+EXIF_BAD_ISO_EXIT=0
+IPHOTO_CATALOG_DB="$EXIF_DB" "$BIN" exif set "$EXIF_IMG" --iso abc > /dev/null 2>&1 || EXIF_BAD_ISO_EXIT=$?
+if [ $EXIF_BAD_ISO_EXIT -ne 0 ]; then
+    pass "exif set --iso abc (Fehler)"
+else
+    fail "exif set --iso abc" "Hätte fehlschlagen sollen"
+fi
+
+# set auf nicht existierende Datei → Fehler
+EXIF_SET_MISS_EXIT=0
+IPHOTO_CATALOG_DB="$EXIF_DB" "$BIN" exif set "/nonexistent/none.jpg" --iso 100 > /dev/null 2>&1 || EXIF_SET_MISS_EXIT=$?
+if [ $EXIF_SET_MISS_EXIT -ne 0 ]; then
+    pass "exif set (Datei fehlt → Fehler)"
+else
+    fail "exif set (Datei fehlt)" "Hätte fehlschlagen sollen"
+fi
+
+# unbekannter Subbefehl → Fehler
+EXIF_BAD_EXIT=0
+"$BIN" exif bogus > /dev/null 2>&1 || EXIF_BAD_EXIT=$?
+if [ $EXIF_BAD_EXIT -ne 0 ]; then
+    pass "exif bogus (Fehler)"
+else
+    fail "exif bogus" "Hätte fehlschlagen sollen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
