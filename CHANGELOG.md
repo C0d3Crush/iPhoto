@@ -2,6 +2,19 @@
 
 ---
 
+## 1.104.0
+**Projekte (Vault-Modus)**
+
+- Neuer „Projekte"-Modus: benannte Sammlungen von Ordnern, ähnlich wie Obsidian-Vaults
+- Beim App-Start erscheint der Projekt-Picker, wenn kein zuletzt geöffnetes Projekt gefunden wird
+- Projekt-Picker zeigt vorhandene Projekte in der linken Spalte; rechts: Erstellen, Ordner öffnen, ohne Projekt öffnen
+- Projekte werden als JSON in `~/Library/Application Support/iPhoto/projects.json` gespeichert
+- Zuletzt geöffnetes Projekt wird in `UserDefaults` gemerkt und beim nächsten Start automatisch geladen
+- Menübefehl „Projekte…" (⇧⌘P) öffnet den Picker jederzeit
+- `ImageViewModel.openProject(_:)` leert die aktuelle Collection und scannt alle Projektordner rekursiv
+
+---
+
 ## 1.103.5
 **Ordner und iOrdner als Kontext-Menü statt eigene Sektionen**
 

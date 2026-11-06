@@ -63,6 +63,7 @@ class ImageViewModel: ObservableObject {
     @Published var isStartupLoading: Bool = true                 { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
+    @Published var activeProjectName: String? = nil
     @Published var showModeSwitcher: Bool = false
     @Published var modeSwitcherEnabled: Bool = UserDefaults.standard.object(forKey: "feature.modeSwitcherEnabled") as? Bool ?? true {
         didSet {
@@ -582,6 +583,55 @@ class ImageViewModel: ObservableObject {
         // with matching stem exists in the backup destination (catches manual/external backups).
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             self?.syncBackupCatalog()
+        }
+    }
+
+    // MARK: - Projects
+
+    func openProject(_ project: Project) {
+        activeProjectName = project.name
+        // Clear existing collection
+        collection.documents = []
+        collection.selectedIndices = []
+        collection.currentIndex = 0
+        navSelection = .library
+
+        // Scan each project folder
+        for path in project.folderPaths {
+            let folderURL = URL(fileURLWithPath: path)
+            scanProjectFolder(folderURL)
+        }
+    }
+
+    private func scanProjectFolder(_ folderURL: URL) {
+        let folderName = folderURL.lastPathComponent
+        let taskID = UUID()
+        DispatchQueue.main.async { self.activity.enqueue(id: taskID, label: "Lade \"\(folderName)\"", icon: "folder", done: 0, total: 0) }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
+            let fm = FileManager.default
+            guard let enumerator = fm.enumerator(
+                at: folderURL,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else {
+                DispatchQueue.main.async { self.activity.dequeue(id: taskID) }
+                return
+            }
+            var found: [URL] = []
+            for case let fileURL as URL in enumerator {
+                let vals = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                if vals?.isRegularFile == true,
+                   vals?.isSymbolicLink != true,
+                   ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
+                    found.append(fileURL)
+                }
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.importFiles(found, selectFirst: false)
+                self.activity.dequeue(id: taskID)
+            }
         }
     }
 

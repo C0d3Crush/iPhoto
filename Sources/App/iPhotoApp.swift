@@ -4,13 +4,32 @@ import SwiftUI
 struct iPhotoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var viewModel = ImageViewModel()
+    @StateObject private var projectStore = ProjectStore.shared
+    @State private var showProjectPicker: Bool = ProjectStore.shared.lastProject == nil
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(viewModel)
                 .frame(minWidth: 600, minHeight: 400)
-                .onAppear { }
+                .sheet(isPresented: $showProjectPicker) {
+                    ProjectPickerView(
+                        onOpen: { project in
+                            ProjectStore.shared.setLastOpened(project)
+                            viewModel.openProject(project)
+                            showProjectPicker = false
+                        },
+                        onOpenWithoutProject: {
+                            ProjectStore.shared.lastProjectID = nil
+                            showProjectPicker = false
+                        }
+                    )
+                }
+                .onAppear {
+                    if let p = ProjectStore.shared.lastProject {
+                        viewModel.openProject(p)
+                    }
+                }
         }
         Settings {
             SettingsView().environmentObject(viewModel)
@@ -66,6 +85,13 @@ struct iPhotoApp: App {
                 .keyboardShortcut("k", modifiers: [.command, .shift])
             }
             CommandGroup(after: .newItem) {
+                Button("Projekte…") {
+                    showProjectPicker = true
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+
+                Divider()
+
                 Button("Importieren…") {
                     NotificationCenter.default.post(name: .importRequested, object: nil)
                 }
