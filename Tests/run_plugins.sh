@@ -2715,6 +2715,83 @@ if [ $EP_ERR -ne 0 ]; then pass "elo stats --bucket abc (→ Fehler)"; else fail
 echo ""
 
 # ---------------------------------------------------------------------------
+# elo stats / elo suggest
+# ---------------------------------------------------------------------------
+echo "--- elo stats/suggest ---"
+ES_DB="$TMPDIR/elo_stats_catalog.db"
+es() { IPHOTO_CATALOG_DB="$ES_DB" "$BIN" "$@"; }
+
+ES_OUT=$(es elo stats --json 2>/dev/null) || true
+if echo "$ES_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['count']==0 and d['min'] is None and len(d['buckets'])==6
+" 2>/dev/null; then
+    pass "elo stats --json (leerer Katalog)"
+else
+    fail "elo stats (leer)" "$ES_OUT"
+fi
+
+es elo set /tmp/es_a.jpg 1600 --matches 3  > /dev/null 2>&1 || true
+es elo set /tmp/es_b.jpg 1250 --matches 0  > /dev/null 2>&1 || true
+es elo set /tmp/es_c.jpg 1720 --matches 1  > /dev/null 2>&1 || true
+es elo set /tmp/es_d.jpg 1610 --matches 10 > /dev/null 2>&1 || true
+
+ES_OUT=$(es elo stats --json 2>/dev/null) || true
+if echo "$ES_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+b={x['label']:x['count'] for x in d['buckets']}
+assert d['count']==4 and d['played']==3 and d['duels']==7
+assert d['min']==1250 and d['max']==1720 and abs(d['median']-1605)<0.01
+assert b['< 1300']==1 and b['1600–1700']==2 and b['≥ 1700']==1 and b['1500–1600']==0
+" 2>/dev/null; then
+    pass "elo stats --json (Verteilung, Median, Duelle)"
+else
+    fail "elo stats --json" "$ES_OUT"
+fi
+
+ES_OUT=$(es elo suggest --count 2 --json 2>/dev/null) || true
+if echo "$ES_OUT" | python3 -c "
+import sys,json; a=json.load(sys.stdin)
+assert len(a)==2
+assert a[0]['left']['path']=='/tmp/es_b.jpg' and a[0]['right']['path']=='/tmp/es_a.jpg'
+assert a[1]['left']['path']=='/tmp/es_c.jpg' and a[1]['right']['path']=='/tmp/es_d.jpg'
+assert 0 < a[0]['expectedLeft'] < 0.5
+" 2>/dev/null; then
+    pass "elo suggest --count 2 (wenig gespielt + nächstes ELO)"
+else
+    fail "elo suggest --count 2" "$ES_OUT"
+fi
+
+es trash mark /tmp/es_d.jpg > /dev/null 2>&1 || true
+ES_OUT=$(es elo suggest --json 2>/dev/null) || true
+if echo "$ES_OUT" | python3 -c "
+import sys,json; a=json.load(sys.stdin)
+paths={p for x in a for p in (x['left']['path'],x['right']['path'])}
+assert len(a)==1 and '/tmp/es_d.jpg' not in paths
+" 2>/dev/null; then
+    pass "elo suggest (Papierkorb wird ausgeschlossen)"
+else
+    fail "elo suggest (Papierkorb)" "$ES_OUT"
+fi
+
+ES_OUT=$(es elo suggest --include-trashed --json 2>/dev/null) || true
+if echo "$ES_OUT" | python3 -c "import sys,json; a=json.load(sys.stdin); assert len(a)==2" 2>/dev/null; then
+    pass "elo suggest --include-trashed"
+else
+    fail "elo suggest --include-trashed" "$ES_OUT"
+fi
+
+ES_ERR=0
+es elo suggest --count 0 > /dev/null 2>&1 || ES_ERR=$?
+if [ $ES_ERR -ne 0 ]; then pass "elo suggest --count 0 (→ Fehler)"; else fail "elo suggest --count 0" "Hätte fehlschlagen sollen"; fi
+
+ES_ERR=0
+IPHOTO_CATALOG_DB="$TMPDIR/elo_suggest_empty.db" "$BIN" elo suggest > /dev/null 2>&1 || ES_ERR=$?
+if [ $ES_ERR -ne 0 ]; then pass "elo suggest (leerer Katalog → Fehler)"; else fail "elo suggest (leer)" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

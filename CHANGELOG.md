@@ -32,9 +32,10 @@
 
 **CLI: ELO-Prognose und ELO-Verteilung**
 - Neuer Befehl `iphoto-cli elo predict <links> <rechts> [--json]` zeigt die Gewinnchance beider Bilder und die projizierten ELO-Werte für Sieg links, Sieg rechts und Unentschieden — ohne etwas zu speichern
-- Neuer Befehl `iphoto-cli elo stats [--bucket N] [--json]` fasst alle ELO-Scores zusammen: Anzahl, Duelle gesamt, ungespielte Bilder, Min/Max/Mittel/Median und ein Histogramm (Bucket-Breite einstellbar, Standard 100)
-- Beide Befehle nutzen dieselbe Berechnung wie der Duell-Modus der App; `stats` liest den Katalog mit einer einzigen Abfrage
-- Tests in `Tests/run_plugins.sh` (neue Bilder, Favorit, Read-only-Prüfung, Buckets, Textausgabe, Fehlerpfade)
+- Neuer Befehl `iphoto-cli elo stats [--bucket N] [--json]` fasst alle ELO-Scores zusammen: Anzahl, Duelle gesamt, ungespielte Bilder, Min/Max/Mittel/Median und ein Histogramm (Bucket-Breite einstellbar, Standard 100); zeigt auch die ELO-Verteilung im selben 6-Stufen-Raster wie das Histogramm im Duell-Modus
+- Neuer Befehl `iphoto-cli elo suggest [--count N] [--include-trashed] [--json]` schlägt die nächsten Duell-Paare vor – wie in der App: wenig gespielte Bilder zuerst, Gegner mit dem nächstgelegenen ELO; jedes Bild höchstens einmal, Papierkorb standardmäßig ausgeschlossen, inkl. Gewinnwahrscheinlichkeit
+- Alle Befehle nutzen dieselbe Berechnung wie der Duell-Modus der App; `stats` liest den Katalog mit einer einzigen Abfrage
+- Tests in `Tests/run_plugins.sh` (neue Bilder, Favorit, Read-only-Prüfung, Buckets, Paarbildung, Papierkorb-Filter, Textausgabe, Fehlerpfade)
 
 ## 1.100.0
 **PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
