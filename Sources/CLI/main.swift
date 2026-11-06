@@ -93,6 +93,7 @@ private func printUsage() {
       iphoto-cli exif stats [--by lens|iso|aperture|focal|film|camera] [--limit N] [--json]
       iphoto-cli stack list [--json]
       iphoto-cli stack query <bildpfad> [--json]
+      iphoto-cli storage info [--json]
       iphoto-cli trash list [--json]
       iphoto-cli trash mark <bildpfad> [--json]
       iphoto-cli trash mark-rejected [--dry-run] [--json]
@@ -2528,6 +2529,43 @@ private func runStack(_ args: [String]) -> Int32 {
         fputs("Verwendung: iphoto-cli stack list|query [opts]\n", stderr)
         return 1
     }
+}
+
+// MARK: - Storage
+
+private func runStorage(_ args: [String]) -> Int32 {
+    let jsonMode = args.contains("--json")
+    let catalog  = CatalogStore(dbPath: envDBPath())
+
+    let images   = catalog.allImages()
+    let trashed  = catalog.trashedPaths()
+    let backedUp = catalog.backedUpPaths()
+
+    let totalCount  = images.count
+    let trashedCount = trashed.count
+    let backedCount  = backedUp.count
+    let totalBytes: Int64 = images.reduce(0) { $0 + $1.sizeBytes }
+
+    if jsonMode {
+        let obj: [String: Any] = [
+            "total_images":   totalCount,
+            "backed_up":      backedCount,
+            "trashed":        trashedCount,
+            "library_bytes":  totalBytes
+        ]
+        if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: d, encoding: .utf8) { print(s) }
+    } else {
+        let fmt = ByteCountFormatter()
+        fmt.allowedUnits = [.useGB, .useMB, .useKB]
+        fmt.countStyle = .file
+        print("Speicherübersicht:")
+        print("  Bilder gesamt:  \(totalCount)")
+        print("  Gesichert:      \(backedCount)")
+        print("  Papierkorb:     \(trashedCount)")
+        print("  Bibliotheksgröße: \(fmt.string(fromByteCount: totalBytes))")
+    }
+    return 0
 }
 
 // MARK: - Trash
@@ -6486,6 +6524,9 @@ if firstArg == "smartfolder" {
 }
 if firstArg == "stack" {
     exit(runStack(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "storage" {
+    exit(runStorage(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "trash" {
     exit(runTrash(Array(rawArgs.dropFirst(2))))

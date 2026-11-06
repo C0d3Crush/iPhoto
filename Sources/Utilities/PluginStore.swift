@@ -260,6 +260,17 @@ final class PluginStore: ObservableObject {
           "storageKey": "plugin.people"
         }
         """),
+        ("builtin-storage.json", """
+        {
+          "id": "com.iphoto.builtin.storage",
+          "name": "Speicher",
+          "icon": "internaldrive",
+          "builtin": "storage",
+          "order": 12,
+          "defaultEnabled": true,
+          "storageKey": "plugin.speicher"
+        }
+        """),
     ]
 
     private func writeBuiltins() {

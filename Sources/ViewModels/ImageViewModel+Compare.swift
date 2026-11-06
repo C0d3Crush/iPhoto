@@ -131,6 +131,12 @@ extension ImageViewModel {
         guard let left = compareLeftDocument,
               let right = compareRightDocument else { return }
 
+        compareUndoEntry = CompareUndoEntry(
+            leftID: left.id, rightID: right.id,
+            leftElo: left.elo, rightElo: right.elo,
+            leftMatches: left.eloMatches, rightMatches: right.eloMatches
+        )
+
         let leftScore: Double
         switch verdict {
         case .left:  leftScore = 1.0
@@ -153,6 +159,24 @@ extension ImageViewModel {
             UserDefaults.standard.set(compare.dailyCount, forKey: "compare.dailyCount")
         }
         iphotoBreadcrumb("resolveCompare: done")
+    }
+
+    // MARK: Compare Undo
+
+    func undoCompare(_ entry: CompareUndoEntry) {
+        for i in collection.documents.indices {
+            let doc = collection.documents[i]
+            if doc.id == entry.leftID {
+                collection.documents[i].elo = entry.leftElo
+                collection.documents[i].eloMatches = entry.leftMatches
+                CatalogStore.shared.saveElo(path: doc.url.path, elo: entry.leftElo, eloMatches: entry.leftMatches)
+            } else if doc.id == entry.rightID {
+                collection.documents[i].elo = entry.rightElo
+                collection.documents[i].eloMatches = entry.rightMatches
+                CatalogStore.shared.saveElo(path: doc.url.path, elo: entry.rightElo, eloMatches: entry.rightMatches)
+            }
+        }
+        invalidateVisibleOrder()
     }
 
     // MARK: ELO-Konvergenz

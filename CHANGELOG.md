@@ -2,6 +2,19 @@
 
 ---
 
+## 1.102.0
+**Speicherverwaltung, Backup-Vorschau, Undo und Tastaturkürzel**
+
+- Neues Inspector-Panel „Speicher" ist jetzt standardmäßig aktiviert: zeigt Bibliotheksgröße, gesicherte Bilder, Backup-Ordnergröße, Papierkorb und Duplikate
+- Empfehlungs-Buttons im Speicher-Panel zeigen ihre Tastaturkürzel direkt an (⌘⇧⌫, ⌘⇧U, ⌘⇧K)
+- Neues Menü „Speicher" mit Tastaturkürzeln: ⌘B = ausgewählte Bilder sichern, ⌘⇧⌫ = Papierkorb leeren, ⌘⇧U = Duplikate prüfen, ⌘⇧K = Backup-Ordner öffnen
+- Backup-Sektion in der Sidebar zeigt jetzt eine Thumbnail-Vorschau der letzten gesicherten Bilder
+- Cmd+Z (Rückgängig) funktioniert jetzt kontextabhängig: Anpassungen → Vergleichs-Pick → zuletzt in den Papierkorb verschobene Bilder
+- Cmd+Shift+Z wiederholt zurückgenommene Anpassungen
+- Neuer CLI-Befehl `iphoto-cli storage info [--json]` zeigt Speicherstatistiken der Bibliothek
+
+---
+
 ## 1.101.0
 **CLI: Motiv-Tags katalogweit umbenennen und entfernen**
 - Neuer Befehl `iphoto-cli motif rename <alt> <neu> [--dry-run] [--json]` benennt einen Motiv-Tag in allen Bildern um; Reihenfolge bleibt erhalten, entstehende Duplikate werden zusammengeführt

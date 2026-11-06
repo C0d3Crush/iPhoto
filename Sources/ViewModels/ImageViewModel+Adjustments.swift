@@ -111,6 +111,20 @@ extension ImageViewModel {
         }
     }
 
+    // MARK: - Unified Undo
+
+    /// Context-aware undo: adjustments → compare verdict → trash batch.
+    func performUndo() {
+        if adj.history.canUndo {
+            undoAdjustments()
+        } else if let entry = compareUndoEntry {
+            undoCompare(entry)
+            compareUndoEntry = nil
+        } else {
+            undoTrash()
+        }
+    }
+
     // MARK: - Presets
 
     func applyPreset(_ preset: Preset) {

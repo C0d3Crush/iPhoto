@@ -4,7 +4,7 @@ private let kSmartFolderIDType = "com.c0d3cru5h.iphoto.smartfolder-id"
 private let kNavSectionDragType = "com.c0d3cru5h.iphoto.navsection"
 
 enum NavSidebarSection: String, CaseIterable, Hashable {
-    case library, albums, smartFolders, volumes, trash, duplicates, blurry, people
+    case library, albums, smartFolders, volumes, trash, backup, duplicates, blurry, people
 
     static func loadOrder() -> [NavSidebarSection] {
         guard let raw = UserDefaults.standard.string(forKey: "nav.sectionOrder") else {
@@ -35,6 +35,7 @@ enum NavSidebarSection: String, CaseIterable, Hashable {
         case .smartFolders: return "iAlben"
         case .volumes:      return "Wechseldatenträger"
         case .trash:        return "Papierkorb"
+        case .backup:       return "Backup"
         case .duplicates:   return "Duplikate"
         case .blurry:       return "Qualität"
         case .people:       return "Menschen"
@@ -48,6 +49,7 @@ enum NavSidebarSection: String, CaseIterable, Hashable {
         case .smartFolders: return "folder.badge.gearshape"
         case .volumes:      return "externaldrive"
         case .trash:        return "trash"
+        case .backup:       return "externaldrive.badge.checkmark"
         case .duplicates:   return "doc.on.doc"
         case .blurry:       return "eye.trianglebadge.exclamationmark"
         case .people:       return "person.2"
@@ -68,6 +70,7 @@ struct NavSidebarView: View {
     @State private var smartFoldersCollapsed = false
     @State private var volumesCollapsed = false
     @State private var trashCollapsed = false
+    @State private var backupCollapsed = false
     @State private var duplicatesCollapsed = false
     @State private var qualityCollapsed = false
     @State private var peopleCollapsed = false
@@ -241,6 +244,7 @@ struct NavSidebarView: View {
         case .smartFolders:  smartFoldersSection
         case .volumes:       volumesSection
         case .trash:         trashSection
+        case .backup:        backupSection
         case .duplicates:    duplicatesSection
         case .blurry:        blurrySection
         case .people:        peopleSection
@@ -501,6 +505,68 @@ struct NavSidebarView: View {
                 .disabled(viewModel.trashedCount == 0)
         }
         } // !trashCollapsed
+    }
+
+    @ViewBuilder private var backupSection: some View {
+        collapsibleSectionHeader("Backup", isCollapsed: backupCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { backupCollapsed.toggle() } })
+        if !backupCollapsed {
+            Button(action: { viewModel.navSelection = .backup }) {
+                HStack(spacing: 4) {
+                    Label("Backup", systemImage: viewModel.backedUpCount > 0
+                          ? "externaldrive.badge.checkmark" : "externaldrive")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if viewModel.backedUpCount > 0 {
+                        Text("\(viewModel.backedUpCount)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.trailing, 2)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(viewModel.navSelection == .backup ? Color.accentColor.opacity(0.2) : Color.clear)
+                .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 4)
+            .help("Gesicherte Bilder anzeigen (⌘B zum Sichern)")
+
+            // Thumbnail-Vorschau der letzten gesicherten Bilder
+            let backedUpDocs = viewModel.collection.documents
+                .filter { $0.isBackedUp && !$0.isTrashed }
+                .suffix(6)
+            if !backedUpDocs.isEmpty {
+                HStack(spacing: 2) {
+                    ForEach(Array(backedUpDocs), id: \.id) { doc in
+                        Button(action: {
+                            viewModel.navSelection = .backup
+                            if let idx = viewModel.collectionIndex(for: doc) {
+                                viewModel.collection.select(index: idx)
+                                viewModel.loadCurrentImage()
+                            }
+                        }) {
+                            if let thumb = doc.thumbnailImage ?? doc.placeholderThumbnailImage {
+                                Image(nsImage: thumb)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 28, height: 20)
+                                    .clipped()
+                                    .cornerRadius(2)
+                            } else {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color(NSColor.separatorColor))
+                                    .frame(width: 28, height: 20)
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 4)
+            }
+        } // !backupCollapsed
     }
 
     // Sidebar-Highlight bleibt auf "Ähnliche Bilder", auch wenn der Nutzer in eine

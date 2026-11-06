@@ -96,11 +96,14 @@ extension ImageViewModel {
         // Pick-Schutz: als Pick markierte Bilder blockieren die gesamte Operation.
         if showPickBlockedAlertIfNeeded(docs) { return }
         let prev = visibleDocuments
+        let paths = docs.map { $0.url.path }
+        trashUndoStack.append(paths)
+        if trashUndoStack.count > 20 { trashUndoStack.removeFirst() }
         let ids = Set(docs.map { $0.id })
         for i in collection.documents.indices where ids.contains(collection.documents[i].id) {
             collection.documents[i].isTrashed = true
         }
-        CatalogStore.shared.setTrashed(paths: docs.map { $0.url.path }, true)
+        CatalogStore.shared.setTrashed(paths: paths, true)
         collection.selectedIndices = []
         invalidateVisibleOrder()
         if compare.active, let l = compare.leftID, let r = compare.rightID,
@@ -108,6 +111,14 @@ extension ImageViewModel {
             nextComparePair()
         }
         selectNeighborAfterExclusion(previousVisible: prev, excludedIDs: ids)
+    }
+
+    func undoTrash() {
+        guard let paths = trashUndoStack.popLast(), !paths.isEmpty else { return }
+        let pathSet = Set(paths)
+        let docs = collection.documents.filter { pathSet.contains($0.url.path) && $0.isTrashed }
+        guard !docs.isEmpty else { return }
+        restoreFromTrash(docs)
     }
 
     func restoreFromTrash(_ docs: [ImageDocument]) {

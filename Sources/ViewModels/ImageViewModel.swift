@@ -111,6 +111,18 @@ class ImageViewModel: ObservableObject {
     // MARK: - Inpaint
     var inpaint = InpaintState()
 
+    // MARK: - Undo stacks (non-adjustment)
+
+    struct CompareUndoEntry {
+        let leftID: UUID; let rightID: UUID
+        let leftElo: Double; let rightElo: Double
+        let leftMatches: Int; let rightMatches: Int
+    }
+    /// Last compare verdict, overwritten each round (single-step undo).
+    var compareUndoEntry: CompareUndoEntry? = nil
+    /// Stack of path batches moved to trash — each entry is one moveToAppTrash call.
+    var trashUndoStack: [[String]] = []
+
     // MARK: - Internal state (accessible from extension files via internal access)
 
     private(set) var lastClickModifiers: NSEvent.ModifierFlags = []
@@ -279,9 +291,62 @@ class ImageViewModel: ObservableObject {
             .sink { [weak self] _ in self?.clearAll() }
             .store(in: &cancellables)
 
+        NotificationCenter.default.publisher(for: .flagPickRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.toggleFlag(.pick) }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .flagRejectRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.toggleFlag(.reject) }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: .exportRequested)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.showExportSheet = true }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .undoRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.performUndo() }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .redoRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.redoAdjustments() }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .backupRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                let targets = self.collection.selectedIndices.isEmpty
+                    ? self.collection.currentDocument.map { [$0] } ?? []
+                    : self.collection.selectedIndices.sorted().compactMap {
+                        $0 < self.collection.documents.count ? self.collection.documents[$0] : nil
+                      }
+                self.backupDocuments(targets, deleteOriginal: false)
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .emptyTrashRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.emptyTrash() }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .checkDuplicatesRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.navSelection = .duplicates }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .openBackupFolderRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                let (root, stop) = self.backupSettings.resolveDestination()
+                NSWorkspace.shared.open(root)
+                stop()
+            }
             .store(in: &cancellables)
 
         $navSelection
@@ -541,12 +606,14 @@ class ImageViewModel: ObservableObject {
         let catalogElos = CatalogStore.shared.allElos()
         let modifiedPaths = CatalogStore.shared.allModifiedPaths()
         let trashedPaths = CatalogStore.shared.trashedPaths()
+        let backedUpPaths = CatalogStore.shared.backedUpPaths()
         let qualityRecords = CatalogStore.shared.allQualityRecords()
         let newDocs = newURLs
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .map { url -> ImageDocument in
                 var doc = ImageDocument(url: url)
                 doc.isTrashed = trashedPaths.contains(url.path)
+                doc.isBackedUp = backedUpPaths.contains(url.path)
                 doc.hasPersistedAdjustments = modifiedPaths.contains(url.path)
                 if let r = catalogRatings[url.path] {
                     doc.rating = r.rating

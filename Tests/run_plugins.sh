@@ -2984,6 +2984,26 @@ if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy (kein Ziel → Fehler)"; else 
 echo ""
 
 # ---------------------------------------------------------------------------
+# storage info
+# ---------------------------------------------------------------------------
+echo "--- Storage ---"
+STORAGE_OUT=$("$BIN" storage info 2>&1)
+if echo "$STORAGE_OUT" | grep -q "Bilder gesamt"; then
+    pass "storage info (Textausgabe enthält 'Bilder gesamt')"
+else
+    fail "storage info" "Erwartete 'Bilder gesamt' nicht gefunden: $STORAGE_OUT"
+fi
+
+STORAGE_JSON=$("$BIN" storage info --json 2>&1)
+if echo "$STORAGE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'total_images' in d and 'backed_up' in d" 2>/dev/null; then
+    pass "storage info --json (valides JSON mit 'total_images' und 'backed_up')"
+else
+    fail "storage info --json" "Kein valides JSON oder fehlende Felder: $STORAGE_JSON"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
