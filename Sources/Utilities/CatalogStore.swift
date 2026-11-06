@@ -497,6 +497,21 @@ final class CatalogStore {
         }
     }
 
+    func deleteImages(paths: [String]) {
+        guard !paths.isEmpty else { return }
+        queue.sync {
+            exec("BEGIN")
+            let stmt = prepare("DELETE FROM images WHERE path=?")
+            for path in paths {
+                sqlite3_bind_text(stmt, 1, (path as NSString).utf8String, -1, nil)
+                _ = step(stmt)
+                sqlite3_reset(stmt)
+            }
+            sqlite3_finalize(stmt)
+            exec("COMMIT")
+        }
+    }
+
     // Bulk-insert inside a single transaction — several orders of magnitude faster than N individual calls.
     func batchUpsertImages(_ items: [(path: String, filename: String, isRAW: Bool,
                                       width: Int, height: Int, sizeBytes: Int64,

@@ -678,9 +678,17 @@ class ImageViewModel: ObservableObject {
         }
     }
 
+    // Returns true for paths managed internally (album copies, smart-folder symlinks).
+    // These must never enter the user-visible collection or catalog.
+    private func isSystemManagedPath(_ url: URL) -> Bool {
+        let p = url.standardized.path
+        return p.hasPrefix(albumsSystemRoot.standardized.path)
+            || p.hasPrefix(SmartFolderFileSync.root.standardized.path)
+    }
+
     func importFiles(_ urls: [URL], selectFirst: Bool = true) {
         let importStart = Date()
-        let supported = urls.filter { isSupportedFormat($0) }
+        let supported = urls.filter { isSupportedFormat($0) && !isSystemManagedPath($0) }
         guard !supported.isEmpty else { return }
 
         let existingURLs = Set(collection.documents.map { $0.url })
@@ -770,16 +778,27 @@ class ImageViewModel: ObservableObject {
     // results that may arrive concurrently.
     private func restoreCatalogImages() {
         guard !isProjectMode else { return }
+        let albumRoot = albumsSystemRoot.standardized.path
+        let smartRoot = SmartFolderFileSync.root.standardized.path
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let fm = FileManager.default
-            let paths = CatalogStore.shared.allImages()
-                .map { $0.path }
-                .filter { fm.fileExists(atPath: $0) }
-            guard !paths.isEmpty else { return }
+            // Purge system-managed paths that were accidentally catalogued previously
+            let allPaths = CatalogStore.shared.allImages().map { $0.path }
+            let stale = allPaths.filter {
+                $0.hasPrefix(albumRoot) || $0.hasPrefix(smartRoot)
+            }
+            if !stale.isEmpty {
+                CatalogStore.shared.deleteImages(paths: stale)
+                Log.info("Catalog purge: \(stale.count) system-managed Pfade entfernt")
+            }
+            let cleanPaths = allPaths.filter {
+                !$0.hasPrefix(albumRoot) && !$0.hasPrefix(smartRoot) && fm.fileExists(atPath: $0)
+            }
+            guard !cleanPaths.isEmpty else { return }
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 let existing = Set(self.collection.documents.map { $0.url.path })
-                let newURLs = paths
+                let newURLs = cleanPaths
                     .filter { !existing.contains($0) }
                     .map { URL(fileURLWithPath: $0) }
                 guard !newURLs.isEmpty else { return }
