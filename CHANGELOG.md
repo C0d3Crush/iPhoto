@@ -2,8 +2,16 @@
 
 ---
 
+## 1.101.0
+**CLI: SWITCH-Latenzmetriken auswerten (`perf`)**
+- Neuer Befehl `iphoto-cli perf switch [--log <datei>] [--last-session] [--label <tag>] [--slowest N] [--json]` wertet die `SWITCH`-Zeilen aus `~/Library/Logs/iPhoto/iPhoto.log` aus: Anzahl, Median, p95, Mittelwert und Maximum je Anzeigepfad (cache-hit, thumbnail-hit, preview-hit, preview-decoded, full-res, full-res-decode)
+- Gesamtzeile `switches` zählt nur echte Bildwechsel (ohne die Decoder-Teilmessung `full-res-decode`)
+- `--last-session` betrachtet nur die Messungen seit dem letzten App-Start, `--slowest N` listet die langsamsten Wechsel mit Datei und Zeitstempel
+- `iphoto-cli perf path [--json]` zeigt Pfad und Größe der Log-Datei; Pfad per `IPHOTO_LOG_FILE` überschreibbar
+- Tests in `Tests/run_plugins.sh` mit synthetischem Log (Gruppierung, Median/p95, Session-Filter, leeres Log, Fehlerpfade)
+- Verwaister Konfliktmarker im Changelog entfernt
+
 ## 1.100.0
-<<<<<<< HEAD
 **PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
 - Neuer GitHub-Actions-Workflow `project-manager.yml` läuft alle 2 Stunden und analysiert offene, noch nicht zugewiesene Issues
 - Claude (`claude-opus-4-7`) erfindet bei Bedarf neue Akteure (Rollen) und wählt den passenden für jeden Issue aus
