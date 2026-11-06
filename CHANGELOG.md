@@ -2,8 +2,15 @@
 
 ---
 
+## 1.101.0
+**CLI: Katalog-Integritätscheck für verwaiste Einträge**
+- Neuer Befehl `iphoto-cli catalog orphans [--fix] [--json]` findet Bewertungen, Papierkorb-, Album-, Anpassungs- und Gesichts-Einträge, deren Bild nicht mehr im Katalog steht, sowie Album-Zuordnungen auf gelöschte Alben
+- Ohne `--fix` nur Bericht; mit `--fix` werden die verwaisten Zeilen in einer einzigen Transaktion gelöscht
+- Ein SQL-Durchlauf pro Tabelle statt Einzelabfragen pro Bild
+- Tests in `Tests/run_plugins.sh` (leerer Katalog, Bericht, `--fix`, Textausgabe, Fehlerpfade)
+- Changelog: übrig gebliebenen Merge-Konfliktmarker entfernt
+
 ## 1.100.0
-<<<<<<< HEAD
 **PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
 - Neuer GitHub-Actions-Workflow `project-manager.yml` läuft alle 2 Stunden und analysiert offene, noch nicht zugewiesene Issues
 - Claude (`claude-opus-4-7`) erfindet bei Bedarf neue Akteure (Rollen) und wählt den passenden für jeden Issue aus

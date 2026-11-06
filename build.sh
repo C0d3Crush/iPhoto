@@ -194,6 +194,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/CatalogStore+Adjustments.swift \
     $ROOT/Sources/Utilities/CatalogStore+Albums.swift \
     $ROOT/Sources/Utilities/CatalogStore+Backup.swift \
+    $ROOT/Sources/Utilities/CatalogStore+Integrity.swift \
     $ROOT/Sources/Utilities/CatalogStore+Motifs.swift \
     $ROOT/Sources/Utilities/CatalogStore+Quality.swift \
     $ROOT/Sources/Utilities/CatalogStore+Ratings.swift \

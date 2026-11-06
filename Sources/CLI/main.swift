@@ -47,7 +47,7 @@ private func printUsage() {
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
-      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline [--json]
+      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans [--json]
       iphoto-cli albumfolder list|create|rename|delete [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
@@ -115,6 +115,7 @@ private func printUsage() {
       iphoto-cli catalog prune [--dry-run] [--json]
       iphoto-cli catalog cameras [--json]
       iphoto-cli catalog timeline [--by year|month|day] [--json]
+      iphoto-cli catalog orphans [--fix] [--json]
       iphoto-cli query filters [--json]
       iphoto-cli query parse <suchtext> [--json]
       iphoto-cli query run <suchtext> [--blur-threshold 80] [--include-trashed] [--json]
@@ -149,6 +150,7 @@ private func printUsage() {
     search:   Bilder im Katalog nach Text, Flag (none/pick/reject), Rating (0-5), Farbe, Kamera, Datum
     catalog:  Statistiken (inkl. ELO-Anzahl), Pfad, vacuum --json, export
               cameras: Bilder pro Kamera; timeline: Bilder pro Jahr/Monat/Tag (--by)
+              orphans: verwaiste Bewertungen/Papierkorb/Album/Anpassungen/Gesichter (--fix löscht)
     motif:    Motiv-Tags eines Bildes anzeigen
     elo:      ELO-Scores lesen, auflisten (nach Score sortiert) und setzen
     duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
@@ -3767,8 +3769,46 @@ private func runCatalog(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "orphans":
+        // catalog orphans [--fix] [--json]
+        // Integritäts-Check: Bewertungen, Papierkorb-, Album-, Anpassungs- und Gesichts-Zeilen,
+        // deren Bild nicht (mehr) im Katalog steht, plus Album-Zuordnungen auf gelöschte Alben.
+        // Ohne --fix nur Bericht; mit --fix werden die Zeilen in einer Transaktion gelöscht.
+        let rest = Array(args.dropFirst())
+        guard rest.allSatisfy({ $0 == "--json" || $0 == "--fix" }) else {
+            fputs("Verwendung: iphoto-cli catalog orphans [--fix] [--json]\n", stderr); return 1
+        }
+        let fix = rest.contains("--fix")
+        let orphans = catalog.orphanRows()
+        let keys = CatalogStore.orphanChecks.map { $0.key }
+        let counts = orphans.mapValues { $0.count }
+        let total = counts.values.reduce(0, +)
+        let removed: [String: Int] = (fix && total > 0) ? catalog.deleteOrphanRows() : [:]
+        if jsonMode {
+            var obj: [String: Any] = ["orphans": orphans, "counts": counts, "total": total,
+                                      "fixed": fix, "ok": true]
+            if fix { obj["removed"] = removed.isEmpty ? Dictionary(uniqueKeysWithValues: keys.map { ($0, 0) }) : removed }
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else if total == 0 {
+            print("Keine verwaisten Einträge — Katalog konsistent")
+        } else {
+            for k in keys {
+                guard let list = orphans[k], !list.isEmpty else { continue }
+                print("\(k) (\(list.count)):")
+                list.forEach { print("  \($0)") }
+            }
+            if fix {
+                let n = removed.values.reduce(0, +)
+                print("Entfernt: \(n) verwaiste Zeile(n)")
+            } else {
+                print("Verwaist: \(total) Eintrag/Einträge (Bericht; --fix zum Entfernen)")
+            }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans [--json]\n", stderr)
         return 1
     }
 }
