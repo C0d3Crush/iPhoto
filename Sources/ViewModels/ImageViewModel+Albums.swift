@@ -215,7 +215,7 @@ extension ImageViewModel {
                 }
             }
 
-            // Copy photos not yet in manifest
+            // Copy photos not yet in manifest (or claim pre-existing files for migration)
             var usedNames = Set(manifest.values)
             for photoURL in photoURLs {
                 let srcPath = photoURL.standardized.path
@@ -232,9 +232,23 @@ extension ImageViewModel {
                     counter += 1
                 }
                 let destURL = dir.appendingPathComponent(destName)
-                if (try? fm.copyItem(at: photoURL, to: destURL)) != nil {
+                if fm.fileExists(atPath: destURL.path) {
+                    // Pre-existing file (from old sync) — claim it without re-copying
                     manifest[srcPath] = destName
                     usedNames.insert(destName)
+                } else if (try? fm.copyItem(at: photoURL, to: destURL)) != nil {
+                    manifest[srcPath] = destName
+                    usedNames.insert(destName)
+                }
+            }
+
+            // Remove orphaned files not referenced by any manifest entry (old duplicates, etc.)
+            let manifestedNames = Set(manifest.values)
+            if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
+                for file in contents where file.lastPathComponent != Self.manifestFilename {
+                    if !manifestedNames.contains(file.lastPathComponent) {
+                        try? fm.removeItem(at: file)
+                    }
                 }
             }
 

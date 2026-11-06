@@ -561,7 +561,11 @@ final class ImageLoadingOrchestrator {
 
     func scanExifForLibrary() {
         guard let host = host else { return }
-        let paths = CatalogStore.shared.pathsNeedingExifScan()
+        var paths = CatalogStore.shared.pathsNeedingExifScan()
+        if host.isProjectMode {
+            let inCollection = Set(host.collection.documents.map { $0.url.path })
+            paths = paths.filter { inCollection.contains($0) }
+        }
         guard !paths.isEmpty else { return }
 
         let taskID = UUID()
@@ -633,7 +637,11 @@ final class ImageLoadingOrchestrator {
     // (siehe project_perf_diagnosis.md, Bug #33).
     func scanQualityForLibrary() {
         guard let host = host else { return }
-        let paths = CatalogStore.shared.pathsNeedingQualityScan()
+        var paths = CatalogStore.shared.pathsNeedingQualityScan()
+        if host.isProjectMode {
+            let inCollection = Set(host.collection.documents.map { $0.url.path })
+            paths = paths.filter { inCollection.contains($0) }
+        }
         guard !paths.isEmpty else { return }
 
         let taskID = UUID()
@@ -721,7 +729,11 @@ final class ImageLoadingOrchestrator {
     // Gleiche Batch-Strategie wie Quality-Scan (100er-Batches, einmaliger Array-Write).
     func scanMotifForLibrary() {
         guard let host = host else { return }
-        let paths = CatalogStore.shared.pathsNeedingMotifScan()
+        var paths = CatalogStore.shared.pathsNeedingMotifScan()
+        if host.isProjectMode {
+            let inCollection = Set(host.collection.documents.map { $0.url.path })
+            paths = paths.filter { inCollection.contains($0) }
+        }
         guard !paths.isEmpty else { return }
 
         let taskID = UUID()

@@ -2,6 +2,15 @@
 
 ---
 
+## 1.104.3
+**Startup-Scans und Album-Duplikate behoben**
+
+- Metadaten/Qualität/Motiv-Scans beim Start laufen im Projekt-Modus nur für Bilder des aktuellen Projekts, nicht für alle 28.000+ Katalog-Einträge
+- Album-Sync bereinigt jetzt automatisch verwaiste Duplikate (photo_1.jpg, photo_2.jpg usw.) beim nächsten Start
+- Bestehende Dateien ohne Manifest-Eintrag werden korrekt übernommen statt erneut kopiert
+
+---
+
 ## 1.104.2
 **Album-Sync: keine doppelten Kopien mehr bei jedem Start**
 
