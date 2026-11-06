@@ -2984,6 +2984,115 @@ if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy (kein Ziel → Fehler)"; else 
 echo ""
 
 # ---------------------------------------------------------------------------
+# plugins status / enable / disable / reset / validate (temp Plugin-Ordner)
+# ---------------------------------------------------------------------------
+echo "--- Plugins status/enable/disable/reset/validate ---"
+PL_DIR="$TMPDIR/plugins_ok"
+PL_BAD="$TMPDIR/plugins_bad"
+mkdir -p "$PL_DIR" "$PL_BAD"
+PL_KEY="citest.$$.$RANDOM"
+echo "{\"id\":\"ci-alpha\",\"name\":\"CI Alpha\",\"order\":1,\"defaultEnabled\":true,\"storageKey\":\"$PL_KEY.alpha\"}" > "$PL_DIR/alpha.json"
+echo "{\"id\":\"ci-beta\",\"name\":\"CI Beta\",\"order\":2,\"defaultEnabled\":false,\"storageKey\":\"$PL_KEY.beta\"}" > "$PL_DIR/beta.json"
+pl() { IPHOTO_PLUGIN_DIR="$1" "$BIN" plugins "${@:2}"; }
+plstate() {  # $1 = JSON-Status, $2 = id → "enabled,overridden"
+    python3 -c "import sys,json; d={p['id']:p for p in json.load(sys.stdin)}; p=d['$2']; print(f\"{p['enabled']},{p['overridden']}\")" <<< "$1"
+}
+
+PL_OUT=$(pl "$PL_DIR" status --json 2>&1 || true)
+if [ "$(plstate "$PL_OUT" ci-alpha 2>/dev/null)" = "True,False" ] && \
+   [ "$(plstate "$PL_OUT" ci-beta 2>/dev/null)" = "False,False" ]; then
+    pass "plugins status --json (Standardwerte aus defaultEnabled)"
+else
+    fail "plugins status --json" "Unerwartet: $PL_OUT"
+fi
+
+PL_OUT=$(pl "$PL_DIR" disable ci-alpha --json 2>&1 || true)
+if echo "$PL_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['changed']==['ci-alpha'] and d['action']=='disable'" 2>/dev/null; then
+    pass "plugins disable --json (changed=[ci-alpha])"
+else
+    fail "plugins disable --json" "Unerwartet: $PL_OUT"
+fi
+
+PL_OUT=$(pl "$PL_DIR" enable "CI Beta" --json 2>&1 || true)
+PL_ST=$(pl "$PL_DIR" status --json 2>&1 || true)
+if [ "$(plstate "$PL_ST" ci-alpha 2>/dev/null)" = "False,True" ] && \
+   [ "$(plstate "$PL_ST" ci-beta 2>/dev/null)" = "True,True" ]; then
+    pass "plugins enable per Name + Status persistiert"
+else
+    fail "plugins enable per Name" "enable: $PL_OUT / status: $PL_ST"
+fi
+
+PL_OUT=$(pl "$PL_DIR" enable ci-beta --json 2>&1 || true)
+if echo "$PL_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['changed']==[] and d['unchanged']==['ci-beta']" 2>/dev/null; then
+    pass "plugins enable (bereits aktiv → unchanged)"
+else
+    fail "plugins enable idempotent" "Unerwartet: $PL_OUT"
+fi
+
+PL_ERR=0
+pl "$PL_DIR" disable ci-beta gibt-es-nicht > /dev/null 2>&1 || PL_ERR=$?
+PL_ST=$(pl "$PL_DIR" status --json 2>&1 || true)
+if [ $PL_ERR -ne 0 ] && [ "$(plstate "$PL_ST" ci-beta 2>/dev/null)" = "True,True" ]; then
+    pass "plugins disable unbekannte ID → Fehler, nichts geändert"
+else
+    fail "plugins disable unbekannte ID" "Exit=$PL_ERR status: $PL_ST"
+fi
+
+PL_ERR=0
+pl "$PL_DIR" enable > /dev/null 2>&1 || PL_ERR=$?
+if [ $PL_ERR -ne 0 ]; then pass "plugins enable ohne ID → Fehler"; else fail "plugins enable ohne ID" "Hätte fehlschlagen sollen"; fi
+
+PL_OUT=$(pl "$PL_DIR" reset --all --json 2>&1 || true)
+PL_ST=$(pl "$PL_DIR" status --json 2>&1 || true)
+if [ "$(plstate "$PL_ST" ci-alpha 2>/dev/null)" = "True,False" ] && \
+   [ "$(plstate "$PL_ST" ci-beta 2>/dev/null)" = "False,False" ]; then
+    pass "plugins reset --all (zurück auf Standard)"
+else
+    fail "plugins reset --all" "reset: $PL_OUT / status: $PL_ST"
+fi
+
+PL_ERR=0
+pl "$PL_DIR" reset > /dev/null 2>&1 || PL_ERR=$?
+if [ $PL_ERR -ne 0 ]; then pass "plugins reset ohne ID/--all → Fehler"; else fail "plugins reset ohne Argument" "Hätte fehlschlagen sollen"; fi
+
+PL_TXT=$(pl "$PL_DIR" status 2>&1 || true)
+if echo "$PL_TXT" | grep -q "\[x\] ci-alpha" && echo "$PL_TXT" | grep -q "1/2 aktiv"; then
+    pass "plugins status (Textausgabe)"
+else
+    fail "plugins status Text" "Unerwartet: $PL_TXT"
+fi
+
+PL_ERR=0
+PL_OUT=$(pl "$PL_DIR" validate --json 2>&1) || PL_ERR=$?
+if [ $PL_ERR -eq 0 ] && echo "$PL_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] is True and d['valid']==2" 2>/dev/null; then
+    pass "plugins validate (gültiger Ordner → ok, Exit 0)"
+else
+    fail "plugins validate ok" "Exit=$PL_ERR: $PL_OUT"
+fi
+
+echo '{"id":"ci-alpha","name":"Eins"}' > "$PL_BAD/a.json"
+echo '{"id":"ci-alpha","name":"Zwei"}' > "$PL_BAD/b.json"
+echo '{"id":"kaputt"}' > "$PL_BAD/c.json"
+echo 'kein json' > "$PL_BAD/d.json"
+PL_ERR=0
+PL_OUT=$(pl "$PL_BAD" validate --json 2>&1) || PL_ERR=$?
+if [ $PL_ERR -ne 0 ] && echo "$PL_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['ok'] is False and d['valid']==2
+assert sorted(p['file'] for p in d['problems'])==['c.json','d.json']
+assert d['duplicates'][0]['id']=='ci-alpha' and d['duplicates'][0]['files']==['a.json','b.json']" 2>/dev/null; then
+    pass "plugins validate (fehlendes Feld, kaputtes JSON, doppelte ID → Exit 1)"
+else
+    fail "plugins validate Fehler" "Exit=$PL_ERR: $PL_OUT"
+fi
+
+PL_ERR=0
+pl "$PL_DIR" frobnicate > /dev/null 2>&1 || PL_ERR=$?
+if [ $PL_ERR -ne 0 ]; then pass "plugins unbekannter Unterbefehl → Fehler"; else fail "plugins unbekannter Unterbefehl" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

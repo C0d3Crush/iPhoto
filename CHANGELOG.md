@@ -2,6 +2,15 @@
 
 ---
 
+## 1.102.0
+**CLI: Inspector-Panels per Kommandozeile verwalten (`plugins status/enable/disable/reset/validate`)**
+- Neuer Befehl `iphoto-cli plugins status [--json]` zeigt für jedes Panel, ob es aktiv ist, ob der Wert vom Standard (`defaultEnabled`) abweicht, Reihenfolge und Speicher-Schlüssel
+- `iphoto-cli plugins enable|disable <id|name> [...]` schaltet Panels wie der Schalter im Inspector (gleicher UserDefaults-Schlüssel); unbekannte ID → Fehler, es wird nichts geändert
+- `iphoto-cli plugins reset <id|name> [...] | --all` setzt Panels auf ihren Standardwert zurück
+- `iphoto-cli plugins validate [--json]` prüft alle Plugin-JSONs mit demselben Decoder wie die App und meldet kaputtes JSON, fehlende Pflichtfelder, Aktionen ohne Befehl und doppelte IDs (Exit 1 bei Problemen)
+- Plugin-Ordner per `IPHOTO_PLUGIN_DIR` überschreibbar (Tests/Scripting); `list`/`dir` respektieren die Variable ebenfalls
+- Tests in `Tests/run_plugins.sh` (Standardwerte, Ein-/Ausschalten per ID und Name, Idempotenz, atomarer Abbruch, Reset, Textausgabe, Validierung, Fehlerpfade)
+
 ## 1.101.0
 **CLI: Motiv-Tags katalogweit umbenennen und entfernen**
 - Neuer Befehl `iphoto-cli motif rename <alt> <neu> [--dry-run] [--json]` benennt einen Motiv-Tag in allen Bildern um; Reihenfolge bleibt erhalten, entstehende Duplikate werden zusammengeführt

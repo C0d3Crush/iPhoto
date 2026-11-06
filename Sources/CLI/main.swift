@@ -28,7 +28,11 @@ private func printUsage() {
       iphoto-cli analyse <datei|ordner> [--json] [--blur-threshold N] [--shadow N] [--highlight N]
       iphoto-cli inpaint <datei> --output <ziel> [--python /usr/bin/python3] [--cmt ~/cmt] [--checkpoint ~/cmt/checkpoints]
       iphoto-cli plugins list [--json]
-      iphoto-cli plugins dir
+      iphoto-cli plugins dir [--json]
+      iphoto-cli plugins status [--json]
+      iphoto-cli plugins enable|disable <id|name> [...] [--json]
+      iphoto-cli plugins reset <id|name> [...] | --all [--json]
+      iphoto-cli plugins validate [--json]
       iphoto-cli viewmode get [--json]
       iphoto-cli viewmode set <grid|list|columns|gallery> [--json]
       iphoto-cli people scan <bild1> [<bild2> ...] [--json]
@@ -161,6 +165,9 @@ private func printUsage() {
     analyse:  Analysiert Schärfe und Belichtung (Blur + Exposure)
     inpaint:  KI-basiertes Inpainting via CMT (benötigt Python + CMT-Installation); --json
     plugins:  Listet installierte Plugins/Panels auf oder zeigt den Plugin-Ordner; dir --json
+              status: aktiv/inaktiv je Panel; enable/disable/reset schalten Panels wie der Inspector
+              (atomar: unbekannte ID → nichts geändert); validate prüft JSON + doppelte IDs (Exit 1)
+              Ordner per IPHOTO_PLUGIN_DIR überschreibbar
     album:    Alben erstellen, bearbeiten, umbenennen, Bilder hinzufügen/entfernen, in Ordner exportieren
     quality:  Qualitätsanalyse (Blur, Belichtung, Closed-Eye) scannen und lesen; list --sort blur|rating|elo
     version:  Versionshistorie eines Bildes sichern, anzeigen oder wiederherstellen
@@ -1472,9 +1479,68 @@ private func runHDR(_ args: CLIArgs) -> Int32 {
 
 // MARK: - Plugins Command
 
-private func runPlugins(_ subArgs: [String]) -> Int32 {
-    let pluginDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+/// Plugin-Ordner; per IPHOTO_PLUGIN_DIR überschreibbar (Tests/Scripting).
+private func pluginDirectoryURL() -> URL {
+    if let override = ProcessInfo.processInfo.environment["IPHOTO_PLUGIN_DIR"], !override.isEmpty {
+        return URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
+    }
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("iPhoto/Plugins")
+}
+
+private struct PluginFileScan {
+    var plugins: [(url: URL, plugin: Plugin)] = []
+    var invalid: [(file: String, error: String)] = []
+}
+
+private func pluginDecodeErrorText(_ error: Error) -> String {
+    if let de = error as? DecodingError {
+        switch de {
+        case .keyNotFound(let key, _):
+            return "Pflichtfeld '\(key.stringValue)' fehlt"
+        case .typeMismatch(_, let ctx), .valueNotFound(_, let ctx):
+            let path = ctx.codingPath.map { $0.stringValue }.joined(separator: ".")
+            return "Falscher Typ bei '\(path)'"
+        case .dataCorrupted(let ctx):
+            return "Ungültiges JSON: \(ctx.debugDescription)"
+        @unknown default:
+            return "\(de)"
+        }
+    }
+    return error.localizedDescription
+}
+
+/// Liest alle *.json im Plugin-Ordner mit demselben Decoder wie `PluginStore`
+/// und sortiert wie `PluginStore.loadFromDisk` (order, dann name).
+private func scanPluginFiles(_ dir: URL) -> PluginFileScan {
+    var scan = PluginFileScan()
+    let urls = (try? FileManager.default.contentsOfDirectory(
+        at: dir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
+    ).filter { $0.pathExtension == "json" }
+     .sorted { $0.lastPathComponent < $1.lastPathComponent }) ?? []
+    let decoder = JSONDecoder()
+    for url in urls {
+        do {
+            let data = try Data(contentsOf: url)
+            let plugin = try decoder.decode(Plugin.self, from: data)
+            scan.plugins.append((url: url, plugin: plugin))
+        } catch {
+            scan.invalid.append((file: url.lastPathComponent, error: pluginDecodeErrorText(error)))
+        }
+    }
+    scan.plugins.sort {
+        $0.plugin.order != $1.plugin.order ? $0.plugin.order < $1.plugin.order : $0.plugin.name < $1.plugin.name
+    }
+    return scan
+}
+
+private func printPluginJSON(_ obj: Any) {
+    if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+       let s = String(data: d, encoding: .utf8) { print(s) }
+}
+
+private func runPlugins(_ subArgs: [String]) -> Int32 {
+    let pluginDir = pluginDirectoryURL()
 
     let sub = subArgs.first ?? "list"
     let jsonOutput = subArgs.contains("--json")
@@ -1541,8 +1607,144 @@ private func runPlugins(_ subArgs: [String]) -> Int32 {
             print("  \(infos.count) Plugins/Panels")
         }
         return 0
+    case "status":
+        let defaults = UserDefaults.standard
+        let scan = scanPluginFiles(pluginDir)
+        var rows: [[String: Any]] = []
+        rows.reserveCapacity(scan.plugins.count)
+        for (url, p) in scan.plugins {
+            let stored = defaults.object(forKey: p.resolvedStorageKey) as? Bool
+            var row: [String: Any] = [
+                "id": p.id,
+                "name": p.name,
+                "enabled": stored ?? p.defaultEnabled,
+                "default_enabled": p.defaultEnabled,
+                "overridden": stored != nil,
+                "order": p.order,
+                "storage_key": p.resolvedStorageKey,
+                "file": url.lastPathComponent
+            ]
+            if let b = p.builtin { row["builtin"] = b } else { row["builtin"] = NSNull() }
+            rows.append(row)
+        }
+        if jsonOutput {
+            printPluginJSON(rows)
+        } else {
+            print("Plugin-Ordner: \(pluginDir.path)")
+            for r in rows {
+                let on = (r["enabled"] as? Bool) == true
+                let ov = (r["overridden"] as? Bool) == true ? "" : "  (Standard)"
+                print("  [\(on ? "x" : " ")] \(r["id"] as? String ?? "")  —  \(r["name"] as? String ?? "")\(ov)")
+            }
+            let enabledCount = rows.filter { ($0["enabled"] as? Bool) == true }.count
+            print("  \(enabledCount)/\(rows.count) aktiv")
+            if !scan.invalid.isEmpty {
+                print("  \(scan.invalid.count) ungültige Datei(en) — 'iphoto-cli plugins validate' für Details")
+            }
+        }
+        return 0
+
+    case "enable", "disable", "reset":
+        let resetAll = sub == "reset" && subArgs.contains("--all")
+        let ids = subArgs.dropFirst().filter { !$0.hasPrefix("--") }
+        if ids.isEmpty && !resetAll {
+            fputs("Verwendung: iphoto-cli plugins \(sub) <id|name> [...]\(sub == "reset" ? " | --all" : "") [--json]\n", stderr)
+            return 1
+        }
+        let scan = scanPluginFiles(pluginDir)
+        var byID: [String: Plugin] = [:]
+        var byName: [String: Plugin] = [:]
+        for (_, p) in scan.plugins {
+            byID[p.id] = p
+            byName[p.name.lowercased()] = p
+        }
+        // Alle IDs zuerst auflösen → keine Teil-Änderung bei Tippfehler
+        var targets: [Plugin] = []
+        var seen = Set<String>()
+        if resetAll {
+            targets = scan.plugins.map { $0.plugin }
+        } else {
+            for raw in ids {
+                guard let p = byID[raw] ?? byName[raw.lowercased()] else {
+                    fputs("Fehler: Plugin '\(raw)' nicht gefunden in \(pluginDir.path)\n", stderr)
+                    return 1
+                }
+                if seen.insert(p.id).inserted { targets.append(p) }
+            }
+        }
+        let defaults = UserDefaults.standard
+        var changed: [String] = []
+        var unchanged: [String] = []
+        for p in targets {
+            let key = p.resolvedStorageKey
+            let before = (defaults.object(forKey: key) as? Bool) ?? p.defaultEnabled
+            let after: Bool
+            if sub == "reset" {
+                defaults.removeObject(forKey: key)
+                after = p.defaultEnabled
+            } else {
+                after = sub == "enable"
+                defaults.set(after, forKey: key)
+            }
+            if before != after { changed.append(p.id) } else { unchanged.append(p.id) }
+        }
+        defaults.synchronize()
+        if jsonOutput {
+            printPluginJSON([
+                "action": sub,
+                "plugins": targets.map { $0.id },
+                "changed": changed,
+                "unchanged": unchanged
+            ] as [String: Any])
+        } else {
+            let verb = sub == "enable" ? "aktiviert" : (sub == "disable" ? "deaktiviert" : "auf Standard zurückgesetzt")
+            print("\(targets.count) Plugin(s) \(verb) (\(changed.count) geändert)")
+            for p in targets { print("  \(p.id)") }
+        }
+        return 0
+
+    case "validate":
+        let scan = scanPluginFiles(pluginDir)
+        var filesByID: [String: [String]] = [:]
+        var problems: [[String: String]] = scan.invalid.map { ["file": $0.file, "error": $0.error] }
+        for (url, p) in scan.plugins {
+            filesByID[p.id, default: []].append(url.lastPathComponent)
+            if p.id.trimmingCharacters(in: .whitespaces).isEmpty {
+                problems.append(["file": url.lastPathComponent, "error": "Leere id"])
+            }
+            if p.name.trimmingCharacters(in: .whitespaces).isEmpty {
+                problems.append(["file": url.lastPathComponent, "error": "Leerer name"])
+            }
+            for a in p.actions where a.command.trimmingCharacters(in: .whitespaces).isEmpty {
+                problems.append(["file": url.lastPathComponent, "error": "Aktion '\(a.label)' ohne command"])
+            }
+        }
+        let duplicates = filesByID.filter { $0.value.count > 1 }
+            .sorted { $0.key < $1.key }
+            .map { ["id": $0.key, "files": $0.value.sorted()] as [String: Any] }
+        let ok = problems.isEmpty && duplicates.isEmpty
+        if jsonOutput {
+            printPluginJSON([
+                "dir": pluginDir.path,
+                "valid": scan.plugins.count,
+                "problems": problems,
+                "duplicates": duplicates,
+                "ok": ok
+            ] as [String: Any])
+        } else {
+            print("Plugin-Ordner: \(pluginDir.path)")
+            print("  \(scan.plugins.count) gültige Plugin-Datei(en)")
+            for pr in problems { print("  FEHLER  \(pr["file"] ?? ""): \(pr["error"] ?? "")") }
+            for d in duplicates {
+                let files = (d["files"] as? [String] ?? []).joined(separator: ", ")
+                print("  DOPPELT id '\(d["id"] as? String ?? "")': \(files)")
+            }
+            print(ok ? "  OK" : "  \(problems.count + duplicates.count) Problem(e)")
+        }
+        return ok ? 0 : 1
+
     default:
-        fputs("Fehler: Unbekannter plugins-Unterbefehl '\(sub)'. Erlaubt: list, dir\n", stderr)
+        fputs("Fehler: Unbekannter plugins-Unterbefehl '\(sub)'. Erlaubt: list, dir, status, enable, disable, reset, validate\n", stderr)
         return 1
     }
 }
