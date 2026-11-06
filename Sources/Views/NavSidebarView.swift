@@ -587,40 +587,6 @@ struct NavSidebarView: View {
             .padding(.horizontal, 4)
             .help("Gesicherte Bilder anzeigen (⌘B zum Sichern)")
 
-            // Thumbnail-Vorschau der letzten gesicherten Bilder
-            let backedUpDocs = viewModel.collection.documents
-                .filter { $0.isBackedUp }
-                .suffix(6)
-            if !backedUpDocs.isEmpty {
-                HStack(spacing: 2) {
-                    ForEach(Array(backedUpDocs), id: \.id) { doc in
-                        Button(action: {
-                            viewModel.navSelection = .backup
-                            if let idx = viewModel.collectionIndex(for: doc) {
-                                viewModel.collection.select(index: idx)
-                                viewModel.loadCurrentImage()
-                            }
-                        }) {
-                            if let thumb = doc.thumbnailImage ?? doc.placeholderThumbnailImage {
-                                Image(nsImage: thumb)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 28, height: 20)
-                                    .clipped()
-                                    .cornerRadius(2)
-                            } else {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color(NSColor.separatorColor))
-                                    .frame(width: 28, height: 20)
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 4)
-            }
         } // !backupCollapsed
     }
 
