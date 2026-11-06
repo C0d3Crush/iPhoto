@@ -101,6 +101,8 @@ private func printUsage() {
       iphoto-cli elo set <bildpfad> <wert> [--matches N] [--json]
       iphoto-cli elo match <links> <rechts> [--winner left|right|draw] [--json]
       iphoto-cli elo reset <bildpfad> [<bildpfad>...] | --all [--json]
+      iphoto-cli elo predict <links> <rechts> [--json]
+      iphoto-cli elo stats [--bucket N] [--json]
       iphoto-cli adjustments list [--json]
       iphoto-cli adjustments get <bildpfad> [--json]
       iphoto-cli adjustments delete <bildpfad> [--json]
@@ -151,6 +153,7 @@ private func printUsage() {
               cameras: Bilder pro Kamera; timeline: Bilder pro Jahr/Monat/Tag (--by)
     motif:    Motiv-Tags eines Bildes anzeigen
     elo:      ELO-Scores lesen, auflisten (nach Score sortiert) und setzen
+              predict: Gewinnchance + ELO-Prognose ohne Speichern; stats: Verteilung/Histogramm
     duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
     config:   Einstellungen anzeigen, lesen (get <key>), schreiben (set <key> <wert>), ex-/importieren
     query:    App-Suchsyntax (bewertung:5 typ:raw vor:2024 nach:2023-06 kamera:x album:x markiert:pick
@@ -3916,8 +3919,93 @@ private func runElo(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "predict":
+        // Read-only: Gewinnwahrscheinlichkeit + projizierte ELO-Änderung je Ausgang, ohne zu speichern.
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli elo predict <links> <rechts> [--json]\n", stderr); return 1
+        }
+        let leftPath = positional[0], rightPath = positional[1]
+        guard leftPath != rightPath else {
+            fputs("Fehler: Ein Bild kann nicht gegen sich selbst antreten\n", stderr); return 1
+        }
+        let l = catalog.elo(forPath: leftPath) ?? (elo: EloRating.initial, matches: 0)
+        let r = catalog.elo(forPath: rightPath) ?? (elo: EloRating.initial, matches: 0)
+        let pLeft = EloRating.expected(l.elo, r.elo)
+        var outcomes: [String: [String: Double]] = [:]
+        for (name, score) in [("left", 1.0), ("right", 0.0), ("draw", 0.5)] {
+            let res = EloRating.update(leftRating: l.elo, leftMatches: l.matches,
+                                       rightRating: r.elo, rightMatches: r.matches,
+                                       leftScore: score)
+            outcomes[name] = ["left": res.left, "right": res.right]
+        }
+        if jsonMode {
+            let d: [String: Any] = [
+                "left":  ["path": leftPath,  "elo": l.elo, "matches": l.matches] as [String: Any],
+                "right": ["path": rightPath, "elo": r.elo, "matches": r.matches] as [String: Any],
+                "p_left": pLeft, "p_right": 1.0 - pLeft,
+                "outcomes": outcomes
+            ]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print(String(format: "Links:  %.1f (%d Duelle)  %@", l.elo, l.matches, leftPath))
+            print(String(format: "Rechts: %.1f (%d Duelle)  %@", r.elo, r.matches, rightPath))
+            print(String(format: "Gewinnchance links: %.1f %%  rechts: %.1f %%", pLeft * 100, (1 - pLeft) * 100))
+            for name in ["left", "right", "draw"] {
+                let o = outcomes[name]!
+                let label = name == "left" ? "Links gewinnt " : name == "right" ? "Rechts gewinnt" : "Unentschieden "
+                print(String(format: "  %@ → %.1f / %.1f", label, o["left"]!, o["right"]!))
+            }
+        }
+        return 0
+
+    case "stats":
+        // Verteilung der ELO-Scores im Katalog (Bucket-Breite per --bucket, Default 100).
+        var bucket = 100
+        if let bi = args.firstIndex(of: "--bucket") {
+            guard bi + 1 < args.count, let b = Int(args[bi + 1]), b > 0 else {
+                fputs("Fehler: --bucket muss eine positive ganze Zahl sein\n", stderr); return 1
+            }
+            bucket = b
+        }
+        let values = catalog.allElos().values.map { $0 }
+        let elos = values.map { $0.elo }.sorted()
+        let n = elos.count
+        let totalMatches = values.reduce(0) { $0 + $1.matches }
+        let mean = n > 0 ? elos.reduce(0, +) / Double(n) : 0
+        let median: Double = n == 0 ? 0 : (n % 2 == 1 ? elos[n / 2] : (elos[n / 2 - 1] + elos[n / 2]) / 2)
+        var hist: [Int: Int] = [:]
+        for e in elos { hist[Int((e / Double(bucket)).rounded(.down)) * bucket, default: 0] += 1 }
+        let buckets = hist.keys.sorted()
+        if jsonMode {
+            var d: [String: Any] = [
+                "count": n, "total_matches": totalMatches, "bucket_size": bucket,
+                "unplayed": values.filter { $0.matches == 0 }.count,
+                "buckets": buckets.map { ["from": $0, "to": $0 + bucket, "count": hist[$0]!] }
+            ]
+            if n > 0 {
+                d["min"] = elos.first!; d["max"] = elos.last!
+                d["mean"] = mean; d["median"] = median
+            }
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            guard n > 0 else { print("(keine ELO-Einträge im Katalog)"); return 0 }
+            print(String(format: "Einträge: %d  Duelle gesamt: %d", n, totalMatches))
+            print(String(format: "Min: %.1f  Max: %.1f  Mittel: %.1f  Median: %.1f",
+                         elos.first!, elos.last!, mean, median))
+            let maxCount = hist.values.max() ?? 1
+            for b in buckets {
+                let c = hist[b]!
+                let bar = String(repeating: "█", count: max(1, c * 30 / maxCount))
+                print(String(format: "%5d–%-5d %5d  %@", b, b + bucket, c, bar))
+            }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli elo get|list|set|match|reset [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli elo get|list|set|match|reset|predict|stats [opts]\n", stderr)
         return 1
     }
 }
