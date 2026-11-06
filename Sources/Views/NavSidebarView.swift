@@ -534,7 +534,7 @@ struct NavSidebarView: View {
 
             // Thumbnail-Vorschau der letzten gesicherten Bilder
             let backedUpDocs = viewModel.collection.documents
-                .filter { $0.isBackedUp && !$0.isTrashed }
+                .filter { $0.isBackedUp }
                 .suffix(6)
             if !backedUpDocs.isEmpty {
                 HStack(spacing: 2) {

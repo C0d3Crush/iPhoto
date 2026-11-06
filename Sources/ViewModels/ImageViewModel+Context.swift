@@ -153,7 +153,7 @@ extension ImageViewModel {
         case .trash:
             filtered = collection.documents.filter { $0.isTrashed }
         case .backup:
-            filtered = collection.documents.filter { $0.isBackedUp && !$0.isTrashed }
+            filtered = collection.documents.filter { $0.isBackedUp }
         case .duplicates:
             filtered = docs
         case .similar:
