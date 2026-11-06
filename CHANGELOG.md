@@ -2,6 +2,14 @@
 
 ---
 
+## 1.103.4
+**Smart-Folder-Gruppen als eigene Seitenleisten-Sektionen**
+
+- iAlben-Gruppen (z. B. „Bewertungen", „Farblabels") erscheinen jetzt als eigene aufklappbare Abschnitte in der Seitenleiste statt in iAlben
+- iAlben zeigt nur noch ungegruppierte Smart-Filter
+
+---
+
 ## 1.103.0
 **Ordner und iOrdner in der Seitenleiste**
 

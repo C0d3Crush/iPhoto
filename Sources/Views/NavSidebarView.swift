@@ -248,7 +248,11 @@ struct NavSidebarView: View {
             }
         case .albums:        albumsSection
         case .folders:       foldersSection
-        case .smartFolders:  smartFoldersSection
+        case .smartFolders:
+            Group {
+                smartFoldersSection
+                smartFolderGroupSections
+            }
         case .iFolders:      iFoldersSection
         case .volumes:       volumesSection
         case .trash:         trashSection
@@ -423,15 +427,38 @@ struct NavSidebarView: View {
 
     @ViewBuilder private var smartFoldersContent: some View {
         let iAlben = viewModel.library.smartFolders.filter { $0.baseFolderPath == nil }
+        // Only ungrouped smart folders — groups appear as own top-level sections below
         ForEach(iAlben.filter { $0.group == nil || $0.group?.isEmpty == true }) { sf in
             smartFolderRow(sf)
         }
+    }
+
+    /// Renders each SmartFolder group as its own collapsible top-level section.
+    @ViewBuilder var smartFolderGroupSections: some View {
+        let iAlben = viewModel.library.smartFolders.filter { $0.baseFolderPath == nil }
         let groups = Array(Set(iAlben.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
         ForEach(groups, id: \.self) { groupName in
-            groupHeaderRow(groupName)
+            collapsibleSectionHeader(groupName, isCollapsed: collapsedGroups.contains(groupName),
+                onToggle: {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        if collapsedGroups.contains(groupName) { collapsedGroups.remove(groupName) }
+                        else { collapsedGroups.insert(groupName) }
+                    }
+                })
+                .onDrop(of: [kSmartFolderIDType],
+                        isTargeted: Binding(
+                            get: { dropTargetGroups.contains(groupName) },
+                            set: { if $0 { dropTargetGroups.insert(groupName) } else { dropTargetGroups.remove(groupName) } }
+                        )) { providers in
+                    loadSmartFolderID(from: providers) { sf in
+                        guard let sf = sf else { return }
+                        viewModel.moveSmartFolder(sf, toGroup: groupName)
+                    }
+                    return true
+                }
             if !collapsedGroups.contains(groupName) {
                 ForEach(iAlben.filter { $0.group == groupName }) { sf in
-                    smartFolderRow(sf, indented: true)
+                    smartFolderRow(sf)
                 }
             }
         }
