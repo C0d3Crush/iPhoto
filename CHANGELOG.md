@@ -2,8 +2,16 @@
 
 ---
 
+## 1.101.0
+**CLI: Entwicklungs-Einstellungen setzen und auf andere Bilder übertragen**
+- Neuer Befehl `iphoto-cli adjustments set <bildpfad> [--exposure X] [--contrast X] [--saturation X] [--warmth X] … [--reset] [--json]` setzt einzelne Regler im Katalog (bestehende Werte bleiben erhalten; `--reset` startet von den Standardwerten); negative Werte wie `--exposure -0.5` werden korrekt erkannt
+- Neuer Befehl `iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>...] [--include-crop] [--json]` synchronisiert Belichtung, Farbe, Kurven, Schärfe, Rauschreduzierung und Objektivkorrekturen auf beliebig viele Bilder — Zuschnitt, Drehung und lokale Masken bleiben standardmäßig am Ziel erhalten
+- Alle Ziele werden in einer einzigen SQLite-Transaktion geschrieben (neues `CatalogStore.saveAdjustments(_:)`) statt eines Commits pro Bild
+- Doppelt angegebene Ziele und die Quelle selbst werden übersprungen
+- Behoben: verwaister Merge-Konfliktmarker im Changelog entfernt
+- Tests in `Tests/run_plugins.sh` (Setzen/Lesen, Reset, Kopieren mit Duplikaten, Fehlerpfade für fehlende Regler, ungültige Zahl, unbekannte Option, Quelle ohne Anpassungen, fehlendes Ziel)
+
 ## 1.100.0
-<<<<<<< HEAD
 **PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
 - Neuer GitHub-Actions-Workflow `project-manager.yml` läuft alle 2 Stunden und analysiert offene, noch nicht zugewiesene Issues
 - Claude (`claude-opus-4-7`) erfindet bei Bedarf neue Akteure (Rollen) und wählt den passenden für jeden Issue aus

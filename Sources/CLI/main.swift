@@ -104,6 +104,8 @@ private func printUsage() {
       iphoto-cli adjustments list [--json]
       iphoto-cli adjustments get <bildpfad> [--json]
       iphoto-cli adjustments delete <bildpfad> [--json]
+      iphoto-cli adjustments set <bildpfad> [--exposure X] [--contrast X] [--saturation X] [--warmth X] … [--reset] [--json]
+      iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>...] [--include-crop] [--json]
       iphoto-cli rating batch-set <bild1> [<bild2>...] [--set N] [--flag pick|reject|none] [--color farbe] [--json]
       iphoto-cli export --list-formats [--json]
       iphoto-cli catalog scan-needed [--json]
@@ -151,6 +153,8 @@ private func printUsage() {
               cameras: Bilder pro Kamera; timeline: Bilder pro Jahr/Monat/Tag (--by)
     motif:    Motiv-Tags eines Bildes anzeigen
     elo:      ELO-Scores lesen, auflisten (nach Score sortiert) und setzen
+    adjustments: Gespeicherte Entwicklungs-Einstellungen auflisten/lesen/setzen/löschen;
+                 copy überträgt globale Regler auf andere Bilder (Crop bleibt, außer --include-crop)
     duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
     config:   Einstellungen anzeigen, lesen (get <key>), schreiben (set <key> <wert>), ex-/importieren
     query:    App-Suchsyntax (bewertung:5 typ:raw vor:2024 nach:2023-06 kamera:x album:x markiert:pick
@@ -4280,8 +4284,110 @@ private func runAdjustments(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "set":
+        // Explizites Parsing: negative Zahlen (z.B. --exposure -0.5) dürfen nicht als Flags gelten.
+        let fields: [String: WritableKeyPath<AdjustmentState, Double>] = [
+            "--exposure": \.exposure, "--brightness": \.brightness, "--contrast": \.contrast,
+            "--saturation": \.saturation, "--vibrance": \.vibrance, "--hue": \.hue,
+            "--warmth": \.warmth, "--tint": \.tint, "--clarity": \.clarity,
+            "--texture": \.texture, "--dehaze": \.dehaze,
+            "--sharpen": \.sharpenAmount, "--sharpen-radius": \.sharpenRadius,
+            "--luma-noise": \.lumaNoise, "--color-noise": \.colorNoise,
+            "--vignette": \.vignetteAmount, "--distortion": \.distortion, "--ca": \.caAmount
+        ]
+        let usage = "Verwendung: iphoto-cli adjustments set <bildpfad> [--exposure X] [--contrast X] … [--reset] [--json]\n"
+        var path: String?
+        var updates: [(String, WritableKeyPath<AdjustmentState, Double>, Double)] = []
+        var reset = false
+        var i = 1
+        while i < args.count {
+            let a = args[i]
+            if a == "--json" { i += 1; continue }
+            if a == "--reset" { reset = true; i += 1; continue }
+            if let kp = fields[a] {
+                guard i + 1 < args.count, let v = Double(args[i + 1]), v.isFinite else {
+                    fputs("Fehler: \(a) braucht eine Zahl\n", stderr); return 1
+                }
+                updates.append((a, kp, v)); i += 2; continue
+            }
+            if a.hasPrefix("--") {
+                fputs("Fehler: Unbekannte Option '\(a)'\n", stderr); fputs(usage, stderr); return 1
+            }
+            guard path == nil else {
+                fputs("Fehler: Nur ein Bildpfad erlaubt ('\(a)')\n", stderr); return 1
+            }
+            path = a; i += 1
+        }
+        guard let target = path else { fputs(usage, stderr); return 1 }
+        guard !updates.isEmpty || reset else {
+            fputs("Fehler: Mindestens ein Regler (z.B. --exposure 0.5) oder --reset angeben\n", stderr)
+            return 1
+        }
+        var adj = reset ? AdjustmentState() : (catalog.loadAdjustments(path: target) ?? AdjustmentState())
+        for (_, kp, v) in updates { adj[keyPath: kp] = v }
+        catalog.saveAdjustments(path: target, adjustments: adj)
+        if jsonMode {
+            var changed: [String: Double] = [:]
+            for (flag, _, v) in updates { changed[String(flag.dropFirst(2))] = v }
+            let d: [String: Any] = ["path": target, "ok": true, "reset": reset, "changed": changed]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print("Anpassungen gespeichert: \(target)")
+            for (flag, _, v) in updates { print("  \(flag.dropFirst(2)) = \(v)") }
+        }
+        return 0
+
+    case "copy":
+        // Synchronisiert Entwicklungs-Einstellungen von einem Quellbild auf N Zielbilder.
+        // Standard: nur globale Regler — Crop/Rotation/lokale Masken sind bildspezifisch
+        // und bleiben am Ziel erhalten (--include-crop überträgt alles 1:1).
+        let includeGeometry = args.contains("--include-crop")
+        if let bad = args.dropFirst().first(where: { $0.hasPrefix("--") && $0 != "--json" && $0 != "--include-crop" }) {
+            fputs("Fehler: Unbekannte Option '\(bad)'\n", stderr); return 1
+        }
+        let positional = args.dropFirst().filter { !$0.hasPrefix("--") }
+        guard positional.count >= 2, let source = positional.first else {
+            fputs("Verwendung: iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>...] [--include-crop] [--json]\n", stderr)
+            return 1
+        }
+        guard let src = catalog.loadAdjustments(path: source) else {
+            fputs("Fehler: Keine Anpassungen für Quelle: \(source)\n", stderr); return 1
+        }
+        var seen = Set<String>([source])
+        let targets = positional.dropFirst().filter { seen.insert($0).inserted }
+        var entries: [(path: String, adjustments: AdjustmentState)] = []
+        entries.reserveCapacity(targets.count)
+        for t in targets {
+            if includeGeometry { entries.append((path: t, adjustments: src)); continue }
+            var dst = catalog.loadAdjustments(path: t) ?? AdjustmentState()
+            dst.exposure = src.exposure; dst.brightness = src.brightness
+            dst.contrast = src.contrast; dst.saturation = src.saturation
+            dst.vibrance = src.vibrance; dst.hue = src.hue
+            dst.warmth = src.warmth; dst.tint = src.tint
+            dst.clarity = src.clarity; dst.texture = src.texture; dst.dehaze = src.dehaze
+            dst.curvePoints = src.curvePoints; dst.curveR = src.curveR
+            dst.curveG = src.curveG; dst.curveB = src.curveB
+            dst.sharpenAmount = src.sharpenAmount; dst.sharpenRadius = src.sharpenRadius
+            dst.lumaNoise = src.lumaNoise; dst.colorNoise = src.colorNoise
+            dst.vignetteAmount = src.vignetteAmount; dst.vignetteRadius = src.vignetteRadius
+            dst.distortion = src.distortion; dst.caAmount = src.caAmount
+            entries.append((path: t, adjustments: dst))
+        }
+        catalog.saveAdjustments(entries)
+        if jsonMode {
+            let d: [String: Any] = ["source": source, "targets": targets, "copied": entries.count,
+                                    "include_crop": includeGeometry, "ok": true]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            print("Anpassungen von \(source) auf \(entries.count) Bild(er) übertragen"
+                  + (includeGeometry ? " (inkl. Crop/Rotation)" : ""))
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli adjustments list|get|delete [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli adjustments list|get|set|copy|delete [opts]\n", stderr)
         return 1
     }
 }

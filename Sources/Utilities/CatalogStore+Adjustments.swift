@@ -20,6 +20,33 @@ extension CatalogStore {
         }
     }
 
+    /// Schreibt viele Anpassungen in einer einzigen Transaktion (ein prepare, N steps) —
+    /// für Batch-Sync (CLI `adjustments copy`) statt N einzelner Commits.
+    func saveAdjustments(_ entries: [(path: String, adjustments: AdjustmentState)]) {
+        guard !entries.isEmpty else { return }
+        let encoder = JSONEncoder()
+        let encoded: [(String, String)] = entries.compactMap { e -> (String, String)? in
+            guard let data = try? encoder.encode(e.adjustments),
+                  let json = String(data: data, encoding: .utf8) else { return nil }
+            return (e.path, json)
+        }
+        queue.sync {
+            exec("BEGIN")
+            let stmt = prepare("""
+                INSERT INTO adjustments (image_path, data, updated_at) VALUES (?,?,?)
+                ON CONFLICT(image_path) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at
+            """)
+            let now = iso8601()
+            for (path, json) in encoded {
+                sqlite3_reset(stmt)
+                bind(stmt, 1, path); bind(stmt, 2, json); bind(stmt, 3, now)
+                step(stmt)
+            }
+            sqlite3_finalize(stmt)
+            exec("COMMIT")
+        }
+    }
+
     func loadAdjustments(path: String) -> AdjustmentState? {
         queue.sync {
             let stmt = prepare("SELECT data FROM adjustments WHERE image_path=?")
