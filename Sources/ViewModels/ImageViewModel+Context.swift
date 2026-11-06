@@ -152,6 +152,8 @@ extension ImageViewModel {
             filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
         case .trash:
             filtered = collection.documents.filter { $0.isTrashed }
+        case .backup:
+            filtered = collection.documents.filter { $0.isBackedUp && !$0.isTrashed }
         case .duplicates:
             filtered = docs
         case .similar:

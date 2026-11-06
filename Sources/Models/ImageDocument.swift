@@ -42,6 +42,7 @@ struct ImageDocument: Identifiable, Equatable {
     var flagStatus: FlagStatus = .none
     var colorLabel: ColorLabel = .none
     var isTrashed: Bool = false
+    var isBackedUp: Bool = false
     var hasPersistedAdjustments: Bool = false
 
     // v1.19.0: ELO-Rating aus Bildvergleich. Bewusst getrennt von rating (Sternen):

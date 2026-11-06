@@ -20,6 +20,10 @@ extension ImageViewModel {
         var failed: [(filename: String, reason: String)] = []
     }
 
+    var backedUpCount: Int {
+        collection.documents.reduce(0) { $0 + ($1.isBackedUp ? 1 : 0) }
+    }
+
     func backupDocuments(_ docs: [ImageDocument], deleteOriginal: Bool) {
         guard !docs.isEmpty else { return }
         // Delete-Variante ist destruktiv → Pick-Schutz wie beim Trash-Pfad.
@@ -68,6 +72,18 @@ extension ImageViewModel {
                 if !summary.failed.isEmpty {
                     self.showBackupFailureAlert(summary)
                 }
+                // Erfolgreich gesicherte Bilder als backed-up markieren
+                if !succeededDocs.isEmpty {
+                    let paths = succeededDocs.map { $0.url.path }
+                    CatalogStore.shared.setBackedUp(paths: paths, true)
+                    let pathSet = Set(paths)
+                    for i in self.collection.documents.indices {
+                        if pathSet.contains(self.collection.documents[i].url.path) {
+                            self.collection.documents[i].isBackedUp = true
+                        }
+                    }
+                    self.invalidateVisibleOrder()
+                }
                 // Nur die tatsächlich erfolgreich gesicherten Bilder werden gelöscht —
                 // fehlerhafte Backups würden sonst Original + Backup verlieren.
                 if deleteOriginal, !succeededDocs.isEmpty {
@@ -106,5 +122,21 @@ extension ImageViewModel {
         }
         if let members = collapsedStackMembers(for: doc) { return members }
         return [doc]
+    }
+
+    /// Targets for global Cmd+B / Cmd+Shift+B menu actions (no context doc available).
+    /// Uses multi-selection when active, otherwise the current single document.
+    func backupTargetsForCurrentSelection() -> [ImageDocument] {
+        if collection.selectedIndices.count > 1 {
+            return collection.selectedIndices.sorted().compactMap {
+                $0 < collection.documents.count ? collection.documents[$0] : nil
+            }
+        }
+        let idx = collection.currentIndex
+        if idx < collection.documents.count {
+            let doc = collection.documents[idx]
+            return collapsedStackMembers(for: doc) ?? [doc]
+        }
+        return []
     }
 }

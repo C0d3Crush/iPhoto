@@ -135,6 +135,13 @@ final class CatalogStore {
         """)
 
         exec("""
+        CREATE TABLE IF NOT EXISTS backed_up (
+            image_path TEXT PRIMARY KEY,
+            backed_at  TEXT NOT NULL
+        )
+        """)
+
+        exec("""
         CREATE TABLE IF NOT EXISTS albums (
             id         TEXT PRIMARY KEY,
             name       TEXT NOT NULL,

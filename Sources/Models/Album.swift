@@ -58,6 +58,7 @@ enum NavSelection: Hashable {
     case smartFolder(UUID)
     case volume(UUID)
     case trash
+    case backup
     case duplicates
     case similar
     // Temporärer Scope auf eine einzelne Similar-Gruppe: main viewer + Pfeiltasten

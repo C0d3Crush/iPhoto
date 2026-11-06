@@ -1,5 +1,26 @@
 import SwiftUI
 
+// Helper: menu item with right-aligned shortcut hint (macOS 11 doesn't auto-display
+// bare-key shortcuts from .keyboardShortcut(), so we embed them in the label).
+private func mItem(_ title: String, shortcut: String? = nil, icon: String? = nil) -> some View {
+    HStack(spacing: 0) {
+        if let icon = icon {
+            Image(systemName: icon)
+                .frame(width: 16)
+                .foregroundColor(.primary)
+        }
+        Text(title)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        if let s = shortcut {
+            Text(s)
+                .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                .font(.system(size: 11, design: .monospaced))
+                .padding(.leading, 12)
+        }
+    }
+    .frame(minWidth: 220)
+}
+
 struct ThumbnailContextMenu: View {
     let doc: ImageDocument
     @EnvironmentObject var vm: ImageViewModel
@@ -66,47 +87,39 @@ struct ThumbnailContextMenu: View {
             Button(stackMembers.map { "Stapel (\($0.count)) aus Sammlung entfernen" } ?? "Aus Sammlung entfernen") {
                 vm.removeDocument(doc)
             }
-            Button {
-                vm.trashDocument(doc)
-            } label: {
-                if isInMultiSelection {
-                    Label("\(vm.collection.selectedIndices.count) Dateien in Papierkorb", systemImage: "trash")
-                } else if let members = stackMembers {
-                    Label("Stapel (\(members.count)) in Papierkorb", systemImage: "trash")
-                } else {
-                    Label("In Papierkorb", systemImage: "trash")
-                }
-            }
+            trashButton
             .keyboardShortcut(.delete, modifiers: .command)
             Divider()
             backupSection
         }
     }
 
+    private var trashTitle: String {
+        if isInMultiSelection { return "\(vm.collection.selectedIndices.count) Dateien in Papierkorb" }
+        if let members = stackMembers { return "Stapel (\(members.count)) in Papierkorb" }
+        return "In Papierkorb"
+    }
+
+    @ViewBuilder private var trashButton: some View {
+        Button(action: { vm.trashDocument(doc) }) {
+            mItem(trashTitle, shortcut: "⌘⌫", icon: "trash")
+        }
+        .keyboardShortcut(.delete, modifiers: .command)
+    }
+
     @ViewBuilder private var backupSection: some View {
         let targets = trashTargets
         let n = targets.count
-        Button {
-            vm.backupDocuments(targets, deleteOriginal: false)
-        } label: {
-            if isInMultiSelection {
-                Label("\(n) Dateien als Backup sichern", systemImage: "externaldrive.badge.checkmark")
-            } else if let members = stackMembers {
-                Label("Stapel (\(members.count)) als Backup sichern", systemImage: "externaldrive.badge.checkmark")
-            } else {
-                Label("Als Backup sichern", systemImage: "externaldrive.badge.checkmark")
-            }
+        Button { vm.backupDocuments(targets, deleteOriginal: false) } label: {
+            let title = isInMultiSelection ? "\(n) Dateien als Backup sichern"
+                : (stackMembers.map { "Stapel (\($0.count)) als Backup sichern" } ?? "Als Backup sichern")
+            mItem(title, shortcut: "⌘B", icon: "externaldrive.badge.checkmark")
         }
-        Button {
-            vm.backupDocuments(targets, deleteOriginal: true)
-        } label: {
-            if isInMultiSelection {
-                Label("\(n) Dateien sichern & Original in Papierkorb", systemImage: "externaldrive.badge.minus")
-            } else if let members = stackMembers {
-                Label("Stapel (\(members.count)) sichern & Original in Papierkorb", systemImage: "externaldrive.badge.minus")
-            } else {
-                Label("Als Backup sichern & Original in Papierkorb", systemImage: "externaldrive.badge.minus")
-            }
+        Button { vm.backupDocuments(targets, deleteOriginal: true) } label: {
+            let title = isInMultiSelection ? "\(n) Dateien sichern & Original in Papierkorb"
+                : (stackMembers.map { "Stapel (\($0.count)) sichern & Original in Papierkorb" }
+                   ?? "Als Backup sichern & Original in Papierkorb")
+            mItem(title, shortcut: "⌘⇧B", icon: "externaldrive.badge.minus")
         }
     }
 
@@ -115,9 +128,9 @@ struct ThumbnailContextMenu: View {
             vm.setFlagStatus(.pick, for: doc)
         } label: {
             if doc.flagStatus == .pick {
-                Label("Pick entfernen", systemImage: "checkmark")
+                mItem("Pick entfernen", shortcut: "P", icon: "checkmark")
             } else {
-                Text("Als Pick markieren")
+                mItem("Als Pick markieren", shortcut: "P")
             }
         }
         .keyboardShortcut("p", modifiers: [])
@@ -125,9 +138,9 @@ struct ThumbnailContextMenu: View {
             vm.setFlagStatus(.reject, for: doc)
         } label: {
             if doc.flagStatus == .reject {
-                Label("Abgelehnt entfernen", systemImage: "checkmark")
+                mItem("Abgelehnt entfernen", shortcut: "X", icon: "checkmark")
             } else {
-                Text("Als Abgelehnt markieren")
+                mItem("Als Abgelehnt markieren", shortcut: "X")
             }
         }
         .keyboardShortcut("x", modifiers: [])
@@ -140,11 +153,8 @@ struct ThumbnailContextMenu: View {
                     vm.setRating(stars, for: doc)
                 } label: {
                     let label = String(repeating: "★", count: stars) + String(repeating: "☆", count: 5 - stars)
-                    if doc.rating == stars {
-                        Label(label, systemImage: "checkmark")
-                    } else {
-                        Text(label)
-                    }
+                    mItem(label, shortcut: "\(stars)",
+                          icon: doc.rating == stars ? "checkmark" : nil)
                 }
                 .keyboardShortcut(KeyEquivalent(Character("\(stars)")), modifiers: [])
             }
@@ -152,44 +162,35 @@ struct ThumbnailContextMenu: View {
             Button {
                 vm.setRating(0, for: doc)
             } label: {
-                if doc.rating == 0 {
-                    Label("Keine Bewertung", systemImage: "checkmark")
-                } else {
-                    Text("Keine Bewertung")
-                }
+                mItem("Keine Bewertung", shortcut: "0",
+                      icon: doc.rating == 0 ? "checkmark" : nil)
             }
             .keyboardShortcut("0", modifiers: [])
         }
     }
 
     @ViewBuilder private var colorLabelSection: some View {
-        colorLabelButton(.red,    name: "Rot",   shortcut: "r")
-        colorLabelButton(.yellow, name: "Gelb",  shortcut: "y")
-        colorLabelButton(.green,  name: "Grün",  shortcut: "g")
-        colorLabelButton(.blue,   name: "Blau",  shortcut: "b")
+        colorLabelButton(.red,    name: "Rot",        shortcut: "R")
+        colorLabelButton(.yellow, name: "Gelb",       shortcut: "Y")
+        colorLabelButton(.green,  name: "Grün",       shortcut: "G")
+        colorLabelButton(.blue,   name: "Blau",       shortcut: "B")
         Button {
             vm.setColorLabel(.none, for: doc)
         } label: {
-            if doc.colorLabel == .none {
-                Label("Kein Label", systemImage: "checkmark")
-            } else {
-                Text("Kein Label")
-            }
+            mItem("Kein Label", shortcut: "L",
+                  icon: doc.colorLabel == .none ? "checkmark" : nil)
         }
         .keyboardShortcut("l", modifiers: [])
     }
 
-    private func colorLabelButton(_ label: ColorLabel, name: String, shortcut: Character) -> some View {
+    private func colorLabelButton(_ label: ColorLabel, name: String, shortcut: String) -> some View {
         Button {
             vm.setColorLabel(label, for: doc)
         } label: {
-            if doc.colorLabel == label {
-                Label(name, systemImage: "checkmark")
-            } else {
-                Text(name)
-            }
+            mItem(name, shortcut: shortcut,
+                  icon: doc.colorLabel == label ? "checkmark" : nil)
         }
-        .keyboardShortcut(KeyEquivalent(shortcut), modifiers: [])
+        .keyboardShortcut(KeyEquivalent(shortcut.lowercased().first ?? "?"), modifiers: [])
     }
 
     @ViewBuilder private var qualityOverrideSection: some View {
@@ -241,8 +242,8 @@ struct ThumbnailContextMenu: View {
             }
             vm.showExportSheet = true
         }
-        Button("Im Finder zeigen") {
-            vm.showInFinder(doc)
+        Button { vm.showInFinder(doc) } label: {
+            mItem("Im Finder zeigen", shortcut: "⌘R")
         }
         .keyboardShortcut("r", modifiers: .command)
     }

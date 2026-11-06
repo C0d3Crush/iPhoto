@@ -204,4 +204,33 @@ extension CatalogStore {
         let n = step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : 0
         sqlite3_finalize(stmt); return n
     }
+
+    // MARK: - Backed-up (Bildarchiv)
+
+    func setBackedUp(paths: [String], _ value: Bool) {
+        guard !paths.isEmpty else { return }
+        queue.sync {
+            exec("BEGIN")
+            for path in paths {
+                let stmt = value
+                    ? prepare("INSERT OR REPLACE INTO backed_up(image_path, backed_at) VALUES(?, datetime('now'))")
+                    : prepare("DELETE FROM backed_up WHERE image_path=?")
+                bind(stmt, 1, path)
+                step(stmt); sqlite3_finalize(stmt)
+            }
+            exec("COMMIT")
+        }
+    }
+
+    func backedUpPaths() -> Set<String> {
+        queue.sync {
+            let stmt = prepare("SELECT image_path FROM backed_up")
+            var out = Set<String>()
+            while step(stmt) == SQLITE_ROW {
+                out.insert(String(cString: sqlite3_column_text(stmt, 0)))
+            }
+            sqlite3_finalize(stmt)
+            return out
+        }
+    }
 }

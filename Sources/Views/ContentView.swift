@@ -24,6 +24,7 @@ struct ContentView: View {
     @AppStorage("navtoolbar.showSearch")     private var navShowSearch     = true
     @AppStorage("navtoolbar.showSort")       private var navShowGridSort   = true
     @AppStorage("navtoolbar.showSlider")     private var navShowSlider     = true
+    @AppStorage("settings.geekMode")         private var geekPanelVisible  = false
 
     // Per-item action bar visibility
     @AppStorage("toolbar.item.sort")        private var showSort        = true
@@ -87,8 +88,10 @@ struct ContentView: View {
                     showInspector: navShowInspector,
                     sidebarActive: viewModel.navSidebarVisible,
                     inspectorActive: viewModel.inspectorVisible,
+                    consoleActive: geekPanelVisible,
                     onToggleSidebar: { viewModel.navSidebarVisible.toggle() },
-                    onToggleInspector: { viewModel.toggleInspector() }
+                    onToggleInspector: { viewModel.toggleInspector() },
+                    onToggleConsole: { geekPanelVisible.toggle() }
                 )
 
                 if viewModel.modeSwitcherEnabled {
@@ -748,8 +751,10 @@ private struct PanelToggleGroup: View {
     let showInspector: Bool
     let sidebarActive: Bool
     let inspectorActive: Bool
+    let consoleActive: Bool
     let onToggleSidebar: () -> Void
     let onToggleInspector: () -> Void
+    let onToggleConsole: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -760,10 +765,13 @@ private struct PanelToggleGroup: View {
             }
             if showInspector {
                 panelButton(icon: "sidebar.right", active: inspectorActive,
-                            isFirst: !showSidebar, isLast: true, action: onToggleInspector)
+                            isFirst: !showSidebar, isLast: false, action: onToggleInspector)
                     .help("Inspector ein-/ausblenden")
                     .keyboardShortcut("i", modifiers: .command)
             }
+            panelButton(icon: "terminal", active: consoleActive,
+                        isFirst: !showSidebar && !showInspector, isLast: true, action: onToggleConsole)
+                .help("Log / Konsole ein-/ausblenden")
         }
         .background(
             RoundedRectangle(cornerRadius: 6)

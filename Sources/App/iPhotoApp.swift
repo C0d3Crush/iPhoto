@@ -48,6 +48,10 @@ struct iPhotoApp: App {
                     NotificationCenter.default.post(name: .backupRequested, object: nil)
                 }
                 .keyboardShortcut("b", modifiers: .command)
+                Button("Sichern & Original in Papierkorb") {
+                    NotificationCenter.default.post(name: .backupAndTrashRequested, object: nil)
+                }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
                 Button("Papierkorb leeren") {
                     NotificationCenter.default.post(name: .emptyTrashRequested, object: nil)
                 }
@@ -95,5 +99,6 @@ extension Notification.Name {
     static let backupRequested          = Notification.Name("backupRequested")
     static let emptyTrashRequested      = Notification.Name("emptyTrashRequested")
     static let checkDuplicatesRequested = Notification.Name("checkDuplicatesRequested")
-    static let openBackupFolderRequested = Notification.Name("openBackupFolderRequested")
+    static let openBackupFolderRequested   = Notification.Name("openBackupFolderRequested")
+    static let backupAndTrashRequested     = Notification.Name("backupAndTrashRequested")
 }

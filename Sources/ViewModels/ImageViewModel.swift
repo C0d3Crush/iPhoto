@@ -320,12 +320,17 @@ class ImageViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                let targets = self.collection.selectedIndices.isEmpty
-                    ? self.collection.currentDocument.map { [$0] } ?? []
-                    : self.collection.selectedIndices.sorted().compactMap {
-                        $0 < self.collection.documents.count ? self.collection.documents[$0] : nil
-                      }
+                let targets = self.backupTargetsForCurrentSelection()
                 self.backupDocuments(targets, deleteOriginal: false)
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .backupAndTrashRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                let targets = self.backupTargetsForCurrentSelection()
+                self.backupDocuments(targets, deleteOriginal: true)
             }
             .store(in: &cancellables)
 

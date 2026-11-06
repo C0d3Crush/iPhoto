@@ -220,7 +220,7 @@ extension ImageViewModel {
                 syncVolume(vol)
             }
             foldersToLoad = []
-        case .trash:
+        case .trash, .backup:
             foldersToLoad = []
         case .duplicates, .similar, .similarGroup, .blurry, .underexposed, .overexposed, .closedEyes, .eloRange, .people, .personDetail:
             foldersToLoad = []

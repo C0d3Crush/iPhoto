@@ -31,12 +31,12 @@ extension ImageViewModel {
 
     var compareLeftDocument: ImageDocument? {
         guard let id = compare.leftID else { return nil }
-        return collection.documents.first(where: { $0.id == id && !$0.isTrashed })
+        return collection.documents.first(where: { $0.id == id && !$0.isTrashed && !$0.isBackedUp })
     }
 
     var compareRightDocument: ImageDocument? {
         guard let id = compare.rightID else { return nil }
-        return collection.documents.first(where: { $0.id == id && !$0.isTrashed })
+        return collection.documents.first(where: { $0.id == id && !$0.isTrashed && !$0.isBackedUp })
     }
 
     // MARK: ELO-Verteilung
@@ -73,7 +73,7 @@ extension ImageViewModel {
     ///    Duelle statt einseitiger Blowouts.
     func nextComparePair() {
         iphotoBreadcrumb("nextComparePair: start")
-        let candidates = visibleDocuments.filter { !$0.isTrashed }
+        let candidates = visibleDocuments.filter { !$0.isTrashed && !$0.isBackedUp }
         guard candidates.count >= 2 else {
             compare.leftID = nil
             compare.rightID = nil
@@ -184,7 +184,7 @@ extension ImageViewModel {
     /// Konvergenz-Faktor 0.0–1.0: wie stabil ist das ELO-Ranking.
     /// Zielwert: 20 Duelle pro Bild (K-Faktor stabilisiert sich ab ~30 Matches).
     var eloConvergenceFactor: Double {
-        let docs = visibleDocuments.filter { !$0.isTrashed }
+        let docs = visibleDocuments.filter { !$0.isTrashed && !$0.isBackedUp }
         guard !docs.isEmpty else { return 0 }
         let target: Double = 20
         let sum = docs.reduce(0.0) { $0 + min(1.0, Double($1.eloMatches) / target) }

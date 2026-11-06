@@ -2,6 +2,15 @@
 
 ---
 
+## 1.102.2
+**Backup/Trash aus Bildvergleich ausgeschlossen, Kontextmenü-Kürzel und Backup-Shortcuts**
+
+- Bilder aus Backup und Papierkorb erscheinen nicht mehr im Bildvergleich (Duell-Modus)
+- Tastaturkürzel Cmd+B / Cmd+Shift+B funktionieren jetzt auch über das Menü (Speicher → Ausgewählte sichern / Sichern & Papierkorb)
+- Kontextmenü: Papierkorb-Eintrag zeigt Kürzel ⌘⌫ korrekt an
+
+---
+
 ## 1.102.1
 **Tastaturkürzel, Einstellungen-Tab, Log-Drawer, Plugin-Bereinigung**
 
