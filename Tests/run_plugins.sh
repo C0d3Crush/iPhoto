@@ -2617,6 +2617,104 @@ if [ $CO_ERR -ne 0 ]; then pass "collect --bogus (→ Fehler)"; else fail "colle
 echo ""
 
 # ---------------------------------------------------------------------------
+# elo predict / elo stats
+# ---------------------------------------------------------------------------
+echo "--- elo predict/stats ---"
+EP_DB="$TMPDIR/elo_predict_catalog.db"
+ep() { IPHOTO_CATALOG_DB="$EP_DB" "$BIN" "$@"; }
+
+# Leerer Katalog: stats liefert count 0
+EP_OUT=$(ep elo stats --json 2>/dev/null) || true
+if echo "$EP_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==0 and d['buckets']==[]" 2>/dev/null; then
+    pass "elo stats --json (leerer Katalog)"
+else
+    fail "elo stats (leer)" "$EP_OUT"
+fi
+
+# Neue Bilder: 50/50, links gewinnt → 1520/1480 — und nichts wird gespeichert
+EP_OUT=$(ep elo predict /tmp/ep_a.jpg /tmp/ep_b.jpg --json 2>/dev/null) || true
+if echo "$EP_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert abs(d['p_left']-0.5)<1e-9 and abs(d['p_right']-0.5)<1e-9
+assert abs(d['outcomes']['left']['left']-1520)<0.01 and abs(d['outcomes']['left']['right']-1480)<0.01
+assert abs(d['outcomes']['draw']['left']-1500)<0.01
+" 2>/dev/null; then
+    pass "elo predict --json (neue Bilder → 50 %, 1520/1480)"
+else
+    fail "elo predict (neu)" "$EP_OUT"
+fi
+EP_LIST=$(ep elo list --json 2>/dev/null) || true
+if echo "$EP_LIST" | python3 -c "import sys,json; assert json.load(sys.stdin)==[]" 2>/dev/null; then
+    pass "elo predict ist read-only (keine Einträge geschrieben)"
+else
+    fail "elo predict read-only" "$EP_LIST"
+fi
+
+# Favorit: 1800 vs 1400 → p_left > 0.9
+ep elo set /tmp/ep_a.jpg 1800 --matches 10 > /dev/null 2>&1 || true
+ep elo set /tmp/ep_b.jpg 1400 --matches 4 > /dev/null 2>&1 || true
+ep elo set /tmp/ep_c.jpg 1450 > /dev/null 2>&1 || true
+EP_OUT=$(ep elo predict /tmp/ep_a.jpg /tmp/ep_b.jpg --json 2>/dev/null) || true
+if echo "$EP_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['p_left']>0.9 and d['left']['elo']==1800 and d['right']['matches']==4
+assert d['outcomes']['right']['right']>1400
+" 2>/dev/null; then
+    pass "elo predict (Favorit 1800 vs 1400 → >90 %)"
+else
+    fail "elo predict (Favorit)" "$EP_OUT"
+fi
+
+EP_OUT=$(ep elo stats --json 2>/dev/null) || true
+if echo "$EP_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['count']==3 and d['total_matches']==14 and d['unplayed']==1
+assert d['min']==1400 and d['max']==1800 and abs(d['median']-1450)<0.01
+assert {b['from']:b['count'] for b in d['buckets']}=={1400:2,1800:1}
+" 2>/dev/null; then
+    pass "elo stats --json (Count/Median/Buckets)"
+else
+    fail "elo stats" "$EP_OUT"
+fi
+
+EP_OUT=$(ep elo stats --bucket 500 --json 2>/dev/null) || true
+if echo "$EP_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['bucket_size']==500 and {b['from']:b['count'] for b in d['buckets']}=={1000:2,1500:1}
+" 2>/dev/null; then
+    pass "elo stats --bucket 500"
+else
+    fail "elo stats --bucket" "$EP_OUT"
+fi
+
+EP_EXIT=0
+EP_OUT=$(ep elo stats 2>&1) || EP_EXIT=$?
+if [ $EP_EXIT -eq 0 ] && echo "$EP_OUT" | grep -q "Median: 1450.0"; then
+    pass "elo stats (Textausgabe)"
+else
+    fail "elo stats (Text)" "Exit $EP_EXIT: $EP_OUT"
+fi
+
+# Fehlerpfade
+EP_ERR=0
+ep elo predict /tmp/ep_a.jpg > /dev/null 2>&1 || EP_ERR=$?
+if [ $EP_ERR -ne 0 ]; then pass "elo predict (nur ein Bild → Fehler)"; else fail "elo predict (ein Bild)" "Hätte fehlschlagen sollen"; fi
+
+EP_ERR=0
+ep elo predict /tmp/ep_a.jpg /tmp/ep_a.jpg > /dev/null 2>&1 || EP_ERR=$?
+if [ $EP_ERR -ne 0 ]; then pass "elo predict (gegen sich selbst → Fehler)"; else fail "elo predict (selbst)" "Hätte fehlschlagen sollen"; fi
+
+EP_ERR=0
+ep elo stats --bucket 0 > /dev/null 2>&1 || EP_ERR=$?
+if [ $EP_ERR -ne 0 ]; then pass "elo stats --bucket 0 (→ Fehler)"; else fail "elo stats --bucket 0" "Hätte fehlschlagen sollen"; fi
+
+EP_ERR=0
+ep elo stats --bucket abc > /dev/null 2>&1 || EP_ERR=$?
+if [ $EP_ERR -ne 0 ]; then pass "elo stats --bucket abc (→ Fehler)"; else fail "elo stats --bucket abc" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
