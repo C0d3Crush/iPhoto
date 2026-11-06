@@ -187,7 +187,11 @@ class ImageViewModel: ObservableObject {
         guard let doc = collection.currentDocument else { return nil }
         return doc.cgImage ?? doc.previewImage ?? doc.thumbnail
     }
-    var windowTitle: String { collection.currentDocument?.filename ?? "iPhoto" }
+    var windowTitle: String {
+        if let doc = collection.currentDocument { return doc.filename }
+        if let project = activeProjectName { return project }
+        return "iPhoto"
+    }
     var imageSize: CGSize { collection.currentDocument?.imageSize ?? .zero }
 
     func collectionIndex(for document: ImageDocument) -> Int? {
