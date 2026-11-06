@@ -149,6 +149,8 @@ private func printUsage() {
       iphoto-cli perf switch [--log <datei>] [--last-session] [--label <tag>] [--slowest N] [--json]
       iphoto-cli collect --output-dir <ordner> [--flag pick|reject|none] [--color farbe] [--min-rating N]
                          [--include-trashed] [--dry-run] [--overwrite] [--json]
+      iphoto-cli volumes list [--all] [--json]
+      iphoto-cli volumes scan <pfad> [--dest <ordner>] [--list-new] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -186,6 +188,8 @@ private func printUsage() {
               pro Anzeigepfad (cache-hit, preview-hit, full-res …), --slowest N; Datei per IPHOTO_LOG_FILE
     collect:  Kopiert alle Bilder, die Flag/Farbe/Mindest-Rating erfüllen (Standard: alle Picks), in einen
               Ordner; Papierkorb ausgeschlossen (außer --include-trashed), Namenskollisionen → name-2.ext
+    volumes:  Eingehängte Wechseldatenträger (SD-Karten, USB) auflisten (--all: alle Volumes); scan zeigt
+              ohne zu kopieren, was der Karten-Sync importieren würde (neu vs. bereits in ~/Pictures/iPhoto)
     adjustments: gespeicherte Bearbeitungen auflisten/lesen/löschen; set schreibt Reglerwerte ohne Rendern,
               copy überträgt sie auf andere Bilder (eine Transaktion; --exclude-geometry behält Crop/Drehung)
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
@@ -6315,6 +6319,180 @@ private func runPerf(_ args: [String]) -> Int32 {
 
 /// Kopiert alle Bilder, die einem Rating-/Flag-/Farb-Filter entsprechen, in einen Zielordner.
 /// Ohne Filter werden alle Picks gesammelt. Papierkorb-Einträge sind standardmäßig ausgeschlossen.
+// MARK: - Volumes Command
+
+/// Standard-Ziel des Karten-Syncs (identisch zu ImageViewModel.syncVolumeToLibrary).
+private func defaultCardSyncDestination() -> URL {
+    FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("iPhoto")
+}
+
+private func runVolumes(_ args: [String]) -> Int32 {
+    let usage = """
+    Verwendung: iphoto-cli volumes list [--all] [--json]
+                iphoto-cli volumes scan <pfad> [--dest <ordner>] [--list-new] [--json]
+
+    """
+    let sub = args.first ?? ""
+    let rest = Array(args.dropFirst())
+    let jsonMode = rest.contains("--json")
+    let fm = FileManager.default
+
+    switch sub {
+    case "list":
+        var showAll = false
+        for a in rest {
+            switch a {
+            case "--all": showAll = true
+            case "--json": break
+            default:
+                fputs("Fehler: Unbekanntes Argument: \(a)\n", stderr); fputs(usage, stderr); return 1
+            }
+        }
+        let keys: [URLResourceKey] = [.volumeNameKey, .volumeIsRemovableKey, .volumeIsEjectableKey,
+                                      .volumeTotalCapacityKey, .volumeAvailableCapacityKey]
+        let urls = fm.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) ?? []
+        var rows: [[String: Any]] = []
+        for url in urls {
+            let v = try? url.resourceValues(forKeys: Set(keys))
+            let removable = (v?.volumeIsRemovable ?? false) || (v?.volumeIsEjectable ?? false)
+            if !showAll && !removable { continue }
+            rows.append([
+                "name": v?.volumeName ?? url.lastPathComponent,
+                "path": url.path,
+                "removable": removable,
+                "totalBytes": v?.volumeTotalCapacity ?? 0,
+                "availableBytes": v?.volumeAvailableCapacity ?? 0,
+            ])
+        }
+        rows.sort { ($0["path"] as? String ?? "") < ($1["path"] as? String ?? "") }
+        if jsonMode {
+            printBugReportJSON(rows)
+        } else if rows.isEmpty {
+            print(showAll ? "(keine Volumes)" : "(keine Wechseldatenträger eingehängt — --all zeigt alle Volumes)")
+        } else {
+            for r in rows {
+                let total = Int64(r["totalBytes"] as? Int ?? 0)
+                let avail = Int64(r["availableBytes"] as? Int ?? 0)
+                let tag = (r["removable"] as? Bool ?? false) ? "[wechselbar]" : "[intern]    "
+                print("\(tag) \(r["name"] as? String ?? "")  \(r["path"] as? String ?? "")  "
+                      + "\(ByteCountFormatter.string(fromByteCount: avail, countStyle: .file)) frei von "
+                      + "\(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))")
+            }
+        }
+        return 0
+
+    case "scan":
+        var source: String? = nil
+        var destPath: String? = nil
+        var listNew = false
+        var i = 0
+        while i < rest.count {
+            let a = rest[i]
+            switch a {
+            case "--dest":
+                i += 1
+                guard i < rest.count, !rest[i].isEmpty else { fputs("Fehler: --dest braucht einen Pfad\n", stderr); return 1 }
+                destPath = rest[i]
+            case "--list-new": listNew = true
+            case "--json": break
+            default:
+                if a.hasPrefix("-") || source != nil {
+                    fputs("Fehler: Unbekanntes Argument: \(a)\n", stderr); fputs(usage, stderr); return 1
+                }
+                source = a
+            }
+            i += 1
+        }
+        guard let src = source else { fputs(usage, stderr); return 1 }
+        let srcURL = URL(fileURLWithPath: (src as NSString).expandingTildeInPath).standardized
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: srcURL.path, isDirectory: &isDir), isDir.boolValue else {
+            fputs("Fehler: Ordner nicht gefunden: \(srcURL.path)\n", stderr); return 1
+        }
+        let destURL = destPath.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath).standardized }
+            ?? defaultCardSyncDestination()
+
+        // Gleiche Auswahl wie der Karten-Sync der App: reguläre Dateien, keine versteckten/Pakete,
+        // Endung in ImageDocument.supportedExtensions. Keys vorab anfordern → ein stat pro Datei.
+        let t0 = Date()
+        let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey]
+        var files: [(url: URL, size: Int64)] = []
+        if let en = fm.enumerator(at: srcURL, includingPropertiesForKeys: keys,
+                                  options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+            for case let f as URL in en {
+                guard ImageDocument.supportedExtensions.contains(f.pathExtension.lowercased()) else { continue }
+                guard let v = try? f.resourceValues(forKeys: Set(keys)), v.isRegularFile == true else { continue }
+                files.append((f, Int64(v.fileSize ?? 0)))
+            }
+        }
+        // Ziel einmal listen → Set-Lookup O(1) statt Dateisystem-Check pro Bild.
+        let existing = Set(((try? fm.contentsOfDirectory(atPath: destURL.path)) ?? []).map { $0.lowercased() })
+
+        var byExt: [String: Int] = [:]
+        var totalBytes: Int64 = 0
+        var newBytes: Int64 = 0
+        var rawCount = 0
+        var newPaths: [String] = []
+        var seenNames = Set<String>()
+        var nameConflicts = 0
+        for (url, size) in files {
+            let ext = url.pathExtension.lowercased()
+            byExt[ext, default: 0] += 1
+            totalBytes += size
+            if ImageDocument.rawExtensions.contains(ext) { rawCount += 1 }
+            let name = url.lastPathComponent.lowercased()
+            if !seenNames.insert(name).inserted { nameConflicts += 1 }
+            if !existing.contains(name) {
+                newPaths.append(url.path)
+                newBytes += size
+            }
+        }
+        newPaths.sort()
+        let ms = Int(Date().timeIntervalSince(t0) * 1000)
+
+        if jsonMode {
+            var obj: [String: Any] = [
+                "source": srcURL.path,
+                "destination": destURL.path,
+                "total": files.count,
+                "raw": rawCount,
+                "new": newPaths.count,
+                "existing": files.count - newPaths.count,
+                "totalBytes": totalBytes,
+                "newBytes": newBytes,
+                "byExtension": byExt,
+                "nameConflicts": nameConflicts,
+                "ms": ms,
+            ]
+            if listNew { obj["newFiles"] = newPaths }
+            printBugReportJSON(obj)
+        } else {
+            print("Quelle:  \(srcURL.path)")
+            print("Ziel:    \(destURL.path)")
+            print("Bilder:  \(files.count) (\(rawCount) RAW), "
+                  + ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file))
+            print("Neu:     \(newPaths.count), "
+                  + ByteCountFormatter.string(fromByteCount: newBytes, countStyle: .file))
+            print("Bereits im Ziel: \(files.count - newPaths.count)")
+            if nameConflicts > 0 {
+                print("Warnung: \(nameConflicts) Dateinamen kommen mehrfach vor (Sync kopiert nur die erste)")
+            }
+            if !byExt.isEmpty {
+                print("Formate: " + byExt.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+                    .map { "\($0.key)=\($0.value)" }.joined(separator: ", "))
+            }
+            if listNew { for p in newPaths { print("  + \(p)") } }
+            print("(\(ms) ms)")
+        }
+        return 0
+
+    default:
+        fputs(usage, stderr)
+        return 1
+    }
+}
+
 private func runCollect(_ args: [String]) -> Int32 {
     let usage = "Verwendung: iphoto-cli collect --output-dir <ordner> [--flag pick|reject|none] [--color farbe] [--min-rating N] [--include-trashed] [--dry-run] [--overwrite] [--json]\n"
     var jsonMode = false
@@ -6556,6 +6734,9 @@ if firstArg == "perf" {
 }
 if firstArg == "collect" {
     exit(runCollect(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "volumes" {
+    exit(runVolumes(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

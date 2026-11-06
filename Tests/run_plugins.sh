@@ -2984,6 +2984,83 @@ if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy (kein Ziel → Fehler)"; else 
 echo ""
 
 # ---------------------------------------------------------------------------
+# volumes list / scan — Karten-Sync-Probelauf (keine echten Bilder nötig)
+# ---------------------------------------------------------------------------
+echo "--- volumes ---"
+VOL_SRC="$TMPDIR/vol_card"
+VOL_DST="$TMPDIR/vol_lib"
+mkdir -p "$VOL_SRC/DCIM/100FUJI" "$VOL_SRC/.hidden" "$VOL_DST"
+printf 'xxxx' > "$VOL_SRC/DCIM/100FUJI/DSCF0001.JPG"
+printf 'xxxxxxxx' > "$VOL_SRC/DCIM/100FUJI/DSCF0001.RAF"
+printf 'xx' > "$VOL_SRC/DCIM/100FUJI/DSCF0002.jpg"
+printf 'x' > "$VOL_SRC/DCIM/100FUJI/notes.txt"
+printf 'x' > "$VOL_SRC/.hidden/secret.jpg"
+printf 'x' > "$VOL_DST/dscf0001.jpg"
+
+VOL_EXIT=0
+VOL_OUT=$("$BIN" volumes list --all --json 2>&1) || VOL_EXIT=$?
+if [ $VOL_EXIT -eq 0 ] && echo "$VOL_OUT" | python3 -c "
+import json,sys; d=json.load(sys.stdin); assert isinstance(d,list) and len(d)>=1
+assert all('path' in r and 'removable' in r for r in d)
+" 2>/dev/null; then
+    pass "volumes list --all --json (mind. 1 Volume)"
+else
+    fail "volumes list --all --json" "Exit $VOL_EXIT: $VOL_OUT"
+fi
+
+VOL_EXIT=0
+VOL_OUT=$("$BIN" volumes list --json 2>&1) || VOL_EXIT=$?
+if [ $VOL_EXIT -eq 0 ] && echo "$VOL_OUT" | python3 -c "
+import json,sys; d=json.load(sys.stdin); assert isinstance(d,list) and all(r['removable'] for r in d)
+" 2>/dev/null; then
+    pass "volumes list --json (nur Wechseldatenträger)"
+else
+    fail "volumes list --json" "Exit $VOL_EXIT: $VOL_OUT"
+fi
+
+VOL_EXIT=0
+VOL_OUT=$("$BIN" volumes scan "$VOL_SRC" --dest "$VOL_DST" --list-new --json 2>&1) || VOL_EXIT=$?
+if [ $VOL_EXIT -eq 0 ] && echo "$VOL_OUT" | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+assert d['total']==3, d
+assert d['raw']==1, d
+assert d['new']==2 and d['existing']==1, d
+assert d['totalBytes']==14 and d['newBytes']==10, d
+assert d['byExtension']=={'jpg':2,'raf':1}, d
+assert sorted(p.split('/')[-1] for p in d['newFiles'])==['DSCF0001.RAF','DSCF0002.jpg'], d
+" 2>/dev/null; then
+    pass "volumes scan --dest --list-new (3 Bilder, 2 neu, versteckt/txt ignoriert)"
+else
+    fail "volumes scan --json" "Exit $VOL_EXIT: $VOL_OUT"
+fi
+
+VOL_EXIT=0
+VOL_OUT=$("$BIN" volumes scan "$VOL_SRC" --dest "$VOL_DST" 2>&1) || VOL_EXIT=$?
+if [ $VOL_EXIT -eq 0 ] && echo "$VOL_OUT" | grep -q "Neu:     2"; then
+    pass "volumes scan (Textausgabe)"
+else
+    fail "volumes scan Text" "Exit $VOL_EXIT: $VOL_OUT"
+fi
+
+VOL_ERR=0
+"$BIN" volumes scan "$TMPDIR/gibt_es_nicht" --json > /dev/null 2>&1 || VOL_ERR=$?
+if [ $VOL_ERR -ne 0 ]; then pass "volumes scan (fehlender Ordner → Fehler)"; else fail "volumes scan fehlender Ordner" "Hätte fehlschlagen sollen"; fi
+
+VOL_ERR=0
+"$BIN" volumes scan > /dev/null 2>&1 || VOL_ERR=$?
+if [ $VOL_ERR -ne 0 ]; then pass "volumes scan (kein Pfad → Fehler)"; else fail "volumes scan ohne Pfad" "Hätte fehlschlagen sollen"; fi
+
+VOL_ERR=0
+"$BIN" volumes list --bogus > /dev/null 2>&1 || VOL_ERR=$?
+if [ $VOL_ERR -ne 0 ]; then pass "volumes list --bogus (→ Fehler)"; else fail "volumes list --bogus" "Hätte fehlschlagen sollen"; fi
+
+VOL_ERR=0
+"$BIN" volumes frobnicate > /dev/null 2>&1 || VOL_ERR=$?
+if [ $VOL_ERR -ne 0 ]; then pass "volumes (unbekannter Subcommand → Fehler)"; else fail "volumes unbekannt" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

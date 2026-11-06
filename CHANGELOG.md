@@ -2,6 +2,13 @@
 
 ---
 
+## 1.102.0
+**CLI: Wechseldatenträger auflisten und Karten-Sync probeweise prüfen**
+- Neuer Befehl `iphoto-cli volumes list [--all] [--json]` zeigt eingehängte SD-Karten/USB-Laufwerke mit freiem und Gesamtspeicher; `--all` listet auch interne Volumes
+- Neuer Befehl `iphoto-cli volumes scan <pfad> [--dest <ordner>] [--list-new] [--json]` zeigt ohne zu kopieren, wie viele Bilder der Karten-Sync importieren würde (neu vs. bereits in `~/Pictures/iPhoto`), mit RAW-Anteil, Datenmenge, Formatverteilung und Warnung bei doppelten Dateinamen
+- Gleiche Dateiauswahl wie der Sync der App (unterstützte Formate, versteckte Dateien ignoriert); Zielordner wird nur einmal gelesen (Set-Lookup statt Dateiprüfung pro Bild)
+- Tests in `Tests/run_plugins.sh` (Volume-Liste, Scan mit Zielabgleich, Textausgabe, Fehlerpfade)
+
 ## 1.101.0
 **CLI: Motiv-Tags katalogweit umbenennen und entfernen**
 - Neuer Befehl `iphoto-cli motif rename <alt> <neu> [--dry-run] [--json]` benennt einen Motiv-Tag in allen Bildern um; Reihenfolge bleibt erhalten, entstehende Duplikate werden zusammengeführt
