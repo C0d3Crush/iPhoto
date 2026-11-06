@@ -30,97 +30,7 @@ struct SettingsView: View {
     // MARK: - Backup
 
     private var backupTab: some View {
-        let s = viewModel.backupSettings
-        return Form {
-            Section(header: Text("Zielordner").font(.headline)) {
-                HStack {
-                    Text(s.destinationDisplayPath)
-                        .font(.system(.body, design: .monospaced))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Button("Wählen…") { pickBackupDestination() }
-                }
-                Text("Backups werden nach `<Jahr>/<Monat>/` einsortiert (Aufnahmedatum aus EXIF, Fallback: Dateidatum).")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Divider().padding(.vertical, 4)
-
-            Section(header: Text("JPEG-Qualität").font(.headline)) {
-                HStack {
-                    Slider(value: Binding(
-                        get: { s.jpegQuality },
-                        set: { s.jpegQuality = $0 }
-                    ), in: 0.5...1.0, step: 0.01)
-                    Text(String(format: "%.0f %%", s.jpegQuality * 100))
-                        .font(.body.monospacedDigit())
-                        .foregroundColor(.secondary)
-                        .frame(width: 60, alignment: .trailing)
-                }
-                Text("0.85 entspricht dem Export-Standard — sichtbar verlustfrei bei ~30–50 % Dateigröße.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Divider().padding(.vertical, 4)
-
-            Section(header: Text("Metadaten & Auflösung").font(.headline)) {
-                Toggle(isOn: Binding(get: { s.copyMetadata }, set: { s.copyMetadata = $0 })) {
-                    Text("EXIF/GPS/Kamera-Metadaten mitkopieren")
-                }
-                Toggle(isOn: Binding(get: { s.downscaleEnabled }, set: { s.downscaleEnabled = $0 })) {
-                    Text("Auflösung reduzieren")
-                }
-                HStack {
-                    Text("Lange Kante")
-                        .frame(width: 110, alignment: .leading)
-                        .foregroundColor(s.downscaleEnabled ? .primary : .secondary)
-                    Stepper(value: Binding(
-                        get: { s.longSidePixels },
-                        set: { s.longSidePixels = max(320, $0) }
-                    ), in: 320...12000, step: 128) {
-                        Text("\(s.longSidePixels) px")
-                            .font(.body.monospacedDigit())
-                    }
-                    .disabled(!s.downscaleEnabled)
-                }
-            }
-
-            Divider().padding(.vertical, 4)
-
-            Section(header: Text("Bei bestehender Datei").font(.headline)) {
-                Picker("", selection: Binding(
-                    get: { s.collisionMode },
-                    set: { s.collisionMode = $0 }
-                )) {
-                    ForEach(BackupSettings.CollisionMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                .pickerStyle(RadioGroupPickerStyle())
-                .labelsHidden()
-            }
-
-            Divider().padding(.vertical, 4)
-
-            Section(header: Text("Beim Löschen").font(.headline)) {
-                Toggle(isOn: Binding(
-                    get: { s.backupBeforeDelete },
-                    set: { s.backupBeforeDelete = $0 }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Vor dem Löschen sichern")
-                        Text("Erstellt eine Sicherungskopie im Backup-Zielordner bevor die Datei endgültig gelöscht wird.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-        }
-        .padding(20)
+        BackupSettingsTab(settings: viewModel.backupSettings, pickDestination: pickBackupDestination)
     }
 
     // MARK: - Thumbnails
@@ -640,6 +550,95 @@ private struct ToolbarEntry: Identifiable, Hashable {
 }
 
 // MARK: - Shortcuts Tab
+
+// Extracted as own struct so @ObservedObject properly tracks BackupSettings changes.
+// Using let s = viewModel.backupSettings in a computed property var caused crashes on
+// macOS 11 when tabs switched while the RadioGroupPicker was live.
+private struct BackupSettingsTab: View {
+    @ObservedObject var settings: BackupSettings
+    let pickDestination: () -> Void
+
+    var body: some View {
+        Form {
+            Section(header: Text("Zielordner").font(.headline)) {
+                HStack {
+                    Text(settings.destinationDisplayPath)
+                        .font(.system(.body, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("Wählen…") { pickDestination() }
+                }
+                Text("Backups werden nach `<Jahr>/<Monat>/` einsortiert (Aufnahmedatum aus EXIF, Fallback: Dateidatum).")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Divider().padding(.vertical, 4)
+
+            Section(header: Text("JPEG-Qualität").font(.headline)) {
+                HStack {
+                    Slider(value: $settings.jpegQuality, in: 0.5...1.0, step: 0.01)
+                    Text(String(format: "%.0f %%", settings.jpegQuality * 100))
+                        .font(.body.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 60, alignment: .trailing)
+                }
+                Text("0.85 entspricht dem Export-Standard — sichtbar verlustfrei bei ~30–50 % Dateigröße.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Divider().padding(.vertical, 4)
+
+            Section(header: Text("Metadaten & Auflösung").font(.headline)) {
+                Toggle(isOn: $settings.copyMetadata) {
+                    Text("EXIF/GPS/Kamera-Metadaten mitkopieren")
+                }
+                Toggle(isOn: $settings.downscaleEnabled) {
+                    Text("Auflösung reduzieren")
+                }
+                HStack {
+                    Text("Lange Kante")
+                        .frame(width: 110, alignment: .leading)
+                        .foregroundColor(settings.downscaleEnabled ? .primary : .secondary)
+                    Stepper(value: $settings.longSidePixels, in: 320...12000, step: 128) {
+                        Text("\(settings.longSidePixels) px")
+                            .font(.body.monospacedDigit())
+                    }
+                    .disabled(!settings.downscaleEnabled)
+                }
+            }
+
+            Divider().padding(.vertical, 4)
+
+            Section(header: Text("Bei bestehender Datei").font(.headline)) {
+                Picker("", selection: $settings.collisionMode) {
+                    ForEach(BackupSettings.CollisionMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .labelsHidden()
+            }
+
+            Divider().padding(.vertical, 4)
+
+            Section(header: Text("Beim Löschen").font(.headline)) {
+                Toggle(isOn: $settings.backupBeforeDelete) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Vor dem Löschen sichern")
+                        Text("Erstellt eine Sicherungskopie im Backup-Zielordner bevor die Datei endgültig gelöscht wird.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(20)
+    }
+}
 
 struct ShortcutsTab: View {
     struct ShortcutEntry: Identifiable {
