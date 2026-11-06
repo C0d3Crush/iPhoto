@@ -220,10 +220,28 @@ struct NavSidebarView: View {
 
     // MARK: - Scroll area
 
+    private static let systemSections: Set<NavSidebarSection> = [.trash, .backup, .duplicates, .blurry, .people]
+
     @ViewBuilder private var sidebarScrollView: some View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(sectionOrder.filter { NavSidebarSection.isVisible($0) && $0 != .folders && $0 != .iFolders }, id: \.self) { section in
+                // Project subdirectory sections (project mode only, before system divider)
+                if viewModel.isProjectMode {
+                    projectSubdirSections
+                }
+                let visibleSections = sectionOrder.filter {
+                    NavSidebarSection.isVisible($0)
+                    && $0 != .folders && $0 != .iFolders
+                    && (!viewModel.isProjectMode || ($0 != .albums && $0 != .smartFolders))
+                }
+                ForEach(Array(visibleSections.enumerated()), id: \.element) { idx, section in
+                    // Divider before first system section
+                    if Self.systemSections.contains(section)
+                        && (idx == 0 || !Self.systemSections.contains(visibleSections[idx - 1])) {
+                        Divider()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                    }
                     sectionView(for: section)
                         .onDrag {
                             DispatchQueue.main.async { self.draggingSection = section }
@@ -244,6 +262,41 @@ struct NavSidebarView: View {
             .padding(.trailing, 12)
         }
         .contextMenu { sidebarCreationMenu }
+    }
+
+    @ViewBuilder private var projectSubdirSections: some View {
+        let subdirs = viewModel.projectSubdirectories
+        if subdirs.isEmpty {
+            EmptyView()
+        } else {
+            ForEach(subdirs, id: \.path) { dir in
+                let name = dir.lastPathComponent
+                let isCollapsed = collapsedGroups.contains(name)
+                collapsibleSectionHeader(name, isCollapsed: isCollapsed,
+                    onToggle: {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            if isCollapsed { collapsedGroups.remove(name) }
+                            else { collapsedGroups.insert(name) }
+                        }
+                    })
+                if !isCollapsed {
+                    Button(action: { viewModel.navSelection = .projectFolder(dir.standardized.path) }) {
+                        HStack(spacing: 4) {
+                            Label(name, systemImage: "folder")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(viewModel.navSelection == .projectFolder(dir.standardized.path)
+                            ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal, 4)
+                }
+            }
+        }
     }
 
     @ViewBuilder private var sidebarCreationMenu: some View {

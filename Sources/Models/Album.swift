@@ -71,4 +71,5 @@ enum NavSelection: Hashable {
     case eloRange(Double, Double)   // min (inclusive) … max (inclusive)
     case people
     case personDetail(String)       // personID
+    case projectFolder(String)      // path: immediate subdir of a project root folder
 }

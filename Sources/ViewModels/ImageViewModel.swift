@@ -64,6 +64,7 @@ class ImageViewModel: ObservableObject {
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
     @Published var activeProjectName: String? = nil
+    @Published var projectSubdirectories: [URL] = []
     var isProjectMode: Bool = false
     @Published var showModeSwitcher: Bool = false
     @Published var modeSwitcherEnabled: Bool = UserDefaults.standard.object(forKey: "feature.modeSwitcherEnabled") as? Bool ?? true {
@@ -596,12 +597,21 @@ class ImageViewModel: ObservableObject {
     func openProject(_ project: Project) {
         isProjectMode = true
         activeProjectName = project.name
-        // Pre-fill syncedFolderIDs so loadContentForSelection triggered by navSelection
-        // change won't pull in any watched folders
         syncedFolderIDs = Set(library.watchedFolders.map { $0.id })
         collection.documents = []
         collection.selectedIndices = []
         collection.currentIndex = 0
+        // Discover immediate subdirectories of project root folders → sidebar sections
+        let fm = FileManager.default
+        var subdirs: [URL] = []
+        for path in project.folderPaths {
+            let root = URL(fileURLWithPath: path)
+            if let entries = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+                let dirs = entries.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+                subdirs.append(contentsOf: dirs.sorted { $0.lastPathComponent < $1.lastPathComponent })
+            }
+        }
+        projectSubdirectories = subdirs
         navSelection = .library
         for path in project.folderPaths {
             scanProjectFolder(URL(fileURLWithPath: path))
@@ -611,6 +621,7 @@ class ImageViewModel: ObservableObject {
     func openWithoutProject() {
         isProjectMode = false
         activeProjectName = nil
+        projectSubdirectories = []
         syncedFolderIDs = []
         collection.documents = []
         collection.selectedIndices = []

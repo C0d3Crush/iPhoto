@@ -192,6 +192,8 @@ extension ImageViewModel {
             let faces = people.facesPerPerson[personID] ?? []
             let paths = Set(faces.map { $0.imagePath })
             filtered = docs.filter { paths.contains($0.url.path) }
+        case .projectFolder(let path):
+            filtered = docs.filter { $0.url.standardized.path.hasPrefix(path) }
         }
         let sorted = applyStacking(to: applySortCriterion(to: filtered))
         guard !searchQuery.isEmpty else { return sorted }
