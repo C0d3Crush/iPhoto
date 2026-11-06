@@ -21,6 +21,7 @@ struct iPhotoApp: App {
                         },
                         onOpenWithoutProject: {
                             ProjectStore.shared.lastProjectID = nil
+                            viewModel.openWithoutProject()
                             showProjectPicker = false
                         }
                     )

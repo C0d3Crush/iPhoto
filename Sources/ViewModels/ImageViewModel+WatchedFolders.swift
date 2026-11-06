@@ -202,6 +202,8 @@ extension ImageViewModel {
     }
 
     func loadContentForSelection(_ selection: NavSelection?) {
+        // In project mode watched folders are intentionally excluded
+        guard !isProjectMode else { return }
         let foldersToLoad: [WatchedFolder]
         switch selection {
         case .library, nil:

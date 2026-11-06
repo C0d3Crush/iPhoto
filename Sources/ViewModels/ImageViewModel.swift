@@ -64,6 +64,7 @@ class ImageViewModel: ObservableObject {
     @Published var sortCriterion: SortCriterion = .filenameAsc
     @Published var shuffledOrder: [UUID] = []
     @Published var activeProjectName: String? = nil
+    var isProjectMode: Bool = false
     @Published var showModeSwitcher: Bool = false
     @Published var modeSwitcherEnabled: Bool = UserDefaults.standard.object(forKey: "feature.modeSwitcherEnabled") as? Bool ?? true {
         didSet {
@@ -195,6 +196,10 @@ class ImageViewModel: ObservableObject {
     // MARK: - Init
 
     init() {
+        // Set project mode before any folder loading so watched folders are skipped on startup
+        if ProjectStore.shared.lastProject != nil {
+            isProjectMode = true
+        }
         library.onError = { [weak self] msg in self?.errorMessage = msg }
         library.loadAlbums()
         library.loadAlbumFolders()
@@ -589,18 +594,30 @@ class ImageViewModel: ObservableObject {
     // MARK: - Projects
 
     func openProject(_ project: Project) {
+        isProjectMode = true
         activeProjectName = project.name
-        // Clear existing collection
+        // Pre-fill syncedFolderIDs so loadContentForSelection triggered by navSelection
+        // change won't pull in any watched folders
+        syncedFolderIDs = Set(library.watchedFolders.map { $0.id })
         collection.documents = []
         collection.selectedIndices = []
         collection.currentIndex = 0
         navSelection = .library
-
-        // Scan each project folder
         for path in project.folderPaths {
-            let folderURL = URL(fileURLWithPath: path)
-            scanProjectFolder(folderURL)
+            scanProjectFolder(URL(fileURLWithPath: path))
         }
+    }
+
+    func openWithoutProject() {
+        isProjectMode = false
+        activeProjectName = nil
+        syncedFolderIDs = []
+        collection.documents = []
+        collection.selectedIndices = []
+        collection.currentIndex = 0
+        navSelection = .library
+        loadContentForSelection(.library)
+        restoreCatalogImages()
     }
 
     private func scanProjectFolder(_ folderURL: URL) {
@@ -741,6 +758,7 @@ class ImageViewModel: ObservableObject {
     // any watched folder). Runs async; importFiles() deduplicates against watched-folder
     // results that may arrive concurrently.
     private func restoreCatalogImages() {
+        guard !isProjectMode else { return }
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let fm = FileManager.default
             let paths = CatalogStore.shared.allImages()
