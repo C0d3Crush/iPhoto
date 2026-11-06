@@ -2,6 +2,15 @@
 
 ---
 
+## 1.103.5
+**Ordner und iOrdner als Kontext-Menü statt eigene Sektionen**
+
+- „Ordner" und „iOrdner" haben keine eigenen Seitenleisten-Sektionen mehr
+- iOrdner-Smart-Filter erscheinen direkt unter iAlben
+- Rechtsklick auf eine leere Stelle in der Seitenleiste öffnet Erstellungs-Menü: Neues Album, Neues iAlbum, Ordner hinzufügen, Neues iOrdner
+
+---
+
 ## 1.103.4
 **Smart-Folder-Gruppen als eigene Seitenleisten-Sektionen**
 

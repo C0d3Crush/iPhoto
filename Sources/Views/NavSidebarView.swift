@@ -137,25 +137,7 @@ struct NavSidebarView: View {
                 Divider()
             }
 
-            ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(sectionOrder.filter { NavSidebarSection.isVisible($0) }, id: \.self) { section in
-                        sectionView(for: section)
-                            .onDrag {
-                                DispatchQueue.main.async { self.draggingSection = section }
-                                return NSItemProvider(object: section.rawValue as NSString)
-                            }
-                            .onDrop(of: ["public.text"],
-                                    delegate: NavSectionDropDelegate(
-                                        target: section,
-                                        order: $sectionOrder,
-                                        dragging: $draggingSection))
-                            .opacity(draggingSection == section ? 0.4 : 1.0)
-                    }
-                }
-                .padding(.vertical, 8)
-                .padding(.trailing, 12)
-            }
+            sidebarScrollView
 
             if !viewModel.activity.loadingQueue.isEmpty {
                 Divider()
@@ -235,6 +217,58 @@ struct NavSidebarView: View {
         }
     }
 
+
+    // MARK: - Scroll area
+
+    @ViewBuilder private var sidebarScrollView: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(sectionOrder.filter { NavSidebarSection.isVisible($0) && $0 != .folders && $0 != .iFolders }, id: \.self) { section in
+                    sectionView(for: section)
+                        .onDrag {
+                            DispatchQueue.main.async { self.draggingSection = section }
+                            return NSItemProvider(object: section.rawValue as NSString)
+                        }
+                        .onDrop(of: ["public.text"],
+                                delegate: NavSectionDropDelegate(
+                                    target: section,
+                                    order: $sectionOrder,
+                                    dragging: $draggingSection))
+                        .opacity(draggingSection == section ? 0.4 : 1.0)
+                }
+                Color.clear
+                    .frame(maxWidth: .infinity, minHeight: 120)
+                    .contentShape(Rectangle())
+            }
+            .padding(.vertical, 8)
+            .padding(.trailing, 12)
+        }
+        .contextMenu { sidebarCreationMenu }
+    }
+
+    @ViewBuilder private var sidebarCreationMenu: some View {
+        Button("Neues Album erstellen…") {
+            newAlbumName = ""
+            showCreateAlbum = true
+        }
+        Button("Neues iAlbum erstellen…") {
+            smartFolderSheetItem = SmartFolderSheetItem(folder: nil)
+        }
+        Divider()
+        Button("Ordner hinzufügen…") {
+            viewModel.addFolderDialog()
+        }
+        Button("Neues iOrdner erstellen…") {
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.prompt = "Auswählen"
+            if panel.runModal() == .OK, let url = panel.url {
+                smartFolderSheetItem = SmartFolderSheetItem(folder: nil, preselectedBasePath: url.standardized.path)
+            }
+        }
+    }
 
     // MARK: - Section dispatcher
 
@@ -426,16 +460,15 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var smartFoldersContent: some View {
-        let iAlben = viewModel.library.smartFolders.filter { $0.baseFolderPath == nil }
-        // Only ungrouped smart folders — groups appear as own top-level sections below
-        ForEach(iAlben.filter { $0.group == nil || $0.group?.isEmpty == true }) { sf in
+        // All smart folders (iAlben + iOrdner) that have no group
+        ForEach(viewModel.library.smartFolders.filter { $0.group == nil || $0.group?.isEmpty == true }) { sf in
             smartFolderRow(sf)
         }
     }
 
     /// Renders each SmartFolder group as its own collapsible top-level section.
     @ViewBuilder var smartFolderGroupSections: some View {
-        let iAlben = viewModel.library.smartFolders.filter { $0.baseFolderPath == nil }
+        let iAlben = viewModel.library.smartFolders
         let groups = Array(Set(iAlben.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
         ForEach(groups, id: \.self) { groupName in
             collapsibleSectionHeader(groupName, isCollapsed: collapsedGroups.contains(groupName),
