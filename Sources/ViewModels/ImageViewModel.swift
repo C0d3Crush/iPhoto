@@ -576,6 +576,12 @@ class ImageViewModel: ObservableObject {
         // Restore all previously imported images from the catalog that are not covered by
         // watched folders (e.g. files dragged in from Desktop, Downloads, etc.).
         restoreCatalogImages()
+
+        // Reconcile backup folder with catalog — marks images as backed-up if a file
+        // with matching stem exists in the backup destination (catches manual/external backups).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.syncBackupCatalog()
+        }
     }
 
     deinit {

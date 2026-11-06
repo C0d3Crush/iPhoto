@@ -124,6 +124,48 @@ extension ImageViewModel {
         return [doc]
     }
 
+    /// Scans the backup folder and marks collection images as backed up if a file with
+    /// matching stem exists there. Reconciles manual/external backups with the catalog.
+    func syncBackupCatalog() {
+        let settings = backupSettings
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let (root, stop) = settings.resolveDestination()
+            defer { stop() }
+            let fm = FileManager.default
+            guard let enumerator = fm.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else { return }
+            var backedUpStems = Set<String>()
+            for case let fileURL as URL in enumerator {
+                let vals = try? fileURL.resourceValues(forKeys: [.isRegularFileKey])
+                if vals?.isRegularFile == true {
+                    backedUpStems.insert(fileURL.deletingPathExtension().lastPathComponent.lowercased())
+                }
+            }
+            guard !backedUpStems.isEmpty else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                var newlyFound: [String] = []
+                for i in self.collection.documents.indices {
+                    let doc = self.collection.documents[i]
+                    guard !doc.isBackedUp else { continue }
+                    let stem = doc.url.deletingPathExtension().lastPathComponent.lowercased()
+                    if backedUpStems.contains(stem) {
+                        self.collection.documents[i].isBackedUp = true
+                        newlyFound.append(doc.url.path)
+                    }
+                }
+                if !newlyFound.isEmpty {
+                    CatalogStore.shared.setBackedUp(paths: newlyFound, true)
+                    self.invalidateVisibleOrder()
+                    Log.info("syncBackupCatalog: \(newlyFound.count) Bilder nachträglich als backed-up markiert")
+                }
+            }
+        }
+    }
+
     /// Targets for global Cmd+B / Cmd+Shift+B menu actions (no context doc available).
     /// Uses multi-selection when active, otherwise the current single document.
     func backupTargetsForCurrentSelection() -> [ImageDocument] {
