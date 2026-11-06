@@ -131,6 +131,8 @@ private func printUsage() {
       iphoto-cli gear summary [--json]
       iphoto-cli gear cameras|lenses [--limit N] [--json]
       iphoto-cli gear focal|iso|aperture [--limit N] [--json]
+      iphoto-cli collect --output-dir <ordner> [--flag pick|reject|none] [--color farbe] [--min-rating N]
+                         [--include-trashed] [--dry-run] [--overwrite] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -161,6 +163,8 @@ private func printUsage() {
               verwaiste Einträge aufräumen (prune; offline-Volumes bleiben); Datei per IPHOTO_BOOKMARKS_FILE
     gear:     Kamera-/Objektiv-Statistik aus dem Katalog: Rangliste nach Häufigkeit (cameras/lenses),
               Histogramme für Brennweite/ISO/Blende, summary mit Min/Max/Median
+    collect:  Kopiert alle Bilder, die Flag/Farbe/Mindest-Rating erfüllen (Standard: alle Picks), in einen
+              Ordner; Papierkorb ausgeschlossen (außer --include-trashed), Namenskollisionen → name-2.ext
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
     """)
 }
@@ -5681,6 +5685,130 @@ private func runGear(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - Collect (gefilterte Bilder in Ordner kopieren)
+
+/// Kopiert alle Bilder, die einem Rating-/Flag-/Farb-Filter entsprechen, in einen Zielordner.
+/// Ohne Filter werden alle Picks gesammelt. Papierkorb-Einträge sind standardmäßig ausgeschlossen.
+private func runCollect(_ args: [String]) -> Int32 {
+    let usage = "Verwendung: iphoto-cli collect --output-dir <ordner> [--flag pick|reject|none] [--color farbe] [--min-rating N] [--include-trashed] [--dry-run] [--overwrite] [--json]\n"
+    var jsonMode = false
+    var outDir: String? = nil
+    var flagFilter: String? = nil
+    var colorFilter: String? = nil
+    var minRating: Int? = nil
+    var includeTrashed = false
+    var dryRun = false
+    var overwrite = false
+    var i = 0
+    while i < args.count {
+        let a = args[i]
+        switch a {
+        case "--output-dir":
+            i += 1
+            guard i < args.count, !args[i].isEmpty else { fputs("Fehler: --output-dir braucht einen Pfad\n", stderr); return 1 }
+            outDir = args[i]
+        case "--flag":
+            i += 1
+            guard i < args.count, FlagStatus(rawValue: args[i].lowercased()) != nil else {
+                fputs("Fehler: Ungültiger Flag-Wert. Erlaubt: none, pick, reject\n", stderr); return 1
+            }
+            flagFilter = args[i].lowercased()
+        case "--color":
+            i += 1
+            guard i < args.count, ColorLabel(rawValue: args[i].lowercased()) != nil else {
+                fputs("Fehler: Ungültige Farbe. Erlaubt: none, red, yellow, green, blue\n", stderr); return 1
+            }
+            colorFilter = args[i].lowercased()
+        case "--min-rating":
+            i += 1
+            guard i < args.count, let n = Int(args[i]), n >= 0, n <= 5 else {
+                fputs("Fehler: --min-rating muss zwischen 0 und 5 liegen\n", stderr); return 1
+            }
+            minRating = n
+        case "--include-trashed": includeTrashed = true
+        case "--dry-run": dryRun = true
+        case "--overwrite": overwrite = true
+        case "--json": jsonMode = true
+        default:
+            fputs("Fehler: Unbekanntes Argument: \(a)\n", stderr)
+            fputs(usage, stderr)
+            return 1
+        }
+        i += 1
+    }
+    guard let dest = outDir else { fputs(usage, stderr); return 1 }
+    if flagFilter == nil && colorFilter == nil && minRating == nil { flagFilter = "pick" }
+
+    let catalog = CatalogStore(dbPath: envDBPath())
+    let trashed: Set<String> = includeTrashed ? [] : catalog.trashedPaths()
+    // Ein Durchlauf über alle Ratings, dann nach Pfad sortieren (deterministische Reihenfolge).
+    let matches = catalog.allRatings().filter { (path, e) in
+        if trashed.contains(path) { return false }
+        if let f = flagFilter, e.flag != f { return false }
+        if let c = colorFilter, e.colorLabel != c { return false }
+        if let r = minRating, e.rating < r { return false }
+        return true
+    }.keys.sorted()
+
+    let fm = FileManager.default
+    let destURL = URL(fileURLWithPath: (dest as NSString).expandingTildeInPath)
+    if !dryRun {
+        do { try fm.createDirectory(at: destURL, withIntermediateDirectories: true) }
+        catch { fputs("Fehler: Zielordner kann nicht angelegt werden: \(error.localizedDescription)\n", stderr); return 1 }
+    }
+
+    var copied: [[String: String]] = []
+    var skipped: [String] = []
+    var missing: [String] = []
+    var failed: [String] = []
+    var usedNames = Set<String>()   // Namenskollisionen innerhalb dieses Laufs (gleicher Dateiname, anderer Ordner)
+    for p in matches {
+        guard fm.fileExists(atPath: p) else { missing.append(p); continue }
+        let base = (p as NSString).lastPathComponent
+        var name = base
+        if usedNames.contains(name.lowercased()) {
+            let stem = (base as NSString).deletingPathExtension
+            let ext = (base as NSString).pathExtension
+            var n = 2
+            repeat {
+                name = ext.isEmpty ? "\(stem)-\(n)" : "\(stem)-\(n).\(ext)"
+                n += 1
+            } while usedNames.contains(name.lowercased())
+        }
+        usedNames.insert(name.lowercased())
+        let target = destURL.appendingPathComponent(name)
+        if fm.fileExists(atPath: target.path) {
+            if !overwrite { skipped.append(p); continue }
+            if !dryRun { try? fm.removeItem(at: target) }
+        }
+        if dryRun { copied.append(["source": p, "target": target.path]); continue }
+        do {
+            try fm.copyItem(at: URL(fileURLWithPath: p), to: target)
+            copied.append(["source": p, "target": target.path])
+        } catch { failed.append(p) }
+    }
+
+    if jsonMode {
+        var filter: [String: Any] = ["include_trashed": includeTrashed]
+        if let f = flagFilter { filter["flag"] = f }
+        if let c = colorFilter { filter["color"] = c }
+        if let r = minRating { filter["min_rating"] = r }
+        let obj: [String: Any] = [
+            "output_dir": destURL.path, "dry_run": dryRun, "filter": filter,
+            "matched": matches.count, "copied": copied.count, "skipped": skipped.count,
+            "missing": missing.count, "failed": failed.count,
+            "files": copied, "missing_paths": missing, "ok": failed.isEmpty
+        ]
+        if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: d, encoding: .utf8) { print(s) }
+    } else {
+        let verb = dryRun ? "würden kopiert" : "kopiert"
+        print("\(matches.count) Treffer: \(copied.count) \(verb), \(skipped.count) übersprungen, \(missing.count) fehlend, \(failed.count) Fehler → \(destURL.path)")
+        for c in copied { print("  \(c["source"] ?? "") → \(c["target"] ?? "")") }
+    }
+    return failed.isEmpty ? 0 : 1
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -5796,6 +5924,9 @@ if firstArg == "bookmarks" {
 }
 if firstArg == "gear" {
     exit(runGear(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "collect" {
+    exit(runCollect(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

@@ -2,8 +2,16 @@
 
 ---
 
+## 1.101.0
+**CLI: Gefilterte Bilder in einen Ordner sammeln (`collect`)**
+- Neuer Befehl `iphoto-cli collect --output-dir <ordner> [--flag pick|reject|none] [--color farbe] [--min-rating N] [--include-trashed] [--dry-run] [--overwrite] [--json]` kopiert alle passenden Bilder in einen Zielordner — ohne Filter alle Picks
+- Bilder im Papierkorb werden standardmäßig ausgelassen; fehlende Dateien werden gemeldet statt abzubrechen
+- Gleiche Dateinamen aus verschiedenen Ordnern werden nicht überschrieben, sondern als `name-2.jpg` usw. abgelegt; bereits vorhandene Ziele werden übersprungen (außer `--overwrite`)
+- Ein einziger Durchlauf über die Bewertungen, Papierkorb als Set — kein SQLite-Query pro Bild
+- Tests in `Tests/run_plugins.sh` (Dry-Run, Kopieren, Namenskollision, Wiederholung, Papierkorb, Farb-/Rating-Filter, Fehlerpfade)
+- Verwaister Merge-Konfliktmarker im Changelog entfernt
+
 ## 1.100.0
-<<<<<<< HEAD
 **PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
 - Neuer GitHub-Actions-Workflow `project-manager.yml` läuft alle 2 Stunden und analysiert offene, noch nicht zugewiesene Issues
 - Claude (`claude-opus-4-7`) erfindet bei Bedarf neue Akteure (Rollen) und wählt den passenden für jeden Issue aus
