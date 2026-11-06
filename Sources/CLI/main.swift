@@ -54,6 +54,8 @@ private func printUsage() {
       iphoto-cli motif set <bildpfad> <tag1,tag2,...> [--json]
       iphoto-cli motif find <tag> [--json]
       iphoto-cli motif stats [--json]
+      iphoto-cli motif rename <alt> <neu> [--dry-run] [--json]
+      iphoto-cli motif remove <tag> [--dry-run] [--json]
       iphoto-cli duplicate list|similar [--json]
       iphoto-cli config show|get <key>|set <key> <wert>|export [--path <pfad>]|import <pfad>
       iphoto-cli metadata get <bildpfad> [--json]
@@ -4386,8 +4388,56 @@ private func runMotif(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "rename", "remove":
+        // motif rename <alt> <neu> | motif remove <tag> — Tag katalogweit umbenennen/entfernen.
+        // Ein SELECT über alle Motive, Änderung in-memory, ein Batch-UPDATE in einer Transaktion.
+        let isRename = sub == "rename"
+        let dryRun = args.contains("--dry-run")
+        let known: Set<String> = ["--json", "--dry-run"]
+        if let bad = args.dropFirst().first(where: { $0.hasPrefix("-") && !known.contains($0) }) {
+            fputs("Fehler: Unbekannte Option '\(bad)'\n", stderr); return 1
+        }
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+        let usage = isRename
+            ? "Verwendung: iphoto-cli motif rename <alt> <neu> [--dry-run] [--json]\n"
+            : "Verwendung: iphoto-cli motif remove <tag> [--dry-run] [--json]\n"
+        guard positional.count == (isRename ? 2 : 1), !positional.contains(where: { $0.isEmpty }) else {
+            fputs(usage, stderr); return 1
+        }
+        let oldTag = positional[0]
+        let newTag: String? = isRename ? positional[1] : nil
+        if let n = newTag, n.contains(",") {
+            fputs("Fehler: Tag darf kein Komma enthalten: \(n)\n", stderr); return 1
+        }
+        if let n = newTag, n == oldTag {
+            fputs("Fehler: Alter und neuer Tag sind identisch: \(n)\n", stderr); return 1
+        }
+        var changes: [(path: String, tags: [String])] = []
+        for entry in catalog.allMotifs() where entry.tags.contains(oldTag) {
+            var seen = Set<String>()
+            let updated = entry.tags
+                .compactMap { (t: String) -> String? in t == oldTag ? newTag : t }
+                .filter { seen.insert($0).inserted }
+            changes.append((entry.path, updated))
+        }
+        if !dryRun { catalog.upsertMotifsBatch(changes) }
+        if jsonMode {
+            var d: [String: Any] = ["tag": oldTag, "count": changes.count,
+                                    "paths": changes.map { $0.path }, "dryRun": dryRun]
+            if let n = newTag { d["newTag"] = n }
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else if changes.isEmpty {
+            print("(keine Bilder mit Motiv '\(oldTag)')")
+        } else {
+            let verb = isRename ? "'\(oldTag)' → '\(newTag!)' umbenannt" : "'\(oldTag)' entfernt"
+            print("\(dryRun ? "[Probelauf] " : "")\(verb) in \(changes.count) Bild(ern)")
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli motif get|list|set|find|stats [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli motif get|list|set|find|stats|rename|remove [--json]\n", stderr)
         return 1
     }
 }

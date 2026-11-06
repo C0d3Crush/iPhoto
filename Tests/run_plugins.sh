@@ -2242,6 +2242,99 @@ if [ $GR_ERR -ne 0 ]; then pass "gear summary --bogus (→ Fehler)"; else fail "
 echo ""
 
 # ---------------------------------------------------------------------------
+# motif rename / remove
+# ---------------------------------------------------------------------------
+echo "--- MOTIF RENAME / REMOVE ---"
+
+MR_DB="$TMPDIR/motif_rename.db"
+MR_A="$TMPDIR/mr_a.png"
+MR_B="$TMPDIR/mr_b.png"
+MR_C="$TMPDIR/mr_c.png"
+cp "$INPUT_PNG" "$MR_A"; cp "$INPUT_PNG" "$MR_B"; cp "$INPUT_PNG" "$MR_C"
+mr() { IPHOTO_CATALOG_DB="$MR_DB" "$BIN" "$@"; }
+mr catalog add "$MR_A" "$MR_B" "$MR_C" > /dev/null 2>&1 || true
+mr motif set "$MR_A" sky,cloud > /dev/null 2>&1 || true
+mr motif set "$MR_B" sky,himmel > /dev/null 2>&1 || true
+mr motif set "$MR_C" beach > /dev/null 2>&1 || true
+
+# Probelauf ändert nichts
+MR_OUT=$(mr motif rename SKY himmel --dry-run --json 2>&1) || true
+MR_GET=$(mr motif get "$MR_A" --json 2>&1) || true
+if echo "$MR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['dryRun'] and d['count']==2 and d['tag']=='sky' and d['newTag']=='himmel'" 2>/dev/null \
+   && echo "$MR_GET" | python3 -c "import sys,json; assert json.load(sys.stdin)['motifs']==['sky','cloud']" 2>/dev/null; then
+    pass "motif rename --dry-run (2 Treffer, keine Änderung)"
+else
+    fail "motif rename --dry-run" "$MR_OUT / $MR_GET"
+fi
+
+# rename: Reihenfolge bleibt, Duplikate werden zusammengeführt
+MR_EXIT=0
+MR_OUT=$(mr motif rename sky himmel --json 2>&1) || MR_EXIT=$?
+MR_A_GET=$(mr motif get "$MR_A" --json 2>&1) || true
+MR_B_GET=$(mr motif get "$MR_B" --json 2>&1) || true
+if [ $MR_EXIT -eq 0 ] && echo "$MR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert not d['dryRun'] and d['count']==2" 2>/dev/null \
+   && echo "$MR_A_GET" | python3 -c "import sys,json; assert json.load(sys.stdin)['motifs']==['himmel','cloud']" 2>/dev/null \
+   && echo "$MR_B_GET" | python3 -c "import sys,json; assert json.load(sys.stdin)['motifs']==['himmel']" 2>/dev/null; then
+    pass "motif rename (umbenannt + dedupliziert)"
+else
+    fail "motif rename" "Exit $MR_EXIT: $MR_OUT / $MR_A_GET / $MR_B_GET"
+fi
+
+MR_FIND=$(mr motif find sky --json 2>&1) || true
+if echo "$MR_FIND" | python3 -c "import sys,json; assert json.load(sys.stdin)['count']==0" 2>/dev/null; then
+    pass "motif rename → alter Tag verschwunden"
+else
+    fail "motif rename (alter Tag)" "$MR_FIND"
+fi
+
+# remove
+MR_EXIT=0
+MR_OUT=$(mr motif remove cloud --json 2>&1) || MR_EXIT=$?
+MR_A_GET=$(mr motif get "$MR_A" --json 2>&1) || true
+if [ $MR_EXIT -eq 0 ] && echo "$MR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==1 and 'newTag' not in d" 2>/dev/null \
+   && echo "$MR_A_GET" | python3 -c "import sys,json; assert json.load(sys.stdin)['motifs']==['himmel']" 2>/dev/null; then
+    pass "motif remove --json"
+else
+    fail "motif remove" "Exit $MR_EXIT: $MR_OUT / $MR_A_GET"
+fi
+
+MR_OUT=$(mr motif remove gibtsnicht 2>&1) || true
+if echo "$MR_OUT" | grep -q "keine Bilder"; then
+    pass "motif remove (unbekannter Tag → 0 Treffer)"
+else
+    fail "motif remove (unbekannt)" "$MR_OUT"
+fi
+
+MR_OUT=$(mr motif rename beach strand 2>&1) || true
+if echo "$MR_OUT" | grep -q "umbenannt in 1"; then
+    pass "motif rename (Textausgabe)"
+else
+    fail "motif rename (Text)" "$MR_OUT"
+fi
+
+MR_ERR=0
+mr motif rename sky > /dev/null 2>&1 || MR_ERR=$?
+if [ $MR_ERR -ne 0 ]; then pass "motif rename (ohne neuen Tag → Fehler)"; else fail "motif rename (1 Arg)" "Hätte fehlschlagen sollen"; fi
+
+MR_ERR=0
+mr motif rename sky sky > /dev/null 2>&1 || MR_ERR=$?
+if [ $MR_ERR -ne 0 ]; then pass "motif rename (identisch → Fehler)"; else fail "motif rename (identisch)" "Hätte fehlschlagen sollen"; fi
+
+MR_ERR=0
+mr motif rename sky "a,b" > /dev/null 2>&1 || MR_ERR=$?
+if [ $MR_ERR -ne 0 ]; then pass "motif rename (Komma → Fehler)"; else fail "motif rename (Komma)" "Hätte fehlschlagen sollen"; fi
+
+MR_ERR=0
+mr motif remove > /dev/null 2>&1 || MR_ERR=$?
+if [ $MR_ERR -ne 0 ]; then pass "motif remove (ohne Tag → Fehler)"; else fail "motif remove (ohne Tag)" "Hätte fehlschlagen sollen"; fi
+
+MR_ERR=0
+mr motif remove sky --bogus > /dev/null 2>&1 || MR_ERR=$?
+if [ $MR_ERR -ne 0 ]; then pass "motif remove --bogus (→ Fehler)"; else fail "motif remove --bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
