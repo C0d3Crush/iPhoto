@@ -2,8 +2,15 @@
 
 ---
 
+## 1.101.0
+**CLI: Motiv-Tags katalogweit umbenennen und entfernen**
+- Neuer Befehl `iphoto-cli motif rename <alt> <neu> [--dry-run] [--json]` benennt einen Motiv-Tag in allen Bildern um; Reihenfolge bleibt erhalten, entstehende Duplikate werden zusammengeführt
+- Neuer Befehl `iphoto-cli motif remove <tag> [--dry-run] [--json]` entfernt einen Tag aus allen Bildern
+- `--dry-run` zeigt die betroffenen Bilder, ohne etwas zu schreiben
+- Schnell: eine einzige Katalog-Abfrage und alle Änderungen in einer SQLite-Transaktion statt einem Commit pro Bild
+- Tests in `Tests/run_plugins.sh` (Probelauf, Umbenennen mit Deduplizierung, Entfernen, Textausgabe, Fehlerpfade)
+
 ## 1.100.0
-<<<<<<< HEAD
 **PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
 - Neuer GitHub-Actions-Workflow `project-manager.yml` läuft alle 2 Stunden und analysiert offene, noch nicht zugewiesene Issues
 - Claude (`claude-opus-4-7`) erfindet bei Bedarf neue Akteure (Rollen) und wählt den passenden für jeden Issue aus

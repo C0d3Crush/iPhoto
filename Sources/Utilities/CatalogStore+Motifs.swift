@@ -39,6 +39,30 @@ extension CatalogStore {
         Self.motifCacheLock.unlock()
     }
 
+    /// Schreibt viele Motiv-Listen in einer einzigen Transaktion (ein prepare, N steps) —
+    /// für Bulk-Umbenennen/Entfernen von Tags statt N einzelner Commits.
+    func upsertMotifsBatch(_ entries: [(path: String, tags: [String])]) {
+        guard !entries.isEmpty else { return }
+        queue.sync {
+            exec("BEGIN")
+            let stmt = prepare("UPDATE images SET motif_tags=?, motif_scanned=1 WHERE path=?")
+            for e in entries {
+                sqlite3_reset(stmt)
+                bind(stmt, 1, e.tags.joined(separator: ","))
+                bind(stmt, 2, e.path)
+                step(stmt)
+            }
+            sqlite3_finalize(stmt)
+            exec("COMMIT")
+        }
+        Self.motifCacheLock.lock()
+        for e in entries {
+            Self.motifCache[e.path] = e.tags
+            Self.motifCacheMisses.remove(e.path)
+        }
+        Self.motifCacheLock.unlock()
+    }
+
     // MARK: - Read
 
     func motifs(forPath path: String) -> [String]? {
