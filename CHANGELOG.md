@@ -2,6 +2,14 @@
 
 ---
 
+## 1.104.1
+**Album-Ordner enthalten jetzt Originaldateien statt Symlinks**
+
+- `~/Pictures/iPhoto/Alben/[Albumname]/` speichert echte Kopien der Fotos
+- Bestehende Symlinks werden beim nächsten Sync automatisch durch Kopien ersetzt
+
+---
+
 ## 1.104.0
 **Projekte (Vault-Modus)**
 

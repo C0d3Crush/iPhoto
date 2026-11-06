@@ -178,37 +178,53 @@ extension ImageViewModel {
 
             let targetPaths = Set(photoURLs.map { $0.standardized.path })
 
-            // Remove stale symlinks
-            if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isSymbolicLinkKey]) {
-                for link in contents {
-                    guard (try? link.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true else { continue }
-                    let target = (try? fm.destinationOfSymbolicLink(atPath: link.path)).map {
-                        URL(fileURLWithPath: $0).standardized.path
+            // Remove files that are no longer in the album
+            if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
+                for file in contents {
+                    // Skip if this is a symlink pointing to a still-valid source
+                    let isLink = (try? file.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true
+                    if isLink {
+                        // Migrate old symlink → copy the original
+                        if let dest = try? fm.destinationOfSymbolicLink(atPath: file.path) {
+                            let srcURL = URL(fileURLWithPath: dest).standardized
+                            try? fm.removeItem(at: file)
+                            if targetPaths.contains(srcURL.path) {
+                                try? fm.copyItem(at: srcURL, to: file)
+                            }
+                        } else {
+                            try? fm.removeItem(at: file)
+                        }
+                        continue
                     }
-                    if target.map({ !targetPaths.contains($0) }) ?? true {
-                        try? fm.removeItem(at: link)
+                    // Regular file: remove if its name no longer matches any album photo
+                    let name = file.lastPathComponent
+                    let stillWanted = photoURLs.contains { $0.lastPathComponent == name }
+                    if !stillWanted {
+                        try? fm.removeItem(at: file)
                     }
                 }
             }
 
-            // Add new symlinks
-            var existingLinks = Set((try? fm.contentsOfDirectory(atPath: dir.path)) ?? [])
+            // Copy new photos that aren't already present
+            var existing = Set((try? fm.contentsOfDirectory(atPath: dir.path)) ?? [])
             for photoURL in photoURLs {
-                var linkName = photoURL.lastPathComponent
+                var destName = photoURL.lastPathComponent
                 var counter  = 1
-                while existingLinks.contains(linkName) {
+                // Only deduplicate if a file with that name exists AND is not a copy of this photo
+                while existing.contains(destName) &&
+                      !fm.contentsEqual(atPath: dir.appendingPathComponent(destName).path, andPath: photoURL.path) {
                     let base = (photoURL.lastPathComponent as NSString).deletingPathExtension
                     let ext  = (photoURL.lastPathComponent as NSString).pathExtension
-                    linkName = ext.isEmpty ? "\(base)_\(counter)" : "\(base)_\(counter).\(ext)"
+                    destName = ext.isEmpty ? "\(base)_\(counter)" : "\(base)_\(counter).\(ext)"
                     counter += 1
                 }
-                let linkURL = dir.appendingPathComponent(linkName)
-                if !fm.fileExists(atPath: linkURL.path, isDirectory: nil) {
-                    try? fm.createSymbolicLink(at: linkURL, withDestinationURL: photoURL)
-                    existingLinks.insert(linkName)
+                let destURL = dir.appendingPathComponent(destName)
+                if !fm.fileExists(atPath: destURL.path) {
+                    try? fm.copyItem(at: photoURL, to: destURL)
+                    existing.insert(destName)
                 }
             }
-            Log.info("Album Filesystem-Sync: \"\(album.name)\" → \(photoURLs.count) Symlinks in \(dir.path)")
+            Log.info("Album Filesystem-Sync: \"\(album.name)\" → \(photoURLs.count) Dateien in \(dir.path)")
         }
     }
 
