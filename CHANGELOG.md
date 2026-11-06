@@ -2,6 +2,17 @@
 
 ---
 
+## 1.102.1
+**Tastaturkürzel, Einstellungen-Tab, Log-Drawer, Plugin-Bereinigung**
+
+- Kontextmenü: Bewertung per Taste 1–5 / 0, Farblabel R/Y/G/B/L, In Papierkorb ⌘⌫, Im Finder zeigen ⌘R
+- Neuer Einstellungs-Tab „Kürzel": alle Tastaturkürzel übersichtlich nach Kategorie
+- Log/Konsole-Panel: wird über den ◻-Button in der Toolbar (oben links) ein-/ausgeklappt, Höhe per Drag veränderbar
+- Speicher-Plugin wird jetzt auch bei bestehenden Installationen aktiviert (Migration)
+- Navigation-Plugin aus dem Inspector entfernt (wird durch die Seitenleiste abgedeckt)
+
+---
+
 ## 1.102.0
 **Speicherverwaltung, Backup-Vorschau, Undo und Tastaturkürzel**
 

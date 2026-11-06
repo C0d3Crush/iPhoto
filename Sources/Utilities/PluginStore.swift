@@ -17,9 +17,27 @@ final class PluginStore: ObservableObject {
         createDirectoryIfNeeded()
         writeBuiltins()
         writeExampleIfNeeded()
+        Self.applyMigrations()
         let (loaded, enabled) = Self.loadFromDisk(at: pluginDirectory)
         plugins = loaded
         enabledIDs = enabled
+    }
+
+    private static func applyMigrations() {
+        // v1: force-enable storage plugin (was defaultEnabled:false before 1.102)
+        if !UserDefaults.standard.bool(forKey: "migration.storage.enabled.v1") {
+            UserDefaults.standard.set(true, forKey: "plugin.speicher")
+            UserDefaults.standard.set(true, forKey: "migration.storage.enabled.v1")
+        }
+        // v1: remove navigation plugin (deprecated, superseded by sidebar)
+        if !UserDefaults.standard.bool(forKey: "migration.navigation.disabled.v1") {
+            UserDefaults.standard.set(false, forKey: "plugin.navigation")
+            UserDefaults.standard.set(true,  forKey: "migration.navigation.disabled.v1")
+        }
+        // Always clean up navigation JSON (no longer a builtin)
+        let pluginDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto/Plugins/builtin-navigation.json")
+        try? FileManager.default.removeItem(at: pluginDir)
     }
 
     func reload() {
@@ -203,17 +221,6 @@ final class PluginStore: ObservableObject {
           "order": 6,
           "defaultEnabled": false,
           "storageKey": "plugin.analyse"
-        }
-        """),
-        ("builtin-navigation.json", """
-        {
-          "id": "com.iphoto.builtin.navigation",
-          "name": "Navigation",
-          "icon": "map",
-          "builtin": "navigation",
-          "order": 7,
-          "defaultEnabled": false,
-          "storageKey": "plugin.navigation"
         }
         """),
         ("builtin-hotpixel.json", """

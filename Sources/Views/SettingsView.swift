@@ -21,6 +21,8 @@ struct SettingsView: View {
                 .tabItem { Label("Seitenleiste", systemImage: "sidebar.left") }
             featuresTab
                 .tabItem { Label("Funktionen", systemImage: "slider.horizontal.3") }
+            ShortcutsTab()
+                .tabItem { Label("Kürzel", systemImage: "keyboard") }
         }
         .frame(width: 520, height: 500)
     }
@@ -634,5 +636,106 @@ private struct ToolbarEntry: Identifiable, Hashable {
     static func actionBarItem(from entry: ToolbarEntry) -> ActionBarItem? {
         guard entry.id.hasPrefix("action.") else { return nil }
         return ActionBarItem(rawValue: String(entry.id.dropFirst(7)))
+    }
+}
+
+// MARK: - Shortcuts Tab
+
+struct ShortcutsTab: View {
+    struct ShortcutEntry: Identifiable {
+        let id = UUID()
+        let action: String
+        let shortcut: String
+        let category: String
+    }
+
+    private let entries: [ShortcutEntry] = [
+        // Navigation
+        ShortcutEntry(action: "Nächstes Bild",         shortcut: "→",       category: "Navigation"),
+        ShortcutEntry(action: "Vorheriges Bild",        shortcut: "←",       category: "Navigation"),
+        ShortcutEntry(action: "Importieren",            shortcut: "⌘I",      category: "Navigation"),
+        ShortcutEntry(action: "Exportieren",            shortcut: "⌘E",      category: "Navigation"),
+        ShortcutEntry(action: "Ansicht wählen",         shortcut: "⌘M",      category: "Navigation"),
+        // Zoom
+        ShortcutEntry(action: "Vergrößern",             shortcut: "⌘=",      category: "Zoom"),
+        ShortcutEntry(action: "Verkleinern",            shortcut: "⌘−",      category: "Zoom"),
+        ShortcutEntry(action: "Originalgröße",          shortcut: "⌘0",      category: "Zoom"),
+        // Drehen
+        ShortcutEntry(action: "90° links drehen",       shortcut: "⌘[",      category: "Drehen"),
+        ShortcutEntry(action: "90° rechts drehen",      shortcut: "⌘]",      category: "Drehen"),
+        // Bewertung
+        ShortcutEntry(action: "Als Pick markieren",     shortcut: "P",       category: "Bewertung"),
+        ShortcutEntry(action: "Als Abgelehnt markieren",shortcut: "X",       category: "Bewertung"),
+        ShortcutEntry(action: "Bewertung 1–5",          shortcut: "1 – 5",   category: "Bewertung"),
+        ShortcutEntry(action: "Bewertung entfernen",    shortcut: "0",       category: "Bewertung"),
+        // Farblabels
+        ShortcutEntry(action: "Label Rot",              shortcut: "R",       category: "Farblabel"),
+        ShortcutEntry(action: "Label Gelb",             shortcut: "Y",       category: "Farblabel"),
+        ShortcutEntry(action: "Label Grün",             shortcut: "G",       category: "Farblabel"),
+        ShortcutEntry(action: "Label Blau",             shortcut: "B",       category: "Farblabel"),
+        ShortcutEntry(action: "Kein Label",             shortcut: "L",       category: "Farblabel"),
+        // Datei
+        ShortcutEntry(action: "In Papierkorb",          shortcut: "⌘⌫",     category: "Datei"),
+        ShortcutEntry(action: "Im Finder zeigen",       shortcut: "⌘R",      category: "Datei"),
+        ShortcutEntry(action: "Alle entfernen",         shortcut: "⌘⇧D",     category: "Datei"),
+        // Speicher
+        ShortcutEntry(action: "Als Backup sichern",     shortcut: "⌘B",      category: "Speicher"),
+        ShortcutEntry(action: "Papierkorb leeren",      shortcut: "⌘⇧⌫",    category: "Speicher"),
+        ShortcutEntry(action: "Duplikate prüfen",       shortcut: "⌘⇧U",     category: "Speicher"),
+        ShortcutEntry(action: "Backup-Ordner öffnen",   shortcut: "⌘⇧K",     category: "Speicher"),
+        // Bearbeiten
+        ShortcutEntry(action: "Rückgängig",             shortcut: "⌘Z",      category: "Bearbeiten"),
+        ShortcutEntry(action: "Wiederholen",            shortcut: "⌘⇧Z",     category: "Bearbeiten"),
+    ]
+
+    private var categories: [String] {
+        var seen = Set<String>()
+        return entries.compactMap { seen.insert($0.category).inserted ? $0.category : nil }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                ForEach(categories, id: \.self) { cat in
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(cat)
+                            .font(.headline)
+                            .padding(.bottom, 6)
+                        VStack(spacing: 0) {
+                            ForEach(entries.filter { $0.category == cat }) { entry in
+                                HStack {
+                                    Text(entry.action)
+                                        .font(.body)
+                                    Spacer()
+                                    Text(entry.shortcut)
+                                        .font(.system(.body, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .fill(Color(NSColor.controlBackgroundColor))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 4)
+                                                        .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+                                                )
+                                        )
+                                }
+                                .padding(.vertical, 5)
+                                .padding(.horizontal, 12)
+                                Divider().padding(.leading, 12)
+                            }
+                        }
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 0.5)
+                        )
+                    }
+                }
+            }
+            .padding(20)
+        }
     }
 }

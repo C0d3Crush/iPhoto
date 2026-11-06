@@ -1446,57 +1446,66 @@ struct VerboseLogView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @AppStorage("settings.geekMode") private var geekMode = false
     @State private var activeTab: GeekTab = .log
-    @State private var isExpanded = true
+    @State private var panelHeight: CGFloat = 160
+    @State private var dragStartHeight: CGFloat = 160
+    private let minHeight: CGFloat = 60
+    private let maxHeight: CGFloat = 400
 
     var body: some View {
         if geekMode {
             VStack(spacing: 0) {
-                Divider()
-                // Tab header row
+                // Resize handle — drag up/down to change panel height
+                HStack {
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(Color(NSColor.tertiaryLabelColor))
+                        .frame(width: 28, height: 3)
+                    Spacer()
+                }
+                .frame(height: 10)
+                .background(Color(NSColor.windowBackgroundColor))
+                .overlay(Divider(), alignment: .top)
+                .gesture(
+                    DragGesture()
+                        .onChanged { val in
+                            let newH = dragStartHeight - val.translation.height
+                            panelHeight = max(minHeight, min(maxHeight, newH))
+                        }
+                        .onEnded { _ in dragStartHeight = panelHeight }
+                )
+                .onHover { inside in
+                    if inside { NSCursor.resizeUpDown.push() }
+                    else      { NSCursor.pop() }
+                }
+
+                // Tab bar
                 HStack(spacing: 0) {
                     geekTabButton(tab: .log,     icon: "ant",      label: "Log")
                     geekTabButton(tab: .console, icon: "terminal", label: "Konsole")
                     Spacer()
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
-                    }) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help(isExpanded ? "Einklappen" : "Ausklappen")
                 }
                 .background(Color(NSColor.windowBackgroundColor))
 
-                if isExpanded {
-                    Group {
-                        if activeTab == .log     { LogPanelView() }
-                        else                     { ConsolePanelView() }
-                    }
-                    .frame(height: 140)
+                // Content
+                Group {
+                    if activeTab == .log     { LogPanelView() }
+                    else                     { ConsolePanelView() }
                 }
+                .frame(height: panelHeight)
             }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
     private func geekTabButton(tab: GeekTab, icon: String, label: String) -> some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                if activeTab == tab { isExpanded.toggle() }
-                else { activeTab = tab; isExpanded = true }
-            }
-        }) {
+        Button(action: { activeTab = tab }) {
             HStack(spacing: 4) {
                 Image(systemName: icon).font(.system(size: 9))
                 Text(label).font(.system(size: 10, weight: .medium))
             }
-            .foregroundColor(activeTab == tab && isExpanded ? .accentColor : .secondary)
+            .foregroundColor(activeTab == tab ? .accentColor : .secondary)
             .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.vertical, 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())

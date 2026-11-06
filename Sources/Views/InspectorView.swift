@@ -196,12 +196,12 @@ private struct PluginBlock: View {
         case "local":       LocalAdjustmentsPanel()
         case "presets":     PresetsPanel()
         case "analyse":     AnalysePanel()
-        case "navigation":  NavigationPanel()
         case "hotpixel":    HotPixelPanel()
         case "inpaint":     InpaintPanel()
         case "toolbox":     ToolboxPanel()
         case "similar":     SimilarPanel()
         case "people":      PeoplePanel()
+        case "storage":     StoragePanel()
         default:            EmptyView()
         }
     }

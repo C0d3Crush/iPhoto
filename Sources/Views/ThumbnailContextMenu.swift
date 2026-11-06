@@ -77,6 +77,7 @@ struct ThumbnailContextMenu: View {
                     Label("In Papierkorb", systemImage: "trash")
                 }
             }
+            .keyboardShortcut(.delete, modifiers: .command)
             Divider()
             backupSection
         }
@@ -119,6 +120,7 @@ struct ThumbnailContextMenu: View {
                 Text("Als Pick markieren")
             }
         }
+        .keyboardShortcut("p", modifiers: [])
         Button {
             vm.setFlagStatus(.reject, for: doc)
         } label: {
@@ -128,6 +130,7 @@ struct ThumbnailContextMenu: View {
                 Text("Als Abgelehnt markieren")
             }
         }
+        .keyboardShortcut("x", modifiers: [])
     }
 
     @ViewBuilder private var ratingMenu: some View {
@@ -143,6 +146,7 @@ struct ThumbnailContextMenu: View {
                         Text(label)
                     }
                 }
+                .keyboardShortcut(KeyEquivalent(Character("\(stars)")), modifiers: [])
             }
             Divider()
             Button {
@@ -154,14 +158,15 @@ struct ThumbnailContextMenu: View {
                     Text("Keine Bewertung")
                 }
             }
+            .keyboardShortcut("0", modifiers: [])
         }
     }
 
     @ViewBuilder private var colorLabelSection: some View {
-        colorLabelButton(.red,    name: "Rot")
-        colorLabelButton(.yellow, name: "Gelb")
-        colorLabelButton(.green,  name: "Grün")
-        colorLabelButton(.blue,   name: "Blau")
+        colorLabelButton(.red,    name: "Rot",   shortcut: "r")
+        colorLabelButton(.yellow, name: "Gelb",  shortcut: "y")
+        colorLabelButton(.green,  name: "Grün",  shortcut: "g")
+        colorLabelButton(.blue,   name: "Blau",  shortcut: "b")
         Button {
             vm.setColorLabel(.none, for: doc)
         } label: {
@@ -171,9 +176,10 @@ struct ThumbnailContextMenu: View {
                 Text("Kein Label")
             }
         }
+        .keyboardShortcut("l", modifiers: [])
     }
 
-    private func colorLabelButton(_ label: ColorLabel, name: String) -> some View {
+    private func colorLabelButton(_ label: ColorLabel, name: String, shortcut: Character) -> some View {
         Button {
             vm.setColorLabel(label, for: doc)
         } label: {
@@ -183,6 +189,7 @@ struct ThumbnailContextMenu: View {
                 Text(name)
             }
         }
+        .keyboardShortcut(KeyEquivalent(shortcut), modifiers: [])
     }
 
     @ViewBuilder private var qualityOverrideSection: some View {
@@ -237,6 +244,7 @@ struct ThumbnailContextMenu: View {
         Button("Im Finder zeigen") {
             vm.showInFinder(doc)
         }
+        .keyboardShortcut("r", modifiers: .command)
     }
 
     @ViewBuilder private var albumSection: some View {
