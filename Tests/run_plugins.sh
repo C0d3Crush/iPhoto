@@ -2792,6 +2792,102 @@ if [ $ES_ERR -ne 0 ]; then pass "elo suggest (leerer Katalog → Fehler)"; else 
 echo ""
 
 # ---------------------------------------------------------------------------
+# adjustments set / copy
+# ---------------------------------------------------------------------------
+echo "--- adjustments set/copy ---"
+AJ_DB="$TMPDIR/adjcopy_catalog.db"
+aj() { IPHOTO_CATALOG_DB="$AJ_DB" "$BIN" "$@"; }
+
+# set → Werte landen im Katalog
+AJ_OUT=$(aj adjustments set /fake/src.raf --exposure 1.5 --contrast 1.2 --turns 1 --json 2>&1) || true
+if echo "$AJ_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['exposure']==1.5 and d['contrast']==1.2 and d['turns']==1 and 'exposure' in d['changed']" 2>/dev/null; then
+    pass "adjustments set (exposure/contrast/turns)"
+else
+    fail "adjustments set" "$AJ_OUT"
+fi
+
+# set merged mit bestehenden Werten
+aj adjustments set /fake/src.raf --warmth 0.5 > /dev/null 2>&1 || true
+AJ_OUT=$(aj adjustments get /fake/src.raf --json 2>&1) || true
+if echo "$AJ_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['exposure']==1.5 and d['warmth']==0.5" 2>/dev/null; then
+    pass "adjustments set (merged mit bestehenden Werten)"
+else
+    fail "adjustments set merge" "$AJ_OUT"
+fi
+
+# Ziel mit eigener Drehung für --exclude-geometry
+aj adjustments set /fake/dst2.raf --turns 3 --exposure -2 > /dev/null 2>&1 || true
+
+# copy --dry-run schreibt nichts
+AJ_OUT=$(aj adjustments copy /fake/src.raf /fake/dst1.raf --dry-run --json 2>&1) || true
+AJ_GET=$(aj adjustments get /fake/dst1.raf --json 2>&1) || true
+if echo "$AJ_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['dry_run'] and d['copied']==1" 2>/dev/null && [ "$AJ_GET" = "{}" ]; then
+    pass "adjustments copy --dry-run (nichts geschrieben)"
+else
+    fail "adjustments copy --dry-run" "$AJ_OUT / $AJ_GET"
+fi
+
+# copy auf zwei Ziele (+ Duplikat + Quelle selbst werden ignoriert)
+AJ_OUT=$(aj adjustments copy /fake/src.raf /fake/dst1.raf /fake/dst2.raf /fake/dst1.raf /fake/src.raf --exclude-geometry --json 2>&1) || true
+if echo "$AJ_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['copied']==2 and d['targets']==['/fake/dst1.raf','/fake/dst2.raf']" 2>/dev/null; then
+    pass "adjustments copy (2 Ziele, dedupliziert)"
+else
+    fail "adjustments copy" "$AJ_OUT"
+fi
+AJ_GET=$(aj adjustments get /fake/dst2.raf --json 2>&1) || true
+if echo "$AJ_GET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['exposure']==1.5 and d['warmth']==0.5 and d['turns']==3" 2>/dev/null; then
+    pass "adjustments copy --exclude-geometry (Werte übernommen, Drehung behalten)"
+else
+    fail "adjustments copy --exclude-geometry" "$AJ_GET"
+fi
+AJ_GET=$(aj adjustments get /fake/dst1.raf --json 2>&1) || true
+if echo "$AJ_GET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['exposure']==1.5 and d['turns']==0" 2>/dev/null; then
+    pass "adjustments copy (neues Ziel ohne Geometrie)"
+else
+    fail "adjustments copy neues Ziel" "$AJ_GET"
+fi
+
+# --skip-existing
+AJ_OUT=$(aj adjustments copy /fake/src.raf /fake/dst1.raf /fake/dst3.raf --skip-existing --json 2>&1) || true
+if echo "$AJ_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['copied']==1 and d['skipped']==['/fake/dst1.raf']" 2>/dev/null; then
+    pass "adjustments copy --skip-existing"
+else
+    fail "adjustments copy --skip-existing" "$AJ_OUT"
+fi
+
+# set --reset setzt auf Standard zurück
+AJ_OUT=$(aj adjustments set /fake/dst3.raf --reset --json 2>&1) || true
+if echo "$AJ_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['reset'] and d['exposure']==0 and d['contrast']==1" 2>/dev/null; then
+    pass "adjustments set --reset"
+else
+    fail "adjustments set --reset" "$AJ_OUT"
+fi
+
+# Fehlerpfade
+AJ_ERR=0; aj adjustments set /fake/x.raf > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments set ohne Regler (→ Fehler)"; else fail "adjustments set ohne Regler" "Hätte fehlschlagen sollen"; fi
+AJ_ERR=0; aj adjustments set --exposure 1 > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments set ohne Pfad (→ Fehler)"; else fail "adjustments set ohne Pfad" "Hätte fehlschlagen sollen"; fi
+AJ_ERR=0; aj adjustments set /fake/x.raf --exposure 99 > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments set --exposure 99 (→ Bereichsfehler)"; else fail "adjustments set Bereich" "Hätte fehlschlagen sollen"; fi
+AJ_ERR=0; aj adjustments set /fake/x.raf --exposure abc > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments set --exposure abc (→ Fehler)"; else fail "adjustments set abc" "Hätte fehlschlagen sollen"; fi
+AJ_ERR=0; aj adjustments set /fake/x.raf --bogus 1 > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments set --bogus (→ Fehler)"; else fail "adjustments set --bogus" "Hätte fehlschlagen sollen"; fi
+AJ_ERR=0; aj adjustments set /fake/x.raf --turns 4 > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments set --turns 4 (→ Fehler)"; else fail "adjustments set --turns 4" "Hätte fehlschlagen sollen"; fi
+AJ_ERR=0; aj adjustments copy /fake/none.raf /fake/dst1.raf > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy ohne Quell-Anpassungen (→ Fehler)"; else fail "adjustments copy leere Quelle" "Hätte fehlschlagen sollen"; fi
+AJ_ERR=0; aj adjustments copy /fake/src.raf > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy ohne Ziel (→ Fehler)"; else fail "adjustments copy ohne Ziel" "Hätte fehlschlagen sollen"; fi
+AJ_ERR=0; aj adjustments copy /fake/src.raf /fake/src.raf > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy Quelle = Ziel (→ Fehler)"; else fail "adjustments copy Quelle=Ziel" "Hätte fehlschlagen sollen"; fi
+AJ_ERR=0; aj adjustments copy /fake/src.raf /fake/d.raf --bogus > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy --bogus (→ Fehler)"; else fail "adjustments copy --bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

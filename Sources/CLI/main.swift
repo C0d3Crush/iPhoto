@@ -109,6 +109,14 @@ private func printUsage() {
       iphoto-cli adjustments list [--json]
       iphoto-cli adjustments get <bildpfad> [--json]
       iphoto-cli adjustments delete <bildpfad> [--json]
+      iphoto-cli adjustments set <bildpfad> [--exposure N] [--brightness N] [--contrast N] [--saturation N]
+                                 [--vibrance N] [--hue N] [--warmth N] [--tint N] [--clarity N]
+                                 [--texture N] [--dehaze N] [--sharpen N] [--sharpen-radius N]
+                                 [--luma-noise N] [--color-noise N] [--vignette N] [--vignette-radius N]
+                                 [--distortion N] [--ca N]
+                                 [--rotation N] [--turns 0-3] [--reset] [--json]
+      iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>...] [--exclude-geometry] [--exclude-local]
+                                  [--skip-existing] [--dry-run] [--json]
       iphoto-cli rating batch-set <bild1> [<bild2>...] [--set N] [--flag pick|reject|none] [--color farbe] [--json]
       iphoto-cli export --list-formats [--json]
       iphoto-cli catalog scan-needed [--json]
@@ -178,6 +186,8 @@ private func printUsage() {
               pro Anzeigepfad (cache-hit, preview-hit, full-res …), --slowest N; Datei per IPHOTO_LOG_FILE
     collect:  Kopiert alle Bilder, die Flag/Farbe/Mindest-Rating erfüllen (Standard: alle Picks), in einen
               Ordner; Papierkorb ausgeschlossen (außer --include-trashed), Namenskollisionen → name-2.ext
+    adjustments: gespeicherte Bearbeitungen auflisten/lesen/löschen; set schreibt Reglerwerte ohne Rendern,
+              copy überträgt sie auf andere Bilder (eine Transaktion; --exclude-geometry behält Crop/Drehung)
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
     """)
 }
@@ -4483,10 +4493,199 @@ private func runAdjustments(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "set":
+        return runAdjustmentsSet(Array(args.dropFirst()), catalog: catalog, jsonMode: jsonMode)
+
+    case "copy":
+        return runAdjustmentsCopy(Array(args.dropFirst()), catalog: catalog, jsonMode: jsonMode)
+
     default:
-        fputs("Verwendung: iphoto-cli adjustments list|get|delete [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli adjustments list|get|set|copy|delete [opts]\n", stderr)
         return 1
     }
+}
+
+/// Numerische Regler, die `adjustments set` kennt: Flag → (Bereich, Setter).
+/// Bereiche entsprechen den Schiebereglern in AdjustmentsPanel / CropEditorView.
+private let adjustmentSetFields: [(flag: String, range: ClosedRange<Double>, apply: (inout AdjustmentState, Double) -> Void)] = [
+    ("--exposure",       -2...2,     { $0.exposure = $1 }),
+    ("--brightness",     -0.5...0.5,    { $0.brightness = $1 }),
+    ("--contrast",       0.5...1.5,    { $0.contrast = $1 }),
+    ("--saturation",     0...2,      { $0.saturation = $1 }),
+    ("--vibrance",       -1...1,     { $0.vibrance = $1 }),
+    ("--hue",            -180...180, { $0.hue = $1 }),
+    ("--warmth",         -1...1, { $0.warmth = $1 }),
+    ("--tint",           -1...1, { $0.tint = $1 }),
+    ("--clarity",        -1...1, { $0.clarity = $1 }),
+    ("--texture",        -1...1, { $0.texture = $1 }),
+    ("--dehaze",         -1...1, { $0.dehaze = $1 }),
+    ("--sharpen",        0...150,    { $0.sharpenAmount = $1 }),
+    ("--sharpen-radius", 0.5...3,    { $0.sharpenRadius = $1 }),
+    ("--luma-noise",     0...100,    { $0.lumaNoise = $1 }),
+    ("--color-noise",    0...100,    { $0.colorNoise = $1 }),
+    ("--vignette",       -100...100, { $0.vignetteAmount = $1 }),
+    ("--vignette-radius", 0.3...1,   { $0.vignetteRadius = $1 }),
+    ("--distortion",     -100...100, { $0.distortion = $1 }),
+    ("--ca",             0...100,    { $0.caAmount = $1 }),
+    ("--rotation",       -45...45,   { $0.rotation = $1 }),
+]
+
+private func adjustmentSummaryDict(_ adj: AdjustmentState) -> [String: Any] {
+    [
+        "exposure": adj.exposure, "brightness": adj.brightness,
+        "contrast": adj.contrast, "saturation": adj.saturation,
+        "vibrance": adj.vibrance, "hue": adj.hue,
+        "warmth": adj.warmth, "tint": adj.tint,
+        "clarity": adj.clarity, "texture": adj.texture, "dehaze": adj.dehaze,
+        "sharpen_amount": adj.sharpenAmount, "sharpen_radius": adj.sharpenRadius,
+        "luma_noise": adj.lumaNoise, "color_noise": adj.colorNoise,
+        "rotation": adj.rotation, "turns": adj.turns,
+        "vignette_amount": adj.vignetteAmount, "vignette_radius": adj.vignetteRadius,
+        "distortion": adj.distortion, "ca_amount": adj.caAmount,
+        "local_adjustments": adj.localAdjustments.count
+    ]
+}
+
+private func printAdjustmentsJSON(_ obj: Any) {
+    if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+       let s = String(data: d, encoding: .utf8) { print(s) }
+}
+
+/// adjustments set <bildpfad> [--exposure N ...] [--turns 0-3] [--reset] [--json]
+/// Schreibt Reglerwerte nicht-destruktiv in den Katalog (wie das Bearbeiten-Panel),
+/// ohne das Bild zu rendern. Bestehende Werte bleiben erhalten, außer bei --reset.
+private func runAdjustmentsSet(_ args: [String], catalog: CatalogStore, jsonMode: Bool) -> Int32 {
+    let usage = "Verwendung: iphoto-cli adjustments set <bildpfad> [--exposure N] [--contrast N] ... [--turns 0-3] [--reset] [--json]\n"
+    var path: String? = nil
+    var reset = false
+    var updates: [(Int, Double)] = []      // Index in adjustmentSetFields → Wert
+    var turns: Int? = nil
+    var i = 0
+    while i < args.count {
+        let a = args[i]
+        if a == "--json" { i += 1; continue }
+        if a == "--reset" { reset = true; i += 1; continue }
+        if a == "--turns" {
+            guard i + 1 < args.count, let t = Int(args[i + 1]), (0...3).contains(t) else {
+                fputs("Fehler: --turns erwartet 0, 1, 2 oder 3\n", stderr); return 1
+            }
+            turns = t; i += 2; continue
+        }
+        if a.hasPrefix("--") {
+            guard let idx = adjustmentSetFields.firstIndex(where: { $0.flag == a }) else {
+                fputs("Fehler: Unbekannte Option \(a)\n", stderr); fputs(usage, stderr); return 1
+            }
+            let field = adjustmentSetFields[idx]
+            guard i + 1 < args.count, let v = Double(args[i + 1]), v.isFinite else {
+                fputs("Fehler: \(a) erwartet eine Zahl\n", stderr); return 1
+            }
+            guard field.range.contains(v) else {
+                fputs("Fehler: \(a) außerhalb des Bereichs \(field.range.lowerBound)…\(field.range.upperBound)\n", stderr)
+                return 1
+            }
+            updates.append((idx, v)); i += 2; continue
+        }
+        if path == nil { path = a } else {
+            fputs("Fehler: Nur ein Bildpfad erlaubt (zusätzlich: \(a))\n", stderr); return 1
+        }
+        i += 1
+    }
+    guard let imagePath = path else { fputs(usage, stderr); return 1 }
+    guard !updates.isEmpty || turns != nil || reset else {
+        fputs("Fehler: Keine Anpassung angegeben\n", stderr); fputs(usage, stderr); return 1
+    }
+
+    var state = reset ? AdjustmentState() : (catalog.loadAdjustments(path: imagePath) ?? AdjustmentState())
+    for (idx, v) in updates { adjustmentSetFields[idx].apply(&state, v) }
+    if let t = turns { state.turns = t }
+    catalog.saveAdjustments(path: imagePath, adjustments: state)
+
+    if jsonMode {
+        var d = adjustmentSummaryDict(state)
+        d["path"] = imagePath
+        d["ok"] = true
+        var changed: [String] = updates.map { String(adjustmentSetFields[$0.0].flag.dropFirst(2)) }
+        if turns != nil { changed.append("turns") }
+        d["changed"] = changed
+        d["reset"] = reset
+        printAdjustmentsJSON(d)
+    } else {
+        print("Anpassungen gespeichert: \(imagePath)")
+        for (idx, v) in updates { print("  \(adjustmentSetFields[idx].flag.dropFirst(2)): \(v)") }
+        if let t = turns { print("  turns: \(t)") }
+    }
+    return 0
+}
+
+/// adjustments copy <quelle> <ziel1> [<ziel2>...] [--exclude-geometry] [--exclude-local]
+///                  [--skip-existing] [--dry-run] [--json]
+/// Überträgt die gespeicherten Anpassungen eines Bildes auf andere ("Anpassungen kopieren/einfügen").
+/// Alle Ziele werden in einer einzigen SQLite-Transaktion geschrieben.
+private func runAdjustmentsCopy(_ args: [String], catalog: CatalogStore, jsonMode: Bool) -> Int32 {
+    let usage = "Verwendung: iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>...] [--exclude-geometry] [--exclude-local] [--skip-existing] [--dry-run] [--json]\n"
+    let known: Set<String> = ["--json", "--exclude-geometry", "--exclude-local", "--skip-existing", "--dry-run"]
+    if let bad = args.first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
+        fputs("Fehler: Unbekannte Option \(bad)\n", stderr); fputs(usage, stderr); return 1
+    }
+    let excludeGeometry = args.contains("--exclude-geometry")
+    let excludeLocal    = args.contains("--exclude-local")
+    let skipExisting    = args.contains("--skip-existing")
+    let dryRun          = args.contains("--dry-run")
+    let positional = args.filter { !$0.hasPrefix("--") }
+    guard positional.count >= 2 else { fputs(usage, stderr); return 1 }
+    let source = positional[0]
+    guard let srcState = catalog.loadAdjustments(path: source) else {
+        fputs("Fehler: Keine gespeicherten Anpassungen für Quelle: \(source)\n", stderr); return 1
+    }
+
+    // Ziele deduplizieren (Reihenfolge stabil), Quelle selbst ignorieren.
+    var seen = Set<String>([source])
+    let targets = positional.dropFirst().filter { seen.insert($0).inserted }
+    guard !targets.isEmpty else {
+        fputs("Fehler: Kein Ziel angegeben (Quelle kann nicht ihr eigenes Ziel sein)\n", stderr); return 1
+    }
+
+    // Eine Abfrage für alle vorhandenen Einträge statt loadAdjustments() pro Ziel —
+    // nur nötig, wenn Ziel-Werte erhalten bleiben sollen.
+    let existing = catalog.allModifiedPaths()
+    var items: [(path: String, adjustments: AdjustmentState)] = []
+    var skipped: [String] = []
+    items.reserveCapacity(targets.count)
+    for t in targets {
+        let hasExisting = existing.contains(t)
+        if skipExisting && hasExisting { skipped.append(t); continue }
+        var newState = srcState
+        if excludeGeometry || excludeLocal {
+            let old = hasExisting ? (catalog.loadAdjustments(path: t) ?? AdjustmentState()) : AdjustmentState()
+            if excludeGeometry {
+                newState.cropRect = old.cropRect
+                newState.rotation = old.rotation
+                newState.turns    = old.turns
+            }
+            if excludeLocal { newState.localAdjustments = old.localAdjustments }
+        }
+        items.append((path: t, adjustments: newState))
+    }
+
+    let written = dryRun ? 0 : catalog.saveAdjustmentsBatch(items)
+    if jsonMode {
+        printAdjustmentsJSON([
+            "source": source,
+            "targets": items.map { $0.path },
+            "skipped": skipped,
+            "copied": dryRun ? items.count : written,
+            "dry_run": dryRun,
+            "exclude_geometry": excludeGeometry,
+            "exclude_local": excludeLocal,
+            "ok": dryRun || written == items.count
+        ] as [String: Any])
+    } else {
+        let verb = dryRun ? "Würde kopieren" : "Kopiert"
+        print("\(verb): Anpassungen von \(source) → \(dryRun ? items.count : written) Bild(er)")
+        for t in items { print("  \(t.path)") }
+        if !skipped.isEmpty { print("Übersprungen (bereits bearbeitet): \(skipped.count)") }
+    }
+    return (dryRun || written == items.count) ? 0 : 1
 }
 
 // MARK: - Motif
