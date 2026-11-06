@@ -51,7 +51,9 @@ Reine SwiftUI-Views ohne eigene Logik. Alle Aktionen delegieren an `ImageViewMod
 | `ContentView.swift` | Haupt-Layout: NavSidebar links, ZoomableScrollView Mitte, Inspector rechts |
 | `LibraryGridView.swift` | Horizontaler Thumbnail-Strip unten |
 | `SidebarView.swift` | Horizontaler Thumbnail-Strip (Album-/Ordner-Ansicht) |
+| `NavSidebarView.swift` | Navigations-Seitenleiste mit umsortierbaren Sektionen (Alben, Ordner, SmartFolders, Volumes, Projekte-Unterordner etc.) |
 | `ThumbnailCell.swift` | Einzelne Thumbnail-Zelle mit Bewertungs-Badge |
+| `ThumbnailContextMenu.swift` | Kontextmenü-Aktionen für Thumbnail-Auswahl |
 | `ZoomableScrollView.swift` | `NSViewRepresentable`-Wrapper um `NSScrollView` für Zoom/Pan |
 | `InspectorView.swift` | Rechte Sidebar mit Plugin-Blöcken (Drag & Drop, ein-/ausklappbar) |
 | `AdjustmentsPanel.swift` | Belichtung, Kontrast, Sättigung, Kurven, Crop |
@@ -60,6 +62,8 @@ Reine SwiftUI-Views ohne eigene Logik. Alle Aktionen delegieren an `ImageViewMod
 | `VersionHistorySheet.swift` | Gespeicherte Bildversionen anzeigen und wiederherstellen |
 | `CropEditorView.swift` | Interaktiver Zuschnitt-Editor |
 | `CurvesView.swift` | Tonwertkurven-Editor mit 5 Kontrollpunkten |
+| `ProjectPickerView.swift` | Projekt-Picker: Vault-Modus-Auswahl, Projekte anlegen/öffnen |
+| `SmartFolderSheet.swift` | Sheet zum Erstellen und Bearbeiten von SmartFoldern |
 
 ### ViewModel (`Sources/ViewModels/`)
 
@@ -123,6 +127,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `StackDetector.swift` | Erkennt Bracket-/Burst-Sequenzen aus EXIF-Daten |
 | `PeopleState.swift` | Observable State für Gesichtserkennung |
 | `LibraryViewMode.swift` | Enum: grid / list / columns / gallery |
+| `Project.swift` | Projekt-Struct (benannte Ordner-Sammlung, Vault-Modus) — `Codable, Identifiable` |
 | `BackupSettings.swift` | Backup-Konfiguration (Qualität, Modus, Zielordner) |
 | `DetectedVolume.swift` | Eingehängtes Volume (Name, URL, Kapazität) |
 | `HDRMerger.swift` | HDR-Merge-Logik (Belichtungsreihe → HDR-Stack) |
@@ -141,6 +146,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `CatalogStore+People.swift` | `faces` + `people` Tabellen |
 | `CatalogStore+Quality.swift` | Qualitäts-Columns + Overrides |
 | `CatalogStore+Motifs.swift` | Motiv-Tag-Columns |
+| `CatalogStore+Integrity.swift` | Integritäts-Check: findet verwaiste Einträge in abgeleiteten Tabellen (`catalog orphans`) |
 | `ImageExporter.swift` | JPEG/PNG/TIFF/HEIF-Export; Metal-GPU sRGB-Konvertierung (CIContext) |
 | `ImageExporter+Batch.swift` | `exportBatch()` als Extension (CLI-kompatibel, kein AppKit) |
 | `AnalysisEngine.swift` | Histogramm (vImage/SIMD), Waveform, RGB-Parade (teils via Rust-FFI) |
@@ -162,6 +168,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `BackupService.swift` | Backup-Job ausführen (Resizing, Metadaten, Zielordner) |
 | `SmartFolderSQLGenerator.swift` | Übersetzt SmartFolder-Filter in SQL-Abfragen |
 | `SmartFolderFileSync.swift` | Synchronisiert Smart-Folder-Ergebnisse auf Disk |
+| `ProjectStore.swift` | Projekte-Persistenz: CRUD + JSON (`projects.json`); letztes Projekt via `UserDefaults` |
 | `AppConfig.swift` | Key-Value-Konfigurationsdatei (`config.json`) |
 | `PluginStore.swift` | Plugin-Verzeichnis einlesen, laden, auflisten |
 | `InpaintProcessor.swift` | Bridge zu Python/CMT-Inpainting-Skript |
@@ -259,6 +266,7 @@ Alle persistenten Daten liegen in `~/Library/Application Support/iPhoto/`:
 | `albums.json` | JSON | Legacy-Alben (Fallback, wird bei erstem Start migriert) |
 | `bookmarks.json` | JSON | Security-Scoped Bookmarks für importierte URLs |
 | `watchedFolders.json` | JSON | Überwachte Ordner (URL + Bookmark) |
+| `projects.json` | JSON | Projekte / Vault-Modus (`ProjectStore`) |
 | `versions/<hash>/` | Verzeichnisse | Backup-Versionen je Bild (index.json + Pixeldateien) |
 | `thumbnails/` | JPEG-Dateien | ThumbnailDiskCache (160 px, LRU) |
 | `config.json` | JSON | App-Konfiguration (`AppConfig`) |
@@ -329,7 +337,7 @@ iphoto-cli info <datei> [--json]
 iphoto-cli adjust <datei> --output <ziel> [--exposure N] [--brightness N] [--contrast N]
                   [--saturation N] [--warmth N] [--clarity N] [--sharpen N]
                   [--crop x,y,w,h] [--rotate 90|180|270] [--preset <name>]
-iphoto-cli adjustments list|get|delete [<bildpfad>] [--json]
+iphoto-cli adjustments list|get|set|copy|delete [<bildpfad>] [--json]
 iphoto-cli local-adjustments list|clear <bildpfad> [--json]
 
 # Presets
@@ -342,10 +350,10 @@ iphoto-cli rating histogram [--json]
 iphoto-cli rating export [--output <datei.json|.csv>] [--format json|csv] [--include-unrated] [--json]
 iphoto-cli rating import <datei.json|.csv> [--skip-existing] [--dry-run] [--json]
 iphoto-cli rating batch-set <bild1> [...] [--set N] [--flag ...] [--json]
-iphoto-cli elo get|list|set|match|reset [<bildpfad>] [--winner left|right|draw] [--json]
+iphoto-cli elo get|list|set|match|reset|predict|stats|suggest [<bildpfad>] [--winner left|right|draw] [--bucket N] [--count N] [--json]
 
 # Katalog & Suche
-iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline [--json]
+iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans [--json]
 iphoto-cli catalog cameras [--json]
 iphoto-cli catalog timeline [--by year|month|day] [--json]
 iphoto-cli search <text> [--flag ...] [--rating N] [--color ...] [--camera ...] [--date ...] [--json]
@@ -380,11 +388,19 @@ iphoto-cli analyse <datei|ordner> [--blur-threshold N] [--shadow N] [--highlight
 iphoto-cli quality scan|list|get|override [--blur|--under|--over|--eyes-closed on|off] [--json]
 iphoto-cli hotpixel <ordner>
 
+# Performance-Analyse
+iphoto-cli perf path [--json]
+iphoto-cli perf switch [--log <datei>] [--last-session] [--label <tag>] [--slowest N] [--json]
+
+# Bilder sammeln
+iphoto-cli collect --output-dir <ordner> [--flag pick|reject|none] [--color farbe] [--min-rating N]
+                   [--include-trashed] [--dry-run] [--overwrite] [--json]
+
 # Gesichter / People
 iphoto-cli people scan|list|faces|cluster|rename|delete|reset|export-names|import-names [--json]
 
 # Motiv-Tags
-iphoto-cli motif get|list|set|find|stats <bildpfad> [<tags>] [--json]
+iphoto-cli motif get|list|set|find|stats|rename|remove <bildpfad> [<tags>] [--dry-run] [--json]
 
 # Weitere
 iphoto-cli hdr <ordner> --output-dir <ziel> [--json]
