@@ -422,14 +422,15 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var smartFoldersContent: some View {
-        ForEach(viewModel.library.smartFolders.filter { $0.group == nil || $0.group?.isEmpty == true }) { sf in
+        let iAlben = viewModel.library.smartFolders.filter { $0.baseFolderPath == nil }
+        ForEach(iAlben.filter { $0.group == nil || $0.group?.isEmpty == true }) { sf in
             smartFolderRow(sf)
         }
-        let groups = Array(Set(viewModel.library.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
+        let groups = Array(Set(iAlben.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
         ForEach(groups, id: \.self) { groupName in
             groupHeaderRow(groupName)
             if !collapsedGroups.contains(groupName) {
-                ForEach(viewModel.library.smartFolders.filter { $0.group == groupName }) { sf in
+                ForEach(iAlben.filter { $0.group == groupName }) { sf in
                     smartFolderRow(sf, indented: true)
                 }
             }
