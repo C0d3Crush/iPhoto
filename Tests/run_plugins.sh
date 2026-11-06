@@ -2335,6 +2335,74 @@ if [ $MR_ERR -ne 0 ]; then pass "motif remove --bogus (→ Fehler)"; else fail "
 echo ""
 
 # ---------------------------------------------------------------------------
+# catalog orphans
+# ---------------------------------------------------------------------------
+echo "--- CATALOG ORPHANS ---"
+
+OR_DB="$TMPDIR/or_catalog.db"
+OR_IMG_A="$TMPDIR/or_a.png"
+OR_IMG_B="$TMPDIR/or_b.png"
+cp "$INPUT_PNG" "$OR_IMG_A"
+cp "$INPUT_PNG" "$OR_IMG_B"
+orc() { IPHOTO_CATALOG_DB="$OR_DB" "$BIN" "$@"; }
+
+# leerer Katalog → total 0
+OR_EXIT=0
+OR_OUT=$(orc catalog orphans --json 2>&1) || OR_EXIT=$?
+if [ $OR_EXIT -eq 0 ] && echo "$OR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['total']==0 and not d['fixed']" 2>/dev/null; then
+    pass "catalog orphans --json (leerer Katalog)"
+else
+    fail "catalog orphans --json (leer)" "Exit $OR_EXIT: $OR_OUT"
+fi
+
+# A im Katalog, B nur bewertet + im Papierkorb → B verwaist (ratings + trash)
+orc catalog add "$OR_IMG_A" > /dev/null 2>&1 || true
+orc rating batch-set "$OR_IMG_A" "$OR_IMG_B" --set 4 > /dev/null 2>&1 || true
+orc trash mark "$OR_IMG_B" > /dev/null 2>&1 || true
+
+OR_EXIT=0
+OR_OUT=$(orc catalog orphans --json 2>&1) || OR_EXIT=$?
+OR_RATINGS=$(orc rating list --json 2>&1) || true
+if [ $OR_EXIT -eq 0 ] \
+   && echo "$OR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['total']==2 and d['counts']['ratings']==1 and d['counts']['trash']==1 and d['orphans']['ratings'][0].endswith('or_b.png') and 'removed' not in d" 2>/dev/null \
+   && echo "$OR_RATINGS" | grep -q "or_b.png"; then
+    pass "catalog orphans (Bericht: Rating + Papierkorb von B, nichts gelöscht)"
+else
+    fail "catalog orphans (Bericht)" "Exit $OR_EXIT: $OR_OUT | $OR_RATINGS"
+fi
+
+# --fix → B-Zeilen weg, A-Rating bleibt
+OR_EXIT=0
+OR_OUT=$(orc catalog orphans --fix --json 2>&1) || OR_EXIT=$?
+OR_RATINGS=$(orc rating list --json 2>&1) || true
+OR_AGAIN=$(orc catalog orphans --json 2>&1) || true
+if [ $OR_EXIT -eq 0 ] \
+   && echo "$OR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['fixed'] and d['removed']['ratings']==1 and d['removed']['trash']==1" 2>/dev/null \
+   && ! echo "$OR_RATINGS" | grep -q "or_b.png" \
+   && echo "$OR_RATINGS" | grep -q "or_a.png" \
+   && echo "$OR_AGAIN" | python3 -c "import sys,json; assert json.load(sys.stdin)['total']==0" 2>/dev/null; then
+    pass "catalog orphans --fix (verwaiste Zeilen entfernt, gültige bleiben)"
+else
+    fail "catalog orphans --fix" "Exit $OR_EXIT: $OR_OUT | $OR_RATINGS | $OR_AGAIN"
+fi
+
+# Text-Ausgabe bei konsistentem Katalog
+OR_TXT=$(orc catalog orphans 2>&1) || true
+if echo "$OR_TXT" | grep -q "konsistent"; then pass "catalog orphans (Text, konsistent)"; else fail "catalog orphans Text" "$OR_TXT"; fi
+
+# unbekannte Option → Fehler
+OR_ERR=0
+orc catalog orphans --force > /dev/null 2>&1 || OR_ERR=$?
+if [ $OR_ERR -ne 0 ]; then pass "catalog orphans --force (unbekannte Option → Fehler)"; else fail "catalog orphans --force" "Hätte fehlschlagen sollen"; fi
+
+# Positionsargument → Fehler
+OR_ERR=0
+orc catalog orphans "$OR_IMG_A" > /dev/null 2>&1 || OR_ERR=$?
+if [ $OR_ERR -ne 0 ]; then pass "catalog orphans <pfad> (Argument → Fehler)"; else fail "catalog orphans <pfad>" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
