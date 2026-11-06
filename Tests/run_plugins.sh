@@ -2518,6 +2518,105 @@ if [ $PF_ERR -ne 0 ]; then pass "perf ohne Subcommand (→ Fehler)"; else fail "
 echo ""
 
 # ---------------------------------------------------------------------------
+# collect (gefilterte Bilder in Ordner kopieren)
+# ---------------------------------------------------------------------------
+echo "--- collect ---"
+CO_DB="$TMPDIR/co_catalog.db"
+CO_SRC="$TMPDIR/co_src"
+CO_DST="$TMPDIR/co_dst"
+mkdir -p "$CO_SRC/a" "$CO_SRC/b"
+printf 'a' > "$CO_SRC/a/same.jpg"
+printf 'b' > "$CO_SRC/b/same.jpg"
+printf 'r' > "$CO_SRC/rej.jpg"
+printf 't' > "$CO_SRC/trash.jpg"
+printf 'f' > "$CO_SRC/red4.jpg"
+co() { IPHOTO_CATALOG_DB="$CO_DB" "$BIN" "$@"; }
+co rating batch-set "$CO_SRC/a/same.jpg" "$CO_SRC/b/same.jpg" "$CO_SRC/trash.jpg" "$CO_SRC/gone.jpg" --flag pick > /dev/null 2>&1 || true
+co rating batch-set "$CO_SRC/rej.jpg" --flag reject > /dev/null 2>&1 || true
+co rating batch-set "$CO_SRC/red4.jpg" --set 4 --color red > /dev/null 2>&1 || true
+co trash mark "$CO_SRC/trash.jpg" > /dev/null 2>&1 || true
+
+# dry-run (Standard-Filter = Picks): 2 kopierbar, 1 fehlend, Papierkorb ausgeschlossen, nichts geschrieben
+CO_EXIT=0
+CO_OUT=$(co collect --output-dir "$CO_DST" --dry-run --json 2>&1) || CO_EXIT=$?
+if [ $CO_EXIT -eq 0 ] && [ ! -e "$CO_DST" ] && echo "$CO_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['dry_run'] is True and d['filter']['flag']=='pick'
+assert d['matched']==3 and d['copied']==2 and d['missing']==1
+" 2>/dev/null; then
+    pass "collect --dry-run --json (Picks, Papierkorb ausgeschlossen, nichts geschrieben)"
+else
+    fail "collect --dry-run" "Exit $CO_EXIT: $CO_OUT"
+fi
+
+# echt: Namenskollision → same.jpg + same-2.jpg
+CO_EXIT=0
+CO_OUT=$(co collect --output-dir "$CO_DST" --json 2>&1) || CO_EXIT=$?
+if [ $CO_EXIT -eq 0 ] && [ -f "$CO_DST/same.jpg" ] && [ -f "$CO_DST/same-2.jpg" ] && [ ! -e "$CO_DST/trash.jpg" ] \
+   && [ "$(cat "$CO_DST/same.jpg")" = "a" ] && [ "$(cat "$CO_DST/same-2.jpg")" = "b" ] \
+   && echo "$CO_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['copied']==2 and d['skipped']==0 and d['ok'] is True" 2>/dev/null; then
+    pass "collect --json (Picks kopiert, Namenskollision → same-2.jpg)"
+else
+    fail "collect" "Exit $CO_EXIT: $CO_OUT"
+fi
+
+# erneut → vorhandene übersprungen
+CO_OUT=$(co collect --output-dir "$CO_DST" --json 2>&1) || true
+if echo "$CO_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['copied']==0 and d['skipped']==2" 2>/dev/null; then
+    pass "collect erneut (vorhandene übersprungen)"
+else
+    fail "collect erneut" "$CO_OUT"
+fi
+
+# --include-trashed nimmt Papierkorb-Pick mit
+CO_OUT=$(co collect --output-dir "$CO_DST" --include-trashed --json 2>&1) || true
+if [ -f "$CO_DST/trash.jpg" ] && echo "$CO_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['matched']==4 and d['copied']==1" 2>/dev/null; then
+    pass "collect --include-trashed"
+else
+    fail "collect --include-trashed" "$CO_OUT"
+fi
+
+# Farb- + Rating-Filter
+CO_EXIT=0
+CO_OUT=$(co collect --output-dir "$TMPDIR/co_red" --color red --min-rating 4 --json 2>&1) || CO_EXIT=$?
+if [ $CO_EXIT -eq 0 ] && [ -f "$TMPDIR/co_red/red4.jpg" ] && echo "$CO_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['matched']==1 and d['copied']==1 and 'flag' not in d['filter'] and d['filter']['min_rating']==4
+" 2>/dev/null; then
+    pass "collect --color red --min-rating 4"
+else
+    fail "collect --color/--min-rating" "Exit $CO_EXIT: $CO_OUT"
+fi
+
+# Textausgabe
+CO_EXIT=0
+CO_OUT=$(co collect --output-dir "$TMPDIR/co_rej" --flag reject --dry-run 2>&1) || CO_EXIT=$?
+if [ $CO_EXIT -eq 0 ] && echo "$CO_OUT" | grep -q "1 Treffer: 1 würden kopiert"; then
+    pass "collect --flag reject (Textausgabe)"
+else
+    fail "collect (Text)" "Exit $CO_EXIT: $CO_OUT"
+fi
+
+# Fehlerpfade
+CO_ERR=0
+co collect --flag pick > /dev/null 2>&1 || CO_ERR=$?
+if [ $CO_ERR -ne 0 ]; then pass "collect ohne --output-dir (→ Fehler)"; else fail "collect ohne --output-dir" "Hätte fehlschlagen sollen"; fi
+
+CO_ERR=0
+co collect --output-dir "$CO_DST" --flag maybe > /dev/null 2>&1 || CO_ERR=$?
+if [ $CO_ERR -ne 0 ]; then pass "collect --flag maybe (→ Fehler)"; else fail "collect --flag maybe" "Hätte fehlschlagen sollen"; fi
+
+CO_ERR=0
+co collect --output-dir "$CO_DST" --min-rating 9 > /dev/null 2>&1 || CO_ERR=$?
+if [ $CO_ERR -ne 0 ]; then pass "collect --min-rating 9 (→ Fehler)"; else fail "collect --min-rating 9" "Hätte fehlschlagen sollen"; fi
+
+CO_ERR=0
+co collect --output-dir "$CO_DST" --bogus > /dev/null 2>&1 || CO_ERR=$?
+if [ $CO_ERR -ne 0 ]; then pass "collect --bogus (→ Fehler)"; else fail "collect --bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
