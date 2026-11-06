@@ -2,6 +2,14 @@
 
 ---
 
+## 1.102.3
+**„Neues Album erstellen" direkt im Kontextmenü**
+
+- Kontextmenü → „Zu Album hinzufügen": ganz oben steht jetzt „Neues Album erstellen…" mit einem +-Symbol
+- Album wird sofort angelegt und das Bild (bzw. die Auswahl/Stapel) automatisch hinzugefügt
+
+---
+
 ## 1.102.2
 **Backup/Trash aus Bildvergleich ausgeschlossen, Kontextmenü-Kürzel und Backup-Shortcuts**
 

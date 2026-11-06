@@ -249,11 +249,15 @@ struct ThumbnailContextMenu: View {
     }
 
     @ViewBuilder private var albumSection: some View {
-        if !vm.library.albums.isEmpty {
-            let multi = isInMultiSelection
-            let stack = stackMembers
-            Menu(multi ? "Alle (\(vm.collection.selectedIndices.count)) zu Album hinzufügen"
-                 : (stack.map { "Stapel (\($0.count)) zu Album hinzufügen" } ?? "Zu Album hinzufügen")) {
+        let multi = isInMultiSelection
+        let stack = stackMembers
+        Menu(multi ? "Alle (\(vm.collection.selectedIndices.count)) zu Album hinzufügen"
+             : (stack.map { "Stapel (\($0.count)) zu Album hinzufügen" } ?? "Zu Album hinzufügen")) {
+            Button(action: { createAlbumAndAdd() }) {
+                Label("Neues Album erstellen…", systemImage: "plus")
+            }
+            if !vm.library.albums.isEmpty {
+                Divider()
                 ForEach(vm.library.albums) { album in
                     let inAlbum = !multi && stack == nil && album.photoURLs.contains(doc.url)
                     Button {
@@ -275,11 +279,36 @@ struct ThumbnailContextMenu: View {
                     }
                 }
             }
-            if case .album(let id) = vm.navSelection {
-                Button("Aus Album entfernen") {
-                    for m in stack ?? [doc] { vm.removeFromAlbum(m, albumID: id) }
-                }
+        }
+        if case .album(let id) = vm.navSelection {
+            Button("Aus Album entfernen") {
+                for m in stack ?? [doc] { vm.removeFromAlbum(m, albumID: id) }
             }
+        }
+    }
+
+    private func createAlbumAndAdd() {
+        let alert = NSAlert()
+        alert.messageText = "Neues Album"
+        alert.informativeText = "Albumname eingeben:"
+        alert.addButton(withTitle: "Erstellen")
+        alert.addButton(withTitle: "Abbrechen")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 22))
+        field.placeholderString = "Albumname"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = field.stringValue.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        vm.createAlbum(name: name)
+        guard let album = vm.library.albums.first(where: { $0.name == name }) else { return }
+        let stack = stackMembers
+        if isInMultiSelection {
+            vm.addSelectedToAlbum(albumID: album.id)
+        } else if let members = stack {
+            for m in members { vm.addToAlbum(m, albumID: album.id) }
+        } else {
+            vm.addToAlbum(doc, albumID: album.id)
         }
     }
 }
