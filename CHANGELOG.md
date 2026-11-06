@@ -2,8 +2,15 @@
 
 ---
 
+## 1.101.0
+**CLI: Anpassungen setzen und auf andere Bilder kopieren**
+- Neuer Befehl `iphoto-cli adjustments set <bildpfad> [--exposure N] [--contrast N] … [--turns 0-3] [--reset] [--json]` speichert Reglerwerte (Belichtung, Kontrast, Weißabgleich, Schärfe, Rauschen, Vignette, Verzeichnung, Drehung) nicht-destruktiv im Katalog — ohne das Bild zu rendern; bestehende Werte bleiben erhalten, ungültige oder außerhalb des Bereichs liegende Werte werden abgelehnt
+- Neuer Befehl `iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>…] [--exclude-geometry] [--exclude-local] [--skip-existing] [--dry-run] [--json]` überträgt die Bearbeitung eines Bildes auf beliebig viele andere („Anpassungen kopieren/einfügen“); `--exclude-geometry` behält Zuschnitt und Drehung der Ziele
+- Schneller: alle Ziele werden in einer einzigen SQLite-Transaktion mit wiederverwendetem Statement geschrieben (neu: `CatalogStore.saveAdjustmentsBatch`)
+- Verwaister Merge-Konfliktmarker im Changelog entfernt
+- Tests in `Tests/run_plugins.sh` (Setzen, Zusammenführen, Reset, Kopieren, Probelauf, `--skip-existing`, `--exclude-geometry`, Fehlerpfade)
+
 ## 1.100.0
-<<<<<<< HEAD
 **PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
 - Neuer GitHub-Actions-Workflow `project-manager.yml` läuft alle 2 Stunden und analysiert offene, noch nicht zugewiesene Issues
 - Claude (`claude-opus-4-7`) erfindet bei Bedarf neue Akteure (Rollen) und wählt den passenden für jeden Issue aus

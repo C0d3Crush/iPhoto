@@ -20,6 +20,41 @@ extension CatalogStore {
         }
     }
 
+    /// Speichert Anpassungen für viele Bilder in einer einzigen Transaktion mit einem
+    /// wiederverwendeten Prepared Statement — statt N Commits (z. B. "Anpassungen einfügen"
+    /// auf eine Auswahl). Gibt die Anzahl geschriebener Einträge zurück.
+    @discardableResult
+    func saveAdjustmentsBatch(_ items: [(path: String, adjustments: AdjustmentState)]) -> Int {
+        guard !items.isEmpty else { return 0 }
+        let encoder = JSONEncoder()
+        let encoded: [(String, String)] = items.compactMap { item in
+            guard let data = try? encoder.encode(item.adjustments),
+                  let json = String(data: data, encoding: .utf8) else { return nil }
+            return (item.path, json)
+        }
+        guard !encoded.isEmpty else { return 0 }
+        return queue.sync {
+            let now = self.iso8601()
+            exec("BEGIN")
+            let stmt = prepare("""
+                INSERT INTO adjustments (image_path, data, updated_at) VALUES (?,?,?)
+                ON CONFLICT(image_path) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at
+            """)
+            var written = 0
+            for (path, json) in encoded {
+                bind(stmt, 1, path)
+                bind(stmt, 2, json)
+                bind(stmt, 3, now)
+                if step(stmt) == SQLITE_DONE { written += 1 }
+                sqlite3_reset(stmt)
+                sqlite3_clear_bindings(stmt)
+            }
+            sqlite3_finalize(stmt)
+            exec("COMMIT")
+            return written
+        }
+    }
+
     func loadAdjustments(path: String) -> AdjustmentState? {
         queue.sync {
             let stmt = prepare("SELECT data FROM adjustments WHERE image_path=?")
