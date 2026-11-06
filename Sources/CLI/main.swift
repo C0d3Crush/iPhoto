@@ -101,6 +101,8 @@ private func printUsage() {
       iphoto-cli elo set <bildpfad> <wert> [--matches N] [--json]
       iphoto-cli elo match <links> <rechts> [--winner left|right|draw] [--json]
       iphoto-cli elo reset <bildpfad> [<bildpfad>...] | --all [--json]
+      iphoto-cli elo stats [--json]
+      iphoto-cli elo suggest [--count N] [--include-trashed] [--json]
       iphoto-cli adjustments list [--json]
       iphoto-cli adjustments get <bildpfad> [--json]
       iphoto-cli adjustments delete <bildpfad> [--json]
@@ -150,7 +152,8 @@ private func printUsage() {
     catalog:  Statistiken (inkl. ELO-Anzahl), Pfad, vacuum --json, export
               cameras: Bilder pro Kamera; timeline: Bilder pro Jahr/Monat/Tag (--by)
     motif:    Motiv-Tags eines Bildes anzeigen
-    elo:      ELO-Scores lesen, auflisten (nach Score sortiert) und setzen
+    elo:      ELO-Scores lesen, auflisten (nach Score sortiert) und setzen; stats: Verteilung
+              (App-Histogramm-Raster), suggest: nächste Duell-Paare (wenig gespielt + ähnliches ELO)
     duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
     config:   Einstellungen anzeigen, lesen (get <key>), schreiben (set <key> <wert>), ex-/importieren
     query:    App-Suchsyntax (bewertung:5 typ:raw vor:2024 nach:2023-06 kamera:x album:x markiert:pick
@@ -3916,8 +3919,118 @@ private func runElo(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "stats":
+        // ELO-Verteilung im selben 6-Stufen-Raster wie das Histogramm im Duell-Modus der App.
+        let entries = Array(catalog.allElos().values)
+        let buckets: [(label: String, lo: Double, hi: Double)] = [
+            ("< 1300", -.infinity, 1300), ("1300–1400", 1300, 1400), ("1400–1500", 1400, 1500),
+            ("1500–1600", 1500, 1600), ("1600–1700", 1600, 1700), ("≥ 1700", 1700, .infinity)
+        ]
+        var counts = [Int](repeating: 0, count: buckets.count)
+        for e in entries {
+            let idx = buckets.firstIndex(where: { e.elo >= $0.lo && e.elo < $0.hi }) ?? buckets.count - 1
+            counts[idx] += 1
+        }
+        let elos = entries.map { $0.elo }.sorted()
+        let played = entries.filter { $0.matches > 0 }.count
+        let totalMatches = entries.reduce(0) { $0 + $1.matches }
+        let mean: Double? = elos.isEmpty ? nil : elos.reduce(0, +) / Double(elos.count)
+        let median: Double? = elos.isEmpty ? nil
+            : (elos.count % 2 == 1 ? elos[elos.count / 2]
+                                   : (elos[elos.count / 2 - 1] + elos[elos.count / 2]) / 2)
+        if jsonMode {
+            let d: [String: Any] = [
+                "count": entries.count,
+                "played": played,
+                "unplayed": entries.count - played,
+                "duels": totalMatches / 2,
+                "min": elos.first.map { $0 as Any } ?? NSNull(),
+                "max": elos.last.map { $0 as Any } ?? NSNull(),
+                "mean": mean.map { $0 as Any } ?? NSNull(),
+                "median": median.map { $0 as Any } ?? NSNull(),
+                "buckets": zip(buckets, counts).map { ["label": $0.0.label, "count": $0.1] as [String: Any] }
+            ]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: .prettyPrinted),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else if entries.isEmpty {
+            print("(keine ELO-Einträge im Katalog)")
+        } else {
+            print("Einträge: \(entries.count)  gespielt: \(played)  Duelle: \(totalMatches / 2)")
+            print(String(format: "Min %.1f  Max %.1f  Ø %.1f  Median %.1f",
+                         elos.first!, elos.last!, mean!, median!))
+            let maxCount = max(1, counts.max() ?? 1)
+            for (b, c) in zip(buckets, counts) {
+                let bar = String(repeating: "█", count: c * 30 / maxCount)
+                print("\(b.label.padding(toLength: 10, withPad: " ", startingAt: 0)) \(String(format: "%5d", c))  \(bar)")
+            }
+        }
+        return 0
+
+    case "suggest":
+        // Schlägt Duell-Paare vor — gleiche Strategie wie nextComparePair() der App,
+        // aber deterministisch und ohne Mehrfachverwendung eines Bildes:
+        // Anker = am wenigsten gespielt, Gegner = nächstgelegenes ELO.
+        var count = 5
+        if let ci = args.firstIndex(of: "--count") {
+            guard ci + 1 < args.count, let n = Int(args[ci + 1]), n > 0 else {
+                fputs("Fehler: --count muss eine positive ganze Zahl sein\n", stderr); return 1
+            }
+            count = n
+        }
+        let includeTrashed = args.contains("--include-trashed")
+        let elos = catalog.allElos()
+        var pool: [String: (elo: Double, matches: Int)] = elos
+        for img in catalog.allImages() where pool[img.path] == nil {
+            pool[img.path] = (elo: EloRating.initial, matches: 0)
+        }
+        if !includeTrashed {
+            for p in catalog.trashedPaths() { pool.removeValue(forKey: p) }
+        }
+        guard pool.count >= 2 else {
+            fputs("Fehler: Mindestens 2 Bilder im Katalog nötig (gefunden: \(pool.count))\n", stderr); return 1
+        }
+        // Anker-Reihenfolge: wenigste Duelle zuerst, dann Pfad (stabil/deterministisch).
+        let anchors = pool.sorted { a, b in
+            a.value.matches != b.value.matches ? a.value.matches < b.value.matches : a.key < b.key
+        }
+        var used = Set<String>()
+        var pairs: [(left: String, right: String, l: (elo: Double, matches: Int), r: (elo: Double, matches: Int))] = []
+        for anchor in anchors where pairs.count < count {
+            guard !used.contains(anchor.key) else { continue }
+            var best: (key: String, value: (elo: Double, matches: Int))?
+            var bestDist = Double.infinity
+            for cand in anchors where cand.key != anchor.key && !used.contains(cand.key) {
+                let dist = abs(cand.value.elo - anchor.value.elo)
+                // anchors ist bereits nach (matches, path) sortiert → erster Treffer gewinnt bei Gleichstand
+                if dist < bestDist { best = cand; bestDist = dist }
+            }
+            guard let partner = best else { break }
+            used.insert(anchor.key); used.insert(partner.key)
+            pairs.append((anchor.key, partner.key, anchor.value, partner.value))
+        }
+        if jsonMode {
+            let arr = pairs.map { p -> [String: Any] in
+                [
+                    "left":  ["path": p.left,  "elo": p.l.elo, "matches": p.l.matches] as [String: Any],
+                    "right": ["path": p.right, "elo": p.r.elo, "matches": p.r.matches] as [String: Any],
+                    "eloDiff": abs(p.l.elo - p.r.elo),
+                    "expectedLeft": EloRating.expected(p.l.elo, p.r.elo)
+                ]
+            }
+            if let dd = try? JSONSerialization.data(withJSONObject: arr, options: .prettyPrinted),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            for (i, p) in pairs.enumerated() {
+                print(String(format: "%2d. %.1f (%d) vs %.1f (%d)  p(links)=%.2f",
+                             i + 1, p.l.elo, p.l.matches, p.r.elo, p.r.matches,
+                             EloRating.expected(p.l.elo, p.r.elo)))
+                print("    \(p.left)\n    \(p.right)")
+            }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli elo get|list|set|match|reset [opts]\n", stderr)
+        fputs("Verwendung: iphoto-cli elo get|list|set|match|reset|stats|suggest [opts]\n", stderr)
         return 1
     }
 }

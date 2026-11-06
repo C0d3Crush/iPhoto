@@ -2,8 +2,15 @@
 
 ---
 
+## 1.101.0
+**CLI: ELO-Statistik und Duell-Vorschläge**
+- Neuer Befehl `iphoto-cli elo stats [--json]` zeigt Anzahl, gespielte Bilder, Duelle, Min/Max/Ø/Median und die ELO-Verteilung im selben 6-Stufen-Raster wie das Histogramm im Duell-Modus
+- Neuer Befehl `iphoto-cli elo suggest [--count N] [--include-trashed] [--json]` schlägt die nächsten Duell-Paare vor – wie in der App: wenig gespielte Bilder zuerst, Gegner mit dem nächstgelegenen ELO; jedes Bild höchstens einmal, Papierkorb standardmäßig ausgeschlossen, inkl. Gewinnwahrscheinlichkeit
+- Beide Befehle lesen alle ELO-Werte mit einer einzigen Katalog-Abfrage
+- Verwaister Merge-Marker in `CHANGELOG.md` entfernt
+- Tests in `Tests/run_plugins.sh` (leerer Katalog, Verteilung/Median, Paarbildung, Papierkorb-Filter, Fehlerpfade)
+
 ## 1.100.0
-<<<<<<< HEAD
 **PM-Scheduler: automatische Issue-Zuweisung an Akteure via Claude**
 - Neuer GitHub-Actions-Workflow `project-manager.yml` läuft alle 2 Stunden und analysiert offene, noch nicht zugewiesene Issues
 - Claude (`claude-opus-4-7`) erfindet bei Bedarf neue Akteure (Rollen) und wählt den passenden für jeden Issue aus
