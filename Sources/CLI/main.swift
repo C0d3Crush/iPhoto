@@ -134,6 +134,8 @@ private func printUsage() {
       iphoto-cli gear summary [--json]
       iphoto-cli gear cameras|lenses [--limit N] [--json]
       iphoto-cli gear focal|iso|aperture [--limit N] [--json]
+      iphoto-cli perf path [--json]
+      iphoto-cli perf switch [--log <datei>] [--last-session] [--label <tag>] [--slowest N] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -165,6 +167,8 @@ private func printUsage() {
               verwaiste Einträge aufräumen (prune; offline-Volumes bleiben); Datei per IPHOTO_BOOKMARKS_FILE
     gear:     Kamera-/Objektiv-Statistik aus dem Katalog: Rangliste nach Häufigkeit (cameras/lenses),
               Histogramme für Brennweite/ISO/Blende, summary mit Min/Max/Median
+    perf:     SWITCH-Latenzmetriken aus ~/Library/Logs/iPhoto/iPhoto.log auswerten: n/median/p95/max
+              pro Anzeigepfad (cache-hit, preview-hit, full-res …), --slowest N; Datei per IPHOTO_LOG_FILE
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
     """)
 }
@@ -5771,6 +5775,186 @@ private func runGear(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - perf (SWITCH-Latenzmetriken aus iPhoto.log)
+
+/// Pfad des App-Logs. Überschreibbar per IPHOTO_LOG_FILE (Tests). Bewusst NICHT über
+/// Log.shared — dessen init() schreibt einen Session-Marker in die Datei.
+private func perfLogPath() -> String {
+    if let override = ProcessInfo.processInfo.environment["IPHOTO_LOG_FILE"], !override.isEmpty {
+        return (override as NSString).expandingTildeInPath
+    }
+    let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+    return dir.appendingPathComponent("Logs/iPhoto/iPhoto.log").path
+}
+
+private struct PerfSwitchSample {
+    let timestamp: String
+    let label: String
+    let ms: Double
+    let file: String
+}
+
+/// Parst `SWITCH <label> <ms> ms: <datei>`-Zeilen (ImageLoadingOrchestrator).
+/// Ein einziger Durchlauf über den Text, schneller Substring-Vorfilter pro Zeile.
+private func parsePerfSwitchLines(_ text: String, lastSessionOnly: Bool) -> [PerfSwitchSample] {
+    var body = Substring(text)
+    if lastSessionOnly, let r = text.range(of: "###SESSION_START###", options: .backwards) {
+        body = text[r.upperBound...]
+    }
+    var out: [PerfSwitchSample] = []
+    for line in body.split(separator: "\n", omittingEmptySubsequences: true) {
+        guard let r = line.range(of: "SWITCH ") else { continue }
+        let rest = line[r.upperBound...]
+        let parts = rest.split(separator: " ", maxSplits: 3, omittingEmptySubsequences: true)
+        guard parts.count >= 3, parts[2].hasPrefix("ms"), let ms = Double(parts[1]), ms >= 0 else { continue }
+        var ts = ""
+        if line.hasPrefix("["), let close = line.firstIndex(of: "]") {
+            ts = String(line[line.index(after: line.startIndex)..<close])
+        }
+        let file = parts.count > 3 ? String(parts[3]) : ""
+        out.append(PerfSwitchSample(timestamp: ts, label: String(parts[0]), ms: ms, file: file))
+    }
+    return out
+}
+
+/// Nearest-Rank-Perzentil auf bereits sortiertem Array.
+private func perfPercentile(_ sorted: [Double], _ p: Double) -> Double {
+    guard !sorted.isEmpty else { return 0 }
+    let rank = Int((p / 100.0 * Double(sorted.count)).rounded(.up))
+    return sorted[max(0, min(sorted.count - 1, rank - 1))]
+}
+
+private func runPerf(_ args: [String]) -> Int32 {
+    let usage = """
+    Verwendung: iphoto-cli perf path [--json]
+                iphoto-cli perf switch [--log <datei>] [--last-session] [--label <tag>] [--slowest N] [--json]
+
+    """
+    let jsonMode = args.contains("--json")
+    guard let sub = args.first else { fputs(usage, stderr); return 1 }
+
+    func emit(_ obj: Any) {
+        if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: d, encoding: .utf8) { print(s) }
+    }
+    func r1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
+
+    switch sub {
+    case "path":
+        guard args.dropFirst().allSatisfy({ $0 == "--json" }) else {
+            fputs("Fehler: Unbekannte Option für 'perf path'\n", stderr); fputs(usage, stderr); return 1
+        }
+        let path = perfLogPath()
+        let attrs = try? FileManager.default.attributesOfItem(atPath: path)
+        let size = (attrs?[.size] as? NSNumber)?.intValue ?? 0
+        if jsonMode {
+            let obj: [String: Any] = ["path": path, "exists": attrs != nil, "size_bytes": size]
+            emit(obj)
+        } else {
+            print(path + (attrs == nil ? "  (nicht vorhanden)" : "  (\(size) Bytes)"))
+        }
+        return 0
+
+    case "switch":
+        var logPath = perfLogPath()
+        var lastSession = false
+        var labelFilter: String? = nil
+        var slowest = 0
+        let opts = Array(args.dropFirst())
+        var i = 0
+        while i < opts.count {
+            let key = opts[i]
+            switch key {
+            case "--json": i += 1
+            case "--last-session": lastSession = true; i += 1
+            case "--log":
+                guard i + 1 < opts.count, !opts[i + 1].hasPrefix("--") else {
+                    fputs("Fehler: --log erwartet einen Dateipfad\n", stderr); return 1
+                }
+                logPath = (opts[i + 1] as NSString).expandingTildeInPath; i += 2
+            case "--label":
+                guard i + 1 < opts.count, !opts[i + 1].hasPrefix("--") else {
+                    fputs("Fehler: --label erwartet einen Tag (z.B. cache-hit)\n", stderr); return 1
+                }
+                labelFilter = opts[i + 1]; i += 2
+            case "--slowest":
+                guard i + 1 < opts.count, let n = Int(opts[i + 1]), n > 0 else {
+                    fputs("Fehler: --slowest erwartet eine positive Ganzzahl\n", stderr); return 1
+                }
+                slowest = n; i += 2
+            default:
+                fputs("Fehler: Unbekannte Option '\(key)'\n", stderr); fputs(usage, stderr); return 1
+            }
+        }
+
+        guard let data = FileManager.default.contents(atPath: logPath) else {
+            fputs("Fehler: Log-Datei nicht gefunden: \(logPath)\n", stderr); return 1
+        }
+        let text = String(decoding: data, as: UTF8.self)
+        var samples = parsePerfSwitchLines(text, lastSessionOnly: lastSession)
+        if let lf = labelFilter { samples = samples.filter { $0.label == lf } }
+
+        // Gruppieren nach Label (ein Durchlauf, Dictionary statt firstIndex-Suche).
+        var byLabel: [String: [Double]] = [:]
+        for s in samples { byLabel[s.label, default: []].append(s.ms) }
+        let order = ["cache-hit", "thumbnail-hit", "preview-hit", "preview-decoded", "full-res", "full-res-decode"]
+        let labels = byLabel.keys.sorted {
+            let a = order.firstIndex(of: $0) ?? order.count, b = order.firstIndex(of: $1) ?? order.count
+            return a != b ? a < b : $0 < $1
+        }
+        func stats(_ values: [Double]) -> [String: Any] {
+            let v = values.sorted()
+            let mean = v.isEmpty ? 0 : v.reduce(0, +) / Double(v.count)
+            return ["count": v.count, "min_ms": r1(v.first ?? 0), "max_ms": r1(v.last ?? 0),
+                    "mean_ms": r1(mean), "median_ms": r1(perfPercentile(v, 50)), "p95_ms": r1(perfPercentile(v, 95))]
+        }
+        var rows: [[String: Any]] = []
+        for l in labels {
+            var row = stats(byLabel[l] ?? [])
+            row["label"] = l
+            rows.append(row)
+        }
+        // "switches" = echte Bildwechsel; full-res-decode ist eine Decoder-Teilmessung.
+        let switchValues = samples.filter { $0.label != "full-res-decode" }.map { $0.ms }
+        let total = stats(switchValues)
+        let slow = slowest > 0 ? Array(samples.sorted { $0.ms > $1.ms }.prefix(slowest)) : []
+
+        if jsonMode {
+            var obj: [String: Any] = ["log": logPath, "last_session": lastSession,
+                                      "samples": samples.count, "labels": rows, "switches": total]
+            if let lf = labelFilter { obj["label_filter"] = lf }
+            if slowest > 0 {
+                obj["slowest"] = slow.map { s -> [String: Any] in
+                    ["label": s.label, "ms": r1(s.ms), "file": s.file, "timestamp": s.timestamp]
+                }
+            }
+            emit(obj)
+        } else {
+            if samples.isEmpty { print("Keine SWITCH-Einträge in \(logPath)"); return 0 }
+            print("SWITCH-Latenzen (\(samples.count) Messungen)\(lastSession ? " — letzte Session" : "")")
+            func pad(_ s: String, _ n: Int) -> String { s.count >= n ? s : s + String(repeating: " ", count: n - s.count) }
+            func lpad(_ s: String, _ n: Int) -> String { s.count >= n ? s : String(repeating: " ", count: n - s.count) + s }
+            func fmt(_ v: Any?) -> String { String(format: "%.1f", (v as? Double) ?? 0) }
+            print(pad("Label", 18) + lpad("n", 6) + lpad("median", 10) + lpad("p95", 10) + lpad("max", 10))
+            var totalRow = total
+            totalRow["label"] = "= switches"
+            for row in rows + [totalRow] {
+                guard let n = row["count"] as? Int, n > 0 else { continue }
+                print(pad(row["label"] as? String ?? "", 18) + lpad("\(n)", 6)
+                      + lpad(fmt(row["median_ms"]), 10) + lpad(fmt(row["p95_ms"]), 10) + lpad(fmt(row["max_ms"]), 10))
+            }
+            if !slow.isEmpty {
+                print("\nLangsamste \(slow.count):")
+                for s in slow { print("  \(String(format: "%8.1f", s.ms)) ms  \(pad(s.label, 16)) \(s.file)  \(s.timestamp)") }
+            }
+        }
+        return 0
+
+    default:
+        fputs("Fehler: Unbekannter perf-Befehl '\(sub)'\n", stderr); fputs(usage, stderr); return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -5886,6 +6070,9 @@ if firstArg == "bookmarks" {
 }
 if firstArg == "gear" {
     exit(runGear(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "perf" {
+    exit(runPerf(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

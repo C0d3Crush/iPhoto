@@ -2403,6 +2403,121 @@ if [ $OR_ERR -ne 0 ]; then pass "catalog orphans <pfad> (Argument → Fehler)"; 
 echo ""
 
 # ---------------------------------------------------------------------------
+# perf (SWITCH-Latenzmetriken aus Log-Datei)
+# ---------------------------------------------------------------------------
+echo "--- perf ---"
+PERF_LOG="$TMPDIR/perf_test.log"
+cat > "$PERF_LOG" <<'LOGEOF'
+
+###SESSION_START### /tmp/iPhoto.log
+[2026-11-06 10:00:00.000] [INFO ] [ImageLoadingOrchestrator.reportSwitch(_:url:)] SWITCH full-res 400.0 ms: old.raf
+[2026-11-06 10:00:01.000] [INFO ] [ImageLoadingOrchestrator.reportSwitch(_:url:)] SWITCH cache-hit 9.0 ms: old2.raf
+
+###SESSION_START### /tmp/iPhoto.log
+[2026-11-06 11:00:00.000] [INFO ] [ImageLoadingOrchestrator.reportSwitch(_:url:)] SWITCH cache-hit 2.0 ms: a.raf
+[2026-11-06 11:00:01.000] [INFO ] [ImageLoadingOrchestrator.reportSwitch(_:url:)] SWITCH cache-hit 4.0 ms: b.raf
+[2026-11-06 11:00:02.000] [DEBUG] [Other.func] irrelevante Zeile ohne Metrik
+[2026-11-06 11:00:03.000] [INFO ] [ImageLoadingOrchestrator.reportSwitch(_:url:)] SWITCH preview-hit 30.0 ms: c.raf
+[2026-11-06 11:00:04.000] [INFO ] [ImageLoadingOrchestrator.reportDecode(_:)] SWITCH full-res-decode 250.0 ms: c.raf 6000×4000
+LOGEOF
+
+PF_EXIT=0
+PF_OUT=$(IPHOTO_LOG_FILE="$PERF_LOG" "$BIN" perf switch --json 2>&1) || PF_EXIT=$?
+if [ $PF_EXIT -eq 0 ] && echo "$PF_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['samples']==6, d['samples']
+L={r['label']:r for r in d['labels']}
+assert L['cache-hit']['count']==3 and L['cache-hit']['median_ms']==4.0 and L['cache-hit']['max_ms']==9.0, L['cache-hit']
+assert L['full-res-decode']['count']==1
+assert d['switches']['count']==5, d['switches']
+assert d['labels'][0]['label']=='cache-hit'
+" 2>/dev/null; then
+    pass "perf switch --json (Gruppierung, Median, switches ohne full-res-decode)"
+else
+    fail "perf switch --json" "Exit $PF_EXIT: $PF_OUT"
+fi
+
+PF_EXIT=0
+PF_OUT=$("$BIN" perf switch --log "$PERF_LOG" --last-session --slowest 2 --json 2>&1) || PF_EXIT=$?
+if [ $PF_EXIT -eq 0 ] && echo "$PF_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['samples']==4 and d['last_session'] is True, d
+assert [s['ms'] for s in d['slowest']]==[250.0,30.0], d['slowest']
+assert d['slowest'][0]['file'].startswith('c.raf')
+" 2>/dev/null; then
+    pass "perf switch --log --last-session --slowest 2"
+else
+    fail "perf switch --last-session" "Exit $PF_EXIT: $PF_OUT"
+fi
+
+PF_EXIT=0
+PF_OUT=$(IPHOTO_LOG_FILE="$PERF_LOG" "$BIN" perf switch --label preview-hit --json 2>&1) || PF_EXIT=$?
+if [ $PF_EXIT -eq 0 ] && echo "$PF_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['samples']==1 and d['label_filter']=='preview-hit' and d['labels'][0]['p95_ms']==30.0
+" 2>/dev/null; then
+    pass "perf switch --label preview-hit"
+else
+    fail "perf switch --label" "Exit $PF_EXIT: $PF_OUT"
+fi
+
+PF_EXIT=0
+PF_OUT=$(IPHOTO_LOG_FILE="$PERF_LOG" "$BIN" perf switch 2>&1) || PF_EXIT=$?
+if [ $PF_EXIT -eq 0 ] && echo "$PF_OUT" | grep -q "cache-hit" && echo "$PF_OUT" | grep -q "= switches"; then
+    pass "perf switch (Textausgabe)"
+else
+    fail "perf switch (Text)" "Exit $PF_EXIT: $PF_OUT"
+fi
+
+PF_EXIT=0
+PF_OUT=$(IPHOTO_LOG_FILE="$PERF_LOG" "$BIN" perf path --json 2>&1) || PF_EXIT=$?
+if [ $PF_EXIT -eq 0 ] && echo "$PF_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['exists'] is True and d['size_bytes']>0 and d['path'].endswith('perf_test.log')
+" 2>/dev/null; then
+    pass "perf path --json (IPHOTO_LOG_FILE)"
+else
+    fail "perf path --json" "Exit $PF_EXIT: $PF_OUT"
+fi
+
+# Leeres Log → 0 Samples, kein Fehler
+: > "$TMPDIR/perf_empty.log"
+PF_EXIT=0
+PF_OUT=$("$BIN" perf switch --log "$TMPDIR/perf_empty.log" --json 2>&1) || PF_EXIT=$?
+if [ $PF_EXIT -eq 0 ] && echo "$PF_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['samples']==0 and d['labels']==[]" 2>/dev/null; then
+    pass "perf switch leeres Log (0 Samples)"
+else
+    fail "perf switch leeres Log" "Exit $PF_EXIT: $PF_OUT"
+fi
+
+# Fehlerpfade
+PF_ERR=0
+"$BIN" perf switch --log "$TMPDIR/does_not_exist.log" > /dev/null 2>&1 || PF_ERR=$?
+if [ $PF_ERR -ne 0 ]; then pass "perf switch fehlende Log-Datei (→ Fehler)"; else fail "perf switch fehlende Datei" "Hätte fehlschlagen sollen"; fi
+
+PF_ERR=0
+IPHOTO_LOG_FILE="$PERF_LOG" "$BIN" perf switch --slowest 0 > /dev/null 2>&1 || PF_ERR=$?
+if [ $PF_ERR -ne 0 ]; then pass "perf switch --slowest 0 (→ Fehler)"; else fail "perf --slowest 0" "Hätte fehlschlagen sollen"; fi
+
+PF_ERR=0
+IPHOTO_LOG_FILE="$PERF_LOG" "$BIN" perf switch --bogus > /dev/null 2>&1 || PF_ERR=$?
+if [ $PF_ERR -ne 0 ]; then pass "perf switch --bogus (→ Fehler)"; else fail "perf --bogus" "Hätte fehlschlagen sollen"; fi
+
+PF_ERR=0
+"$BIN" perf bogus > /dev/null 2>&1 || PF_ERR=$?
+if [ $PF_ERR -ne 0 ]; then pass "perf unbekannter Subcommand (→ Fehler)"; else fail "perf bogus" "Hätte fehlschlagen sollen"; fi
+
+PF_ERR=0
+"$BIN" perf > /dev/null 2>&1 || PF_ERR=$?
+if [ $PF_ERR -ne 0 ]; then pass "perf ohne Subcommand (→ Fehler)"; else fail "perf ohne Subcommand" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
