@@ -577,13 +577,8 @@ class ImageViewModel: ObservableObject {
         memSource.resume()
         cancellables.insert(AnyCancellable { memSource.cancel() })
 
-        // $navSelection uses dropFirst() so the initial .library never fires loadContentForSelection.
-        // Trigger it explicitly so watched folders sync on startup.
-        loadContentForSelection(navSelection)
-
-        // Restore all previously imported images from the catalog that are not covered by
-        // watched folders (e.g. files dragged in from Desktop, Downloads, etc.).
-        restoreCatalogImages()
+        // Content loading is deferred to openProject() / openWithoutProject(),
+        // which are called after the user makes a project selection in the picker.
 
         // Reconcile backup folder with catalog — marks images as backed-up if a file
         // with matching stem exists in the backup destination (catches manual/external backups).
@@ -616,6 +611,9 @@ class ImageViewModel: ObservableObject {
         for path in project.folderPaths {
             scanProjectFolder(URL(fileURLWithPath: path))
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.syncBackupCatalog()
+        }
     }
 
     func openWithoutProject() {
@@ -629,6 +627,9 @@ class ImageViewModel: ObservableObject {
         navSelection = .library
         loadContentForSelection(.library)
         restoreCatalogImages()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.syncBackupCatalog()
+        }
     }
 
     private func scanProjectFolder(_ folderURL: URL) {

@@ -6,31 +6,40 @@ struct iPhotoApp: App {
     @StateObject private var viewModel = ImageViewModel()
     @StateObject private var projectStore = ProjectStore.shared
     @State private var showProjectPicker: Bool = ProjectStore.shared.lastProject == nil
+    @State private var loadingInitiated: Bool = false
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(viewModel)
-                .frame(minWidth: 600, minHeight: 400)
-                .sheet(isPresented: $showProjectPicker) {
-                    ProjectPickerView(
-                        onOpen: { project in
-                            ProjectStore.shared.setLastOpened(project)
-                            viewModel.openProject(project)
-                            showProjectPicker = false
-                        },
-                        onOpenWithoutProject: {
-                            ProjectStore.shared.lastProjectID = nil
-                            viewModel.openWithoutProject()
-                            showProjectPicker = false
-                        }
-                    )
-                }
-                .onAppear {
-                    if let p = ProjectStore.shared.lastProject {
-                        viewModel.openProject(p)
+            if showProjectPicker {
+                ProjectPickerView(
+                    onOpen: { project in
+                        ProjectStore.shared.setLastOpened(project)
+                        viewModel.openProject(project)
+                        loadingInitiated = true
+                        showProjectPicker = false
+                    },
+                    onOpenWithoutProject: {
+                        ProjectStore.shared.lastProjectID = nil
+                        viewModel.openWithoutProject()
+                        loadingInitiated = true
+                        showProjectPicker = false
                     }
-                }
+                )
+                .frame(minWidth: 700, minHeight: 480)
+            } else {
+                ContentView()
+                    .environmentObject(viewModel)
+                    .frame(minWidth: 600, minHeight: 400)
+                    .onAppear {
+                        guard !loadingInitiated else { return }
+                        loadingInitiated = true
+                        if let p = ProjectStore.shared.lastProject {
+                            viewModel.openProject(p)
+                        } else {
+                            viewModel.openWithoutProject()
+                        }
+                    }
+            }
         }
         Settings {
             SettingsView().environmentObject(viewModel)
