@@ -465,6 +465,7 @@ class ImageViewModel: ObservableObject {
                 default: break
                 }
             }
+            if textFieldFocused { return event }
             switch event.keyCode {
             case 123: // ←
                 if self.sidebarNavigationFocused {

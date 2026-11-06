@@ -2,6 +2,13 @@
 
 ---
 
+## 1.102.4
+**Pfeiltasten in Textfeldern funktionieren wieder**
+
+- Globaler Tastatur-Handler gibt Pfeiltasten (← →  ↑ ↓) jetzt korrekt ans fokussierte Textfeld weiter statt sie als Bild-Navigation zu interpretieren
+
+---
+
 ## 1.102.3
 **„Neues Album erstellen" direkt im Kontextmenü**
 
