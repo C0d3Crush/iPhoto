@@ -4,7 +4,7 @@ private let kSmartFolderIDType = "com.c0d3cru5h.iphoto.smartfolder-id"
 private let kNavSectionDragType = "com.c0d3cru5h.iphoto.navsection"
 
 enum NavSidebarSection: String, CaseIterable, Hashable {
-    case library, albums, smartFolders, volumes, trash, backup, duplicates, blurry, people
+    case library, albums, folders, smartFolders, iFolders, volumes, trash, backup, duplicates, blurry, people
 
     static func loadOrder() -> [NavSidebarSection] {
         guard let raw = UserDefaults.standard.string(forKey: "nav.sectionOrder") else {
@@ -32,7 +32,9 @@ enum NavSidebarSection: String, CaseIterable, Hashable {
         switch self {
         case .library:      return "Bibliothek"
         case .albums:       return "Alben"
+        case .folders:      return "Ordner"
         case .smartFolders: return "iAlben"
+        case .iFolders:     return "iOrdner"
         case .volumes:      return "Wechseldatenträger"
         case .trash:        return "Papierkorb"
         case .backup:       return "Backup"
@@ -46,7 +48,9 @@ enum NavSidebarSection: String, CaseIterable, Hashable {
         switch self {
         case .library:      return "photo.on.rectangle.angled"
         case .albums:       return "rectangle.stack"
+        case .folders:      return "folder"
         case .smartFolders: return "folder.badge.gearshape"
+        case .iFolders:     return "folder.badge.gearshape"
         case .volumes:      return "externaldrive"
         case .trash:        return "trash"
         case .backup:       return "externaldrive.badge.checkmark"
@@ -67,7 +71,9 @@ struct NavSidebarView: View {
     @State private var albumDetailItem: Album? = nil
     @State private var smartFolderSheetItem: SmartFolderSheetItem? = nil
     @State private var albumsCollapsed = false
+    @State private var foldersCollapsed = false
     @State private var smartFoldersCollapsed = false
+    @State private var iFoldersCollapsed = false
     @State private var volumesCollapsed = false
     @State private var trashCollapsed = false
     @State private var backupCollapsed = false
@@ -185,7 +191,7 @@ struct NavSidebarView: View {
             .environmentObject(viewModel)
         }
         .sheet(item: $smartFolderSheetItem) { item in
-            SmartFolderSheet(editing: item.folder)
+            SmartFolderSheet(editing: item.folder, preselectedBasePath: item.preselectedBasePath)
                 .environmentObject(viewModel)
         }
         .sheet(item: $movingFolder) { sf in
@@ -241,7 +247,9 @@ struct NavSidebarView: View {
                 libraryCompactRow
             }
         case .albums:        albumsSection
+        case .folders:       foldersSection
         case .smartFolders:  smartFoldersSection
+        case .iFolders:      iFoldersSection
         case .volumes:       volumesSection
         case .trash:         trashSection
         case .backup:        backupSection
@@ -335,6 +343,53 @@ struct NavSidebarView: View {
                             else { viewModel.deleteAlbum(album) }
                         }
                     }
+            }
+        }
+    }
+
+    @ViewBuilder private var foldersSection: some View {
+        let regularFolders = viewModel.library.watchedFolders.filter { !$0.isRemovableMedia }
+        collapsibleSectionHeader("Ordner", isCollapsed: foldersCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { foldersCollapsed.toggle() } },
+            trailing: AnyView(
+                Button(action: { viewModel.addFolderDialog() }) {
+                    Image(systemName: "plus").font(.caption)
+                }
+                .buttonStyle(PlainButtonStyle())
+            ))
+        if !foldersCollapsed {
+            ForEach(regularFolders) { folder in
+                FolderRow(folder: folder, isSelected: viewModel.navSelection == .folder(folder.id))
+                    .environmentObject(viewModel)
+                    .contextMenu {
+                        Button("Ordner entfernen") { viewModel.deleteWatchedFolder(folder) }
+                    }
+            }
+        }
+    }
+
+    @ViewBuilder private var iFoldersSection: some View {
+        let iFolders = viewModel.library.smartFolders.filter { $0.baseFolderPath != nil }
+        collapsibleSectionHeader("iOrdner", isCollapsed: iFoldersCollapsed,
+            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { iFoldersCollapsed.toggle() } },
+            trailing: AnyView(
+                Button(action: {
+                    let panel = NSOpenPanel()
+                    panel.canChooseFiles = false
+                    panel.canChooseDirectories = true
+                    panel.allowsMultipleSelection = false
+                    panel.prompt = "Auswählen"
+                    if panel.runModal() == .OK, let url = panel.url {
+                        smartFolderSheetItem = SmartFolderSheetItem(folder: nil, preselectedBasePath: url.standardized.path)
+                    }
+                }) {
+                    Image(systemName: "plus").font(.caption)
+                }
+                .buttonStyle(PlainButtonStyle())
+            ))
+        if !iFoldersCollapsed {
+            ForEach(iFolders) { sf in
+                smartFolderRow(sf)
             }
         }
     }

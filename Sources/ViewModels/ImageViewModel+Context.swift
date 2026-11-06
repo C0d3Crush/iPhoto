@@ -132,6 +132,7 @@ extension ImageViewModel {
             filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
         case .smartFolder(let id):
             guard let sf = library.smartFolders.first(where: { $0.id == id }) else { return [] }
+            var sfFiltered: [ImageDocument]
             if let orderedPaths = CatalogStore.shared.orderedPathsForSmartFolder(sf) {
                 // SQL fast path — ORDER BY and LIMIT already applied by the DB
                 let pathSet = Set(orderedPaths)
@@ -140,12 +141,17 @@ extension ImageViewModel {
                         guard pathSet.contains(doc.url.path) else { return nil }
                         return (doc.url.path, doc)
                     })
-                filtered = orderedPaths.compactMap { byPath[$0] }
+                sfFiltered = orderedPaths.compactMap { byPath[$0] }
             } else {
                 // Runtime-only criteria (colorRatio, smartFolderRef) → in-memory fallback
                 let matched = docs.filter { smartFolderMatches($0, sf: sf) }
-                filtered = applySmartFolderLimit(matched, sf: sf)
+                sfFiltered = applySmartFolderLimit(matched, sf: sf)
             }
+            // iOrdner: scope to base folder path if set
+            if let base = sf.baseFolderPath {
+                sfFiltered = sfFiltered.filter { $0.url.standardized.path.hasPrefix(base) }
+            }
+            filtered = sfFiltered
         case .volume(let id):
             guard let volume = library.detectedVolumes.first(where: { $0.id == id }) else { return [] }
             let prefix = volume.url.standardized.path

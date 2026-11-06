@@ -253,6 +253,7 @@ struct SmartFolder: Identifiable, Codable {
     var limitEnabled: Bool
     var limitCount: Int
     var limitSelection: SmartFolderLimitSelection
+    var baseFolderPath: String? = nil
 
     init(name: String) {
         id = UUID()
@@ -263,6 +264,7 @@ struct SmartFolder: Identifiable, Codable {
         limitEnabled = false
         limitCount = 25
         limitSelection = .highestRating
+        baseFolderPath = nil
     }
 
     // Custom decode for backward compatibility with saved folders that lack limit fields.
@@ -276,5 +278,6 @@ struct SmartFolder: Identifiable, Codable {
         limitEnabled   = try c.decodeIfPresent(Bool.self,                        forKey: .limitEnabled)   ?? false
         limitCount     = try c.decodeIfPresent(Int.self,                         forKey: .limitCount)     ?? 25
         limitSelection = try c.decodeIfPresent(SmartFolderLimitSelection.self,   forKey: .limitSelection) ?? .highestRating
+        baseFolderPath = try c.decodeIfPresent(String.self,                      forKey: .baseFolderPath)
     }
 }

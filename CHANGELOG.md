@@ -2,6 +2,14 @@
 
 ---
 
+## 1.103.0
+**Ordner und iOrdner in der Seitenleiste**
+
+- Neuer Abschnitt „Ordner": Beobachtete Ordner haben jetzt ihren eigenen Reiter mit + zum Hinzufügen
+- Neuer Abschnitt „iOrdner": Intelligente Ordner — Smart-Filter eingeschränkt auf einen Basispfad
+
+---
+
 ## 1.102.4
 **Pfeiltasten in Textfeldern funktionieren wieder**
 

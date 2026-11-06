@@ -3,6 +3,7 @@ import SwiftUI
 struct SmartFolderSheetItem: Identifiable {
     let id = UUID()
     let folder: SmartFolder?
+    var preselectedBasePath: String? = nil
 }
 
 struct SmartFolderSheet: View {
@@ -18,8 +19,9 @@ struct SmartFolderSheet: View {
     @State private var limitEnabled: Bool
     @State private var limitCount: Int
     @State private var limitSelection: SmartFolderLimitSelection
+    @State private var baseFolderPath: String?
 
-    init(editing: SmartFolder? = nil) {
+    init(editing: SmartFolder? = nil, preselectedBasePath: String? = nil) {
         self.editing = editing
         _name           = State(initialValue: editing?.name ?? "")
         _matchAll       = State(initialValue: editing?.matchAll ?? true)
@@ -28,49 +30,52 @@ struct SmartFolderSheet: View {
         _limitEnabled   = State(initialValue: editing?.limitEnabled ?? false)
         _limitCount     = State(initialValue: editing?.limitCount ?? 25)
         _limitSelection = State(initialValue: editing?.limitSelection ?? .highestRating)
+        _baseFolderPath = State(initialValue: editing?.baseFolderPath ?? preselectedBasePath)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(editing == nil ? "iAlbum" : "iAlbum bearbeiten")
-                .font(.headline)
+            Group {
+                Text(editing == nil ? "iAlbum" : "iAlbum bearbeiten")
+                    .font(.headline)
 
-            TextField("Name", text: $name)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-
-            HStack(spacing: 8) {
-                Text("Gruppe:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                TextField("Gruppenname (optional)", text: $group)
+                TextField("Name", text: $name)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                let existingGroups = Array(Set(viewModel.library.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
-                if !existingGroups.isEmpty {
-                    Menu("Gruppe wählen") {
-                        ForEach(existingGroups, id: \.self) { g in
-                            Button(g) { group = g }
+
+                HStack(spacing: 8) {
+                    Text("Gruppe:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    TextField("Gruppenname (optional)", text: $group)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    let existingGroups = Array(Set(viewModel.library.smartFolders.compactMap { $0.group }.filter { !$0.isEmpty })).sorted()
+                    if !existingGroups.isEmpty {
+                        Menu("Gruppe wählen") {
+                            ForEach(existingGroups, id: \.self) { g in
+                                Button(g) { group = g }
+                            }
+                            Divider()
+                            Button("Keine Gruppe") { group = "" }
                         }
-                        Divider()
-                        Button("Keine Gruppe") { group = "" }
+                        .menuStyle(BorderlessButtonMenuStyle())
+                        .fixedSize()
                     }
-                    .menuStyle(BorderlessButtonMenuStyle())
-                    .fixedSize()
                 }
-            }
 
-            HStack(spacing: 8) {
-                Text("Übereinstimmung:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Picker("", selection: $matchAll) {
-                    Text("Alle Kriterien").tag(true)
-                    Text("Mindestens eines").tag(false)
+                HStack(spacing: 8) {
+                    Text("Übereinstimmung:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Picker("", selection: $matchAll) {
+                        Text("Alle Kriterien").tag(true)
+                        Text("Mindestens eines").tag(false)
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .labelsHidden()
                 }
-                .pickerStyle(MenuPickerStyle())
-                .labelsHidden()
-            }
 
-            Divider()
+                Divider()
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(criteria) { criterion in
@@ -133,6 +138,62 @@ struct SmartFolderSheet: View {
 
             Divider()
 
+            // Basispfad-Einschränkung (iOrdner)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Toggle("", isOn: Binding(
+                        get: { baseFolderPath != nil },
+                        set: { enabled in
+                            if !enabled { baseFolderPath = nil }
+                            else {
+                                let panel = NSOpenPanel()
+                                panel.canChooseFiles = false
+                                panel.canChooseDirectories = true
+                                panel.allowsMultipleSelection = false
+                                panel.prompt = "Auswählen"
+                                if panel.runModal() == .OK, let url = panel.url {
+                                    baseFolderPath = url.standardized.path
+                                }
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(CheckboxToggleStyle())
+                    Text("Auf Ordner einschränken")
+                        .foregroundColor(baseFolderPath != nil ? .primary : .secondary)
+                }
+                if let path = baseFolderPath {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 11))
+                            .foregroundColor(.accentColor)
+                        Text(path)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Button("Wählen…") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+                            panel.prompt = "Auswählen"
+                            panel.directoryURL = URL(fileURLWithPath: path)
+                            if panel.runModal() == .OK, let url = panel.url {
+                                baseFolderPath = url.standardized.path
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .foregroundColor(.accentColor)
+                        .font(.caption)
+                    }
+                    .padding(.leading, 20)
+                }
+            }
+
+            Divider()
+
             HStack {
                 Spacer()
                 Button("Abbrechen") { presentationMode.wrappedValue.dismiss() }
@@ -156,11 +217,13 @@ struct SmartFolderSheet: View {
         if var sf = editing {
             sf.name = trimmed; sf.criteria = criteria; sf.matchAll = matchAll; sf.group = resolvedGroup
             sf.limitEnabled = limitEnabled; sf.limitCount = max(1, limitCount); sf.limitSelection = limitSelection
+            sf.baseFolderPath = baseFolderPath
             viewModel.updateSmartFolder(sf)
         } else {
             var sf = SmartFolder(name: trimmed)
             sf.criteria = criteria; sf.matchAll = matchAll; sf.group = resolvedGroup
             sf.limitEnabled = limitEnabled; sf.limitCount = max(1, limitCount); sf.limitSelection = limitSelection
+            sf.baseFolderPath = baseFolderPath
             viewModel.createSmartFolder(sf)
         }
     }
