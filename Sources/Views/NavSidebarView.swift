@@ -1441,6 +1441,7 @@ struct VerboseLogView: View {
 
 private struct LogPanelView: View {
     @State private var lines: [String] = []
+    @State private var lastKnownSize: UInt64 = 0
     private let ticker = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -1480,15 +1481,23 @@ private struct LogPanelView: View {
         DispatchQueue.global(qos: .utility).async {
             guard let handle = try? FileHandle(forReadingFrom: url) else { return }
             let size = handle.seekToEndOfFile()
+            // Skip read if file hasn't grown since last tick
+            guard size != lastKnownSize else { handle.closeFile(); return }
             let readBytes: UInt64 = min(size, 8192)
             handle.seek(toFileOffset: size - readBytes)
             let data = handle.readDataToEndOfFile()
             handle.closeFile()
-            let parsed = (String(data: data, encoding: .utf8) ?? "")
+            // Use lossless decoding (replaces invalid bytes with U+FFFD instead of returning nil),
+            // then drop the first line which may be a truncated multi-byte character.
+            let parsed = String(decoding: data, as: UTF8.self)
                 .components(separatedBy: "\n")
+                .dropFirst()
                 .filter { !$0.isEmpty && !$0.contains(Log.sessionMarker) }
                 .suffix(50).map { String($0) }
-            DispatchQueue.main.async { self.lines = parsed }
+            DispatchQueue.main.async {
+                self.lastKnownSize = size
+                self.lines = parsed
+            }
         }
     }
 }
