@@ -82,6 +82,7 @@ struct ThumbnailContextMenu: View {
             Divider()
             actionSection
             Divider()
+            lastUsedAlbumButton
             albumSection
             Divider()
             Button(stackMembers.map { "Stapel (\($0.count)) aus Sammlung entfernen" } ?? "Aus Sammlung entfernen") {
@@ -248,6 +249,35 @@ struct ThumbnailContextMenu: View {
         .keyboardShortcut("r", modifiers: .command)
     }
 
+    private static let lastAlbumKey = "contextMenu.lastUsedAlbumID"
+
+    private var lastUsedAlbum: Album? {
+        guard let raw = UserDefaults.standard.string(forKey: Self.lastAlbumKey),
+              let id = UUID(uuidString: raw) else { return nil }
+        return vm.library.albums.first(where: { $0.id == id })
+    }
+
+    @ViewBuilder private var lastUsedAlbumButton: some View {
+        if let album = lastUsedAlbum {
+            Button("Zu \"\(album.name)\" hinzufügen") {
+                addToAlbum(album)
+            }
+            Divider()
+        }
+    }
+
+    private func addToAlbum(_ album: Album) {
+        UserDefaults.standard.set(album.id.uuidString, forKey: Self.lastAlbumKey)
+        let stack = stackMembers
+        if isInMultiSelection {
+            vm.addSelectedToAlbum(albumID: album.id)
+        } else if let members = stack {
+            for m in members { vm.addToAlbum(m, albumID: album.id) }
+        } else {
+            vm.addToAlbum(doc, albumID: album.id)
+        }
+    }
+
     @ViewBuilder private var albumSection: some View {
         let multi = isInMultiSelection
         let stack = stackMembers
@@ -261,15 +291,7 @@ struct ThumbnailContextMenu: View {
                 ForEach(vm.library.albums) { album in
                     let inAlbum = !multi && stack == nil && album.photoURLs.contains(doc.url)
                     Button {
-                        if multi {
-                            vm.addSelectedToAlbum(albumID: album.id)
-                        } else if let members = stack {
-                            for m in members { vm.addToAlbum(m, albumID: album.id) }
-                        } else if inAlbum {
-                            vm.removeFromAlbum(doc, albumID: album.id)
-                        } else {
-                            vm.addToAlbum(doc, albumID: album.id)
-                        }
+                        addToAlbum(album)
                     } label: {
                         if inAlbum {
                             Label(album.name, systemImage: "checkmark")
@@ -302,13 +324,6 @@ struct ThumbnailContextMenu: View {
         guard !name.isEmpty else { return }
         vm.createAlbum(name: name)
         guard let album = vm.library.albums.first(where: { $0.name == name }) else { return }
-        let stack = stackMembers
-        if isInMultiSelection {
-            vm.addSelectedToAlbum(albumID: album.id)
-        } else if let members = stack {
-            for m in members { vm.addToAlbum(m, albumID: album.id) }
-        } else {
-            vm.addToAlbum(doc, albumID: album.id)
-        }
+        addToAlbum(album)
     }
 }
