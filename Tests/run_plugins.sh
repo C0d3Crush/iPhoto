@@ -2888,6 +2888,102 @@ if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy --bogus (→ Fehler)"; else fa
 echo ""
 
 # ---------------------------------------------------------------------------
+# adjustments set / copy v2 (Entwicklungs-Einstellungen setzen + synchronisieren)
+# ---------------------------------------------------------------------------
+echo "── adjustments set/copy v2 ──"
+AJ_DB="$TMPDIR/adj_sync.db"
+aj() { IPHOTO_CATALOG_DB="$AJ_DB" "$BIN" "$@"; }
+
+AJ_EXIT=0
+AJ_OUT=$(aj adjustments set "/fotos/src.raf" --exposure -0.5 --contrast 1.2 --warmth 15 --json 2>&1) || AJ_EXIT=$?
+if [ $AJ_EXIT -eq 0 ] && echo "$AJ_OUT" | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+assert d['ok'] is True and d['changed']['exposure']==-0.5 and d['changed']['contrast']==1.2
+" 2>/dev/null; then
+    pass "adjustments set --json (negative Zahl akzeptiert)"
+else
+    fail "adjustments set --json" "Exit $AJ_EXIT: $AJ_OUT"
+fi
+
+AJ_EXIT=0
+AJ_OUT=$(aj adjustments get "/fotos/src.raf" --json 2>&1) || AJ_EXIT=$?
+if [ $AJ_EXIT -eq 0 ] && echo "$AJ_OUT" | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+assert d['exposure']==-0.5 and d['contrast']==1.2 and d['warmth']==15 and d['saturation']==1
+" 2>/dev/null; then
+    pass "adjustments get nach set (Werte persistiert)"
+else
+    fail "adjustments get nach set" "Exit $AJ_EXIT: $AJ_OUT"
+fi
+
+# Ziel mit eigener Belichtung — copy überschreibt globale Regler
+aj adjustments set "/fotos/dst1.jpg" --exposure 2 > /dev/null 2>&1 || true
+AJ_EXIT=0
+AJ_OUT=$(aj adjustments copy "/fotos/src.raf" "/fotos/dst1.jpg" "/fotos/dst2.jpg" "/fotos/dst2.jpg" --json 2>&1) || AJ_EXIT=$?
+if [ $AJ_EXIT -eq 0 ] && echo "$AJ_OUT" | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+assert d['ok'] is True and d['copied']==2 and d['include_crop'] is False
+" 2>/dev/null; then
+    pass "adjustments copy --json (2 Ziele, Duplikat entfernt)"
+else
+    fail "adjustments copy --json" "Exit $AJ_EXIT: $AJ_OUT"
+fi
+
+AJ_EXIT=0
+AJ_OUT=$(aj adjustments get "/fotos/dst1.jpg" --json 2>&1) || AJ_EXIT=$?
+if [ $AJ_EXIT -eq 0 ] && echo "$AJ_OUT" | python3 -c "
+import json,sys; d=json.load(sys.stdin)
+assert d['exposure']==-0.5 and d['warmth']==15
+" 2>/dev/null; then
+    pass "adjustments copy (Zielwerte übernommen)"
+else
+    fail "adjustments copy (Zielwerte)" "Exit $AJ_EXIT: $AJ_OUT"
+fi
+
+AJ_EXIT=0
+AJ_OUT=$(aj adjustments list --json 2>&1) || AJ_EXIT=$?
+if [ $AJ_EXIT -eq 0 ] && echo "$AJ_OUT" | python3 -c "
+import json,sys; d=json.load(sys.stdin); assert len(d)==3
+" 2>/dev/null; then
+    pass "adjustments list (3 Bilder nach copy)"
+else
+    fail "adjustments list nach copy" "Exit $AJ_EXIT: $AJ_OUT"
+fi
+
+AJ_EXIT=0
+AJ_OUT=$(aj adjustments set "/fotos/src.raf" --reset --json 2>&1) || AJ_EXIT=$?
+if [ $AJ_EXIT -eq 0 ] && aj adjustments get "/fotos/src.raf" --json 2>/dev/null | python3 -c "
+import json,sys; d=json.load(sys.stdin); assert d['exposure']==0 and d['contrast']==1
+" 2>/dev/null; then
+    pass "adjustments set --reset (Standardwerte)"
+else
+    fail "adjustments set --reset" "Exit $AJ_EXIT: $AJ_OUT"
+fi
+
+# Fehlerpfade
+AJ_ERR=0
+aj adjustments set "/fotos/src.raf" > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments set ohne Regler (→ Fehler)"; else fail "adjustments set ohne Regler" "Hätte fehlschlagen sollen"; fi
+
+AJ_ERR=0
+aj adjustments set "/fotos/src.raf" --exposure abc > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments set --exposure abc (→ Fehler)"; else fail "adjustments set --exposure abc" "Hätte fehlschlagen sollen"; fi
+
+AJ_ERR=0
+aj adjustments set "/fotos/src.raf" --bogus 1 > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments set --bogus (→ Fehler)"; else fail "adjustments set --bogus" "Hätte fehlschlagen sollen"; fi
+
+AJ_ERR=0
+aj adjustments copy "/fotos/keine.jpg" "/fotos/dst1.jpg" > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy (Quelle ohne Anpassungen → Fehler)"; else fail "adjustments copy ohne Quelle" "Hätte fehlschlagen sollen"; fi
+
+AJ_ERR=0
+aj adjustments copy "/fotos/src.raf" > /dev/null 2>&1 || AJ_ERR=$?
+if [ $AJ_ERR -ne 0 ]; then pass "adjustments copy (kein Ziel → Fehler)"; else fail "adjustments copy kein Ziel" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

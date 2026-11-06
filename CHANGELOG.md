@@ -38,9 +38,9 @@
 - Tests in `Tests/run_plugins.sh` (neue Bilder, Favorit, Read-only-Prüfung, Buckets, Paarbildung, Papierkorb-Filter, Textausgabe, Fehlerpfade)
 
 **CLI: Anpassungen setzen und auf andere Bilder kopieren**
-- Neuer Befehl `iphoto-cli adjustments set <bildpfad> [--exposure N] [--contrast N] … [--turns 0-3] [--reset] [--json]` speichert Reglerwerte (Belichtung, Kontrast, Weißabgleich, Schärfe, Rauschen, Vignette, Verzeichnung, Drehung) nicht-destruktiv im Katalog — ohne das Bild zu rendern; bestehende Werte bleiben erhalten, ungültige oder außerhalb des Bereichs liegende Werte werden abgelehnt
-- Neuer Befehl `iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>…] [--exclude-geometry] [--exclude-local] [--skip-existing] [--dry-run] [--json]` überträgt die Bearbeitung eines Bildes auf beliebig viele andere („Anpassungen kopieren/einfügen”); `--exclude-geometry` behält Zuschnitt und Drehung der Ziele
-- Schneller: alle Ziele werden in einer einzigen SQLite-Transaktion mit wiederverwendetem Statement geschrieben (neu: `CatalogStore.saveAdjustmentsBatch`)
+- Neuer Befehl `iphoto-cli adjustments set <bildpfad> [--exposure N] [--contrast N] [--saturation N] [--warmth N] … [--turns 0-3] [--reset] [--json]` speichert Reglerwerte (Belichtung, Kontrast, Weißabgleich, Schärfe, Rauschen, Vignette, Verzeichnung, Drehung) nicht-destruktiv im Katalog — ohne das Bild zu rendern; bestehende Werte bleiben erhalten, `--reset` startet von Standardwerten; negative Werte wie `--exposure -0.5` werden korrekt erkannt
+- Neuer Befehl `iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>…] [--exclude-geometry] [--exclude-local] [--include-crop] [--skip-existing] [--dry-run] [--json]` überträgt die Bearbeitung eines Bildes auf beliebig viele andere; Zuschnitt, Drehung und lokale Masken bleiben standardmäßig am Ziel erhalten; Doppelt angegebene Ziele und die Quelle selbst werden übersprungen
+- Alle Ziele werden in einer einzigen SQLite-Transaktion geschrieben (`CatalogStore.saveAdjustmentsBatch`) statt eines Commits pro Bild
 - Tests in `Tests/run_plugins.sh` (Setzen, Zusammenführen, Reset, Kopieren, Probelauf, `--skip-existing`, `--exclude-geometry`, Fehlerpfade)
 
 ## 1.100.0

@@ -116,7 +116,7 @@ private func printUsage() {
                                  [--distortion N] [--ca N]
                                  [--rotation N] [--turns 0-3] [--reset] [--json]
       iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>...] [--exclude-geometry] [--exclude-local]
-                                  [--skip-existing] [--dry-run] [--json]
+                                  [--include-crop] [--skip-existing] [--dry-run] [--json]
       iphoto-cli rating batch-set <bild1> [<bild2>...] [--set N] [--flag pick|reject|none] [--color farbe] [--json]
       iphoto-cli export --list-formats [--json]
       iphoto-cli catalog scan-needed [--json]
