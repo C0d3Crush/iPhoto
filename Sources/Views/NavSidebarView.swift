@@ -348,7 +348,7 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var foldersSection: some View {
-        let regularFolders = viewModel.library.watchedFolders.filter { !$0.isRemovableMedia }
+        let regularFolders = viewModel.library.watchedFolders.filter { !$0.isRemovableMedia && !$0.isDefaultLibrary }
         collapsibleSectionHeader("Ordner", isCollapsed: foldersCollapsed,
             onToggle: { withAnimation(.easeInOut(duration: 0.18)) { foldersCollapsed.toggle() } },
             trailing: AnyView(
@@ -479,13 +479,21 @@ struct NavSidebarView: View {
     }
 
     @ViewBuilder private var volumesSection: some View {
-        if !viewModel.library.detectedVolumes.isEmpty {
+        let removableFolders = viewModel.library.watchedFolders.filter { $0.isRemovableMedia }
+        if !viewModel.library.detectedVolumes.isEmpty || !removableFolders.isEmpty {
             collapsibleSectionHeader("Wechseldatenträger", isCollapsed: volumesCollapsed,
                 onToggle: { withAnimation(.easeInOut(duration: 0.18)) { volumesCollapsed.toggle() } })
             if !volumesCollapsed {
                 ForEach(viewModel.library.detectedVolumes) { volume in
                     VolumeRow(volume: volume, isSelected: viewModel.navSelection == .volume(volume.id))
                         .environmentObject(viewModel)
+                }
+                ForEach(removableFolders) { folder in
+                    FolderRow(folder: folder, isSelected: viewModel.navSelection == .folder(folder.id))
+                        .environmentObject(viewModel)
+                        .contextMenu {
+                            Button("Ordner entfernen") { viewModel.deleteWatchedFolder(folder) }
+                        }
                 }
             }
         }
