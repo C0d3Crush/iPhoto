@@ -2,6 +2,15 @@
 
 ---
 
+## 1.104.2
+**Album-Sync: keine doppelten Kopien mehr bei jedem Start**
+
+- Manifest-Datei (`.iphoto_manifest.json`) in jedem Album-Ordner merkt sich welche Quelldateien schon kopiert wurden
+- Kein teurer Byte-Vergleich mehr — Dateiänderungen am Original führen nicht zu Duplikaten
+- Bestehende Symlinks werden automatisch zu echten Kopien migriert
+
+---
+
 ## 1.104.1
 **Album-Ordner enthalten jetzt Originaldateien statt Symlinks**
 

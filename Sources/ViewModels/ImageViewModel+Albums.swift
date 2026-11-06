@@ -164,6 +164,21 @@ extension ImageViewModel {
         albumsSystemRoot.appendingPathComponent(album.name)
     }
 
+    // Manifest maps source-path → dest-filename so we never compare file content.
+    private static let manifestFilename = ".iphoto_manifest.json"
+
+    private func loadManifest(at dir: URL) -> [String: String] {
+        let url = dir.appendingPathComponent(Self.manifestFilename)
+        guard let data = try? Data(contentsOf: url),
+              let dict = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return dict
+    }
+
+    private func saveManifest(_ manifest: [String: String], at dir: URL) {
+        guard let data = try? JSONEncoder().encode(manifest) else { return }
+        try? data.write(to: dir.appendingPathComponent(Self.manifestFilename))
+    }
+
     func syncAlbumToFilesystem(_ album: Album, removingOldAt oldDir: URL? = nil) {
         let photoURLs = album.photoURLs
         let dir = albumSystemPath(for: album)
@@ -176,54 +191,54 @@ extension ImageViewModel {
             }
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-            let targetPaths = Set(photoURLs.map { $0.standardized.path })
+            var manifest = self.loadManifest(at: dir)
+            let wantedPaths = Set(photoURLs.map { $0.standardized.path })
 
-            // Remove files that are no longer in the album
-            if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
-                for file in contents {
-                    // Skip if this is a symlink pointing to a still-valid source
-                    let isLink = (try? file.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true
-                    if isLink {
-                        // Migrate old symlink → copy the original
-                        if let dest = try? fm.destinationOfSymbolicLink(atPath: file.path) {
-                            let srcURL = URL(fileURLWithPath: dest).standardized
-                            try? fm.removeItem(at: file)
-                            if targetPaths.contains(srcURL.path) {
-                                try? fm.copyItem(at: srcURL, to: file)
-                            }
-                        } else {
-                            try? fm.removeItem(at: file)
+            // Remove dest files whose source is no longer in the album
+            for (srcPath, destName) in manifest where !wantedPaths.contains(srcPath) {
+                try? fm.removeItem(at: dir.appendingPathComponent(destName))
+                manifest.removeValue(forKey: srcPath)
+            }
+            // Migrate any old symlinks to real files (backward compat)
+            if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isSymbolicLinkKey]) {
+                for link in contents where link.lastPathComponent != Self.manifestFilename {
+                    guard (try? link.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true else { continue }
+                    if let dest = try? fm.destinationOfSymbolicLink(atPath: link.path) {
+                        let srcURL = URL(fileURLWithPath: dest).standardized
+                        try? fm.removeItem(at: link)
+                        if wantedPaths.contains(srcURL.path) {
+                            try? fm.copyItem(at: srcURL, to: link)
                         }
-                        continue
-                    }
-                    // Regular file: remove if its name no longer matches any album photo
-                    let name = file.lastPathComponent
-                    let stillWanted = photoURLs.contains { $0.lastPathComponent == name }
-                    if !stillWanted {
-                        try? fm.removeItem(at: file)
+                    } else {
+                        try? fm.removeItem(at: link)
                     }
                 }
             }
 
-            // Copy new photos that aren't already present
-            var existing = Set((try? fm.contentsOfDirectory(atPath: dir.path)) ?? [])
+            // Copy photos not yet in manifest
+            var usedNames = Set(manifest.values)
             for photoURL in photoURLs {
+                let srcPath = photoURL.standardized.path
+                if let destName = manifest[srcPath], fm.fileExists(atPath: dir.appendingPathComponent(destName).path) {
+                    continue  // already synced
+                }
+                // Find a unique dest filename
                 var destName = photoURL.lastPathComponent
                 var counter  = 1
-                // Only deduplicate if a file with that name exists AND is not a copy of this photo
-                while existing.contains(destName) &&
-                      !fm.contentsEqual(atPath: dir.appendingPathComponent(destName).path, andPath: photoURL.path) {
+                while usedNames.contains(destName) {
                     let base = (photoURL.lastPathComponent as NSString).deletingPathExtension
                     let ext  = (photoURL.lastPathComponent as NSString).pathExtension
                     destName = ext.isEmpty ? "\(base)_\(counter)" : "\(base)_\(counter).\(ext)"
                     counter += 1
                 }
                 let destURL = dir.appendingPathComponent(destName)
-                if !fm.fileExists(atPath: destURL.path) {
-                    try? fm.copyItem(at: photoURL, to: destURL)
-                    existing.insert(destName)
+                if (try? fm.copyItem(at: photoURL, to: destURL)) != nil {
+                    manifest[srcPath] = destName
+                    usedNames.insert(destName)
                 }
             }
+
+            self.saveManifest(manifest, at: dir)
             Log.info("Album Filesystem-Sync: \"\(album.name)\" → \(photoURLs.count) Dateien in \(dir.path)")
         }
     }
