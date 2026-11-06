@@ -345,7 +345,9 @@ iphoto-cli rating batch-set <bild1> [...] [--set N] [--flag ...] [--json]
 iphoto-cli elo get|list|set|match|reset [<bildpfad>] [--winner left|right|draw] [--json]
 
 # Katalog & Suche
-iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune [--json]
+iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline [--json]
+iphoto-cli catalog cameras [--json]
+iphoto-cli catalog timeline [--by year|month|day] [--json]
 iphoto-cli search <text> [--flag ...] [--rating N] [--color ...] [--camera ...] [--date ...] [--json]
 iphoto-cli duplicate list|similar [--json]
 
@@ -366,6 +368,12 @@ iphoto-cli metadata get|set <bildpfad> [--title X] [--caption X] [--keywords X]
                     [--copyright X] [--lat N] [--lon N] [--json]
 iphoto-cli exif get|set|films <bildpfad> [--iso N] [--focal MM] [--aperture F]
                [--lens NAME] [--film NAME] [--json]
+iphoto-cli exif stats [--by lens|iso|aperture|focal|film|camera] [--limit N] [--json]
+
+# Ausrüstungs-Statistik
+iphoto-cli gear summary [--json]
+iphoto-cli gear cameras|lenses [--limit N] [--json]
+iphoto-cli gear focal|iso|aperture [--limit N] [--json]
 
 # Qualität & Analyse
 iphoto-cli analyse <datei|ordner> [--blur-threshold N] [--shadow N] [--highlight N] [--json]

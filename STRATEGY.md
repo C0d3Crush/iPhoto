@@ -7,7 +7,7 @@
 
 ---
 
-## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.99)*
+## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.100.0)*
 
 **Was steht (stark!):**
 - Produktionsreife App-Basis: SQLite-Katalog (WAL, Migration), vollständige CRUD für
@@ -24,10 +24,13 @@
 - **Qualitätsanalyse**: Blur, Belichtung, Closed-Eye — mit manuellen Overrides, CLI-Zugriff.
 - **Motiv-Tags**: manuelle Tags pro Bild, auswertbar via CLI (`motif stats/find`).
 - **ELO-Duelle**: paarweise Vergleiche (`elo match`), Reset, Ranglisten.
-- **CLI** (`iphoto-cli`) mit ~60 Subcommands — Export, Adjust, Rating, Catalog, People,
+- **CLI** (`iphoto-cli`) mit ~65 Subcommands — Export, Adjust, Rating, Catalog, People,
   Motif, ELO, SmartFolder, Metadata, EXIF, Backup, Config, Plugins, Stacks, Trash,
   `rating export/import` (JSON/CSV), `bookmarks list/stats/remove/prune`,
-  `smartfolder sql/count` (SQL-Inspektion), `query filters/parse/run`, `bugreport` u.v.m.
+  `smartfolder sql/count` (SQL-Inspektion), `query filters/parse/run`, `bugreport`,
+  `exif stats` (Verteilung nach Kamera/Objektiv/ISO/Blende/Brennweite/Film),
+  `gear summary/cameras/lenses/focal/iso/aperture` (Ausrüstungsstatistik),
+  `catalog cameras` (Bilder pro Kamera) und `catalog timeline` (Bilder pro Zeitraum) u.v.m.
 - 3-Phasen-Ladelogik + ThumbnailDiskCache: Bild-Switching in Millisekunden.
 - Benchmark- + Skalierungstests bis 1000 Bilder, CI auf macOS-latest.
 
@@ -283,16 +286,18 @@ aber falls du es langfristig tragfähig willst, sind das die abo-freien Wege:
 
 ## 11. Meilensteine / Definition von Erfolg
 
-**Erreicht (v1.99):**
+**Erreicht (v1.100.0):**
 - [x] Phase 0: `AdjustmentState`-Refactor durch, verhaltensgleich.
 - [x] Phase 1: RAW-Pipeline, 3-Phasen-Laden, Rust-Core, ThumbnailDiskCache.
 - [x] Phase 2: Edits im Katalog, Preset-System, Undo/Redo, Batch-Export.
 - [x] Phase 3 (Kern): Rezept-Export/Import, Film-Simulation aus EXIF.
 - [x] People/Gesichtserkennung + ELO-Ranking + Qualitätsanalyse + Motiv-Tags.
-- [x] ~60 CLI-Subcommands: `catalog prune`, `trash mark-rejected`, `album rename/export`,
-      `rating export/import` (JSON/CSV), `bookmarks list/stats/remove/prune`,
-      `smartfolder sql/count` (generiertes SQL + Trefferzahlen inspizieren),
-      `query filters/parse/run` (Suchsyntax-Debugger), `bugreport list/show/fix/reopen`.
+- [x] ~65 CLI-Subcommands: `catalog prune/cameras/timeline`, `trash mark-rejected`,
+      `album rename/export`, `rating export/import` (JSON/CSV),
+      `bookmarks list/stats/remove/prune`, `smartfolder sql/count`,
+      `query filters/parse/run`, `bugreport list/show/fix/reopen`,
+      `exif stats` (Verteilung nach Kamera/Objektiv/ISO/Blende/Brennweite/Film),
+      `gear summary/cameras/lenses/focal/iso/aperture` (Ausrüstungsstatistik).
 
 **Nächste Schritte:**
 - [ ] Film-Look Starter-Presets kuratieren (Classic-Chrome-artig, Acros-artig …).
@@ -312,10 +317,10 @@ Rezepte werden geteilt, Contributors kommen. Alles darüber ist Bonus, nicht Pfl
 
 ---
 
-## 12. Was JETZT konkret zu tun ist *(Stand v1.99)*
+## 12. Was JETZT konkret zu tun ist *(Stand v1.100.0)*
 
 1. ✅ Phasen 0–3 (Kern) abgeschlossen — die App ist ein funktionierender RAW-Editor
-   mit Preset-System, Rezept-Sharing, People, ELO, Qualitätsanalyse und ~50 CLI-Befehlen.
+   mit Preset-System, Rezept-Sharing, People, ELO, Qualitätsanalyse und ~65 CLI-Befehlen.
 2. **Film-Look Starter-Presets kuratieren** — das ist das nächste sichtbare Differenzierungsmerkmal.
    Classic-Chrome-, Acros-, Velvia-, Classic-Neg-artige Presets als `.iphotorecipe` mitliefern.
 3. **Lokale Anpassungen UI** (Phase 4) — Pinsel/Gradient in `AdjustmentsPanel` fertigstellen.
