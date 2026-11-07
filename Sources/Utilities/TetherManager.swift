@@ -112,10 +112,12 @@ final class TetherManager: NSObject, ObservableObject {
 
     func startRecording() {
         guard !isRecording else { return }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tether_\(Int(Date().timeIntervalSince1970)).mov")
+        isRecording = true  // synchronous — prevents double-start on rapid taps
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss_SSS"
+        let name = "TETHER_\(formatter.string(from: Date())).mov"
+        let url = TetherManager.tetherDir.appendingPathComponent(name)
         movieOutput.startRecording(to: url, recordingDelegate: self)
-        DispatchQueue.main.async { self.isRecording = true }
     }
 
     func stopRecording() {

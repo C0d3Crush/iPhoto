@@ -77,14 +77,23 @@ struct PluginPanelView: View {
 
         loading = true
         rowResults = [:]
+        let loadURL = url  // capture as token — stale results are discarded if URL changed
 
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.15) {
+            guard self.viewModel.collection.currentDocument?.url == loadURL else {
+                DispatchQueue.main.async { self.loading = false }
+                return
+            }
             var results: [String: String] = [:]
             for row in commandRows {
                 guard let cmd = row.command else { continue }
-                results[row.label] = PluginStore.shared.run(command: cmd, imageURL: url)
+                results[row.label] = PluginStore.shared.run(command: cmd, imageURL: loadURL)
             }
             DispatchQueue.main.async {
+                guard self.viewModel.collection.currentDocument?.url == loadURL else {
+                    self.loading = false
+                    return
+                }
                 self.rowResults = results
                 self.loading = false
             }

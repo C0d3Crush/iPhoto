@@ -2,6 +2,17 @@
 
 ---
 
+## 1.104.4
+**5 Datenverlust- und Stabilitätsfehler behoben**
+
+- `catalog prune`: Einträge unter `/Volumes/<X>/` werden beim Prune übersprungen, wenn das Volume nicht gemountet ist (kein Datenverlust bei abgesteckten externen Laufwerken)
+- `VersionStore.writeImage`: HEIC/HEIF/WebP erhalten jetzt die korrekte UTI statt JPEG-Bytes; original EXIF/GPS wird beibehalten; atomares Schreiben via Temp-Datei + `replaceItemAt`
+- `MetadataService.writePhotoMetadataSync`: verlustfreies Metadaten-Schreiben via `CGImageDestinationCopyImageSource` — JPEG wird nicht mehr re-kodiert; RAW-Dateien werden mit `unsupported`-Fehler abgelehnt statt still ignoriert
+- `TetherManager.startRecording`: Videos werden jetzt im permanenten Tether-Verzeichnis gespeichert statt im temporären Verzeichnis (kein Datenverlust nach Neustart); `isRecording` wird synchron gesetzt um Doppelauslösung zu verhindern
+- `PluginStore.run` / `PluginPanelView`: Pipe-Deadlock bei >64 KB Plugin-Ausgabe behoben; 5-Sekunden-Timeout gegen hängende Plugin-Befehle; Plugin-Ergebnisse für zurückliegende Bilder werden beim schnellen Durchblättern verworfen
+
+---
+
 ## 1.104.3
 **Startup-Scans und Album-Duplikate behoben**
 

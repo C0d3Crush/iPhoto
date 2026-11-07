@@ -22,6 +22,7 @@ enum MetadataError: LocalizedError {
     case unknownFileType
     case cannotWriteFile
     case writeFailed(String)
+    case unsupported
 
     var errorDescription: String? {
         switch self {
@@ -29,6 +30,7 @@ enum MetadataError: LocalizedError {
         case .unknownFileType:       return "Unbekanntes Dateiformat."
         case .cannotWriteFile:       return "Ausgabeziel konnte nicht erstellt werden."
         case .writeFailed(let msg):  return "Schreiben fehlgeschlagen: \(msg)"
+        case .unsupported:           return "Metadaten-Schreiben für dieses Format nicht unterstützt."
         }
     }
 }

@@ -29,6 +29,7 @@ private func printUsage() {
       iphoto-cli inpaint <datei> --output <ziel> [--python /usr/bin/python3] [--cmt ~/cmt] [--checkpoint ~/cmt/checkpoints]
       iphoto-cli plugins list [--json]
       iphoto-cli plugins dir
+      iphoto-cli plugin run --command <befehl> --path <bildpfad>
       iphoto-cli viewmode get [--json]
       iphoto-cli viewmode set <grid|list|columns|gallery> [--json]
       iphoto-cli people scan <bild1> [<bild2> ...] [--json]
@@ -1542,8 +1543,39 @@ private func runPlugins(_ subArgs: [String]) -> Int32 {
             print("  \(infos.count) Plugins/Panels")
         }
         return 0
+    case "run":
+        // plugin run --command <shell-cmd> --path <bildpfad>
+        // Führt einen Shell-Befehl aus ({path} wird durch den Bildpfad ersetzt) und gibt stdout aus.
+        guard let ci = subArgs.firstIndex(of: "--command"), ci + 1 < subArgs.count,
+              let pi = subArgs.firstIndex(of: "--path"),    pi + 1 < subArgs.count else {
+            fputs("Verwendung: iphoto-cli plugin run --command <befehl> --path <bildpfad>\n", stderr)
+            return 1
+        }
+        let runCommand = subArgs[ci + 1]
+        let runPath    = subArgs[pi + 1]
+        let escaped = runPath.replacingOccurrences(of: "'", with: "'\\''")
+        let resolved = runCommand.replacingOccurrences(of: "{path}", with: "'\(escaped)'")
+        let proc = Process()
+        proc.launchPath = "/bin/zsh"
+        proc.arguments  = ["-c", resolved]
+        proc.environment = ProcessInfo.processInfo.environment
+            .merging(["IPHOTO_PATH": runPath]) { _, new in new }
+        let outPipe = Pipe()
+        proc.standardOutput = outPipe
+        proc.standardError  = FileHandle.nullDevice
+        guard (try? proc.run()) != nil else { return 1 }
+        let tout = DispatchWorkItem { proc.terminate() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5, execute: tout)
+        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+        tout.cancel()
+        let output = (String(data: data, encoding: .utf8) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        print(output)
+        return 0
+
     default:
-        fputs("Fehler: Unbekannter plugins-Unterbefehl '\(sub)'. Erlaubt: list, dir\n", stderr)
+        fputs("Fehler: Unbekannter plugins-Unterbefehl '\(sub)'. Erlaubt: list, dir, run\n", stderr)
         return 1
     }
 }
@@ -3716,33 +3748,49 @@ private func runCatalog(_ args: [String]) -> Int32 {
         // catalog prune [--dry-run] [--json]
         // Entfernt Katalog-Einträge, deren Datei nicht mehr auf der Platte liegt
         // (verschoben/gelöscht außerhalb der App). Existenz-Check parallel.
+        // Pfade unter /Volumes/<X>/ werden übersprungen wenn das Volume nicht gemountet ist —
+        // analog zu `bookmarks prune` — um Datenverlust bei abgesteckten externen Laufwerken zu verhindern.
         let extra = args.dropFirst().filter { !$0.hasPrefix("-") }
         let unknownFlags = args.dropFirst().filter { $0.hasPrefix("-") && $0 != "--json" && $0 != "--dry-run" }
         guard extra.isEmpty, unknownFlags.isEmpty else {
             fputs("Verwendung: iphoto-cli catalog prune [--dry-run] [--json]\n", stderr); return 1
         }
         let dryRun = args.contains("--dry-run")
+        let fm = FileManager.default
         let allPaths = catalog.allImages().map { $0.path }
         var exists = [Bool](repeating: true, count: allPaths.count)
         exists.withUnsafeMutableBufferPointer { buf in
-            guard let base = buf.baseAddress else { return }   // leerer Katalog
+            guard let base = buf.baseAddress else { return }
             DispatchQueue.concurrentPerform(iterations: allPaths.count) { idx in
-                base[idx] = FileManager.default.fileExists(atPath: allPaths[idx])
+                base[idx] = fm.fileExists(atPath: allPaths[idx])
             }
         }
-        let missing = zip(allPaths, exists).filter { !$0.1 }.map { $0.0 }.sorted()
+        var missing: [String] = []
+        var offlineKept = 0
+        for (path, fileExists) in zip(allPaths, exists) where !fileExists {
+            // Skip paths on unmounted volumes to avoid data loss on reconnect.
+            let comps = path.split(separator: "/", omittingEmptySubsequences: true)
+            if comps.count >= 2, comps[0] == "Volumes",
+               !fm.fileExists(atPath: "/Volumes/\(comps[1])") {
+                offlineKept += 1
+            } else {
+                missing.append(path)
+            }
+        }
+        missing.sort()
         if !dryRun && !missing.isEmpty { removeCatalogEntries(missing, catalog: catalog) }
         if jsonMode {
             let obj: [String: Any] = ["missing": missing, "count": missing.count,
-                                      "checked": allPaths.count, "dry_run": dryRun, "ok": true]
+                                      "checked": allPaths.count, "dry_run": dryRun,
+                                      "offline_kept": offlineKept, "ok": true]
             if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
                let s = String(data: d, encoding: .utf8) { print(s) }
         } else {
             missing.forEach { print($0) }
             if dryRun {
-                print("Fehlende Dateien: \(missing.count) von \(allPaths.count) (Probelauf, nichts entfernt)")
+                print("Fehlende Dateien: \(missing.count) von \(allPaths.count) (Probelauf, nichts entfernt); \(offlineKept) offline (behalten)")
             } else {
-                print("Aus Katalog entfernt: \(missing.count) von \(allPaths.count) Bild(er) (Datei fehlt)")
+                print("Aus Katalog entfernt: \(missing.count) von \(allPaths.count) Bild(er) (Datei fehlt); \(offlineKept) offline (behalten)")
             }
         }
         return 0

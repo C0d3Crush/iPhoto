@@ -50,17 +50,38 @@ final class VersionStore {
 
     func writeImage(_ image: CGImage, to url: URL) throws {
         let ext = url.pathExtension.lowercased()
-        let utiStr: String = ext == "png"                    ? "public.png"  :
-                             (ext == "tif" || ext == "tiff") ? "public.tiff" :
-                                                               "public.jpeg"
-        let uti = utiStr as CFString
-        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, uti, 1, nil) else {
+        let utiStr: String
+        switch ext {
+        case "png":           utiStr = "public.png"
+        case "tif", "tiff":   utiStr = "public.tiff"
+        case "heic", "heif":  utiStr = "public.heic"
+        case "webp":          utiStr = "org.webmproject.webp"
+        default:              utiStr = "public.jpeg"
+        }
+
+        // Read existing properties before overwriting so EXIF/GPS/TIFF survive.
+        // Orientation is reset to 1 because the CGImage is already correctly oriented.
+        var opts: [CFString: Any] = utiStr == "public.jpeg"
+            ? [kCGImageDestinationLossyCompressionQuality: 0.95] : [:]
+        if let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+           var props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] {
+            props[kCGImagePropertyOrientation] = 1 as CFNumber
+            for (k, v) in opts { props[k] = v }
+            opts = props
+        }
+
+        // Write to a temp file in the same directory, then atomically replace.
+        let tmp = url.deletingLastPathComponent()
+            .appendingPathComponent(".\(UUID().uuidString).\(ext)")
+        guard let dest = CGImageDestinationCreateWithURL(tmp as CFURL, utiStr as CFString, 1, nil) else {
             throw CocoaError(.fileWriteNoPermission)
         }
-        let opts: [CFString: Any] = utiStr == "public.jpeg"
-            ? [kCGImageDestinationLossyCompressionQuality: 0.95] : [:]
         CGImageDestinationAddImage(dest, image, opts as CFDictionary)
-        guard CGImageDestinationFinalize(dest) else { throw CocoaError(.fileWriteUnknown) }
+        guard CGImageDestinationFinalize(dest) else {
+            try? FileManager.default.removeItem(at: tmp)
+            throw CocoaError(.fileWriteUnknown)
+        }
+        _ = try FileManager.default.replaceItemAt(url, withItemAt: tmp)
     }
 
     func restoreVersion(_ meta: ImageVersionMeta, to url: URL) throws {

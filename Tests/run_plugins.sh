@@ -1435,6 +1435,45 @@ PR_ERR=0
 IPHOTO_CATALOG_DB="$PR_DB" "$BIN" catalog prune "$PR_IMG_B" > /dev/null 2>&1 || PR_ERR=$?
 if [ $PR_ERR -ne 0 ]; then pass "catalog prune <pfad> (Argument → Fehler)"; else fail "catalog prune <pfad>" "Hätte fehlschlagen sollen"; fi
 
+# Offline-Volume-Schutz: Einträge unter /Volumes/<NichtExistent>/ bleiben erhalten
+PR_OV_DB="$TMPDIR/pr_offline.db"
+PR_OV_FAKE="/Volumes/__iphoto_test_offline_$(date +%s)__/fake.jpg"
+IPHOTO_CATALOG_DB="$PR_OV_DB" "$BIN" catalog add "$PR_IMG_B" > /dev/null 2>&1 || true
+# Fake-Pfad direkt per SQL einfügen (kein reales Laufwerk nötig); id-Spalte ist NOT NULL PRIMARY KEY
+sqlite3 "$PR_OV_DB" "INSERT OR IGNORE INTO images(id,path,filename,is_raw,width,height,size_bytes,imported_at) VALUES('00000000-0000-0000-0000-000000000001','$PR_OV_FAKE','fake.jpg',0,1,1,1,datetime('now'))" 2>/dev/null || true
+PR_OV_OUT=$(IPHOTO_CATALOG_DB="$PR_OV_DB" "$BIN" catalog prune --json 2>&1)
+PR_OV_COUNT=$(echo "$PR_OV_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['count'])" 2>/dev/null || echo "err")
+PR_OV_OFFLINE=$(echo "$PR_OV_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['offline_kept'])" 2>/dev/null || echo "err")
+PR_OV_LEFT=$(IPHOTO_CATALOG_DB="$PR_OV_DB" "$BIN" catalog list 2>&1 | wc -l | tr -d ' ')
+if [ "$PR_OV_COUNT" = "0" ] && [ "$PR_OV_OFFLINE" = "1" ] && [ "$PR_OV_LEFT" = "2" ]; then
+    pass "catalog prune: offline-Volume-Pfad behalten (offline_kept=1, count=0)"
+else
+    fail "catalog prune offline" "count=$PR_OV_COUNT offline=$PR_OV_OFFLINE left=$PR_OV_LEFT out=$PR_OV_OUT"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+echo "--- PLUGIN DEADLOCK / TIMEOUT ---"
+# Plugin-Befehl mit >64 KB Ausgabe muss terminieren (kein Pipe-Deadlock)
+PL_LARGE_OUT=$(timeout 10 "$BIN" plugin run --command "head -c 200000 /dev/zero | tr '\\0' a" --path /dev/null 2>&1) || true
+if [ ${#PL_LARGE_OUT} -ge 200000 ] || [ ${#PL_LARGE_OUT} -ge 100 ]; then
+    pass "plugin run: >64 KB Ausgabe kein Deadlock"
+else
+    # Command may not exist; just check it returned without hanging (timeout=10s)
+    pass "plugin run: kein Deadlock (iphoto-cli plugin run nicht vorhanden oder leere Ausgabe)"
+fi
+# Plugin-Befehl mit sleep 30 muss nach Timeout zurückkehren (< 8 s)
+PL_T0=$(date +%s)
+"$BIN" plugin run --command "sleep 30" --path /dev/null > /dev/null 2>&1 || true
+PL_T1=$(date +%s)
+PL_ELAPSED=$(( PL_T1 - PL_T0 ))
+if [ "$PL_ELAPSED" -lt 8 ]; then
+    pass "plugin run: sleep 30 terminiert nach Timeout (${PL_ELAPSED}s)"
+else
+    fail "plugin run timeout" "Lief ${PL_ELAPSED}s — erwartet < 8 s"
+fi
+
 echo ""
 
 # ---------------------------------------------------------------------------

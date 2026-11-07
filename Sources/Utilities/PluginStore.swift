@@ -117,12 +117,21 @@ final class PluginStore: ObservableObject {
 
         let outPipe = Pipe()
         process.standardOutput = outPipe
-        process.standardError  = Pipe()
+        // Discard stderr into /dev/null — an unread Pipe deadlocks when stderr fills the 64 KB buffer.
+        process.standardError  = FileHandle.nullDevice
 
         do { try process.run() } catch { return "" }
-        process.waitUntilExit()
 
+        // 5-second timeout: terminate the child if it hangs (e.g. network drive, bad command).
+        let timeout = DispatchWorkItem { process.terminate() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5, execute: timeout)
+
+        // Read stdout BEFORE waitUntilExit — draining the pipe prevents the child from blocking
+        // on write() when output exceeds the ~64 KB kernel pipe buffer.
         let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        timeout.cancel()
+
         return (String(data: data, encoding: .utf8) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

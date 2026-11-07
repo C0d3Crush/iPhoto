@@ -170,78 +170,14 @@ final class MetadataService {
         return entries.filter { !$0.value.isEmpty || $0.isEditable }
     }
 
-    func writePhotoMetadata(url: URL, entries: [MetadataEntry], completion: @escaping (Error?) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let rawData = try Data(contentsOf: url)
-                guard let src  = CGImageSourceCreateWithData(rawData as CFData, nil) else {
-                    throw MetadataError.cannotReadFile
-                }
-                guard let type = CGImageSourceGetType(src) else {
-                    throw MetadataError.unknownFileType
-                }
-
-                let allProps = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as NSDictionary?
-                let exif = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyExifDictionary] as? NSDictionary) ?? [:])
-                let iptc = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyIPTCDictionary] as? NSDictionary) ?? [:])
-                let gps  = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyGPSDictionary]  as? NSDictionary) ?? [:])
-                let tiff = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyTIFFDictionary] as? NSDictionary) ?? [:])
-
-                for e in entries where e.isEditable && !e.value.isEmpty {
-                    switch e.key {
-                    case "iptc.ObjectName":
-                        iptc[kCGImagePropertyIPTCObjectName] = e.value
-                    case "iptc.Caption":
-                        iptc[kCGImagePropertyIPTCCaptionAbstract] = e.value
-                    case "iptc.Keywords":
-                        iptc[kCGImagePropertyIPTCKeywords] = e.value
-                            .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } as NSArray
-                    case "iptc.Copyright":
-                        iptc[kCGImagePropertyIPTCCopyrightNotice] = e.value
-                        tiff[kCGImagePropertyTIFFCopyright] = e.value
-                    case "iptc.Creator":
-                        iptc[kCGImagePropertyIPTCByline] = [e.value] as NSArray
-                        tiff[kCGImagePropertyTIFFArtist] = e.value
-                    case "exif.DateTimeOriginal":
-                        exif[kCGImagePropertyExifDateTimeOriginal] = e.value
-                    case "gps.Latitude":
-                        if let lat = Double(e.value) {
-                            gps[kCGImagePropertyGPSLatitude]    = abs(lat) as NSNumber
-                            gps[kCGImagePropertyGPSLatitudeRef] = lat >= 0 ? "N" : "S"
-                        }
-                    case "gps.Longitude":
-                        if let lon = Double(e.value) {
-                            gps[kCGImagePropertyGPSLongitude]    = abs(lon) as NSNumber
-                            gps[kCGImagePropertyGPSLongitudeRef] = lon >= 0 ? "E" : "W"
-                        }
-                    default: break
-                    }
-                }
-
-                let options = NSMutableDictionary()
-                options[kCGImagePropertyExifDictionary] = exif
-                options[kCGImagePropertyIPTCDictionary] = iptc
-                options[kCGImagePropertyTIFFDictionary] = tiff
-                if gps.count > 0 { options[kCGImagePropertyGPSDictionary] = gps }
-
-                let outData = NSMutableData()
-                guard let dest = CGImageDestinationCreateWithData(outData as CFMutableData, type, 1, nil) else {
-                    throw MetadataError.cannotWriteFile
-                }
-                CGImageDestinationAddImageFromSource(dest, src, 0, options as CFDictionary)
-                guard CGImageDestinationFinalize(dest) else {
-                    throw MetadataError.writeFailed("Finalize fehlgeschlagen")
-                }
-
-                try (outData as Data).write(to: url, options: .atomic)
-                DispatchQueue.main.async { completion(nil) }
-            } catch {
-                DispatchQueue.main.async { completion(error) }
-            }
-        }
-    }
-
+    // Lossless metadata write using CGImageDestinationCopyImageSource.
+    // The image bytes are copied verbatim; only the metadata container is rewritten.
+    // RAW files are rejected — their embedded JPEG carries the visible metadata and
+    // in-place editing of RAW containers is unsafe.
     func writePhotoMetadataSync(url: URL, entries: [MetadataEntry]) throws {
+        let ext = url.pathExtension.lowercased()
+        guard !ImageDocument.rawExtensions.contains(ext) else { throw MetadataError.unsupported }
+
         let rawData = try Data(contentsOf: url)
         guard let src = CGImageSourceCreateWithData(rawData as CFData, nil) else {
             throw MetadataError.cannotReadFile
@@ -249,49 +185,78 @@ final class MetadataService {
         guard let type = CGImageSourceGetType(src) else {
             throw MetadataError.unknownFileType
         }
-        let allProps = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as NSDictionary?
-        let exif = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyExifDictionary] as? NSDictionary) ?? [:])
-        let iptc = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyIPTCDictionary] as? NSDictionary) ?? [:])
-        let gps  = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyGPSDictionary]  as? NSDictionary) ?? [:])
-        let tiff = NSMutableDictionary(dictionary: (allProps?[kCGImagePropertyTIFFDictionary] as? NSDictionary) ?? [:])
-        for e in entries where e.isEditable && !e.value.isEmpty {
+
+        // Start from existing embedded metadata so unchanged fields are preserved.
+        let existingMeta = CGImageSourceCopyMetadataAtIndex(src, 0, nil)
+        let mutableMeta: CGMutableImageMetadata
+        if let em = existingMeta, let copy = CGImageMetadataCreateMutableCopy(em) {
+            mutableMeta = copy
+        } else {
+            mutableMeta = CGImageMetadataCreateMutable()
+        }
+
+        for e in entries where e.isEditable {
+            let val = e.value
             switch e.key {
-            case "iptc.ObjectName":      iptc[kCGImagePropertyIPTCObjectName] = e.value
-            case "iptc.Caption":         iptc[kCGImagePropertyIPTCCaptionAbstract] = e.value
+            case "iptc.ObjectName":
+                CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                    kCGImagePropertyIPTCDictionary, kCGImagePropertyIPTCObjectName,
+                    val as CFString)
+            case "iptc.Caption":
+                CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                    kCGImagePropertyIPTCDictionary, kCGImagePropertyIPTCCaptionAbstract,
+                    val as CFString)
             case "iptc.Keywords":
-                iptc[kCGImagePropertyIPTCKeywords] = e.value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } as NSArray
+                let arr = val.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } as CFArray
+                CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                    kCGImagePropertyIPTCDictionary, kCGImagePropertyIPTCKeywords, arr)
             case "iptc.Copyright":
-                iptc[kCGImagePropertyIPTCCopyrightNotice] = e.value
-                tiff[kCGImagePropertyTIFFCopyright] = e.value
+                CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                    kCGImagePropertyIPTCDictionary, kCGImagePropertyIPTCCopyrightNotice, val as CFString)
+                CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                    kCGImagePropertyTIFFDictionary, kCGImagePropertyTIFFCopyright, val as CFString)
             case "iptc.Creator":
-                iptc[kCGImagePropertyIPTCByline] = [e.value] as NSArray
-                tiff[kCGImagePropertyTIFFArtist] = e.value
-            case "exif.DateTimeOriginal": exif[kCGImagePropertyExifDateTimeOriginal] = e.value
+                CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                    kCGImagePropertyIPTCDictionary, kCGImagePropertyIPTCByline, [val] as CFArray)
+                CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                    kCGImagePropertyTIFFDictionary, kCGImagePropertyTIFFArtist, val as CFString)
+            case "exif.DateTimeOriginal":
+                CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                    kCGImagePropertyExifDictionary, kCGImagePropertyExifDateTimeOriginal, val as CFString)
             case "gps.Latitude":
-                if let lat = Double(e.value) {
-                    gps[kCGImagePropertyGPSLatitude]    = abs(lat) as NSNumber
-                    gps[kCGImagePropertyGPSLatitudeRef] = lat >= 0 ? "N" : "S"
+                if let lat = Double(val) {
+                    CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                        kCGImagePropertyGPSDictionary, kCGImagePropertyGPSLatitude,
+                        abs(lat) as CFNumber)
+                    CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                        kCGImagePropertyGPSDictionary, kCGImagePropertyGPSLatitudeRef,
+                        (lat >= 0 ? "N" : "S") as CFString)
                 }
             case "gps.Longitude":
-                if let lon = Double(e.value) {
-                    gps[kCGImagePropertyGPSLongitude]    = abs(lon) as NSNumber
-                    gps[kCGImagePropertyGPSLongitudeRef] = lon >= 0 ? "E" : "W"
+                if let lon = Double(val) {
+                    CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                        kCGImagePropertyGPSDictionary, kCGImagePropertyGPSLongitude,
+                        abs(lon) as CFNumber)
+                    CGImageMetadataSetValueMatchingImageProperty(mutableMeta,
+                        kCGImagePropertyGPSDictionary, kCGImagePropertyGPSLongitudeRef,
+                        (lon >= 0 ? "E" : "W") as CFString)
                 }
             default: break
             }
         }
-        let options = NSMutableDictionary()
-        options[kCGImagePropertyExifDictionary] = exif
-        options[kCGImagePropertyIPTCDictionary] = iptc
-        options[kCGImagePropertyTIFFDictionary] = tiff
-        if gps.count > 0 { options[kCGImagePropertyGPSDictionary] = gps }
+
         let outData = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(outData as CFMutableData, type, 1, nil) else {
             throw MetadataError.cannotWriteFile
         }
-        CGImageDestinationAddImageFromSource(dest, src, 0, options as CFDictionary)
-        guard CGImageDestinationFinalize(dest) else {
-            throw MetadataError.writeFailed("Finalize fehlgeschlagen")
+        let opts: [CFString: Any] = [
+            kCGImageDestinationMetadata: mutableMeta,
+            kCGImageDestinationMergeMetadata: true
+        ]
+        var copyError: Unmanaged<CFError>?
+        guard CGImageDestinationCopyImageSource(dest, src, opts as CFDictionary, &copyError) else {
+            let msg = copyError?.takeRetainedValue().localizedDescription ?? "CopyImageSource fehlgeschlagen"
+            throw MetadataError.writeFailed(msg)
         }
         try (outData as Data).write(to: url, options: .atomic)
     }

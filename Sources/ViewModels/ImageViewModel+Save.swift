@@ -146,30 +146,6 @@ extension ImageViewModel {
 
     // MARK: - Metadata
 
-    func saveMetadata(_ entries: [MetadataEntry]) {
-        guard let doc = collection.currentDocument else { return }
-        let index = collection.currentIndex
-        isSavingMetadata = true
-        Log.info("Speichere Metadaten für \(doc.filename) (\(entries.count) Einträge)")
-        metadataService.writePhotoMetadata(url: doc.url, entries: entries) { [weak self] error in
-            guard let self = self else { return }
-            self.isSavingMetadata = false
-            if let error = error {
-                Log.error("Metadaten speichern fehlgeschlagen: \(error.localizedDescription)")
-                self.errorMessage = "Metadaten speichern fehlgeschlagen: \(error.localizedDescription)"
-            } else {
-                Log.info("Metadaten erfolgreich gespeichert")
-                // Katalog-EXIF-Cache invalidieren: geschriebene EXIF/IPTC-Felder werden auch
-                // in CatalogStore gecached — ohne Invalidate liefern SmartFolder-Filter stale Werte.
-                CatalogStore.shared.invalidateExifCache(path: doc.url.path)
-                let updated = self.metadataService.readPhotoMetadata(from: doc.url)
-                guard index < self.collection.documents.count,
-                      self.collection.documents[index].url == doc.url else { return }
-                self.collection.documents[index].metadata = updated
-            }
-        }
-    }
-
     func saveMetadata() {
         guard hasMetadataChanges, let entries = versions.pendingMetadataEntries else { return }
         saveOnlyMeta(entries: entries, label: "Metadaten")
