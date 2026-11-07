@@ -3004,6 +3004,100 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# project (projects.json: list/show/create/rename/delete/add-folder/remove-folder/stats)
+# ---------------------------------------------------------------------------
+echo "--- project ---"
+PJ_FILE="$TMPDIR/projects.json"
+PJ_DB="$TMPDIR/pj_catalog.db"
+norm() { python3 -c 'import os,sys; print(os.path.normpath(sys.argv[1]))' "$1"; }
+PJ_A="$(norm "$TMPDIR/pj_src/a")"
+PJ_B="$(norm "$TMPDIR/pj_src/b")"
+PJ_X="$(norm "$TMPDIR/pj_other")"
+mkdir -p "$PJ_A" "$PJ_B" "$PJ_X"
+pj() { IPHOTO_PROJECTS_FILE="$PJ_FILE" IPHOTO_CATALOG_DB="$PJ_DB" "$BIN" project "$@"; }
+
+PJ_OUT=$(pj path 2>&1) || true
+if [ "$PJ_OUT" = "$PJ_FILE" ]; then pass "project path (IPHOTO_PROJECTS_FILE)"; else fail "project path" "$PJ_OUT"; fi
+
+PJ_OUT=$(pj list --json 2>&1) || true
+if [ "$PJ_OUT" = "[]" ] || echo "$PJ_OUT" | python3 -c "import sys,json; assert json.load(sys.stdin)==[]" 2>/dev/null; then
+    pass "project list --json (fehlende Datei → leer)"
+else fail "project list leer" "$PJ_OUT"; fi
+
+PJ_EXIT=0
+PJ_OUT=$(pj create "Urlaub 2026" --folder "$PJ_A" --json 2>&1) || PJ_EXIT=$?
+if [ $PJ_EXIT -eq 0 ] && echo "$PJ_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['ok'] is True and d['name']=='Urlaub 2026' and d['folders']==['$PJ_A'] and len(d['id'])==36
+" 2>/dev/null; then pass "project create --folder --json"; else fail "project create" "Exit $PJ_EXIT: $PJ_OUT"; fi
+
+PJ_ERR=0; pj create "urlaub 2026" > /dev/null 2>&1 || PJ_ERR=$?
+if [ $PJ_ERR -ne 0 ]; then pass "project create Duplikat (→ Fehler)"; else fail "project create Duplikat" "Hätte fehlschlagen sollen"; fi
+
+PJ_ERR=0; pj create "Neu" --folder "$TMPDIR/gibtsnicht" > /dev/null 2>&1 || PJ_ERR=$?
+PJ_CNT=$(pj list --json | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+if [ $PJ_ERR -ne 0 ] && [ "$PJ_CNT" = "1" ]; then pass "project create fehlender Ordner (→ Fehler, nichts gespeichert)"; else fail "project create fehlender Ordner" "Exit $PJ_ERR, count $PJ_CNT"; fi
+
+PJ_ERR=0; pj create > /dev/null 2>&1 || PJ_ERR=$?
+if [ $PJ_ERR -ne 0 ]; then pass "project create ohne Name (→ Fehler)"; else fail "project create ohne Name" "Hätte fehlschlagen sollen"; fi
+
+PJ_EXIT=0
+PJ_OUT=$(pj add-folder "URLAUB 2026" "$PJ_B" --json 2>&1) || PJ_EXIT=$?
+if [ $PJ_EXIT -eq 0 ] && echo "$PJ_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin); assert d['folders']==['$PJ_A','$PJ_B']
+" 2>/dev/null; then pass "project add-folder (Name case-insensitiv)"; else fail "project add-folder" "Exit $PJ_EXIT: $PJ_OUT"; fi
+
+PJ_ERR=0; pj add-folder "Urlaub 2026" "$PJ_B" > /dev/null 2>&1 || PJ_ERR=$?
+if [ $PJ_ERR -ne 0 ]; then pass "project add-folder doppelt (→ Fehler)"; else fail "project add-folder doppelt" "Hätte fehlschlagen sollen"; fi
+
+PJ_ERR=0; pj remove-folder "Urlaub 2026" "$PJ_X" > /dev/null 2>&1 || PJ_ERR=$?
+if [ $PJ_ERR -ne 0 ]; then pass "project remove-folder fremder Ordner (→ Fehler)"; else fail "project remove-folder fremd" "Hätte fehlschlagen sollen"; fi
+
+# Katalog befüllen: 2 Bilder in a (1 RAW), 1 in b, 1 außerhalb
+printf 'x' > "$PJ_A/p1.jpg"; printf 'x' > "$PJ_A/p2.raf"; printf 'x' > "$PJ_B/p3.jpg"; printf 'x' > "$PJ_X/o1.jpg"
+for f in "$PJ_A/p1.jpg" "$PJ_A/p2.raf" "$PJ_B/p3.jpg" "$PJ_X/o1.jpg"; do
+    IPHOTO_CATALOG_DB="$PJ_DB" "$BIN" exif set "$f" --iso 100 > /dev/null 2>&1 || true
+done
+IPHOTO_CATALOG_DB="$PJ_DB" "$BIN" rating batch-set "$PJ_A/p1.jpg" "$PJ_X/o1.jpg" --set 5 --flag pick > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$PJ_DB" "$BIN" rating batch-set "$PJ_B/p3.jpg" --flag reject > /dev/null 2>&1 || true
+IPHOTO_CATALOG_DB="$PJ_DB" "$BIN" trash mark "$PJ_B/p3.jpg" > /dev/null 2>&1 || true
+
+PJ_EXIT=0
+PJ_OUT=$(pj stats "Urlaub 2026" --json 2>&1) || PJ_EXIT=$?
+if [ $PJ_EXIT -eq 0 ] && echo "$PJ_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['images']==3 and d['raw']==1, d
+assert d['rated']==1 and d['picks']==1 and d['rejects']==1 and d['trashed']==1, d
+assert d['by_stars']['5']==1 and d['by_folder']=={'$PJ_A':2,'$PJ_B':1}, d
+" 2>/dev/null; then pass "project stats --json (nur Projekt-Ordner, Picks/Rejects/Papierkorb)"; else fail "project stats --json" "Exit $PJ_EXIT: $PJ_OUT"; fi
+
+PJ_EXIT=0
+PJ_OUT=$(pj rename "Urlaub 2026" "Sommer" --json 2>&1) || PJ_EXIT=$?
+PJ_SHOW=$(pj show sommer --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['name'])" 2>/dev/null || true)
+if [ $PJ_EXIT -eq 0 ] && [ "$PJ_SHOW" = "Sommer" ]; then pass "project rename + show"; else fail "project rename" "Exit $PJ_EXIT: $PJ_OUT / $PJ_SHOW"; fi
+
+PJ_EXIT=0
+pj remove-folder Sommer "$PJ_A" > /dev/null 2>&1 || PJ_EXIT=$?
+PJ_OUT=$(pj stats Sommer --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['images'])" 2>/dev/null || true)
+if [ $PJ_EXIT -eq 0 ] && [ "$PJ_OUT" = "1" ]; then pass "project remove-folder (stats nur noch b)"; else fail "project remove-folder" "Exit $PJ_EXIT: $PJ_OUT"; fi
+
+PJ_ERR=0; pj show "Gibts nicht" > /dev/null 2>&1 || PJ_ERR=$?
+if [ $PJ_ERR -ne 0 ]; then pass "project show unbekannt (→ Fehler)"; else fail "project show unbekannt" "Hätte fehlschlagen sollen"; fi
+
+PJ_EXIT=0
+pj delete Sommer > /dev/null 2>&1 || PJ_EXIT=$?
+PJ_CNT=$(pj list --json | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+if [ $PJ_EXIT -eq 0 ] && [ "$PJ_CNT" = "0" ]; then pass "project delete"; else fail "project delete" "Exit $PJ_EXIT, count $PJ_CNT"; fi
+
+printf 'kaputt' > "$TMPDIR/pj_broken.json"
+PJ_ERR=0; IPHOTO_PROJECTS_FILE="$TMPDIR/pj_broken.json" "$BIN" project list > /dev/null 2>&1 || PJ_ERR=$?
+if [ $PJ_ERR -ne 0 ]; then pass "project list kaputte Datei (→ Fehler)"; else fail "project list kaputte Datei" "Hätte fehlschlagen sollen"; fi
+
+PJ_ERR=0; pj bogus > /dev/null 2>&1 || PJ_ERR=$?
+if [ $PJ_ERR -ne 0 ]; then pass "project unbekannter Subcommand (→ Fehler)"; else fail "project bogus" "Hätte fehlschlagen sollen"; fi
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

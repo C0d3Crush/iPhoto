@@ -150,6 +150,11 @@ private func printUsage() {
       iphoto-cli perf switch [--log <datei>] [--last-session] [--label <tag>] [--slowest N] [--json]
       iphoto-cli collect --output-dir <ordner> [--flag pick|reject|none] [--color farbe] [--min-rating N]
                          [--include-trashed] [--dry-run] [--overwrite] [--json]
+      iphoto-cli project list|path [--json]
+      iphoto-cli project show|stats|delete <name|id> [--json]
+      iphoto-cli project create <name> [--folder <pfad>]... [--json]
+      iphoto-cli project rename <name|id> <neuer-name> [--json]
+      iphoto-cli project add-folder|remove-folder <name|id> <pfad> [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -190,6 +195,9 @@ private func printUsage() {
     adjustments: gespeicherte Bearbeitungen auflisten/lesen/löschen; set schreibt Reglerwerte ohne Rendern,
               copy überträgt sie auf andere Bilder (eine Transaktion; --exclude-geometry behält Crop/Drehung)
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
+    project:  Projekte (projects.json) auflisten, anzeigen, anlegen (--folder), umbenennen, löschen,
+              Ordner hinzufügen/entfernen; stats zählt Katalog-Bilder/Bewertungen/Picks/Papierkorb je
+              Projekt; Datei per IPHOTO_PROJECTS_FILE überschreibbar
     """)
 }
 
@@ -5651,6 +5659,244 @@ private func runQuery(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - project (Projekte in projects.json verwalten, analog ProjectStore)
+
+private func projectsFileURL() -> URL {
+    if let override = ProcessInfo.processInfo.environment["IPHOTO_PROJECTS_FILE"], !override.isEmpty {
+        return URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
+    }
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("iPhoto")
+        .appendingPathComponent("projects.json")
+}
+
+/// Lädt projects.json im selben Format wie `ProjectStore` (JSONEncoder-Defaults).
+/// nil = Datei existiert, ist aber nicht dekodierbar; leeres Array = Datei fehlt.
+private func loadProjectsFile(_ url: URL) -> [Project]? {
+    guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+    guard let data = try? Data(contentsOf: url),
+          let decoded = try? JSONDecoder().decode([Project].self, from: data) else { return nil }
+    return decoded
+}
+
+private func saveProjectsFile(_ projects: [Project], to url: URL) -> Bool {
+    guard let data = try? JSONEncoder().encode(projects) else { return false }
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    return (try? data.write(to: url, options: .atomic)) != nil
+}
+
+/// Sucht ein Projekt per UUID oder Name (Groß-/Kleinschreibung egal).
+private func findProjectIndex(_ projects: [Project], _ key: String) -> Int? {
+    let k = key.lowercased()
+    return projects.firstIndex { $0.id.uuidString.lowercased() == k || $0.name.lowercased() == k }
+}
+
+private func normalizedFolderPath(_ p: String) -> String {
+    URL(fileURLWithPath: (p as NSString).expandingTildeInPath).standardizedFileURL.path
+}
+
+private func projectJSON(_ p: Project) -> [String: Any] {
+    let iso = ISO8601DateFormatter()
+    var d: [String: Any] = ["id": p.id.uuidString, "name": p.name,
+                            "folders": p.folderPaths, "created_at": iso.string(from: p.createdAt)]
+    if let lo = p.lastOpenedAt { d["last_opened_at"] = iso.string(from: lo) }
+    return d
+}
+
+private func printProjectJSON(_ obj: Any) {
+    if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+       let s = String(data: d, encoding: .utf8) { print(s) }
+}
+
+private func runProject(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "list"
+    let jsonMode = args.contains("--json")
+    let fileURL = projectsFileURL()
+    let rest = Array(args.dropFirst())
+    let positional = rest.filter { !$0.hasPrefix("-") }
+
+    if sub == "path" { print(fileURL.path); return 0 }
+
+    guard var projects = loadProjectsFile(fileURL) else {
+        fputs("Fehler: projects.json nicht lesbar: \(fileURL.path)\n", stderr)
+        return 1
+    }
+
+    func save() -> Bool {
+        if saveProjectsFile(projects, to: fileURL) { return true }
+        fputs("Fehler: projects.json konnte nicht geschrieben werden: \(fileURL.path)\n", stderr)
+        return false
+    }
+    func lookup(_ usage: String) -> Int? {
+        guard let key = positional.first else { fputs(usage, stderr); return nil }
+        guard let idx = findProjectIndex(projects, key) else {
+            fputs("Fehler: Projekt nicht gefunden: \(key)\n", stderr); return nil
+        }
+        return idx
+    }
+    func done(_ p: Project, _ msg: String) -> Int32 {
+        if jsonMode { var d = projectJSON(p); d["ok"] = true; printProjectJSON(d) } else { print(msg) }
+        return 0
+    }
+
+    switch sub {
+    case "list":
+        let sorted = projects.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        if jsonMode { printProjectJSON(sorted.map(projectJSON)); return 0 }
+        if sorted.isEmpty { print("Keine Projekte vorhanden."); return 0 }
+        for p in sorted {
+            print("\(p.name)  (\(p.folderPaths.count) Ordner)")
+            print("   ID: \(p.id.uuidString)")
+        }
+        return 0
+
+    case "show":
+        guard let idx = lookup("Verwendung: iphoto-cli project show <name|id> [--json]\n") else { return 1 }
+        let p = projects[idx]
+        if jsonMode { printProjectJSON(projectJSON(p)); return 0 }
+        print("Name:    \(p.name)")
+        print("ID:      \(p.id.uuidString)")
+        print("Ordner:  \(p.folderPaths.isEmpty ? "(keine)" : "")")
+        for f in p.folderPaths {
+            let ok = FileManager.default.fileExists(atPath: f) ? "✓" : "✗"
+            print("   \(ok) \(f)")
+        }
+        return 0
+
+    case "create":
+        var name: String? = nil
+        var folders: [String] = []
+        var i = 0
+        while i < rest.count {
+            let a = rest[i]
+            switch a {
+            case "--folder":
+                i += 1
+                guard i < rest.count, !rest[i].isEmpty else { fputs("Fehler: --folder braucht einen Pfad\n", stderr); return 1 }
+                let f = normalizedFolderPath(rest[i])
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: f, isDirectory: &isDir), isDir.boolValue else {
+                    fputs("Fehler: Verzeichnis nicht gefunden: \(f)\n", stderr); return 1
+                }
+                if !folders.contains(f) { folders.append(f) }
+            case "--json": break
+            default:
+                if a.hasPrefix("-") { fputs("Fehler: Unbekannte Option '\(a)'\n", stderr); return 1 }
+                if name == nil { name = a } else { fputs("Fehler: Unerwartetes Argument '\(a)'\n", stderr); return 1 }
+            }
+            i += 1
+        }
+        guard let n = name?.trimmingCharacters(in: .whitespaces), !n.isEmpty else {
+            fputs("Verwendung: iphoto-cli project create <name> [--folder <pfad>]... [--json]\n", stderr); return 1
+        }
+        guard !projects.contains(where: { $0.name.lowercased() == n.lowercased() }) else {
+            fputs("Fehler: Projekt existiert bereits: \(n)\n", stderr); return 1
+        }
+        let p = Project(name: n, folderPaths: folders)
+        projects.append(p)
+        guard save() else { return 1 }
+        return done(p, "Projekt erstellt: \(n) (\(p.id.uuidString))")
+
+    case "rename":
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli project rename <name|id> <neuer-name> [--json]\n", stderr); return 1
+        }
+        guard let idx = findProjectIndex(projects, positional[0]) else {
+            fputs("Fehler: Projekt nicht gefunden: \(positional[0])\n", stderr); return 1
+        }
+        let newName = positional[1].trimmingCharacters(in: .whitespaces)
+        guard !newName.isEmpty else { fputs("Fehler: Neuer Name darf nicht leer sein\n", stderr); return 1 }
+        if let other = findProjectIndex(projects, newName), other != idx {
+            fputs("Fehler: Projekt existiert bereits: \(newName)\n", stderr); return 1
+        }
+        projects[idx].name = newName
+        guard save() else { return 1 }
+        return done(projects[idx], "Projekt umbenannt: \(newName)")
+
+    case "delete":
+        guard let idx = lookup("Verwendung: iphoto-cli project delete <name|id> [--json]\n") else { return 1 }
+        let p = projects.remove(at: idx)
+        guard save() else { return 1 }
+        return done(p, "Projekt gelöscht: \(p.name)")
+
+    case "add-folder", "remove-folder":
+        guard positional.count >= 2 else {
+            fputs("Verwendung: iphoto-cli project \(sub) <name|id> <pfad> [--json]\n", stderr); return 1
+        }
+        guard let idx = findProjectIndex(projects, positional[0]) else {
+            fputs("Fehler: Projekt nicht gefunden: \(positional[0])\n", stderr); return 1
+        }
+        let f = normalizedFolderPath(positional[1])
+        if sub == "add-folder" {
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: f, isDirectory: &isDir), isDir.boolValue else {
+                fputs("Fehler: Verzeichnis nicht gefunden: \(f)\n", stderr); return 1
+            }
+            guard !projects[idx].folderPaths.map(normalizedFolderPath).contains(f) else {
+                fputs("Fehler: Ordner gehört bereits zum Projekt: \(f)\n", stderr); return 1
+            }
+            projects[idx].folderPaths.append(f)
+        } else {
+            // Vergleich normalisiert: Ordner muss nicht mehr existieren (z. B. offline-Volume).
+            let before = projects[idx].folderPaths.count
+            projects[idx].folderPaths.removeAll { normalizedFolderPath($0) == f }
+            guard projects[idx].folderPaths.count < before else {
+                fputs("Fehler: Ordner gehört nicht zum Projekt: \(f)\n", stderr); return 1
+            }
+        }
+        guard save() else { return 1 }
+        return done(projects[idx], sub == "add-folder" ? "Ordner hinzugefügt: \(f)" : "Ordner entfernt: \(f)")
+
+    case "stats":
+        guard let idx = lookup("Verwendung: iphoto-cli project stats <name|id> [--json]\n") else { return 1 }
+        let p = projects[idx]
+        let prefixes = p.folderPaths.map { normalizedFolderPath($0) }.map { $0.hasSuffix("/") ? $0 : $0 + "/" }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        // Je eine Abfrage für Bilder/Bewertungen/Papierkorb, danach O(N·Ordner) im Speicher.
+        let images = catalog.allImages().filter { img in prefixes.contains { img.path.hasPrefix($0) } }
+        let ratings = catalog.allRatings()
+        let trashed = catalog.trashedPaths()
+        var raw = 0, rated = 0, picks = 0, rejects = 0, inTrash = 0
+        var stars = [Int](repeating: 0, count: 6)
+        var bytes: Int64 = 0
+        var perFolder = [String: Int]()
+        for img in images {
+            bytes += img.sizeBytes
+            if img.isRAW { raw += 1 }
+            if trashed.contains(img.path) { inTrash += 1 }
+            if let r = ratings[img.path] {
+                if r.rating > 0 { rated += 1 }
+                if r.rating >= 0 && r.rating <= 5 { stars[r.rating] += 1 }
+                if r.flag == "pick" { picks += 1 } else if r.flag == "reject" { rejects += 1 }
+            } else { stars[0] += 1 }
+            if let pre = prefixes.first(where: { img.path.hasPrefix($0) }) {
+                perFolder[String(pre.dropLast()), default: 0] += 1
+            }
+        }
+        if jsonMode {
+            var byStars: [String: Int] = [:]
+            for (k, v) in stars.enumerated() { byStars[String(k)] = v }
+            printProjectJSON([
+                "id": p.id.uuidString, "name": p.name, "images": images.count, "raw": raw,
+                "rated": rated, "picks": picks, "rejects": rejects, "trashed": inTrash,
+                "size_bytes": bytes, "by_stars": byStars, "by_folder": perFolder,
+            ] as [String: Any])
+            return 0
+        }
+        print("Projekt:     \(p.name)")
+        print("Bilder:      \(images.count) (RAW: \(raw))")
+        print("Bewertet:    \(rated)  Picks: \(picks)  Rejects: \(rejects)")
+        print("Papierkorb:  \(inTrash)")
+        print("Größe:       \(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))")
+        for (k, v) in stars.enumerated().reversed() { print("   \(k)★ \(v)") }
+        return 0
+
+    default:
+        fputs("Verwendung: iphoto-cli project path|list|show|create|rename|delete|add-folder|remove-folder|stats [--json]\n", stderr)
+        return 1
+    }
+}
+
 // MARK: - bookmarks (Security-Scoped-Bookmarks in bookmarks.json verwalten)
 
 private func bookmarksFileURL() -> URL {
@@ -6597,6 +6843,9 @@ if firstArg == "perf" {
 }
 if firstArg == "collect" {
     exit(runCollect(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "project" {
+    exit(runProject(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }
