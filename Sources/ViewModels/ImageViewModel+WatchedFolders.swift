@@ -310,37 +310,59 @@ extension ImageViewModel {
 
     private func startWatching(_ folder: WatchedFolder) {
         guard let (folderURL, stop) = folder.resolveURL() else { return }
-        let fd = open(folderURL.path, O_EVTONLY)
+        let rootPath = folderURL.path
         stop()
-        guard fd != -1 else { return }
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd,
-            eventMask: [.write, .rename, .delete],
-            queue: .global(qos: .utility)
-        )
-        // Debounce: Batch-Löschen/-Kopieren feuert pro Datei ein Event — ohne
-        // Entprellung lief syncFolder dutzendfach parallel und fror die UI ein.
-        source.setEventHandler { [weak self] in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                self.folderSyncDebounce[folder.id]?.cancel()
-                let work = DispatchWorkItem { [weak self] in
-                    guard let self = self,
-                          let f = self.library.watchedFolders.first(where: { $0.id == folder.id }) else { return }
-                    self.folderSyncDebounce[folder.id] = nil
-                    self.syncFolder(f)
+
+        // Collect root + all current subdirectories so deep changes are detected.
+        var paths = [rootPath]
+        if let enumerator = FileManager.default.enumerator(
+            at: folderURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) {
+            for case let url as URL in enumerator {
+                if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    paths.append(url.path)
                 }
-                self.folderSyncDebounce[folder.id] = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
             }
         }
-        source.setCancelHandler { close(fd) }
-        source.resume()
-        folderWatchers[folder.id] = source
+
+        var sources: [DispatchSourceFileSystemObject] = []
+        for path in paths {
+            let fd = open(path, O_EVTONLY)
+            guard fd != -1 else { continue }
+            let source = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: fd,
+                eventMask: [.write, .rename, .delete],
+                queue: .global(qos: .utility)
+            )
+            // Debounce: Batch-Löschen/-Kopieren feuert pro Datei ein Event.
+            source.setEventHandler { [weak self] in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.folderSyncDebounce[folder.id]?.cancel()
+                    let work = DispatchWorkItem { [weak self] in
+                        guard let self = self,
+                              let f = self.library.watchedFolders.first(where: { $0.id == folder.id }) else { return }
+                        self.folderSyncDebounce[folder.id] = nil
+                        self.syncFolder(f)
+                        // Refresh subdirectory watchers in case new subdirs appeared.
+                        self.stopWatching(folder)
+                        self.startWatching(folder)
+                    }
+                    self.folderSyncDebounce[folder.id] = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+                }
+            }
+            source.setCancelHandler { close(fd) }
+            source.resume()
+            sources.append(source)
+        }
+        folderWatchers[folder.id] = sources
     }
 
     private func stopWatching(_ folder: WatchedFolder) {
-        folderWatchers[folder.id]?.cancel()
+        folderWatchers[folder.id]?.forEach { $0.cancel() }
         folderWatchers[folder.id] = nil
     }
 

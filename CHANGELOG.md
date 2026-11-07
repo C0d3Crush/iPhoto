@@ -2,6 +2,15 @@
 
 ---
 
+## 1.105.3
+**Watched Folders überwacht jetzt Unterordner; CropEditor und Album-Select beschleunigt**
+
+- `startWatching`: überwacht jetzt root + alle vorhandenen Unterordner mit separaten `DispatchSource`s; nach einem Event werden die Watcher neu aufgebaut um neu angelegte Unterordner zu erfassen (#44)
+- `selectAlbum`: `Set<URL>`-Lookup statt O(M×N)-`contains(where:)`; fehlende Fotos via `importFiles` geladen (erhalten jetzt Katalog-Ratings) (#32)
+- `CropEditorView`: `NSImage` wird einmal in `init` erzeugt statt bei jedem Drag-Frame neu (#34)
+
+---
+
 ## 1.105.2
 **Rust FFI Undefined Behavior behoben; Log-Jitter im Navigations-Hotpath entfernt**
 

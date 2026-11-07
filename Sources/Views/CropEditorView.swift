@@ -4,6 +4,7 @@ import AppKit
 struct CropEditorView: View {
     @EnvironmentObject var viewModel: ImageViewModel
     let sourceImage: CGImage
+    private let displayImage: NSImage  // created once in init, never re-created on body calls
 
     @State private var cropRect: CGRect
     @State private var rotation: Double
@@ -39,6 +40,7 @@ struct CropEditorView: View {
 
     init(image: CGImage, initialCrop: CGRect, initialRotation: Double) {
         self.sourceImage = image
+        self.displayImage = NSImage(cgImage: image, size: .zero)
         _cropRect = State(initialValue: initialCrop)
         _rotation = State(initialValue: initialRotation)
     }
@@ -53,7 +55,7 @@ struct CropEditorView: View {
 
                 // Rotated crop editing area (image + overlay + handles rotate together)
                 ZStack {
-                    Image(nsImage: NSImage(cgImage: sourceImage, size: .zero))
+                    Image(nsImage: displayImage)
                         .resizable()
                         .frame(width: imgSize.width, height: imgSize.height)
 

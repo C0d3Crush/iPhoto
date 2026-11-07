@@ -143,7 +143,7 @@ class ImageViewModel: ObservableObject {
         o.host = self
         return o
     }()
-    var folderWatchers: [UUID: DispatchSourceFileSystemObject] = [:]
+    var folderWatchers: [UUID: [DispatchSourceFileSystemObject]] = [:]
     private var eventMonitors: [Any] = []
     var syncedFolderIDs: Set<UUID> = []
 
@@ -693,7 +693,7 @@ class ImageViewModel: ObservableObject {
     }
 
     deinit {
-        folderWatchers.values.forEach { $0.cancel() }
+        folderWatchers.values.forEach { $0.forEach { $0.cancel() } }
         loader.cancelPendingWork()
         eventMonitors.forEach { NSEvent.removeMonitor($0) }
     }

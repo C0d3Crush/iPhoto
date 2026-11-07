@@ -15,22 +15,15 @@ extension ImageViewModel {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
-            let missing = photoURLs.filter { url in
-                !self.collection.documents.contains(where: { $0.url == url })
-            }
+            let existing = Set(self.collection.documents.map { $0.url.standardizedFileURL })
+            let missing = photoURLs.filter { !existing.contains($0.standardizedFileURL) && self.isSupportedFormat($0) }
             if !missing.isEmpty {
                 Log.info("Importiere \(missing.count) fehlende Album-Fotos")
-                let newDocs = missing
-                    .filter { self.isSupportedFormat($0) }
-                    .sorted { $0.lastPathComponent < $1.lastPathComponent }
-                    .map { ImageDocument(url: $0) }
-                if !newDocs.isEmpty {
-                    self.collection.appendDocuments(newDocs)
-                }
+                self.importFiles(missing, selectFirst: false)
             }
 
             if let firstURL = photoURLs.first,
-               let idx = self.collection.documents.firstIndex(where: { $0.url == firstURL }) {
+               let idx = self.collection.documents.firstIndex(where: { $0.url.standardizedFileURL == firstURL.standardizedFileURL }) {
                 Log.info("Wähle erstes Album-Foto bei Index \(idx)")
                 self.collection.select(index: idx)
                 self.loadCurrentImage()
