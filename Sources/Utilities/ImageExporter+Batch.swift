@@ -16,6 +16,7 @@ extension ImageExporter {
             var succeeded = 0
             var failed: [(String, String)] = []
             let total = documents.count
+            var usedNames = Set<String>()
 
             for (i, doc) in documents.enumerated() {
                 let image: CGImage
@@ -34,9 +35,16 @@ extension ImageExporter {
                 }
 
                 let stem = (doc.filename as NSString).deletingPathExtension
-                let outURL = folderURL
-                    .appendingPathComponent(stem)
-                    .appendingPathExtension(format.fileExtension)
+                let ext = format.fileExtension
+                // Resolve collisions within this batch and against pre-existing files.
+                var candidate = "\(stem).\(ext)"
+                var counter = 2
+                while usedNames.contains(candidate) || FileManager.default.fileExists(atPath: folderURL.appendingPathComponent(candidate).path) {
+                    candidate = "\(stem)-\(counter).\(ext)"
+                    counter += 1
+                }
+                usedNames.insert(candidate)
+                let outURL = folderURL.appendingPathComponent(candidate)
 
                 do {
                     try exportSingle(image: image, to: outURL, format: format, quality: quality)

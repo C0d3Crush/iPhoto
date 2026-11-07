@@ -2,6 +2,14 @@
 
 ---
 
+## 1.105.1
+**Performance-kritische SQLite-Reads von Main entfernt; Batch-Export Datenverlust behoben**
+
+- `importFiles`: alle 5 SQLite-Full-Table-Scans (`allRatings`, `allElos`, `allModifiedPaths`, `trashedPaths`, `allQualityRecords`) laufen jetzt auf einem Background-Thread — kein Ruckeln mehr beim Import/Watched-Folder-Sync mit großem Katalog (#46)
+- `ImageExporter.exportBatch`: Track `usedNames`-Set — gleicher Dateiname aus zwei Quellen (RAF+JPG, zwei Ordner) erzeugt jetzt `stem.jpg` + `stem-2.jpg` statt still zu überschreiben; existierende Dateien im Zielordner werden ebenfalls umbenannt (#40)
+
+---
+
 ## 1.105.0
 **3 Bugs und Performance-Probleme beim Projekt-Start behoben**
 

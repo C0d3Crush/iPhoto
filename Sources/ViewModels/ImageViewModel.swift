@@ -731,15 +731,19 @@ class ImageViewModel: ObservableObject {
         DispatchQueue.global(qos: .utility).async {
             BookmarkStore.shared.save(urls: newURLs)
         }
-        let catalogRatings = CatalogStore.shared.allRatings()
-        let catalogElos = CatalogStore.shared.allElos()
-        let modifiedPaths = CatalogStore.shared.allModifiedPaths()
-        let trashedPaths = CatalogStore.shared.trashedPaths()
-        let backedUpPaths = CatalogStore.shared.backedUpPaths()
-        let qualityRecords = CatalogStore.shared.allQualityRecords()
-        let newDocs = newURLs
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .map { url -> ImageDocument in
+        let sortedNewURLs = newURLs.sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        // SQLite reads and doc construction on background thread — these are full-table scans
+        // that block Main at O(catalog size), regardless of import batch size.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let catalogRatings = CatalogStore.shared.allRatings()
+            let catalogElos = CatalogStore.shared.allElos()
+            let modifiedPaths = CatalogStore.shared.allModifiedPaths()
+            let trashedPaths = CatalogStore.shared.trashedPaths()
+            let backedUpPaths = CatalogStore.shared.backedUpPaths()
+            let qualityRecords = CatalogStore.shared.allQualityRecords()
+            let newDocs = sortedNewURLs.map { url -> ImageDocument in
                 var doc = ImageDocument(url: url)
                 doc.isTrashed = trashedPaths.contains(url.path)
                 doc.isBackedUp = backedUpPaths.contains(url.path)
@@ -774,33 +778,33 @@ class ImageViewModel: ObservableObject {
                 }
                 return doc
             }
-        let batchItems = newDocs.map { doc in
-            (path: doc.url.path, filename: doc.url.lastPathComponent, isRAW: doc.isRAW,
-             width: 0, height: 0, sizeBytes: Int64(0),
-             dateTaken: nil as String?, cameraMake: nil as String?, cameraModel: nil as String?)
-        }
-        DispatchQueue.global(qos: .utility).async {
+            let batchItems = newDocs.map { doc in
+                (path: doc.url.path, filename: doc.url.lastPathComponent, isRAW: doc.isRAW,
+                 width: 0, height: 0, sizeBytes: Int64(0),
+                 dateTaken: nil as String?, cameraMake: nil as String?, cameraModel: nil as String?)
+            }
             CatalogStore.shared.batchUpsertImages(batchItems)
-        }
 
-        let firstNewIndex = collection.documents.count
-        collection.appendDocuments(newDocs)
-        // Persistierte Qualitätsflags der eben importierten Docs sofort in die Listen aufnehmen —
-        // der neue Scan im Hintergrund kann Minuten dauern, aber bereits gescannte Bilder
-        // (z. B. beim App-Neustart auf gleiche Library) sollen sofort sichtbar sein.
-        refreshQualityLists()
-        loadPersistedGroupsIfAvailable()
-        loadPeople()
-        if selectFirst || collection.documents.count == newDocs.count {
-            collection.select(index: firstNewIndex)
-            loadCurrentImage()
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                let firstNewIndex = self.collection.documents.count
+                self.collection.appendDocuments(newDocs)
+                // Persistierte Qualitätsflags der eben importierten Docs sofort in die Listen aufnehmen.
+                self.refreshQualityLists()
+                self.loadPersistedGroupsIfAvailable()
+                self.loadPeople()
+                if selectFirst || self.collection.documents.count == newDocs.count {
+                    self.collection.select(index: firstNewIndex)
+                    self.loadCurrentImage()
+                }
+                let metaURLs = newDocs.map { $0.url }
+                self.activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
+                self.activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
+                self.activity.enqueueWork { [weak self] in self?.scanQualityForLibrary() }
+                self.activity.enqueueWork { [weak self] in self?.scanMotifForLibrary() }
+                Log.perf(String(format: "IMPORT %d Dateien %.0f ms", newDocs.count, Date().timeIntervalSince(importStart) * 1000))
+            }
         }
-        let metaURLs = newDocs.map { $0.url }
-        activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
-        activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
-        activity.enqueueWork { [weak self] in self?.scanQualityForLibrary() }
-        activity.enqueueWork { [weak self] in self?.scanMotifForLibrary() }
-        Log.perf(String(format: "IMPORT %d Dateien %.0f ms", newDocs.count, Date().timeIntervalSince(importStart) * 1000))
     }
 
     // Restores all catalog-known image paths that still exist on disk but are not yet
