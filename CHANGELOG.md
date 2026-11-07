@@ -2,6 +2,15 @@
 
 ---
 
+## 1.105.0
+**3 Bugs und Performance-Probleme beim Projekt-Start behoben**
+
+- „Öffnen mit iPhoto" aus dem Finder: URLs die ankommen während der Projekt-Picker noch offen ist, werden gepuffert und nach `openProject`/`openWithoutProject` importiert — Bilder verschwinden nicht mehr (#75)
+- `openProject`: Unterordner-Ermittlung für die Sidebar läuft jetzt im Hintergrund — kein Freeze beim Öffnen von Projekten auf Netzlaufwerken (#73)
+- `openProject`/`openWithoutProject`: Doppelstart von `syncBackupCatalog` und nutzloser Init-Aufruf entfernt (#74 follow-up)
+
+---
+
 ## 1.104.9
 **Performance: Main-Thread-I/O und O(N·K)-Copies entfernt**
 

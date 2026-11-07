@@ -68,6 +68,9 @@ class ImageViewModel: ObservableObject {
     var isProjectMode: Bool = false
     private var projectLoadToken: UUID = UUID()
     var versionHistoryURL: URL? = nil
+    private var pendingOpenURLs: [URL] = []
+    // Set to true once openProject/openWithoutProject has been called at least once.
+    private var projectInitialized: Bool = false
     @Published var showModeSwitcher: Bool = false
     @Published var modeSwitcherEnabled: Bool = UserDefaults.standard.object(forKey: "feature.modeSwitcherEnabled") as? Bool ?? true {
         didSet {
@@ -295,7 +298,12 @@ class ImageViewModel: ObservableObject {
             .compactMap { $0.object as? [URL] }
             .sink { [weak self] urls in
                 guard let self = self else { return }
-                self.importFiles(urls)
+                if self.projectInitialized {
+                    self.importFiles(urls)
+                } else {
+                    // Project picker not yet dismissed — buffer; drained in openProject/openWithoutProject.
+                    self.pendingOpenURLs.append(contentsOf: urls)
+                }
             }
             .store(in: &cancellables)
 
@@ -599,21 +607,29 @@ class ImageViewModel: ObservableObject {
         collection.documents = []
         collection.selectedIndices = []
         collection.currentIndex = 0
-        // Discover immediate subdirectories of project root folders → sidebar sections
-        let fm = FileManager.default
-        var subdirs: [URL] = []
-        for path in project.folderPaths {
-            let root = URL(fileURLWithPath: path)
-            if let entries = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
-                let dirs = entries.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
-                subdirs.append(contentsOf: dirs.sorted { $0.lastPathComponent < $1.lastPathComponent })
-            }
-        }
-        projectSubdirectories = subdirs
+        projectSubdirectories = []
         navSelection = .library
+        // Discover subdirectories for sidebar sections in background — filesystem I/O off Main.
+        let folderPaths = project.folderPaths
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let fm = FileManager.default
+            var subdirs: [URL] = []
+            for path in folderPaths {
+                let root = URL(fileURLWithPath: path)
+                if let entries = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+                    let dirs = entries.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+                    subdirs.append(contentsOf: dirs.sorted { $0.lastPathComponent < $1.lastPathComponent })
+                }
+            }
+            DispatchQueue.main.async { [weak self] in self?.projectSubdirectories = subdirs }
+        }
         for path in project.folderPaths {
             scanProjectFolder(URL(fileURLWithPath: path))
         }
+        projectInitialized = true
+        let pending = pendingOpenURLs; pendingOpenURLs = []
+        if !pending.isEmpty { importFiles(pending, selectFirst: true) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             self?.syncBackupCatalog()
         }
@@ -631,6 +647,9 @@ class ImageViewModel: ObservableObject {
         navSelection = .library
         loadContentForSelection(.library)
         restoreCatalogImages()
+        projectInitialized = true
+        let pending = pendingOpenURLs; pendingOpenURLs = []
+        if !pending.isEmpty { importFiles(pending, selectFirst: true) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             self?.syncBackupCatalog()
         }
