@@ -687,8 +687,10 @@ class ImageViewModel: ObservableObject {
     // These must never enter the user-visible collection or catalog.
     private func isSystemManagedPath(_ url: URL) -> Bool {
         let p = url.standardized.path
-        return p.hasPrefix(albumsSystemRoot.standardized.path)
-            || p.hasPrefix(SmartFolderFileSync.root.standardized.path)
+        let albumRoot = albumsSystemRoot.standardized.path
+        let smartRoot = SmartFolderFileSync.root.standardized.path
+        return p.hasPrefix(albumRoot + "/") || p == albumRoot
+            || p.hasPrefix(smartRoot + "/") || p == smartRoot
     }
 
     func importFiles(_ urls: [URL], selectFirst: Bool = true) {
@@ -790,7 +792,8 @@ class ImageViewModel: ObservableObject {
             // Purge system-managed paths that were accidentally catalogued previously
             let allPaths = CatalogStore.shared.allImages().map { $0.path }
             let stale = allPaths.filter {
-                $0.hasPrefix(albumRoot) || $0.hasPrefix(smartRoot)
+                $0.hasPrefix(albumRoot + "/") || $0 == albumRoot
+                    || $0.hasPrefix(smartRoot + "/") || $0 == smartRoot
             }
             if !stale.isEmpty {
                 CatalogStore.shared.deleteImages(paths: stale)

@@ -219,8 +219,16 @@ extension ImageViewModel {
             var usedNames = Set(manifest.values)
             for photoURL in photoURLs {
                 let srcPath = photoURL.standardized.path
-                if let destName = manifest[srcPath], fm.fileExists(atPath: dir.appendingPathComponent(destName).path) {
-                    continue  // already synced
+                if let destName = manifest[srcPath] {
+                    let destURL = dir.appendingPathComponent(destName)
+                    if fm.fileExists(atPath: destURL.path) {
+                        // Re-copy only if source was modified after the destination (stale copy).
+                        let srcMtime = (try? fm.attributesOfItem(atPath: srcPath))?[.modificationDate] as? Date
+                        let dstMtime = (try? fm.attributesOfItem(atPath: destURL.path))?[.modificationDate] as? Date
+                        if let s = srcMtime, let d = dstMtime, s <= d { continue }
+                        // Fall through to re-copy.
+                        try? fm.removeItem(at: destURL)
+                    }
                 }
                 // Find a unique dest filename
                 var destName = photoURL.lastPathComponent
@@ -239,16 +247,6 @@ extension ImageViewModel {
                 } else if (try? fm.copyItem(at: photoURL, to: destURL)) != nil {
                     manifest[srcPath] = destName
                     usedNames.insert(destName)
-                }
-            }
-
-            // Remove orphaned files not referenced by any manifest entry (old duplicates, etc.)
-            let manifestedNames = Set(manifest.values)
-            if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
-                for file in contents where file.lastPathComponent != Self.manifestFilename {
-                    if !manifestedNames.contains(file.lastPathComponent) {
-                        try? fm.removeItem(at: file)
-                    }
                 }
             }
 

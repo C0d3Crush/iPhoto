@@ -2,6 +2,16 @@
 
 ---
 
+## 1.104.6
+**4 Datenverlust- und Korrektheitsfehler behoben**
+
+- `ProjectStore.save`: schreibt jetzt atomar; Fehler werden geloggt statt still verschluckt (#76)
+- `ProjectStore.load`: korrupte/nicht decodierbare `projects.json` wird nach `projects.json.corrupt-<ts>` verschoben statt mit einer leeren Liste überschrieben zu werden (#76)
+- `Album-Sync`: Orphan-Cleanup-Block entfernt (hat Nutzerdateien im Album-Ordner gelöscht); Kopien werden bei geändertem Original (neuere mtime) neu kopiert; `isSystemManagedPath` prüft jetzt mit Pfadtrenner `/` (#69)
+- `SmartFolderSQLGenerator.textClause` / Album-Filter: `_` und `%` im Suchtext werden jetzt als SQLite-LIKE-Sonderzeichen via `ESCAPE '!'` escaped (#68)
+
+---
+
 ## 1.104.5
 **5 Stabilitäts- und Datenkonsistenzfehler behoben**
 

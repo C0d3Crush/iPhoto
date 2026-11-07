@@ -130,13 +130,17 @@ enum SmartFolderSQLGenerator {
 
         // ── Album ────────────────────────────────────────────────────────────
         case .album:
-            let escaped = c.textValue.lowercased().replacingOccurrences(of: "'", with: "''")
+            let likeEsc = c.textValue.lowercased()
+                .replacingOccurrences(of: "!", with: "!!")
+                .replacingOccurrences(of: "%", with: "!%")
+                .replacingOccurrences(of: "_", with: "!_")
+                .replacingOccurrences(of: "'", with: "''")
             let invert = (c.op == .isNot || c.op == .notContains) ? "NOT " : ""
             return """
             i.path \(invert)IN (
               SELECT ai.image_path FROM album_images ai
               JOIN albums a ON a.id = ai.album_id
-              WHERE LOWER(a.name) LIKE '%\(escaped)%'
+              WHERE LOWER(a.name) LIKE '%\(likeEsc)%' ESCAPE '!'
             )
             """
 
@@ -166,15 +170,21 @@ enum SmartFolderSQLGenerator {
     }
 
     private static func textClause(_ col: String, op: SmartFolderOperator, val: String) -> String {
-        let esc = val.lowercased().replacingOccurrences(of: "'", with: "''")
+        // Escape LIKE special chars with '!' before SQL-quoting single-quotes.
+        let likeEsc = val.lowercased()
+            .replacingOccurrences(of: "!", with: "!!")
+            .replacingOccurrences(of: "%", with: "!%")
+            .replacingOccurrences(of: "_", with: "!_")
+            .replacingOccurrences(of: "'", with: "''")
+        let eq = val.lowercased().replacingOccurrences(of: "'", with: "''")
         switch op {
-        case .contains:    return "\(col) LIKE '%\(esc)%'"
-        case .notContains: return "\(col) NOT LIKE '%\(esc)%'"
-        case .beginsWith:  return "\(col) LIKE '\(esc)%'"
-        case .endsWith:    return "\(col) LIKE '%\(esc)'"
-        case .isExact:     return "\(col) = '\(esc)'"
-        case .isNot:       return "\(col) != '\(esc)'"
-        default:           return "\(col) LIKE '%\(esc)%'"
+        case .contains:    return "\(col) LIKE '%\(likeEsc)%' ESCAPE '!'"
+        case .notContains: return "\(col) NOT LIKE '%\(likeEsc)%' ESCAPE '!'"
+        case .beginsWith:  return "\(col) LIKE '\(likeEsc)%' ESCAPE '!'"
+        case .endsWith:    return "\(col) LIKE '%\(likeEsc)' ESCAPE '!'"
+        case .isExact:     return "\(col) = '\(eq)'"
+        case .isNot:       return "\(col) != '\(eq)'"
+        default:           return "\(col) LIKE '%\(likeEsc)%' ESCAPE '!'"
         }
     }
 

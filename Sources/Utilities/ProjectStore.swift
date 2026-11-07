@@ -50,13 +50,25 @@ class ProjectStore: ObservableObject {
     }
 
     func save() {
-        guard let data = try? JSONEncoder().encode(projects) else { return }
-        try? data.write(to: saveURL)
+        do {
+            let data = try JSONEncoder().encode(projects)
+            try data.write(to: saveURL, options: .atomic)
+        } catch {
+            Log.error("ProjectStore.save fehlgeschlagen: \(error.localizedDescription)")
+        }
     }
 
     func load() {
-        guard let data = try? Data(contentsOf: saveURL),
-              let decoded = try? JSONDecoder().decode([Project].self, from: data) else { return }
-        projects = decoded
+        guard let data = try? Data(contentsOf: saveURL) else { return }
+        do {
+            projects = try JSONDecoder().decode([Project].self, from: data)
+        } catch {
+            // Corrupt file — rename to prevent save() from overwriting it silently
+            let stamp = Int(Date().timeIntervalSince1970)
+            let corrupt = saveURL.deletingLastPathComponent()
+                .appendingPathComponent("projects.json.corrupt-\(stamp)")
+            try? FileManager.default.moveItem(at: saveURL, to: corrupt)
+            Log.error("ProjectStore.load: Decode-Fehler, Datei gesichert als \(corrupt.lastPathComponent) — \(error.localizedDescription)")
+        }
     }
 }
