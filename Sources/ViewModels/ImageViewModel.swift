@@ -67,6 +67,7 @@ class ImageViewModel: ObservableObject {
     @Published var projectSubdirectories: [URL] = []
     var isProjectMode: Bool = false
     private var projectLoadToken: UUID = UUID()
+    var versionHistoryURL: URL? = nil
     @Published var showModeSwitcher: Bool = false
     @Published var modeSwitcherEnabled: Bool = UserDefaults.standard.object(forKey: "feature.modeSwitcherEnabled") as? Bool ?? true {
         didSet {

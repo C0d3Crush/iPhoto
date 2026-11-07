@@ -24,7 +24,10 @@ enum BackupService {
 
     /// Führt ein Backup für ein einzelnes Bild durch. Blockiert bis fertig — Aufrufer
     /// muss auf einer Background-Queue laufen.
-    static func backup(source: URL, root: URL, settings: BackupSettings) -> Result {
+    /// `writtenInBatch` verhindert, dass zwei Quelldateien mit gleichem Namen sich gegenseitig
+    /// überschreiben — auch im `.overwrite`-Modus (der nur für *vorherige Runs* gilt).
+    static func backup(source: URL, root: URL, settings: BackupSettings,
+                       writtenInBatch: inout Set<String>) -> Result {
         // Zielordner <root>/<Jahr>/<Monat>/ aus Aufnahmedatum (EXIF DateTimeOriginal)
         // → File-mtime als Fallback. So landen Backups jahresweise sortiert wie in
         // Fotos.app, unabhängig davon wann sie erzeugt wurden.
@@ -40,7 +43,10 @@ enum BackupService {
         let stem = source.deletingPathExtension().lastPathComponent
         let baseTarget = targetDir.appendingPathComponent("\(stem).jpg")
         let target: URL
-        switch resolveCollision(baseTarget: baseTarget, mode: settings.collisionMode) {
+        // If this exact path was already written in this batch, force rename to avoid
+        // silently overwriting a file we just created (same filename from two different dirs).
+        let effectiveMode: BackupSettings.CollisionMode = writtenInBatch.contains(baseTarget.path) ? .rename : settings.collisionMode
+        switch resolveCollision(baseTarget: baseTarget, mode: effectiveMode) {
         case .use(let url):   target = url
         case .skip(let url):  return .skipped(existingURL: url)
         }
@@ -83,6 +89,7 @@ enum BackupService {
         guard CGImageDestinationFinalize(dest) else {
             return .failed(reason: "Schreiben fehlgeschlagen: \(target.lastPathComponent)")
         }
+        writtenInBatch.insert(target.path)
         return .written(target)
     }
 
@@ -108,7 +115,7 @@ enum BackupService {
                 let candidate = dir.appendingPathComponent("\(stem)-\(n).\(ext)")
                 if !fm.fileExists(atPath: candidate.path) { return .use(candidate) }
             }
-            return .use(baseTarget) // Fallback: nach 9999 Kollisionen doch überschreiben
+            return .skip(baseTarget) // 9999 Kollisionen → überspringen statt überschreiben
         }
     }
 

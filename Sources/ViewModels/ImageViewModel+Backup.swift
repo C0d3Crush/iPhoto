@@ -45,11 +45,12 @@ extension ImageViewModel {
 
             var summary = BackupSummary()
             var succeededDocs: [ImageDocument] = []
+            var writtenInBatch = Set<String>()
             for (i, doc) in docs.enumerated() {
                 // Sicherheits-Scope für die Quelle beibehalten (importierte Volumes
                 // brauchen das Bookmark).
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: doc.url)
-                let result = BackupService.backup(source: accessURL, root: root, settings: settings)
+                let result = BackupService.backup(source: accessURL, root: root, settings: settings, writtenInBatch: &writtenInBatch)
                 stopAccess()
                 switch result {
                 case .written(let url):

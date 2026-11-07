@@ -169,12 +169,13 @@ extension ImageViewModel {
         let settings = backupSettings
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             var trashedIDs: Set<UUID> = []
+            var writtenInBatch = Set<String>()
             let (backupRoot, stopBackup) = willBackup ? settings.resolveDestination() : (URL(fileURLWithPath: "/"), {})
             defer { if willBackup { stopBackup() } }
             for (i, doc) in docs.enumerated() {
                 let (accessURL, stop) = BookmarkStore.shared.access(url: doc.url)
                 if willBackup {
-                    _ = BackupService.backup(source: accessURL, root: backupRoot, settings: settings)
+                    _ = BackupService.backup(source: accessURL, root: backupRoot, settings: settings, writtenInBatch: &writtenInBatch)
                 }
                 try? FileManager.default.trashItem(at: accessURL, resultingItemURL: nil)
                 stop()

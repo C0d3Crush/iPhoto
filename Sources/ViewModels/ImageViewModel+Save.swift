@@ -7,6 +7,12 @@ extension ImageViewModel {
 
     func loadVersionsForCurrentImage() {
         guard let url = collection.currentDocument?.url else { versions.savedVersions = []; return }
+        // Clear per-file undo/redo stacks when the active document changes.
+        if url != versionHistoryURL {
+            versions.undoStack = []
+            versions.redoStack = []
+            versionHistoryURL = url
+        }
         // Bookmark-Resolve + Verzeichnis-Anlage + JSON-Read gehören nicht auf den Main-Thread
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let (accessURL, stop) = BookmarkStore.shared.access(url: url)
@@ -125,6 +131,11 @@ extension ImageViewModel {
         } else {
             guard !versions.redoStack.isEmpty else { return }
             meta = versions.redoStack.removeLast()
+        }
+        // Guard: verify the meta belongs to the current document before writing.
+        guard FileManager.default.fileExists(atPath: VersionStore.shared.versionURL(meta, for: doc.url).path) else {
+            Log.error("Undo/Redo: Version nicht in Versionsordner von \(doc.url.lastPathComponent) — Eintrag verworfen")
+            return
         }
         let idx = collection.currentIndex
 

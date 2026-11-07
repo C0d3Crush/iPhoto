@@ -2,6 +2,14 @@
 
 ---
 
+## 1.104.8
+**2 Datenverlust-Fehler behoben**
+
+- `ImageViewModel` Undo/Redo: Stacks werden beim Bildwechsel geleert; `restoreFromHistory` prüft vor jeder Schreiboperation ob die Versionsmetadaten zum aktuellen Dokument gehören — kein Müll-Backup mehr auf fremdem Bild (#56)
+- `BackupService.backup`: Innerhalb eines Laufs wird pro Zielpfad mitgezählt — gleicher Dateiname aus zwei Verzeichnissen erzeugt jetzt zwei getrennte Backup-Dateien statt sich gegenseitig zu überschreiben; nach 9999 Kollisionen wird übersprungen statt überschrieben (#65)
+
+---
+
 ## 1.104.7
 **2 Stabilitäts- und Korrektheitsfehler behoben**
 
