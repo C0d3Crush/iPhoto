@@ -44,13 +44,17 @@ final class Log {
     // Unique marker that only appears as a standalone boundary, never inside a log entry.
     static let sessionMarker = "###SESSION_START###"
 
-    // Synchronous write — blocks the calling thread until the line is flushed to disk.
-    // Routes through the serial queue so it cannot interleave with async writes.
+    // Writes the log line, blocking only when called from a non-Main thread (crash diagnostics).
+    // On Main: uses async to avoid priority inversion and jitter in the navigation hot-path.
     func writeSync(level: LogLevel, _ msg: String, function: String = #function) {
         let timestamp = dateFormatter.string(from: Date())
         let line = "[\(timestamp)] [\(level.rawValue)] [\(function)] \(msg)\n"
         guard let data = line.data(using: .utf8) else { return }
-        queue.sync { self.fileHandle?.write(data) }
+        if Thread.isMainThread {
+            queue.async { self.fileHandle?.write(data) }
+        } else {
+            queue.sync { self.fileHandle?.write(data) }
+        }
     }
 
     private func appendRaw(_ text: String) {

@@ -2,6 +2,14 @@
 
 ---
 
+## 1.105.2
+**Rust FFI Undefined Behavior behoben; Log-Jitter im Navigations-Hotpath entfernt**
+
+- `iphoto_hotpixel_free` / `iphoto_phash_groups_free`: Vecs werden jetzt per `into_boxed_slice()` auf `capacity == len` gebracht und per `Box::from_raw(slice_from_raw_parts_mut)` freigegeben — kein UB mehr durch falsche Kapazität (#38)
+- `Log.writeSync`: schreibt auf dem Main-Thread jetzt asynchron (`queue.async`) statt mit `queue.sync` zu blockieren — entfernt Prioritätsinversion und ms-Jitter in `selectDocument`/`next`/`previous` (#33)
+
+---
+
 ## 1.105.1
 **Performance-kritische SQLite-Reads von Main entfernt; Batch-Export Datenverlust behoben**
 

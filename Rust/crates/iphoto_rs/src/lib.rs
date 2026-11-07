@@ -82,17 +82,16 @@ pub extern "C" fn iphoto_hotpixel_find(
 ) -> *mut HotPixel {
     if mean_frame.is_null() || out_count.is_null() { return std::ptr::null_mut(); }
     let slice = unsafe { std::slice::from_raw_parts(mean_frame, count as usize) };
-    let mut result = hotpixel::find(slice, width, threshold);
-    unsafe { *out_count = result.len() as u32; }
-    let ptr = result.as_mut_ptr();
-    std::mem::forget(result);
-    ptr
+    let result = hotpixel::find(slice, width, threshold);
+    let boxed = result.into_boxed_slice();
+    unsafe { *out_count = boxed.len() as u32; }
+    Box::into_raw(boxed) as *mut HotPixel
 }
 
 #[no_mangle]
 pub extern "C" fn iphoto_hotpixel_free(ptr: *mut HotPixel, count: u32) {
     if ptr.is_null() { return; }
-    unsafe { drop(Vec::from_raw_parts(ptr, count as usize, count as usize)); }
+    unsafe { drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, count as usize))); }
 }
 
 // ── OkLab LUT ─────────────────────────────────────────────────────────────────
@@ -170,18 +169,18 @@ pub extern "C" fn iphoto_phash_seed_pull_groups(
     let n = count as usize;
     let h_slice = unsafe { std::slice::from_raw_parts(hashes_h, n) };
     let v_slice = unsafe { std::slice::from_raw_parts(hashes_v, n) };
-    let mut result = similarity::seed_pull_groups(h_slice, v_slice, max_distance);
-    unsafe { *out_len = result.len() as u32; }
+    let result = similarity::seed_pull_groups(h_slice, v_slice, max_distance);
     if result.is_empty() {
+        unsafe { *out_len = 0; }
         return std::ptr::null_mut();
     }
-    let ptr = result.as_mut_ptr();
-    std::mem::forget(result);
-    ptr
+    let boxed = result.into_boxed_slice();
+    unsafe { *out_len = boxed.len() as u32; }
+    Box::into_raw(boxed) as *mut u32
 }
 
 #[no_mangle]
 pub extern "C" fn iphoto_phash_groups_free(ptr: *mut u32, len: u32) {
     if ptr.is_null() { return; }
-    unsafe { drop(Vec::from_raw_parts(ptr, len as usize, len as usize)); }
+    unsafe { drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len as usize))); }
 }
