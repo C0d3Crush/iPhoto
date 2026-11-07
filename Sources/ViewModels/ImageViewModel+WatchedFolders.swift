@@ -152,53 +152,82 @@ extension ImageViewModel {
     func wipeFolder(_ folder: WatchedFolder) {
         guard folder.isRemovableMedia,
               let (sourceURL, stop) = folder.resolveURL() else { return }
-        defer { stop() }
 
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: sourceURL,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else { return }
+        let taskID = UUID()
+        activity.enqueue(id: taskID, label: "Karte prüfen …", icon: "sdcard", done: 0, total: 0)
 
-        var imageFiles: [URL] = []
-        for case let fileURL as URL in enumerator {
-            if (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
-               ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
-                imageFiles.append(fileURL)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { stop(); return }
+            let fm = FileManager.default
+            guard let enumerator = fm.enumerator(
+                at: sourceURL,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else { stop(); DispatchQueue.main.async { self.activity.dequeue(id: taskID) }; return }
+
+            var imageFiles: [URL] = []
+            for case let fileURL as URL in enumerator {
+                if (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
+                   ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
+                    imageFiles.append(fileURL)
+                }
+            }
+
+            var missingCount = 0
+            if let destURL = folder.importDestinationURL {
+                let destNames = Set((try? fm.contentsOfDirectory(atPath: destURL.path).map { $0.lowercased() }) ?? [])
+                missingCount = imageFiles.filter { !destNames.contains($0.lastPathComponent.lowercased()) }.count
+            }
+            stop()
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.activity.dequeue(id: taskID)
+                guard !imageFiles.isEmpty else { self.activity.completedImports.remove(folder.id); return }
+
+                if missingCount > 0 {
+                    let a = NSAlert()
+                    a.messageText = "\(missingCount) Bilder nicht importiert!"
+                    a.informativeText = "\(missingCount) von \(imageFiles.count) Bilddateien auf der Karte wurden nicht in den Zielordner importiert. Bitte den Import erneut ausführen, bevor die Karte geleert wird."
+                    a.addButton(withTitle: "OK")
+                    a.alertStyle = .critical
+                    a.runModal()
+                    return
+                }
+
+                let confirm = NSAlert()
+                confirm.messageText = "\(imageFiles.count) Bilddateien von \"\(folder.name)\" löschen?"
+                confirm.informativeText = "Alle Bilddateien auf dem Speichermedium werden unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden."
+                confirm.addButton(withTitle: "Löschen")
+                confirm.addButton(withTitle: "Abbrechen")
+                confirm.alertStyle = .critical
+                guard confirm.runModal() == .alertFirstButtonReturn else { return }
+
+                let deleteID = UUID()
+                self.activity.enqueue(id: deleteID, label: "Karte leeren …", icon: "sdcard", done: 0, total: imageFiles.count)
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    var failed = 0
+                    for (i, file) in imageFiles.enumerated() {
+                        if (try? FileManager.default.removeItem(at: file)) == nil { failed += 1 }
+                        let done = i + 1
+                        DispatchQueue.main.async { self?.activity.update(id: deleteID, done: done, total: imageFiles.count) }
+                    }
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.activity.dequeue(id: deleteID)
+                        self.activity.completedImports.remove(folder.id)
+                        if failed > 0 {
+                            let err = NSAlert()
+                            err.messageText = "\(failed) Dateien konnten nicht gelöscht werden"
+                            err.informativeText = "Möglicherweise fehlen Schreibrechte auf dem Speichermedium."
+                            err.alertStyle = .warning
+                            err.addButton(withTitle: "OK")
+                            err.runModal()
+                        }
+                    }
+                }
             }
         }
-        guard !imageFiles.isEmpty else {
-            activity.completedImports.remove(folder.id)
-            return
-        }
-
-        if let destURL = folder.importDestinationURL {
-            let destNames = Set((try? fm.contentsOfDirectory(atPath: destURL.path).map { $0.lowercased() }) ?? [])
-            let missingFiles = imageFiles.filter { !destNames.contains($0.lastPathComponent.lowercased()) }
-            if !missingFiles.isEmpty {
-                let alert = NSAlert()
-                alert.messageText = "\(missingFiles.count) Bilder nicht importiert!"
-                alert.informativeText = "\(missingFiles.count) von \(imageFiles.count) Bilddateien auf der Karte wurden nicht in den Zielordner importiert. Bitte den Import erneut ausführen, bevor die Karte geleert wird."
-                alert.addButton(withTitle: "OK")
-                alert.alertStyle = .critical
-                alert.runModal()
-                return
-            }
-        }
-
-        let alert = NSAlert()
-        alert.messageText = "\(imageFiles.count) Bilddateien von \"\(folder.name)\" löschen?"
-        alert.informativeText = "Alle Bilddateien auf dem Speichermedium werden unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden."
-        alert.addButton(withTitle: "Löschen")
-        alert.addButton(withTitle: "Abbrechen")
-        alert.alertStyle = .critical
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-
-        for file in imageFiles {
-            try? fm.removeItem(at: file)
-        }
-        activity.completedImports.remove(folder.id)
     }
 
     func loadContentForSelection(_ selection: NavSelection?) {

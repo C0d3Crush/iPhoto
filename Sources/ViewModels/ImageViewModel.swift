@@ -585,12 +585,8 @@ class ImageViewModel: ObservableObject {
 
         // Content loading is deferred to openProject() / openWithoutProject(),
         // which are called after the user makes a project selection in the picker.
-
-        // Reconcile backup folder with catalog — marks images as backed-up if a file
-        // with matching stem exists in the backup destination (catches manual/external backups).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.syncBackupCatalog()
-        }
+        // syncBackupCatalog is triggered there after scans complete — not here,
+        // because the collection is empty at init time.
     }
 
     // MARK: - Projects

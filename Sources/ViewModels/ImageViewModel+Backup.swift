@@ -73,16 +73,17 @@ extension ImageViewModel {
                 if !summary.failed.isEmpty {
                     self.showBackupFailureAlert(summary)
                 }
-                // Erfolgreich gesicherte Bilder als backed-up markieren
+                // Erfolgreich gesicherte Bilder als backed-up markieren.
+                // Batch-write: copy → mutate → assign once to avoid O(N·K) @Published copies.
                 if !succeededDocs.isEmpty {
                     let paths = succeededDocs.map { $0.url.path }
                     CatalogStore.shared.setBackedUp(paths: paths, true)
                     let pathSet = Set(paths)
-                    for i in self.collection.documents.indices {
-                        if pathSet.contains(self.collection.documents[i].url.path) {
-                            self.collection.documents[i].isBackedUp = true
-                        }
+                    var docs = self.collection.documents
+                    for i in docs.indices where pathSet.contains(docs[i].url.path) {
+                        docs[i].isBackedUp = true
                     }
+                    self.collection.documents = docs
                     self.invalidateVisibleOrder()
                 }
                 // Nur die tatsächlich erfolgreich gesicherten Bilder werden gelöscht —
@@ -148,17 +149,17 @@ extension ImageViewModel {
             guard !backedUpStems.isEmpty else { return }
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                var docs = self.collection.documents
                 var newlyFound: [String] = []
-                for i in self.collection.documents.indices {
-                    let doc = self.collection.documents[i]
-                    guard !doc.isBackedUp else { continue }
-                    let stem = doc.url.deletingPathExtension().lastPathComponent.lowercased()
+                for i in docs.indices where !docs[i].isBackedUp {
+                    let stem = docs[i].url.deletingPathExtension().lastPathComponent.lowercased()
                     if backedUpStems.contains(stem) {
-                        self.collection.documents[i].isBackedUp = true
-                        newlyFound.append(doc.url.path)
+                        docs[i].isBackedUp = true
+                        newlyFound.append(docs[i].url.path)
                     }
                 }
                 if !newlyFound.isEmpty {
+                    self.collection.documents = docs
                     CatalogStore.shared.setBackedUp(paths: newlyFound, true)
                     self.invalidateVisibleOrder()
                     Log.info("syncBackupCatalog: \(newlyFound.count) Bilder nachträglich als backed-up markiert")

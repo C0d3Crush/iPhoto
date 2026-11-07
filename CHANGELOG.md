@@ -2,6 +2,14 @@
 
 ---
 
+## 1.104.9
+**Performance: Main-Thread-I/O und O(N·K)-Copies entfernt**
+
+- `wipeFolder`: Enumeration und Löschen laufen jetzt im Hintergrund mit Fortschritts-Anzeige; fehlgeschlagene Löschungen werden gemeldet statt still verschluckt (#45)
+- `syncBackupCatalog` / `backup`: `collection.documents` wird als Kopie mutiert und einmal zurückgeschrieben statt per O(N)-Copy pro Treffer; nutzloser Aufruf beim App-Start (leere Collection) entfernt (#74)
+
+---
+
 ## 1.104.8
 **2 Datenverlust-Fehler behoben**
 
