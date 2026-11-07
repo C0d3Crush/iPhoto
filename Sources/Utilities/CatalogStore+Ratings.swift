@@ -22,10 +22,11 @@ extension CatalogStore {
 
     /// Schreibt viele Bewertungen in einer einzigen Transaktion (ein prepare, N steps) —
     /// vermeidet N einzelne Commits bei Bulk-Import/Batch-Set.
-    func saveRatings(_ entries: [(path: String, rating: Int, flag: String, colorLabel: String)]) {
-        guard !entries.isEmpty else { return }
-        queue.sync {
-            exec("BEGIN")
+    @discardableResult
+    func saveRatings(_ entries: [(path: String, rating: Int, flag: String, colorLabel: String)]) -> Bool {
+        guard !entries.isEmpty else { return true }
+        return queue.sync {
+            guard exec("BEGIN") else { return false }
             let stmt = prepare("""
                 INSERT INTO ratings (image_path,rating,flag,color_label,updated_at) VALUES (?,?,?,?,?)
                 ON CONFLICT(image_path) DO UPDATE SET
@@ -33,15 +34,21 @@ extension CatalogStore {
                     color_label=excluded.color_label, updated_at=excluded.updated_at
             """)
             let now = iso8601()
+            var ok = true
             for e in entries {
                 sqlite3_reset(stmt)
                 bind(stmt, 1, e.path)
                 sqlite3_bind_int(stmt, 2, Int32(e.rating))
                 bind(stmt, 3, e.flag); bind(stmt, 4, e.colorLabel); bind(stmt, 5, now)
-                step(stmt)
+                if step(stmt) != SQLITE_DONE { ok = false; break }
             }
             sqlite3_finalize(stmt)
-            exec("COMMIT")
+            if ok {
+                guard exec("COMMIT") else { exec("ROLLBACK"); return false }
+            } else {
+                exec("ROLLBACK")
+            }
+            return ok
         }
     }
 

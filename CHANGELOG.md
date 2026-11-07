@@ -2,6 +2,17 @@
 
 ---
 
+## 1.104.5
+**5 Stabilitäts- und Datenkonsistenzfehler behoben**
+
+- `ImageViewModel.removeDetectedVolume` / `syncVolume`: `hasPrefix`-Check nutzt jetzt Pfadtrenner (`/`) um falsche Treffer bei Volumes mit gemeinsamen Namens-Präfixen zu verhindern (#60)
+- `CatalogStore.backupNow`: läuft jetzt auf `queue` um Konflikte mit gleichzeitigen Schreibzugriffen zu vermeiden; Dateiname erhält Millisekunden + UUID-Suffix gegen Kollisionen bei schnellen Wiederholungsaufrufen (#58)
+- `CatalogStore.open`: `sqlite3_busy_timeout(2000)` nach `sqlite3_open` gesetzt — CLI und App teilen sich die SQLite-Datei ohne `SQLITE_BUSY`-Fehler zu verlieren (#49)
+- `CatalogStore.saveRatings`: gibt jetzt `Bool` zurück; `ROLLBACK` bei Fehler; einzelner `step`-Fehler bricht die Transaktion ab statt still fortzufahren (#59)
+- `InpaintProcessor`: Pipes vor `waitUntilExit` geleert (Deadlock bei >64 KB Output); 5-Minuten-Timeout gegen hängende Inpainting-Prozesse (#57)
+
+---
+
 ## 1.104.4
 **5 Datenverlust- und Stabilitätsfehler behoben**
 

@@ -36,7 +36,10 @@ extension ImageViewModel {
         guard let idx = library.detectedVolumes.firstIndex(where: { $0.url.standardized.path == path }) else { return }
         let volumeID = library.detectedVolumes[idx].id
         library.detectedVolumes.remove(at: idx)
-        collection.documents.removeAll { $0.url.standardized.path.hasPrefix(path) }
+        collection.documents.removeAll {
+            let p = $0.url.standardized.path
+            return p == path || p.hasPrefix(path + "/")
+        }
         if case .volume(let id) = navSelection, id == volumeID {
             navSelection = .library
         }
@@ -144,7 +147,10 @@ extension ImageViewModel {
                 self.activity.dequeue(id: volumeID)
                 if freeUpSpace {
                     let prefix = volumeURL.standardized.path
-                    self.collection.documents.removeAll { $0.url.standardized.path.hasPrefix(prefix) }
+                    self.collection.documents.removeAll {
+                        let p = $0.url.standardized.path
+                        return p == prefix || p.hasPrefix(prefix + "/")
+                    }
                 }
                 if !newURLs.isEmpty {
                     self.importFiles(newURLs, selectFirst: false)

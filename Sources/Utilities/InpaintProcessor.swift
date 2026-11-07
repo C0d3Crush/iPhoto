@@ -90,10 +90,13 @@ struct InpaintProcessor {
         task.standardOutput = outPipe
 
         try task.run()
-        task.waitUntilExit()
-
-        let stderr = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        // Drain pipes BEFORE waitUntilExit to prevent deadlock when output exceeds 64 KB.
         let stdout = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let stderr = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let timeout = DispatchWorkItem { task.terminate() }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 300, execute: timeout)
+        task.waitUntilExit()
+        timeout.cancel()
         guard task.terminationStatus == 0 else {
             let combined = (stdout + "\n" + stderr).trimmingCharacters(in: .whitespacesAndNewlines)
             throw InpaintError.processExited(task.terminationStatus, combined)

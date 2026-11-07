@@ -61,7 +61,11 @@ final class CatalogStore {
     // MARK: - Setup
 
     private func open() {
-        guard sqlite3_open(dbPath, &db) == SQLITE_OK else { return }
+        guard sqlite3_open(dbPath, &db) == SQLITE_OK else {
+            Log.error("CatalogStore: sqlite3_open fehlgeschlagen für \(dbPath)")
+            return
+        }
+        sqlite3_busy_timeout(db, 2000)
         exec("PRAGMA journal_mode=WAL")
         exec("PRAGMA foreign_keys=ON")
         createSchema()
