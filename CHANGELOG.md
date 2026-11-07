@@ -10,6 +10,8 @@
 - `project stats` zählt Katalog-Bilder, RAWs, Sterne, Picks/Rejects und Papierkorb nur für die Ordner des Projekts (je eine Katalog-Abfrage, kein Per-Bild-Roundtrip)
 - Datei per `IPHOTO_PROJECTS_FILE` überschreibbar (Tests)
 
+---
+
 ## 1.104.3
 **Startup-Scans und Album-Duplikate behoben**
 
