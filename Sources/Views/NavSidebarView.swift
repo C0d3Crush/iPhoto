@@ -1793,8 +1793,7 @@ private struct ConsolePanelView: View {
         output.append(ConsoleLine(text: "> " + cmd, kind: .command))
         input = ""
 
-        let args = cmd.components(separatedBy: " ").filter { !$0.isEmpty }
-        // Look for iphoto-cli next to the .app bundle
+        let args = tokenize(cmd)
         let cliURL = Bundle.main.bundleURL
             .deletingLastPathComponent()
             .appendingPathComponent("iphoto-cli")
@@ -1811,16 +1810,19 @@ private struct ConsolePanelView: View {
             let outPipe = Pipe(); proc.standardOutput = outPipe
             let errPipe = Pipe(); proc.standardError  = errPipe
             do {
-                try proc.run(); proc.waitUntilExit()
+                try proc.run()
+                // Drain pipes before waitUntilExit to prevent deadlock on >64 KB output.
                 let outStr = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
                 let errStr = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let timeout = DispatchWorkItem { proc.terminate() }
+                DispatchQueue.global().asyncAfter(deadline: .now() + 30, execute: timeout)
+                proc.waitUntilExit()
+                timeout.cancel()
+                let outLines = outStr.components(separatedBy: "\n").filter { !$0.isEmpty }.map { ConsoleLine(text: $0, kind: .output) }
+                let errLines = errStr.components(separatedBy: "\n").filter { !$0.isEmpty }.map { ConsoleLine(text: $0, kind: .error) }
                 DispatchQueue.main.async {
-                    for line in outStr.components(separatedBy: "\n") where !line.isEmpty {
-                        self.output.append(ConsoleLine(text: line, kind: .output))
-                    }
-                    for line in errStr.components(separatedBy: "\n") where !line.isEmpty {
-                        self.output.append(ConsoleLine(text: line, kind: .error))
-                    }
+                    self.output.append(contentsOf: outLines)
+                    self.output.append(contentsOf: errLines)
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -1828,5 +1830,25 @@ private struct ConsolePanelView: View {
                 }
             }
         }
+    }
+
+    // Shell-like tokenizer: splits on whitespace, honours single/double quotes.
+    private func tokenize(_ s: String) -> [String] {
+        var tokens: [String] = []
+        var current = ""
+        var quoteChar: Character? = nil
+        for ch in s {
+            if let q = quoteChar {
+                if ch == q { quoteChar = nil } else { current.append(ch) }
+            } else if ch == "\"" || ch == "'" {
+                quoteChar = ch
+            } else if ch == " " || ch == "\t" {
+                if !current.isEmpty { tokens.append(current); current = "" }
+            } else {
+                current.append(ch)
+            }
+        }
+        if !current.isEmpty { tokens.append(current) }
+        return tokens
     }
 }

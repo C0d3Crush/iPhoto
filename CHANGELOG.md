@@ -2,6 +2,14 @@
 
 ---
 
+## 1.104.7
+**2 Stabilitäts- und Korrektheitsfehler behoben**
+
+- `NavSidebarView` Konsole: Pipes werden jetzt vor `waitUntilExit` geleert (kein Deadlock bei >64 KB Ausgabe); 30-Sekunden-Timeout; Shell-artiges Argument-Tokenizing mit Quote-Unterstützung; Ausgabezeilen in einem einzigen `append(contentsOf:)` geschrieben (#63)
+- `scanProjectFolder`: `projectLoadToken`-Cancellation — Scan des alten Projekts bricht ab und importiert keine Dateien mehr in das neue Projekt (#70)
+
+---
+
 ## 1.104.6
 **4 Datenverlust- und Korrektheitsfehler behoben**
 

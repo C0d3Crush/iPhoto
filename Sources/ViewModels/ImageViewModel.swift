@@ -66,6 +66,7 @@ class ImageViewModel: ObservableObject {
     @Published var activeProjectName: String? = nil
     @Published var projectSubdirectories: [URL] = []
     var isProjectMode: Bool = false
+    private var projectLoadToken: UUID = UUID()
     @Published var showModeSwitcher: Bool = false
     @Published var modeSwitcherEnabled: Bool = UserDefaults.standard.object(forKey: "feature.modeSwitcherEnabled") as? Bool ?? true {
         didSet {
@@ -596,6 +597,7 @@ class ImageViewModel: ObservableObject {
     func openProject(_ project: Project) {
         isProjectMode = true
         activeProjectName = project.name
+        projectLoadToken = UUID()
         syncedFolderIDs = Set(library.watchedFolders.map { $0.id })
         collection.documents = []
         collection.selectedIndices = []
@@ -623,6 +625,7 @@ class ImageViewModel: ObservableObject {
     func openWithoutProject() {
         isProjectMode = false
         activeProjectName = nil
+        projectLoadToken = UUID()
         projectSubdirectories = []
         syncedFolderIDs = []
         collection.documents = []
@@ -639,6 +642,7 @@ class ImageViewModel: ObservableObject {
     private func scanProjectFolder(_ folderURL: URL) {
         let folderName = folderURL.lastPathComponent
         let taskID = UUID()
+        let token = projectLoadToken
         DispatchQueue.main.async { self.activity.enqueue(id: taskID, label: "Lade \"\(folderName)\"", icon: "folder", done: 0, total: 0) }
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
@@ -653,6 +657,7 @@ class ImageViewModel: ObservableObject {
             }
             var found: [URL] = []
             for case let fileURL as URL in enumerator {
+                guard self.projectLoadToken == token else { break }
                 let vals = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
                 if vals?.isRegularFile == true,
                    vals?.isSymbolicLink != true,
@@ -661,7 +666,10 @@ class ImageViewModel: ObservableObject {
                 }
             }
             DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
+                guard let self = self, self.projectLoadToken == token else {
+                    self?.activity.dequeue(id: taskID)
+                    return
+                }
                 self.importFiles(found, selectFirst: false)
                 self.activity.dequeue(id: taskID)
             }
