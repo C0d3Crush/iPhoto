@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.25
+**Perf: LibraryStore-Saves async — kein JSON-Encode + Disk-Write auf Main-Thread**
+
+- `saveAlbums()`, `saveSmartFolders()`, `saveWatchedFolders()`, `saveAlbumFolders()`: dispatch JSON-Encode + atomisches Schreiben jetzt auf `DispatchQueue.global(qos: .utility)`; spart 100–600 µs Main-Thread-Blocking pro Album/Ordner-Mutation (bei 30+ Alben mit Hunderten von URLs messbar)
+
+---
+
 ## 1.106.24
 **Perf: addSelectedToAlbum + removeURLsFromAllAlbums Batch-Write**
 

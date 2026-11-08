@@ -87,32 +87,26 @@ final class LibraryStore: ObservableObject {
 
     // MARK: - Speichern
 
-    func saveAlbums() {
-        guard let data = try? JSONEncoder().encode(albums) else { return }
-        persist(data, to: albumsFileURL, description: "Album-Datei")
-    }
+    func saveAlbums() { asyncPersist(albums, to: albumsFileURL, description: "Album-Datei") }
 
-    func saveAlbumFolders() {
-        guard let data = try? JSONEncoder().encode(albumFolders) else { return }
-        persist(data, to: albumFoldersFileURL, description: "Album-Ordner-Datei")
-    }
+    func saveAlbumFolders() { asyncPersist(albumFolders, to: albumFoldersFileURL, description: "Album-Ordner-Datei") }
 
-    func saveWatchedFolders() {
-        guard let data = try? JSONEncoder().encode(watchedFolders) else { return }
-        persist(data, to: watchedFoldersFileURL, description: "Ordner-Datei")
-    }
+    func saveWatchedFolders() { asyncPersist(watchedFolders, to: watchedFoldersFileURL, description: "Ordner-Datei") }
 
-    func saveSmartFolders() {
-        guard let data = try? JSONEncoder().encode(smartFolders) else { return }
-        persist(data, to: smartFoldersFileURL, description: "SmartFolder-Datei")
-    }
+    func saveSmartFolders() { asyncPersist(smartFolders, to: smartFoldersFileURL, description: "SmartFolder-Datei") }
 
-    private func persist(_ data: Data, to url: URL, description: String) {
-        do {
-            try data.write(to: url, options: .atomic)
-        } catch {
-            Log.error("\(description) konnte nicht gespeichert werden: \(error)")
-            reportError("\(description): \(error.localizedDescription)")
+    // Encoder + atomic write auf Utility-Queue — kein Haupt-Thread-Blocking für
+    // JSON-Encode (100–600 µs bei 30+ Alben) + Disk-Write (.atomic = rename-after-write).
+    private func asyncPersist<T: Encodable>(_ value: T, to url: URL, description: String) {
+        let capturedURL = url
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let data = try? JSONEncoder().encode(value) else { return }
+            do {
+                try data.write(to: capturedURL, options: .atomic)
+            } catch {
+                Log.error("\(description) konnte nicht gespeichert werden: \(error)")
+                self?.reportError("\(description): \(error.localizedDescription)")
+            }
         }
     }
 
