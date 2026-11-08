@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.37
+**Perf: image(forPath:) Startup-Preload — eliminiert alle ersten Queue-Sync-SELECTs**
+
+- `CatalogStore.open()` ruft jetzt `loadImageCache()` auf — lädt alle `images`-Zeilen beim App-Start in den `imageCache` (läuft auf dem BG-Queue, blockiert Main nicht). Ergebnis: das erste `smartFolderMatches` mit `.orientation`/`.captureDate`/`.cameraMake`/`.cameraModel`-Kriterien trifft vollständig den Cache, ohne einen einzigen `queue.sync`-SQLite-SELECT auszuführen (vorher: N blockierende Reads beim ersten Aufruf nach App-Start, danach dank v1.106.36-Lazy-Cache gecacht)
+
+---
+
 ## 1.106.36
 **Perf: image(forPath:) In-Memory-Cache + totes dateSortKey entfernt**
 

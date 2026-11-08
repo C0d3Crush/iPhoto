@@ -79,6 +79,17 @@ final class CatalogStore {
         if isDefaultCatalog { migrateFromJSON() }
         loadExifCache()
         loadMotifCache()
+        loadImageCache()
+    }
+
+    private func loadImageCache() {
+        let stmt = prepare("SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at FROM images")
+        var rows: [CatalogImage] = []
+        while step(stmt) == SQLITE_ROW { rows.append(rowToImage(stmt)) }
+        sqlite3_finalize(stmt)
+        imageCacheLock.lock()
+        for img in rows { imageCache[img.path] = img }
+        imageCacheLock.unlock()
     }
 
     private func loadExifCache() {
