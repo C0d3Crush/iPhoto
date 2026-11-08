@@ -781,10 +781,7 @@ extension ImageViewModel {
     }
 
     private func parseExifDate(_ s: String) -> Date? {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy:MM:dd HH:mm:ss"
-        return f.date(from: s)
+        Self._sdkFmt.date(from: s)
     }
 
     private func applyDateOp(_ op: SmartFolderOperator, date: Date, lo: Date, hi: Date, dynamic: DynamicDateRange) -> Bool {

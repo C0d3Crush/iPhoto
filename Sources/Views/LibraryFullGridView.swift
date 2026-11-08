@@ -23,13 +23,15 @@ struct LibraryFullGridView: View {
 
     private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv"]
 
+    private static let countFormatter: NumberFormatter = {
+        let f = NumberFormatter(); f.numberStyle = .decimal; f.groupingSeparator = "."; return f
+    }()
+
     private var statusText: String {
         let docs = viewModel.visibleDocuments
         let vidCount = docs.filter { Self.videoExtensions.contains($0.url.pathExtension.lowercased()) }.count
         let photoCount = docs.count - vidCount
-        let fmt = NumberFormatter()
-        fmt.numberStyle = .decimal
-        fmt.groupingSeparator = "."
+        let fmt = Self.countFormatter
         let ps = fmt.string(from: NSNumber(value: photoCount)) ?? "\(photoCount)"
         let vs = fmt.string(from: NSNumber(value: vidCount)) ?? "\(vidCount)"
         return vidCount > 0 ? "\(ps) Fotos, \(vs) Videos · Gerade aktualisiert" : "\(ps) Fotos · Gerade aktualisiert"

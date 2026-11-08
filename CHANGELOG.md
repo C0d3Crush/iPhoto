@@ -2,6 +2,14 @@
 
 ---
 
+## 1.106.21
+**Perf: DateFormatter-Allokation + NumberFormatter-Allokation eliminiert**
+
+- `parseExifDate`: erstellte pro Aufruf einen neuen `DateFormatter` — reused jetzt `_sdkFmt` (bereits gecacht); betrifft Smart-Folder-Matching mit Datumsfiltern (O(N) pro Matching-Durchlauf)
+- `LibraryFullGridView.statusText`: erstellte pro SwiftUI-Render einen neuen `NumberFormatter` — `static let countFormatter` gecacht
+
+---
+
 ## 1.106.20
 **ELO-Update: RatingStore + CatalogStore async statt sync auf Main**
 
