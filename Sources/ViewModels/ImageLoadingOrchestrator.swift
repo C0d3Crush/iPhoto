@@ -71,6 +71,11 @@ final class ImageLoadingOrchestrator {
     // so the prefetch result is reused instead of decoding the same image twice.
     var prefetchCompletions: [URL: [() -> Void]] = [:]
 
+    // Metadata batch-flush buffer — accumulates per-URL results from the metadata queue;
+    // flushed to collection.documents in one write every 150 ms (#14).
+    var metadataPendingFlush: [URL: [MetadataEntry]] = [:]
+    var metadataFlushScheduled = false
+
     // Perf-Instrumentierung: Zeitpunkt, an dem der Nutzer ein neues Bild ausgewählt hat.
     // Speedmetriken (SWITCH cache/preview/full) messen von hier bis zum ersten Display.
     // Der Programmier-Build behält dieses Logging bewusst: Regressionen der
@@ -593,24 +598,67 @@ final class ImageLoadingOrchestrator {
                 defer { stopAccess() }
                 let metadata = host.metadataService.readPhotoMetadata(from: accessURL)
                 DispatchQueue.main.async { [weak self] in
-                    guard let self = self, let host = self.host else { return }
-                    if !metadata.isEmpty,
-                       let idx = host.collection.documents.firstIndex(where: { $0.url == url }),
-                       host.collection.documents[idx].metadata.isEmpty {
-                        host.collection.documents[idx].metadata = metadata
-                        host.invalidateVisibleOrder()
+                    guard let self = self else { return }
+                    // Buffer the result; a single flush will apply all in one array write.
+                    if !metadata.isEmpty {
+                        self.metadataPendingFlush[url] = metadata
                     }
                     self.metaDone += 1
-                    host.activity.update(id: self.metaTaskID,
-                                         done: self.metaDone, total: self.metaTotal)
-                    if self.metaDone >= self.metaTotal {
-                        self.metaDone  = 0
-                        self.metaTotal = 0
-                        host.activity.dequeue(id: self.metaTaskID)
-                        host.detectDuplicates()
-                    }
+                    self.scheduleMetadataFlush()
                 }
             }
+        }
+    }
+
+    private func scheduleMetadataFlush() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard let host = host else { return }
+        // Update progress bar on every completion — it's cheap.
+        host.activity.update(id: metaTaskID, done: metaDone, total: metaTotal)
+        let isLast = metaDone >= metaTotal
+        // Flush the buffer now if this is the last item, or after 150 ms if not yet scheduled.
+        if isLast {
+            flushMetadataPending(isLast: true)
+        } else if !metadataFlushScheduled {
+            metadataFlushScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                self?.metadataFlushScheduled = false
+                self?.flushMetadataPending(isLast: false)
+            }
+        }
+    }
+
+    private func flushMetadataPending(isLast: Bool) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard let host = host, !metadataPendingFlush.isEmpty else {
+            if isLast {
+                metaDone = 0; metaTotal = 0
+                host?.activity.dequeue(id: metaTaskID)
+                host?.detectDuplicates()
+            }
+            return
+        }
+        let t0 = Date()
+        let flush = metadataPendingFlush
+        metadataPendingFlush.removeAll(keepingCapacity: true)
+        // Build URL→index map once; apply all mutations; write back in one assignment.
+        let indexByURL = Dictionary(uniqueKeysWithValues: host.collection.documents.enumerated().map { ($1.url, $0) })
+        var docs = host.collection.documents
+        var changed = false
+        for (url, entries) in flush {
+            guard let idx = indexByURL[url], docs[idx].metadata.isEmpty else { continue }
+            docs[idx].metadata = entries
+            changed = true
+        }
+        if changed {
+            host.collection.documents = docs
+            host.invalidateVisibleOrder()
+        }
+        Log.perf(String(format: "META-FLUSH %d docs %.0f ms", flush.count, Date().timeIntervalSince(t0) * 1000))
+        if isLast {
+            metaDone = 0; metaTotal = 0
+            host.activity.dequeue(id: metaTaskID)
+            host.detectDuplicates()
         }
     }
 

@@ -2,6 +2,16 @@
 
 ---
 
+## 1.106.4
+**Metadaten-Batch-Flush: O(N²) → O(N) beim Album-Import (#14)**
+
+- `loadMetadataInBackground`: Pro Completion wird das Ergebnis jetzt in `metadataPendingFlush: [URL: [MetadataEntry]]` gepuffert statt sofort auf Main geflushst — kein `firstIndex` + Subscript-Write + `invalidateVisibleOrder()` pro Dokument mehr
+- `flushMetadataPending`: Baut einmal ein `[URL: Int]`-Dictionary, mutiert `docs` vollständig, schreibt einmalig zurück und ruft `invalidateVisibleOrder()` nur einmal auf — O(N) statt O(N²)
+- 150-ms-Debounce für Zwischen-Flushes; letztes Ergebnis löst sofortigen Final-Flush aus
+- `META-FLUSH <count> <ms>`-Logzeile für Regressionsüberwachung
+
+---
+
 ## 1.106.3
 **Datumsortierung O(1) Batch-Query; Album-FS-Queue seriell (#10 #24)**
 
