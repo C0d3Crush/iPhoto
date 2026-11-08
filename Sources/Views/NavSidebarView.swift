@@ -266,35 +266,10 @@ struct NavSidebarView: View {
 
     @ViewBuilder private var projectSubdirSections: some View {
         let subdirs = viewModel.projectSubdirectories
-        if subdirs.isEmpty {
-            EmptyView()
-        } else {
+        if !subdirs.isEmpty {
             ForEach(subdirs, id: \.path) { dir in
-                let name = dir.lastPathComponent
-                let isCollapsed = collapsedGroups.contains(name)
-                collapsibleSectionHeader(name, isCollapsed: isCollapsed,
-                    onToggle: {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            if isCollapsed { collapsedGroups.remove(name) }
-                            else { collapsedGroups.insert(name) }
-                        }
-                    })
-                if !isCollapsed {
-                    Button(action: { viewModel.navSelection = .projectFolder(dir.standardized.path) }) {
-                        HStack(spacing: 4) {
-                            Label(name, systemImage: "folder")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(viewModel.navSelection == .projectFolder(dir.standardized.path)
-                            ? Color.accentColor.opacity(0.2) : Color.clear)
-                        .cornerRadius(6)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .padding(.horizontal, 4)
-                }
+                SidebarSubfolderRow(folderURL: dir, depth: 0)
+                    .environmentObject(viewModel)
             }
         }
     }
