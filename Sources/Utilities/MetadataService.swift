@@ -304,7 +304,8 @@ final class MetadataService {
     }
 
     private func propertiesFromJPEGData(_ data: Data) -> [String: Any]? {
-        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let opts = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let src = CGImageSourceCreateWithData(data as CFData, opts) else { return nil }
         return CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any]
     }
 

@@ -227,7 +227,11 @@ struct RAWImageDecoder {
 
         iphotoBreadcrumb("decodeEmbeddedJPEG: CGImageSourceCreateWithData (\(name))")
         Log.trace("CGImageSourceCreateWithData: \(jpegData.count)B \(name)")
-        guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil) else { return nil }
+        // kCGImageSourceShouldCache: false — verhindert dass ImageIO die dekodierten Pixel
+        // (~52 MB pro RAF-JPEG) in seinem globalen Cache hält. materialize() erstellt ohnehin
+        // eine eigenständige Bitmap-Kopie, daher ist der Cache wertlos und kostet nur RAM.
+        let srcOpts = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(jpegData as CFData, srcOpts) else { return nil }
 
         if let maxDim = maxDimension {
             iphotoBreadcrumb("decodeEmbeddedJPEG: CGImageSourceCreateThumbnailAtIndex (\(name))")

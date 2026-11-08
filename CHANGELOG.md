@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.38
+**Bugfix: SIGKILL (OOM) beim Laden großer RAF-Bibliotheken — ImageIO-Cache deaktiviert**
+
+- `decodeEmbeddedJPEG`: `CGImageSourceCreateWithData` erhält jetzt `kCGImageSourceShouldCache: false` — verhindert dass ImageIO die dekodierten Vollbild-Pixel (~52 MB pro RAF-eingebettetem JPEG) in seinem globalen Cache hält. Bei 2343 RAF-Thumbnails akkumulierte der Cache mehrere hundert MB → macOS-SIGKILL; `materialize()` erstellt bereits eigenständige Bitmap-Kopien, daher ist der Cache wertlos
+- Gleiche Option in `MetadataService.propertiesFromJPEGData` ergänzt (konsistenter Umgang mit CGImageSource-Cache in der gesamten Codebase)
+- Bug #42 geschlossen
+
+---
+
 ## 1.106.37
 **Perf: image(forPath:) Startup-Preload — eliminiert alle ersten Queue-Sync-SELECTs**
 
