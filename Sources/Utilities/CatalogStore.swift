@@ -42,6 +42,12 @@ final class CatalogStore {
     private var imageCacheMisses = Set<String>()
     private let imageCacheLock = NSLock()
 
+    // Smart-folder result caches — keyed by generated SQL string.
+    // Populated lazily, invalidated by every DB write that could affect SF criteria.
+    // Access is serialised on `queue` (same as all other DB ops) — no extra lock needed.
+    var sfOrderedPathsCache: [String: [String]] = [:]
+    var sfCountCache: [String: Int] = [:]
+
     // JSON-Legacy-Migration nur für den Standard-Katalog — injizierte Pfade (Tests)
     // dürfen nicht die echten albums.json des Nutzers importieren.
     private let isDefaultCatalog: Bool
@@ -349,6 +355,8 @@ final class CatalogStore {
             sqlite3_bind_int(stmt, 10, isRAW ? 1 : 0)
             bind(stmt, 11, iso8601())
             step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
         // Keep in-memory cache in sync (id unknown after ON CONFLICT — not used by callers).
         imageCacheLock.lock()
@@ -432,6 +440,8 @@ final class CatalogStore {
         queue.sync {
             let stmt = prepare("DELETE FROM images WHERE path=?")
             bind(stmt, 1, path); step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
         imageCacheLock.lock()
         imageCache.removeValue(forKey: path)
@@ -455,6 +465,8 @@ final class CatalogStore {
             sqlite3_bind_int(stmt, 8, autoBracketing ? 1 : 0)
             bind(stmt, 9, path)
             step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
         exifCacheLock.lock()
         exifCache[path] = (focalLength: focalLength, iso: iso, aperture: aperture, lensModel: lensModel, hdr: hdr, filmSimulation: filmSimulation, sequenceNumber: sequenceNumber, autoBracketing: autoBracketing)
@@ -575,6 +587,8 @@ final class CatalogStore {
             }
             sqlite3_finalize(stmt)
             exec("COMMIT")
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 
@@ -611,6 +625,8 @@ final class CatalogStore {
             }
             sqlite3_finalize(stmt)
             exec("COMMIT")
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 
@@ -682,6 +698,7 @@ final class CatalogStore {
         guard !SmartFolderSQLGenerator.hasRuntimeOnlyCriteria(sf) else { return nil }
         let sql = SmartFolderSQLGenerator.generate(for: sf)
         return queue.sync {
+            if let cached = sfOrderedPathsCache[sql] { return cached }
             guard let stmt = prepare(sql) else { return [] }
             var paths: [String] = []
             while step(stmt) == SQLITE_ROW {
@@ -690,6 +707,7 @@ final class CatalogStore {
                 }
             }
             sqlite3_finalize(stmt)
+            sfOrderedPathsCache[sql] = paths
             return paths
         }
     }
@@ -699,9 +717,12 @@ final class CatalogStore {
         guard !SmartFolderSQLGenerator.hasRuntimeOnlyCriteria(sf) else { return nil }
         let sql = SmartFolderSQLGenerator.generateCount(for: sf)
         return queue.sync {
+            if let cached = sfCountCache[sql] { return cached }
             guard let stmt = prepare(sql) else { return nil }
             defer { sqlite3_finalize(stmt) }
-            return step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : nil
+            let count = step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int(stmt, 0)) : nil
+            if let n = count { sfCountCache[sql] = n }
+            return count
         }
     }
 }

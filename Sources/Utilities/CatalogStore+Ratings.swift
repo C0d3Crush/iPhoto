@@ -17,6 +17,8 @@ extension CatalogStore {
             sqlite3_bind_int(stmt, 2, Int32(rating))
             bind(stmt, 3, flag); bind(stmt, 4, colorLabel); bind(stmt, 5, iso8601())
             step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 
@@ -48,6 +50,8 @@ extension CatalogStore {
             } else {
                 exec("ROLLBACK")
             }
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
             return ok
         }
     }
@@ -138,6 +142,8 @@ extension CatalogStore {
             sqlite3_bind_int(stmt, 3, Int32(eloMatches))
             bind(stmt, 4, iso8601())
             step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 
@@ -167,6 +173,8 @@ extension CatalogStore {
         queue.sync {
             let stmt = prepare("DELETE FROM ratings WHERE image_path=?")
             bind(stmt, 1, path); step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 
@@ -184,6 +192,8 @@ extension CatalogStore {
                 step(stmt); sqlite3_finalize(stmt)
             }
             exec("COMMIT")
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 
@@ -226,6 +236,8 @@ extension CatalogStore {
                 step(stmt); sqlite3_finalize(stmt)
             }
             exec("COMMIT")
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 

@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.41
+**Perf: SmartFolder-Ergebnis-Cache — eliminiert blockierende SQLite-Reads bei Rating-Änderungen**
+
+- `orderedPathsForSmartFolder` und `countForSmartFolder` blockierten bei jedem `computeVisibleDocuments`-Aufruf den Main-Thread via `queue.sync` (SQLite-SELECT pro SmartFolder-Neuberechnung, z. B. nach jeder Bewertungsänderung)
+- Fix: `sfOrderedPathsCache: [SQL → [String]]` und `sfCountCache: [SQL → Int]` in `CatalogStore` — Ergebnis wird nach erstem SQL-Lauf gecacht; alle Schreibpfade (`saveRating`, `saveRatings`, `saveElo`, `removeRating`, `setTrashed`, `setBackedUp`, `upsertImage`, `removeImage`, `upsertExif`, `deleteImages`, `batchUpsertImages`) invalidieren den Cache direkt im `queue.sync`-Block
+- Folge-Aufruf nach Cache-Treffer: kein SQLite-Roundtrip, kein Main-Thread-Block
+
+---
+
 ## 1.106.40
 **Perf: autoreleasepool in loadMetadataInBackground**
 
