@@ -49,8 +49,11 @@ Reine SwiftUI-Views ohne eigene Logik. Alle Aktionen delegieren an `ImageViewMod
 | Datei | Zweck |
 |-------|-------|
 | `ContentView.swift` | Haupt-Layout: NavSidebar links, ZoomableScrollView Mitte, Inspector rechts |
+| `NavSidebarView.swift` | Linke Navigationsleiste mit Sektionen (Library, Alben, Ordner, SmartFolders, People …); Reihenfolge per Drag & Drop anpassbar |
 | `LibraryGridView.swift` | Horizontaler Thumbnail-Strip unten |
 | `SidebarView.swift` | Horizontaler Thumbnail-Strip (Album-/Ordner-Ansicht) |
+| `ProjectPickerView.swift` | Projekt-Auswahl-UI (Vault-Modus) zum Wechseln/Anlegen von Projekten |
+| `VerboseLogView.swift` | Geek-Panel für Live-Log und Debug-Infos |
 | `ThumbnailCell.swift` | Einzelne Thumbnail-Zelle mit Bewertungs-Badge |
 | `ZoomableScrollView.swift` | `NSViewRepresentable`-Wrapper um `NSScrollView` für Zoom/Pan |
 | `InspectorView.swift` | Rechte Sidebar mit Plugin-Blöcken (Drag & Drop, ein-/ausklappbar) |
@@ -128,6 +131,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `HDRMerger.swift` | HDR-Merge-Logik (Belichtungsreihe → HDR-Stack) |
 | `HotPixelResult.swift` | Ergebnis der Hotpixel-Analyse |
 | `SearchParser.swift` | Parst `iphoto-cli search`-Tokens in `CatalogStore`-Abfragen |
+| `Project.swift` | Projekt-Struct (UUID, Name, folderPaths, createdAt, lastOpenedAt) für den Vault-Modus |
 
 ### Utilities (`Sources/Utilities/`)
 
@@ -167,6 +171,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `InpaintProcessor.swift` | Bridge zu Python/CMT-Inpainting-Skript |
 | `LensFilters.swift` | Vignette + Verzeichnung via CoreImage |
 | `TetherManager.swift` | Tethered-Shooting-Verbindung |
+| `ProjectStore.swift` | Singleton `ObservableObject` für Projekte (Vault-Modus); liest/schreibt `projects.json`, merkt sich das zuletzt geöffnete Projekt per `UserDefaults` |
 | `Heartbeat.swift` | Laufzeitstatus (App-Aliveness-Signal für CLI-Skripte) |
 | `Log.swift` | File-Logger → `~/Library/Logs/iPhoto/iPhoto.log` |
 | `CrashReporter.swift` | Uncaught-Exception-Handler mit Sheet-Anzeige |
@@ -259,6 +264,7 @@ Alle persistenten Daten liegen in `~/Library/Application Support/iPhoto/`:
 | `albums.json` | JSON | Legacy-Alben (Fallback, wird bei erstem Start migriert) |
 | `bookmarks.json` | JSON | Security-Scoped Bookmarks für importierte URLs |
 | `watchedFolders.json` | JSON | Überwachte Ordner (URL + Bookmark) |
+| `projects.json` | JSON | Projekte / Vault-Modus (`ProjectStore`): UUID, Name, folderPaths, createdAt, lastOpenedAt |
 | `versions/<hash>/` | Verzeichnisse | Backup-Versionen je Bild (index.json + Pixeldateien) |
 | `thumbnails/` | JPEG-Dateien | ThumbnailDiskCache (160 px, LRU) |
 | `config.json` | JSON | App-Konfiguration (`AppConfig`) |
@@ -399,6 +405,15 @@ iphoto-cli config show|get|set|export|import [<key>] [<wert>] [--json]
 iphoto-cli plugins list|dir [--json]
 iphoto-cli bugreport list|show|fix|reopen|path [--fixed|--all] [--json]
 iphoto-cli viewmode get|set <grid|list|columns|gallery> [--json]
+
+# Projekte (Vault-Modus)
+iphoto-cli project list [--json]
+iphoto-cli project show <name|id> [--json]
+iphoto-cli project create <name> [--folder <pfad>]... [--json]
+iphoto-cli project rename <name|id> <neuer-name> [--json]
+iphoto-cli project delete <name|id> [--json]
+iphoto-cli project add-folder <name|id> <pfad> [--json]
+iphoto-cli project remove-folder <name|id> <pfad> [--json]
 ```
 
 ---

@@ -7,7 +7,7 @@
 
 ---
 
-## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.100.0)*
+## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.106.0)*
 
 **Was steht (stark!):**
 - Produktionsreife App-Basis: SQLite-Katalog (WAL, Migration), vollständige CRUD für
@@ -32,6 +32,8 @@
   `gear summary/cameras/lenses/focal/iso/aperture` (Ausrüstungsstatistik),
   `catalog cameras` (Bilder pro Kamera) und `catalog timeline` (Bilder pro Zeitraum) u.v.m.
 - 3-Phasen-Ladelogik + ThumbnailDiskCache: Bild-Switching in Millisekunden.
+- **Projekte (Vault-Modus)**: benannte Ordner-Sammlungen (`ProjectStore`, `projects.json`),
+  Projekt-Picker-UI, Seitenleisten-Sektionen pro Projekt-Unterordner; CLI via `iphoto-cli project`.
 - Benchmark- + Skalierungstests bis 1000 Bilder, CI auf macOS-latest.
 
 **Was noch aktiv weiterentwickelt wird:**
@@ -286,7 +288,7 @@ aber falls du es langfristig tragfähig willst, sind das die abo-freien Wege:
 
 ## 11. Meilensteine / Definition von Erfolg
 
-**Erreicht (v1.100.0):**
+**Erreicht (v1.106.0):**
 - [x] Phase 0: `AdjustmentState`-Refactor durch, verhaltensgleich.
 - [x] Phase 1: RAW-Pipeline, 3-Phasen-Laden, Rust-Core, ThumbnailDiskCache.
 - [x] Phase 2: Edits im Katalog, Preset-System, Undo/Redo, Batch-Export.
@@ -298,6 +300,8 @@ aber falls du es langfristig tragfähig willst, sind das die abo-freien Wege:
       `query filters/parse/run`, `bugreport list/show/fix/reopen`,
       `exif stats` (Verteilung nach Kamera/Objektiv/ISO/Blende/Brennweite/Film),
       `gear summary/cameras/lenses/focal/iso/aperture` (Ausrüstungsstatistik).
+- [x] **Projekte / Vault-Modus**: `ProjectStore`, `projects.json`, Projekt-Picker-UI,
+      `iphoto-cli project list/show/create/rename/delete/add-folder/remove-folder`.
 
 **Nächste Schritte:**
 - [ ] Film-Look Starter-Presets kuratieren (Classic-Chrome-artig, Acros-artig …).
@@ -317,10 +321,11 @@ Rezepte werden geteilt, Contributors kommen. Alles darüber ist Bonus, nicht Pfl
 
 ---
 
-## 12. Was JETZT konkret zu tun ist *(Stand v1.100.0)*
+## 12. Was JETZT konkret zu tun ist *(Stand v1.106.0)*
 
 1. ✅ Phasen 0–3 (Kern) abgeschlossen — die App ist ein funktionierender RAW-Editor
-   mit Preset-System, Rezept-Sharing, People, ELO, Qualitätsanalyse und ~65 CLI-Befehlen.
+   mit Preset-System, Rezept-Sharing, People, ELO, Qualitätsanalyse, ~65 CLI-Befehlen
+   und Projekte/Vault-Modus (benannte Ordner-Sammlungen mit Picker-UI).
 2. **Film-Look Starter-Presets kuratieren** — das ist das nächste sichtbare Differenzierungsmerkmal.
    Classic-Chrome-, Acros-, Velvia-, Classic-Neg-artige Presets als `.iphotorecipe` mitliefern.
 3. **Lokale Anpassungen UI** (Phase 4) — Pinsel/Gradient in `AdjustmentsPanel` fertigstellen.
