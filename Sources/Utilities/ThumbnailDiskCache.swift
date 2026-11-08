@@ -19,7 +19,10 @@ final class ThumbnailDiskCache {
         let cacheURL = cacheDir.appendingPathComponent("\(key).jpg")
         guard FileManager.default.fileExists(atPath: cacheURL.path) else { return nil }
         guard let src = CGImageSourceCreateWithURL(cacheURL as CFURL, nil) else { return nil }
-        return CGImageSourceCreateImageAtIndex(src, 0, nil)
+        // kCGImageSourceShouldCacheImmediately forces JPEG decode here on the BG thread
+        // rather than lazily on the first draw pass on the main thread (#22).
+        let opts = [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+        return CGImageSourceCreateImageAtIndex(src, 0, opts)
     }
 
     func save(_ image: CGImage, for url: URL, maxDimension: Int) {

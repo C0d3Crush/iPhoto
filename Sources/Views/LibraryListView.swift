@@ -359,13 +359,17 @@ private struct ListRow: View {
             .foregroundColor(color)
     }
 
-    private var dateString: String {
-        guard let date = fileDate else { return "–" }
+    private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
         f.timeStyle = .short
         f.locale = Locale(identifier: "de_DE")
-        return f.string(from: date)
+        return f
+    }()
+
+    private var dateString: String {
+        guard let date = fileDate else { return "–" }
+        return Self.dateFormatter.string(from: date)
     }
 
     private func loadFileAttributes() {

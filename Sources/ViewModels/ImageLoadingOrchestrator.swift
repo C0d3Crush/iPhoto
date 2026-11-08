@@ -294,6 +294,7 @@ final class ImageLoadingOrchestrator {
                     updated.cgImage = image
                     updated.imageSize = size
                     updated.metadata = metadata
+                    updated.fileSize = sizeBytes
                     if let r = catalogRating {
                         updated.rating = r.rating
                         updated.flagStatus = FlagStatus(rawValue: r.flag) ?? .none

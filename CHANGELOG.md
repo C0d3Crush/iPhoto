@@ -2,6 +2,18 @@
 
 ---
 
+## 1.106.1
+**ThumbnailDiskCache eager decode; SimilarView kein Disk-I/O im Body; DateFormatter gecacht; Projekt-Ordner werden überwacht; project CLI + Tests**
+
+- `ThumbnailDiskCache.load`: `kCGImageSourceShouldCacheImmediately: true` erzwingt JPEG-Decode im BG-Thread — kein lazy Decode auf dem Main-Thread mehr beim ersten Render-Pass (#22)
+- `SimilarView.recommendedPickIndex`: liest `doc.fileSize` statt `resourceValues` pro Render-Call; `fileSize: Int64` als neues Feld in `ImageDocument`, wird in `loadFullRes` befüllt (#30)
+- `LibraryListView.ListRow.dateString`: `DateFormatter` ist jetzt `static` — wird einmal erzeugt statt pro Zeile/Render (#35)
+- `openProject`: startet jetzt `startWatchingProjectFolder` für jeden Projektordner — neue Dateien und Unterordner werden live erkannt und importiert; Watcher beim Schließen abgebaut (#71)
+- `iphoto-cli project list|create|delete|scan`: neuer CLI-Befehl für Projektverwaltung; `ProjectStore` unterstützt `IPHOTO_PROJECTS_JSON` für Tests; 4 neue Tests in `run_plugins.sh` (#72)
+- `run_plugins.sh`: `$TESTIMG` → `$INPUT_PNG` in `album purge-stale`-Test; alle `$CLI` → `$BIN` korrigiert
+
+---
+
 ## 1.106.0
 **Obsidian-Stil Unterordner-Navigation in Sidebar; keepOverrides stable Key; coverDocs gecacht; Prefetch-Doppeldekodierung verhindert**
 

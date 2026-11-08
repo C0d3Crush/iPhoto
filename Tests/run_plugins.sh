@@ -3049,7 +3049,7 @@ echo "--- album purge-stale ---"
 PURGE_DIR=$(mktemp -d)
 PURGE_IMG="$PURGE_DIR/real.jpg"
 PURGE_GHOST="$PURGE_DIR/ghost.jpg"
-cp "$TESTIMG" "$PURGE_IMG"
+cp "$INPUT_PNG" "$PURGE_IMG"
 # Create a minimal albums.json with one real and one ghost URL
 PURGE_DB="$PURGE_DIR/catalog.db"
 PURGE_ALBUM_ID=$(uuidgen)
@@ -3059,7 +3059,7 @@ cat > "$PURGE_JSON_FILE" <<ALBUMEOF
 [{"id":"$PURGE_ALBUM_ID","name":"PurgeTest","photoURLs":["$PURGE_IMG","$PURGE_GHOST"],"albumDescription":null,"coverPhotoURL":null,"parentID":null}]
 ALBUMEOF
 # dry-run should detect 1 stale reference
-PURGE_OUT=$(IPHOTO_CATALOG_DB="$PURGE_DB" IPHOTO_ALBUMS_JSON="$PURGE_JSON_FILE" "$CLI" album purge-stale --dry-run --json 2>/dev/null)
+PURGE_OUT=$(IPHOTO_CATALOG_DB="$PURGE_DB" IPHOTO_ALBUMS_JSON="$PURGE_JSON_FILE" "$BIN" album purge-stale --dry-run --json 2>/dev/null)
 PURGE_ERR=$?
 PURGE_REMOVED=$(echo "$PURGE_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('removed',0))" 2>/dev/null)
 PURGE_DRYRUN=$(echo "$PURGE_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('dry_run','false'))" 2>/dev/null)
@@ -3069,7 +3069,7 @@ else
     fail "album purge-stale --dry-run" "removed=$PURGE_REMOVED dry_run=$PURGE_DRYRUN (erwartet: 1 / True)"
 fi
 # real run should remove the ghost
-PURGE_OUT2=$(IPHOTO_CATALOG_DB="$PURGE_DB" IPHOTO_ALBUMS_JSON="$PURGE_JSON_FILE" "$CLI" album purge-stale --json 2>/dev/null)
+PURGE_OUT2=$(IPHOTO_CATALOG_DB="$PURGE_DB" IPHOTO_ALBUMS_JSON="$PURGE_JSON_FILE" "$BIN" album purge-stale --json 2>/dev/null)
 PURGE_REMOVED2=$(echo "$PURGE_OUT2" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('removed',0))" 2>/dev/null)
 if [ "$PURGE_REMOVED2" = "1" ]; then
     pass "album purge-stale (1 veralteter Verweis entfernt)"
@@ -3077,6 +3077,57 @@ else
     fail "album purge-stale" "removed=$PURGE_REMOVED2 (erwartet: 1)"
 fi
 rm -rf "$PURGE_DIR"
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# project list / create / scan / delete (#72)
+# ---------------------------------------------------------------------------
+PROJ_DIR=$(mktemp -d)
+PROJ_IMG="$PROJ_DIR/foto.png"
+cp "$INPUT_PNG" "$PROJ_IMG"
+PROJ_JSON="$PROJ_DIR/projects.json"
+
+echo "--- project CLI ---"
+
+# create
+PROJ_CREATE=$(IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project create "TestVault" "$PROJ_DIR" --json 2>/dev/null)
+PROJ_ID=$(echo "$PROJ_CREATE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
+if [ -n "$PROJ_ID" ]; then
+    pass "project create (ID: $PROJ_ID)"
+else
+    fail "project create" "kein id in JSON: $PROJ_CREATE"
+fi
+
+# list
+PROJ_LIST=$(IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project list --json 2>/dev/null)
+PROJ_COUNT=$(echo "$PROJ_LIST" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
+if [ "$PROJ_COUNT" = "1" ]; then
+    pass "project list (1 Projekt)"
+else
+    fail "project list" "erwartet 1, got $PROJ_COUNT"
+fi
+
+# scan
+PROJ_SCAN=$(IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project scan "TestVault" --json 2>/dev/null)
+PROJ_FILES=$(echo "$PROJ_SCAN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('files',0))" 2>/dev/null)
+if [ "$PROJ_FILES" -ge 1 ] 2>/dev/null; then
+    pass "project scan ($PROJ_FILES Datei(en) gefunden)"
+else
+    fail "project scan" "erwartet ≥1, got $PROJ_FILES"
+fi
+
+# delete
+IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project delete "TestVault" > /dev/null 2>&1
+PROJ_LIST2=$(IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project list --json 2>/dev/null)
+PROJ_COUNT2=$(echo "$PROJ_LIST2" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
+if [ "$PROJ_COUNT2" = "0" ]; then
+    pass "project delete"
+else
+    fail "project delete" "erwartet 0 Projekte, got $PROJ_COUNT2"
+fi
+
+rm -rf "$PROJ_DIR"
 
 echo ""
 

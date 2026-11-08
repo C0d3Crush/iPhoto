@@ -111,13 +111,9 @@ struct SimilarView: View {
     static func recommendedPickIndex(in group: [ImageDocument]) -> Int {
         if let idx = group.firstIndex(where: { $0.isRAW }) { return idx }
         var bestIdx = 0
-        var bestSize: Int = -1
+        var bestSize: Int64 = -1
         for (idx, doc) in group.enumerated() {
-            let size = (try? doc.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap({ $0 }) ?? 0
-            if size > bestSize {
-                bestSize = size
-                bestIdx = idx
-            }
+            if doc.fileSize > bestSize { bestSize = doc.fileSize; bestIdx = idx }
         }
         return bestIdx
     }

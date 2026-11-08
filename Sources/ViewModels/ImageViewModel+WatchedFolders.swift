@@ -394,6 +394,87 @@ extension ImageViewModel {
         folderWatchers[folder.id] = nil
     }
 
+    // MARK: - Project folder watching (#71)
+
+    func startWatchingProjectFolder(_ folderURL: URL) {
+        let key = folderURL.standardized.path
+        projectFolderWatchers[key]?.forEach { $0.cancel() }
+
+        var paths = [key]
+        if let enumerator = FileManager.default.enumerator(
+            at: folderURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) {
+            for case let url as URL in enumerator {
+                if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    paths.append(url.standardized.path)
+                }
+            }
+        }
+
+        var sources: [DispatchSourceFileSystemObject] = []
+        for path in paths {
+            let fd = open(path, O_EVTONLY)
+            guard fd != -1 else { continue }
+            let source = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: fd,
+                eventMask: [.write, .rename, .delete],
+                queue: .global(qos: .utility)
+            )
+            source.setEventHandler { [weak self] in
+                DispatchQueue.main.async {
+                    guard let self = self, self.isProjectMode else { return }
+                    self.projectFolderSyncDebounce[key]?.cancel()
+                    let work = DispatchWorkItem { [weak self] in
+                        guard let self = self, self.isProjectMode else { return }
+                        self.projectFolderSyncDebounce[key] = nil
+                        self.scanProjectFolder(folderURL)
+                        self.stopWatchingProjectFolder(key)
+                        self.startWatchingProjectFolder(folderURL)
+                        // Refresh sidebar subdirectory list
+                        DispatchQueue.global(qos: .utility).async {
+                            let fm = FileManager.default
+                            let entries = (try? fm.contentsOfDirectory(
+                                at: folderURL,
+                                includingPropertiesForKeys: [.isDirectoryKey],
+                                options: [.skipsHiddenFiles]
+                            )) ?? []
+                            let subdirs = entries
+                                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+                                .sorted { $0.lastPathComponent < $1.lastPathComponent }
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self = self else { return }
+                                // Merge: add new subdirs, keep existing order
+                                let existing = Set(self.projectSubdirectories.map { $0.standardized.path })
+                                let new = subdirs.filter { !existing.contains($0.standardized.path) }
+                                self.projectSubdirectories.append(contentsOf: new)
+                            }
+                        }
+                    }
+                    self.projectFolderSyncDebounce[key] = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+                }
+            }
+            source.setCancelHandler { close(fd) }
+            source.resume()
+            sources.append(source)
+        }
+        projectFolderWatchers[key] = sources
+    }
+
+    private func stopWatchingProjectFolder(_ key: String) {
+        projectFolderWatchers[key]?.forEach { $0.cancel() }
+        projectFolderWatchers[key] = nil
+    }
+
+    func stopAllProjectFolderWatchers() {
+        projectFolderSyncDebounce.values.forEach { $0.cancel() }
+        projectFolderSyncDebounce = [:]
+        projectFolderWatchers.values.forEach { $0.forEach { $0.cancel() } }
+        projectFolderWatchers = [:]
+    }
+
     func setupWatchedFolders() {
         ensureDefaultLibraryFolder()
         for folder in library.watchedFolders {

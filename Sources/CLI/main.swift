@@ -65,6 +65,7 @@ private func printUsage() {
                               [--copyright X] [--creator X] [--date "YYYY:MM:DD HH:MM:SS"]
                               [--lat N] [--lon N] [--json]
       iphoto-cli cache stats|clear [--json]
+      iphoto-cli project list|create|delete|scan [--json]
       iphoto-cli watched list [--json]
       iphoto-cli watched add <pfad> [--auto-sync] [--json]
       iphoto-cli watched remove <name|id> [--json]
@@ -1952,6 +1953,94 @@ private func saveWatchedFoldersList(_ folders: [WatchedFolder]) {
                                              withIntermediateDirectories: true)
     if let data = try? JSONEncoder().encode(folders) {
         try? data.write(to: url)
+    }
+}
+
+// MARK: - Project CLI (#72)
+
+private func runProject(_ args: [String]) -> Int32 {
+    let sub = args.first ?? "list"
+    let jsonOut = args.contains("--json")
+
+    let store = ProjectStore.shared
+
+    switch sub {
+    case "list":
+        if jsonOut {
+            struct PJ: Encodable { let id: String; let name: String; let folders: [String]; let lastOpened: String? }
+            let items = store.projects.map { p -> PJ in
+                let last = p.lastOpenedAt.map { ISO8601DateFormatter().string(from: $0) }
+                return PJ(id: p.id.uuidString, name: p.name, folders: p.folderPaths, lastOpened: last)
+            }
+            if let d = try? JSONEncoder().encode(items), let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if store.projects.isEmpty { print("Keine Projekte."); return 0 }
+            for p in store.projects {
+                let folders = p.folderPaths.joined(separator: ", ")
+                print("[\(p.id.uuidString)] \(p.name) — \(folders)")
+            }
+        }
+        return 0
+
+    case "create":
+        let positionals = args.dropFirst().filter { !$0.hasPrefix("--") }
+        guard let name = positionals.first else {
+            fputs("Verwendung: iphoto-cli project create <name> <ordner1> [<ordner2> ...]\n", stderr); return 1
+        }
+        let folders = Array(positionals.dropFirst())
+        guard !folders.isEmpty else {
+            fputs("Mindestens ein Ordnerpfad erforderlich.\n", stderr); return 1
+        }
+        let p = store.createProject(name: name, folderPaths: folders)
+        if jsonOut {
+            if let d = try? JSONEncoder().encode(["id": p.id.uuidString, "name": p.name]), let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Projekt erstellt: [\(p.id.uuidString)] \(p.name)")
+        }
+        return 0
+
+    case "delete":
+        let idOrName = args.dropFirst().filter { !$0.hasPrefix("--") }.first ?? ""
+        guard let proj = store.projects.first(where: { $0.id.uuidString == idOrName || $0.name == idOrName }) else {
+            fputs("Projekt nicht gefunden: \(idOrName)\n", stderr); return 1
+        }
+        store.deleteProject(proj)
+        print("Projekt gelöscht: \(proj.name)")
+        return 0
+
+    case "scan":
+        let idOrName = args.dropFirst().filter { !$0.hasPrefix("--") }.first ?? ""
+        guard let proj = store.projects.first(where: { $0.id.uuidString == idOrName || $0.name == idOrName }) else {
+            fputs("Projekt nicht gefunden: \(idOrName)\n", stderr); return 1
+        }
+        let fm = FileManager.default
+        var total = 0
+        for path in proj.folderPaths {
+            let root = URL(fileURLWithPath: path)
+            guard let enumerator = fm.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else { continue }
+            for case let fileURL as URL in enumerator {
+                guard (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
+                guard ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) else { continue }
+                total += 1
+                if !jsonOut { print(fileURL.path) }
+            }
+        }
+        if jsonOut {
+            struct ScanResult: Encodable { let project: String; let files: Int }
+            if let d = try? JSONEncoder().encode(ScanResult(project: proj.name, files: total)),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("\(total) Bild(er) in \"\(proj.name)\" gefunden.")
+        }
+        return 0
+
+    default:
+        fputs("Unbekannter Unterbefehl: \(sub)\nVerfügbar: list, create, delete, scan\n", stderr)
+        return 1
     }
 }
 
@@ -6642,6 +6731,9 @@ if firstArg == "config" {
 }
 if firstArg == "cache" {
     exit(runCache(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "project" {
+    exit(runProject(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "watched" {
     exit(runWatched(Array(rawArgs.dropFirst(2))))

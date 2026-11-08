@@ -66,6 +66,7 @@ struct ImageDocument: Identifiable, Equatable {
     // oder noch nicht gescannt). Ein einziges geschlossenes Auge markiert das Bild —
     // "Gruppenfoto mit Blinzler" ist der typische Fehlerfall, den wir fangen wollen.
     var eyeOpenness: Double? = nil
+    var fileSize: Int64 = 0
     var qualityScanned: Bool = false
     var blurOverride: Bool = false
     var underOverride: Bool = false

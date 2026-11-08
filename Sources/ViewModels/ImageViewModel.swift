@@ -99,6 +99,8 @@ class ImageViewModel: ObservableObject {
     /// weitergeleitet, Views können weiterhin nur ImageViewModel beobachten.
     let activity = BackgroundActivityState()
     var folderSyncDebounce: [UUID: DispatchWorkItem] = [:]
+    var projectFolderWatchers: [String: [DispatchSourceFileSystemObject]] = [:]
+    var projectFolderSyncDebounce: [String: DispatchWorkItem] = [:]
 
     // MARK: - Adjustments
 
@@ -631,7 +633,9 @@ class ImageViewModel: ObservableObject {
             DispatchQueue.main.async { [weak self] in self?.projectSubdirectories = subdirs }
         }
         for path in project.folderPaths {
-            scanProjectFolder(URL(fileURLWithPath: path))
+            let url = URL(fileURLWithPath: path)
+            scanProjectFolder(url)
+            startWatchingProjectFolder(url)
         }
         projectInitialized = true
         let pending = pendingOpenURLs; pendingOpenURLs = []
@@ -647,6 +651,7 @@ class ImageViewModel: ObservableObject {
         projectLoadToken = UUID()
         projectSubdirectories = []
         syncedFolderIDs = []
+        stopAllProjectFolderWatchers()
         collection.documents = []
         collection.selectedIndices = []
         collection.currentIndex = 0
@@ -661,7 +666,7 @@ class ImageViewModel: ObservableObject {
         }
     }
 
-    private func scanProjectFolder(_ folderURL: URL) {
+    func scanProjectFolder(_ folderURL: URL) {
         let folderName = folderURL.lastPathComponent
         let taskID = UUID()
         let token = projectLoadToken
@@ -700,6 +705,7 @@ class ImageViewModel: ObservableObject {
 
     deinit {
         folderWatchers.values.forEach { $0.forEach { $0.cancel() } }
+        projectFolderWatchers.values.forEach { $0.forEach { $0.cancel() } }
         loader.cancelPendingWork()
         eventMonitors.forEach { NSEvent.removeMonitor($0) }
     }

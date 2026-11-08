@@ -6,6 +6,9 @@ class ProjectStore: ObservableObject {
     @Published var projects: [Project] = []
 
     private var saveURL: URL {
+        if let env = ProcessInfo.processInfo.environment["IPHOTO_PROJECTS_JSON"] {
+            return URL(fileURLWithPath: env)
+        }
         let support = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("iPhoto")
