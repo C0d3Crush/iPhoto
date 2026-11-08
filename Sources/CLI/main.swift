@@ -74,6 +74,8 @@ private func printUsage() {
       iphoto-cli backup set [--quality 0.85] [--mode rename|skip|overwrite] [--dest <pfad>]
                             [--downscale|--no-downscale] [--long-side 2560]
                             [--metadata|--no-metadata] [--json]
+      iphoto-cli backup run <datei…> [--dest <pfad>] [--mode rename|skip|overwrite]
+                            [--long-side N] [--quality 0.85] [--json]
       iphoto-cli rating list [--flag pick|reject] [--color farbe] [--min-rating N] [--json]
       iphoto-cli smartfolder list [--json]
       iphoto-cli smartfolder query <name> [--json]
@@ -2267,8 +2269,73 @@ private func runBackupConfig(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "run":
+        // Parse sources and options
+        var sources: [URL] = []
+        var destPath: String? = nil
+        var modeStr: String? = nil
+        var longSide: Int? = nil
+        var quality: Double? = nil
+        var i = 1
+        while i < args.count {
+            let a = args[i]
+            if a == "--dest", i + 1 < args.count {
+                destPath = args[i + 1]; i += 2
+            } else if a == "--mode", i + 1 < args.count {
+                modeStr = args[i + 1]; i += 2
+            } else if a == "--long-side", i + 1 < args.count {
+                longSide = Int(args[i + 1]); i += 2
+            } else if a == "--quality", i + 1 < args.count {
+                quality = Double(args[i + 1]); i += 2
+            } else if a == "--json" {
+                i += 1
+            } else if !a.hasPrefix("--") {
+                sources.append(URL(fileURLWithPath: a)); i += 1
+            } else {
+                i += 1
+            }
+        }
+        guard !sources.isEmpty else {
+            fputs("Fehler: backup run benötigt mindestens eine Quelldatei.\n", stderr)
+            return 1
+        }
+        let root: URL
+        if let dp = destPath {
+            root = URL(fileURLWithPath: dp)
+        } else {
+            root = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("iPhoto/Backups")
+        }
+        let settings = BackupSettings()
+        if let q = quality { settings.jpegQuality = q }
+        if let ls = longSide { settings.longSidePixels = ls; settings.downscaleEnabled = true }
+        if let m = modeStr, let mode = BackupSettings.CollisionMode(rawValue: m) {
+            settings.collisionMode = mode
+        }
+        var written = 0, skipped = 0, failed = 0
+        var writtenInBatch = Set<String>()
+        for src in sources {
+            let result = BackupService.backup(source: src, root: root,
+                                             settings: settings, writtenInBatch: &writtenInBatch)
+            switch result {
+            case .written:   written += 1
+            case .skipped:   skipped += 1
+            case .failed(let r):
+                failed += 1
+                if !jsonMode { fputs("FAIL \(src.lastPathComponent): \(r)\n", stderr) }
+            }
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["written": written, "skipped": skipped, "failed": failed]
+            if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]),
+               let s = String(data: data, encoding: .utf8) { print(s) }
+        } else {
+            print("Backup: \(written) geschrieben, \(skipped) übersprungen, \(failed) fehlgeschlagen.")
+        }
+        return failed > 0 ? 1 : 0
+
     default:
-        fputs("Fehler: Unbekannter backup-Unterbefehl '\(sub)'. Erlaubt: get, set\n", stderr)
+        fputs("Fehler: Unbekannter backup-Unterbefehl '\(sub)'. Erlaubt: get, set, run\n", stderr)
         return 1
     }
 }

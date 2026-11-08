@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.7
+**backup run CLI + 4 Tests (#67)**
+
+- `iphoto-cli backup run <datei…> [--dest DIR] [--mode rename|skip|overwrite] [--long-side N] [--quality Q] [--json]`: neuer Unterbefehl ruft `BackupService.backup` für jede Quelldatei auf; JSON-Ausgabe mit `written/skipped/failed`
+- `build.sh`: `BackupService.swift` und `BackupSettings.swift` zu `CLI_SOURCES` hinzugefügt
+- `run_plugins.sh`: 4 neue Tests — basic-write, `--mode skip`, `--mode rename` und `--long-side 50` (#67)
+
+---
+
 ## 1.106.6
 **VersionStore serial queue + Retention; colorRatio gecacht (#31 #64)**
 

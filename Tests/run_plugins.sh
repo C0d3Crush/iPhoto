@@ -600,6 +600,61 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# backup run
+# ---------------------------------------------------------------------------
+echo "--- backup run ---"
+
+BACKUP_DEST="$TMPDIR/backup_out"
+mkdir -p "$BACKUP_DEST"
+
+# Basic run: PNG should produce a JPEG in YYYY/MM subdir
+BACKUP_RUN=$("$BIN" backup run "$INPUT_PNG" --dest "$BACKUP_DEST" --json 2>&1)
+BACKUP_RUN_EXIT=$?
+BACKUP_WRITTEN=$(echo "$BACKUP_RUN" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('written',0))" 2>/dev/null || echo "0")
+if [ $BACKUP_RUN_EXIT -eq 0 ] && [ "$BACKUP_WRITTEN" -ge 1 ]; then
+    pass "backup run (1 Datei geschrieben)"
+else
+    fail "backup run" "Exit $BACKUP_RUN_EXIT: $BACKUP_RUN"
+fi
+
+# --mode skip: second run should skip
+BACKUP_SKIP=$("$BIN" backup run "$INPUT_PNG" --dest "$BACKUP_DEST" --mode skip --json 2>&1)
+BACKUP_SKIP_SKIPPED=$(echo "$BACKUP_SKIP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('skipped',0))" 2>/dev/null || echo "0")
+if [ "$BACKUP_SKIP_SKIPPED" -ge 1 ]; then
+    pass "backup run --mode skip (skipped: 1)"
+else
+    fail "backup run --mode skip" "Erwartet skipped>=1: $BACKUP_SKIP"
+fi
+
+# --mode rename: second run should produce a second file
+BACKUP_RENAME=$("$BIN" backup run "$INPUT_PNG" --dest "$BACKUP_DEST" --mode rename --json 2>&1)
+BACKUP_RENAME_WRITTEN=$(echo "$BACKUP_RENAME" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('written',0))" 2>/dev/null || echo "0")
+if [ "$BACKUP_RENAME_WRITTEN" -ge 1 ]; then
+    pass "backup run --mode rename (neues File erzeugt)"
+else
+    fail "backup run --mode rename" "Erwartet written>=1: $BACKUP_RENAME"
+fi
+
+# --long-side 50: output must be ≤50 px
+BACKUP_SCALE_DEST="$TMPDIR/backup_scaled"
+mkdir -p "$BACKUP_SCALE_DEST"
+"$BIN" backup run "$INPUT_PNG" --dest "$BACKUP_SCALE_DEST" --long-side 50 --json > /dev/null 2>&1 || true
+SCALED_FILE=$(find "$BACKUP_SCALE_DEST" -name "*.jpg" | head -1)
+if [ -n "$SCALED_FILE" ]; then
+    SCALED_W=$(sips -g pixelWidth "$SCALED_FILE" 2>/dev/null | awk '/pixelWidth/{print $2}')
+    SCALED_H=$(sips -g pixelHeight "$SCALED_FILE" 2>/dev/null | awk '/pixelHeight/{print $2}')
+    if [ "${SCALED_W:-999}" -le 50 ] || [ "${SCALED_H:-999}" -le 50 ]; then
+        pass "backup run --long-side 50 (Output ≤50px)"
+    else
+        fail "backup run --long-side 50" "Output ${SCALED_W}×${SCALED_H} > 50px"
+    fi
+else
+    fail "backup run --long-side 50" "Kein JPEG gefunden in $BACKUP_SCALE_DEST"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # config get / set
 # ---------------------------------------------------------------------------
 echo "--- Config Get/Set ---"
