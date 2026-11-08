@@ -208,7 +208,8 @@ extension ImageViewModel {
             CatalogStore.shared.deleteAdjustments(path: doc.url.path)
         }
         adj.lastPersisted = adj.adjustments
-        if let idx = collection.documents.firstIndex(where: { $0.id == doc.id }) {
+        loader.notifyAdjustmentPersisted(path: doc.url.path, state: hasAdj ? adj.adjustments : nil)
+        if let idx = collection.documentIndexByID[doc.id] {
             collection.documents[idx].hasPersistedAdjustments = hasAdj
         }
     }

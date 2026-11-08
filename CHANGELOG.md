@@ -2,6 +2,16 @@
 
 ---
 
+## 1.106.10
+**loadAdjustments: kein sync SQLite-Read auf Main-Thread mehr; In-Memory-Cache (#2)**
+
+- `ImageLoadingOrchestrator`: `adjCacheHits: [String: AdjustmentState]` + `adjCacheChecked: Set<String>` als In-Memory-Cache für Adjustment-Zustände (#2)
+- `loadCurrentImage()`: Cache-Hit → sofortiger synchroner Zugriff; Cache-Miss → SQLite-Read im BG-Thread, Ergebnis wird auf Main angewendet sobald verfügbar — kein Blockieren des Main-Threads mehr (#2)
+- `notifyAdjustmentPersisted(path:state:)`: neue Methode, damit `persistAdjustmentsForCurrent()` den Cache aktuell hält (#2)
+- `persistAdjustmentsForCurrent()`: `firstIndex(where: { $0.id == doc.id })` → `documentIndexByID[doc.id]` (O(1)) (#2)
+
+---
+
 ## 1.106.9
 **Thumbnail-Completion O(N) → O(1); 3 @Published-Writes → 1 Batch-Write (#3)**
 

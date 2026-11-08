@@ -76,6 +76,12 @@ final class ImageLoadingOrchestrator {
     var metadataPendingFlush: [URL: [MetadataEntry]] = [:]
     var metadataFlushScheduled = false
 
+    // In-memory adjustment cache (#2): avoids sync SQLite reads on main thread per image switch.
+    // adjCacheHits: path → saved AdjustmentState (only entries with actual adjustments).
+    // adjCacheChecked: paths already queried — a hit means "no adjustments stored".
+    var adjCacheHits: [String: AdjustmentState] = [:]
+    var adjCacheChecked: Set<String> = []
+
     // Perf-Instrumentierung: Zeitpunkt, an dem der Nutzer ein neues Bild ausgewählt hat.
     // Speedmetriken (SWITCH cache/preview/full) messen von hier bis zum ersten Display.
     // Der Programmier-Build behält dieses Logging bewusst: Regressionen der
@@ -145,11 +151,30 @@ final class ImageLoadingOrchestrator {
         host.resetAdjustments()
         host.clearInpaint()
         host.adj.isUndoRedoing = false
-        if let saved = CatalogStore.shared.loadAdjustments(path: doc.url.path) {
-            host.adj.adjustments = saved
+        let path = doc.url.path
+        let url  = doc.url
+        if adjCacheChecked.contains(path) {
+            // Cache hit (synchronous, no I/O) — may be nil if file has no adjustments.
+            if let saved = adjCacheHits[path] { host.adj.adjustments = saved }
+            host.adj.history.reset(to: host.adj.adjustments)
+            host.adj.lastPersisted = host.adj.adjustments
+        } else {
+            // Cache miss — apply default state immediately, load from SQLite in background (#2).
+            host.adj.history.reset(to: host.adj.adjustments)
+            host.adj.lastPersisted = host.adj.adjustments
+            DispatchQueue.global(qos: .userInteractive).async { [weak self] in
+                let saved = CatalogStore.shared.loadAdjustments(path: path)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, let host = self.host else { return }
+                    self.adjCacheChecked.insert(path)
+                    if let saved = saved { self.adjCacheHits[path] = saved }
+                    guard host.collection.currentDocument?.url == url else { return }
+                    if let saved = saved { host.adj.adjustments = saved }
+                    host.adj.history.reset(to: host.adj.adjustments)
+                    host.adj.lastPersisted = host.adj.adjustments
+                }
+            }
         }
-        host.adj.history.reset(to: host.adj.adjustments)
-        host.adj.lastPersisted = host.adj.adjustments
         activeFullResToken = nil
         isLoadingFullRes = false
         fullResWorkItem?.cancel()
@@ -165,7 +190,6 @@ final class ImageLoadingOrchestrator {
         }
 
         host.errorMessage = nil
-        let url = doc.url
         let token = UUID()
         loadToken = token
 
@@ -605,6 +629,18 @@ final class ImageLoadingOrchestrator {
                     host.collection.documents[idx] = doc
                 }
             }
+        }
+    }
+
+    // MARK: - Adjustment-Cache
+
+    /// Called by persistAdjustmentsForCurrent() so the cache stays in sync (#2).
+    func notifyAdjustmentPersisted(path: String, state: AdjustmentState?) {
+        adjCacheChecked.insert(path)
+        if let state = state {
+            adjCacheHits[path] = state
+        } else {
+            adjCacheHits.removeValue(forKey: path)
         }
     }
 
