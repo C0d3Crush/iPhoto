@@ -343,6 +343,22 @@ final class CatalogStore {
         }
     }
 
+    /// Batch query: returns a [path → date_taken] map for all rows that have a non-null date_taken.
+    /// One SELECT instead of one per comparison in sort — eliminates O(N log N) queue.sync calls.
+    func dateTakenByPath() -> [String: String] {
+        queue.sync {
+            let stmt = prepare("SELECT path, date_taken FROM images WHERE date_taken IS NOT NULL")
+            var out: [String: String] = [:]
+            while step(stmt) == SQLITE_ROW {
+                let p = String(cString: sqlite3_column_text(stmt, 0))
+                let d = String(cString: sqlite3_column_text(stmt, 1))
+                out[p] = d
+            }
+            sqlite3_finalize(stmt)
+            return out
+        }
+    }
+
     func allImages() -> [CatalogImage] {
         queue.sync {
             let stmt = prepare("SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at FROM images ORDER BY filename")

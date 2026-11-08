@@ -148,6 +148,9 @@ class ImageViewModel: ObservableObject {
     var folderWatchers: [UUID: [DispatchSourceFileSystemObject]] = [:]
     private var eventMonitors: [Any] = []
     var syncedFolderIDs: Set<UUID> = []
+    /// Serial queue for all album filesystem sync operations — prevents thread explosion
+    /// and races between concurrent renames/deletes/adds (#24).
+    let albumFSQueue = DispatchQueue(label: "com.c0d3cru5h.iphoto.albumFS", qos: .utility)
 
     // Reihenfolge-Cache für visibleDocuments: Filter+Sortierung (800+ teure
     // localizedStandardCompare) wird als ID-Liste gecacht, die Dokument-Inhalte
@@ -222,7 +225,8 @@ class ImageViewModel: ObservableObject {
         library.loadAlbumFolders()
         library.loadSmartFolders()
         library.loadWatchedFolders()
-        // Backward compat: Filesystem-Verzeichnisse für bestehende Alben anlegen
+        // Backward compat: Filesystem-Verzeichnisse für bestehende Alben anlegen.
+        // albumFSQueue is serial so all N blocks run in order, never concurrently (#24).
         for album in library.albums { syncAlbumToFilesystem(album) }
         // Verweise auf gelöschte Dateien beim Start bereinigen (Snapshot auf Main, BG fileExists, Write auf Main)
         let albumsSnapshot = library.albums

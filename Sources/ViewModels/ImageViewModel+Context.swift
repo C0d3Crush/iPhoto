@@ -374,10 +374,25 @@ extension ImageViewModel {
             return docs.sorted { $0.filename.localizedStandardCompare($1.filename) == .orderedAscending }
         case .filenameDesc:
             return docs.sorted { $0.filename.localizedStandardCompare($1.filename) == .orderedDescending }
-        case .dateAsc:
-            return docs.sorted { dateSortKey($0) < dateSortKey($1) }
-        case .dateDesc:
-            return docs.sorted { dateSortKey($0) > dateSortKey($1) }
+        case .dateAsc, .dateDesc:
+            // Decorate-sort-undecorate: build date keys with one batch SQLite query instead
+            // of N log N individual queue.sync calls inside the comparator (#10).
+            let t0 = Date()
+            let catalogDates = CatalogStore.shared.dateTakenByPath()
+            let keyed: [(doc: ImageDocument, key: String)] = docs.map { doc in
+                let k: String
+                if let v = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value, !v.isEmpty {
+                    k = v
+                } else {
+                    k = catalogDates[doc.url.path] ?? doc.filename
+                }
+                return (doc, k)
+            }
+            let sorted = sortCriterion == .dateAsc
+                ? keyed.sorted { $0.key < $1.key }
+                : keyed.sorted { $0.key > $1.key }
+            Log.perf(String(format: "SORT dateSort %d docs %.0f ms", docs.count, Date().timeIntervalSince(t0) * 1000))
+            return sorted.map { $0.doc }
         case .ratingDesc:
             return docs.sorted { ($0.rating, $0.filename) > ($1.rating, $1.filename) }
         case .eloDesc:

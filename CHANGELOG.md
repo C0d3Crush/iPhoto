@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.3
+**Datumsortierung O(1) Batch-Query; Album-FS-Queue seriell (#10 #24)**
+
+- `applySortCriterion` (`.dateAsc`/`.dateDesc`): Decorate-sort-undecorate mit einem einzigen `CatalogStore.dateTakenByPath()` Batch-SELECT statt `queue.sync` pro Vergleich — eliminiert O(N log N) synchrone SQLite-Calls auf dem Main-Thread; `SORT dateSort <n> <ms>`-Logeintrag für Regressionsüberwachung (#10)
+- `CatalogStore.dateTakenByPath()`: neuer Batch-Query `SELECT path, date_taken WHERE date_taken IS NOT NULL` → `[String: String]`-Dictionary
+- `syncAlbumToFilesystem` / `removeAlbumFromFilesystem`: nutzen jetzt `albumFSQueue` (neue private serielle `DispatchQueue`) statt `DispatchQueue.global` — verhindert Thread-Explosion bei N Alben beim Start und eliminiert Rename/Delete-Races zwischen parallelen Syncs (#24)
+
+---
+
 ## 1.106.2
 **O(1)-Index-Lookup; Album-Filter per Set; statische DateFormatter; paralleler Batch-Export**
 

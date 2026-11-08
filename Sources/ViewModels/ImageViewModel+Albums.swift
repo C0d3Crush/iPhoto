@@ -198,7 +198,7 @@ extension ImageViewModel {
         let dir = albumSystemPath(for: album)
         let capturedOld = oldDir
 
-        DispatchQueue.global(qos: .utility).async {
+        albumFSQueue.async {
             let fm = FileManager.default
             if let old = capturedOld {
                 try? fm.removeItem(at: old)
@@ -276,7 +276,7 @@ extension ImageViewModel {
             Log.error("removeAlbumFromFilesystem: Pfad außerhalb des Album-Roots, Löschen abgebrochen: \(dir.path)")
             return
         }
-        DispatchQueue.global(qos: .utility).async {
+        albumFSQueue.async {
             try? FileManager.default.removeItem(at: dir)
         }
     }
