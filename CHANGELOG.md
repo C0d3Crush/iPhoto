@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.13
+**ELO-Update O(N) firstIndex → O(1) + Batch-Write; Compare-Preview O(1) (#9)**
+
+- `applyEloUpdate(to:)`: `firstIndex(where: { $0.id })` → `documentIndexByID[id]` (O(1)); zwei separate Subscript-Writes zu einem Copy-Modify-Write gebündelt (#9)
+- `ensureComparePreview(forID:)`: `first(where: { $0.id })` → `documentIndexByID[id]` (O(1)) (#9)
+- Compare-Preview Main-Write: Subscript-Write → Copy-Modify-Write; `documentIndexByURL[url]` statt `firstIndex` (#9)
+
+---
+
 ## 1.106.12
 **yearGroups-Cache im ViewModel: O(N)-Regrouping nur noch bei echter Änderung (#7)**
 

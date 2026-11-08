@@ -193,12 +193,13 @@ extension ImageViewModel {
 
     private func applyEloUpdate(_ newElo: Double, to id: UUID) {
         iphotoBreadcrumb("applyEloUpdate: firstIndex \(id)")
-        guard let idx = collection.documents.firstIndex(where: { $0.id == id }) else { return }
+        guard let idx = collection.documentIndexByID[id] else { return }
         guard idx < collection.documents.count else { return }
         iphotoBreadcrumb("applyEloUpdate: write elo idx=\(idx)")
-        collection.documents[idx].elo = newElo
-        collection.documents[idx].eloMatches += 1
-        let doc = collection.documents[idx]
+        var doc = collection.documents[idx]
+        doc.elo = newElo
+        doc.eloMatches += 1
+        collection.documents[idx] = doc
         let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel,
                                 elo: doc.elo, eloMatches: doc.eloMatches)
         iphotoBreadcrumb("applyEloUpdate: persist \(doc.filename)")
@@ -208,7 +209,9 @@ extension ImageViewModel {
 
     private func ensureComparePreview(forID id: UUID) {
         // Frisch aus der Collection auflösen — Kopien aus visibleDocuments können veraltet sein
-        guard let doc = collection.documents.first(where: { $0.id == id }),
+        guard let idx0 = collection.documentIndexByID[id], idx0 < collection.documents.count else { return }
+        let doc = collection.documents[idx0]
+        guard
               doc.cgImage == nil, doc.previewImage == nil else { return }
         let url = doc.url
         guard !compare.loadInFlight.contains(url) else { return }
@@ -228,9 +231,11 @@ extension ImageViewModel {
                     guard let self = self else { return }
                     self.compare.loadInFlight.remove(url)
                     guard let preview = preview,
-                          let idx = self.collection.documents.firstIndex(where: { $0.url == url }),
+                          let idx = self.collection.documentIndexByURL[url],
                           self.collection.documents[idx].previewImage == nil else { return }
-                    self.collection.documents[idx].previewImage = preview
+                    var doc = self.collection.documents[idx]
+                    doc.previewImage = preview
+                    self.collection.documents[idx] = doc
                 }
             }
         }
