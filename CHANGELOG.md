@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.35
+**Perf: 1500px-Preview Disk-Cache + Gesichts-Scan SubsampleFactor**
+
+- `ImageLoadingOrchestrator`: 1500px-Previews werden nach erstem Decode im `ThumbnailDiskCache` gespeichert — beim nächsten App-Start entfällt der ~200ms-Decode, stattdessen ~15ms JPEG-Read aus dem Cache (`SWITCH preview-cached` im Log)
+- `ThumbnailDiskCache`: Cache-Limit von 500 MB auf 1 GB erhöht (1500px-Previews à ~400 KB benötigen bei 1 000-Bilder-Bibliotheken bis zu ~400 MB zusätzlich zu den 80/160px-Thumbnails)
+- `loadThumbnailCGImage` (Gesichts-Scan): `kCGImageSourceSubsampleFactor` ergänzt — gleicher Fix wie in `RAWImageDecoder.thumbnail`, reduziert Scan-Dauer für 24-MP-Quellen von ~2500ms auf ~200ms pro Bild im Hintergrund
+
+---
+
 ## 1.106.34
 **Perf: Preview-Decode 24 MP JPEG 2500 ms → ~200 ms via SubsampleFactor**
 

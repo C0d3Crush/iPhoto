@@ -329,14 +329,27 @@ extension ImageViewModel {
     private func loadThumbnailCGImage(path: String) -> CGImage? {
         let url = URL(fileURLWithPath: path)
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        // Always statt IfAbsent: eingebettete EXIF-Thumbnails (oft 160×120 px) werden ignoriert;
-        // stattdessen immer aus dem vollen Bilddaten dekodiert → klare Qualität für VNDetectFaceRectanglesRequest.
+        // Always statt IfAbsent: eingebettete EXIF-Thumbnails werden ignoriert;
+        // stattdessen immer aus vollen Bilddaten dekodiert → klare Qualität für VNDetectFaceRectanglesRequest.
         // 1024 statt 512: genug Auflösung für kleine Gesichter in Gruppenfotos.
-        let opts: [CFString: Any] = [
-            kCGImageSourceThumbnailMaxPixelSize: 1024,
+        // SubsampleFactor: DCT-Downsampling vermeidet Full-Decode für 24-MP-Quellen (~2500→~200 ms).
+        let maxDimension = 1024
+        var subsampleFactor = 1
+        let propOpts = [kCGImageSourceShouldCacheImmediately: false] as CFDictionary
+        if let props = CGImageSourceCopyPropertiesAtIndex(src, 0, propOpts) as? [CFString: Any],
+           let pw = props[kCGImagePropertyPixelWidth] as? Int,
+           let ph = props[kCGImagePropertyPixelHeight] as? Int {
+            let maxSide = max(pw, ph)
+            if      maxSide >= maxDimension * 8 { subsampleFactor = 8 }
+            else if maxSide >= maxDimension * 4 { subsampleFactor = 4 }
+            else if maxSide >= maxDimension * 2 { subsampleFactor = 2 }
+        }
+        var opts: [CFString: Any] = [
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true
         ]
+        if subsampleFactor > 1 { opts[kCGImageSourceSubsampleFactor] = subsampleFactor as CFNumber }
         return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
     }
 }

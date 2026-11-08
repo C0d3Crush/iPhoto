@@ -237,8 +237,22 @@ final class ImageLoadingOrchestrator {
             let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
             defer { stopAccess() }
 
-            // Phase 2: Preview in Bildschirmauflösung (~1500px)
-            if let preview = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 1500) {
+            // Phase 2: Preview in Bildschirmauflösung (~1500px) — Disk-Cache vermeidet Re-Decode
+            // bei erneutem App-Start (SubsampleFactor-Decode ~200 ms → Cache-Hit ~15 ms).
+            let previewLabel: String
+            let preview: CGImage?
+            if let cached = ThumbnailDiskCache.shared.load(for: accessURL, maxDimension: 1500) {
+                preview = cached
+                previewLabel = "preview-cached"
+            } else if let decoded = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 1500) {
+                ThumbnailDiskCache.shared.save(decoded, for: accessURL, maxDimension: 1500)
+                preview = decoded
+                previewLabel = "preview-decoded"
+            } else {
+                preview = nil
+                previewLabel = "preview-decoded"
+            }
+            if let preview = preview {
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, let host = self.host, self.loadToken == token else { return }
                     guard let idx = host.collection.documentIndexByURL[url] else { return }
@@ -246,7 +260,7 @@ final class ImageLoadingOrchestrator {
                     host.isLoading = false
                     host.fitToWindowRequested = true
                     host.adj.displayImageVersion = UUID()
-                    self.logSwitchDisplay("preview-decoded", url: url)
+                    self.logSwitchDisplay(previewLabel, url: url)
                     if host.hasActiveAdjustments { host.applyAdjustments() }
                 }
             }

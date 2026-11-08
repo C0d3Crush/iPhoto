@@ -8,7 +8,9 @@ final class ThumbnailDiskCache {
 
     private let cacheDir: URL
     // Eviction limit — if the cache exceeds this, oldest files are pruned on each save (#23).
-    private static let maxCacheBytes: Int64 = 500 * 1024 * 1024
+    // 1 GB: 80/160px thumbnails (≈5–30 KB each) + 1500px previews (≈300–500 KB each).
+    // For 1 000-image libraries the preview tier alone needs ~400 MB.
+    private static let maxCacheBytes: Int64 = 1024 * 1024 * 1024
 
     private init() {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
