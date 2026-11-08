@@ -202,10 +202,15 @@ extension ImageViewModel {
         // Unverändert seit Laden/letztem Speichern → kein synchroner SQLite-Write pro Bildwechsel
         guard adj.adjustments != adj.lastPersisted else { return }
         let hasAdj = adj.adjustments != AdjustmentState()
-        if hasAdj {
-            CatalogStore.shared.saveAdjustments(path: doc.url.path, adjustments: adj.adjustments)
-        } else {
-            CatalogStore.shared.deleteAdjustments(path: doc.url.path)
+        let path = doc.url.path
+        let snapshot = adj.adjustments
+        // Persist asynchronously — no sync SQLite on main per image switch.
+        DispatchQueue.global(qos: .userInitiated).async {
+            if hasAdj {
+                CatalogStore.shared.saveAdjustments(path: path, adjustments: snapshot)
+            } else {
+                CatalogStore.shared.deleteAdjustments(path: path)
+            }
         }
         adj.lastPersisted = adj.adjustments
         loader.notifyAdjustmentPersisted(path: doc.url.path, state: hasAdj ? adj.adjustments : nil)

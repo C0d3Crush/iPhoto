@@ -2,6 +2,17 @@
 
 ---
 
+## 1.106.18
+**Batch-Writes + async SQLite in Save/Selection/Quality/Adjustments**
+
+- `refreshAfterFileRestore` + `saveAdjustedToFile`: 2–3 separate Subscript-Writes → Copy-Modify-Write
+- `prefetchAdjacent` (Orchestrator): 2 `cgImage`/`imageSize`-Writes → Copy-Modify-Write
+- `persistAdjustmentsForCurrent`: `saveAdjustments`/`deleteAdjustments` async statt sync auf Main
+- `moveToAppTrash`/`restoreFromTrash`: Loop von N Subscript-Writes → Batch-Write + `setTrashed` async
+- `setBlurOverride`, `setUnderExposureOverride`, `setOverExposureOverride`, `setEyesClosedOverride`: `setQualityOverride` async statt sync auf Main
+
+---
+
 ## 1.106.17
 **BackupService: 3× Datei-Open → 2×; sequenziell → 4× parallel (#66)**
 

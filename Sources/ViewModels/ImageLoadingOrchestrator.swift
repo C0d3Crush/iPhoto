@@ -485,8 +485,10 @@ final class ImageLoadingOrchestrator {
                               host.collection.documents[idx].url == url,
                               host.collection.documents[idx].cgImage == nil else { return }
                         Log.trace("Prefetch fertig: \(url.lastPathComponent)")
-                        host.collection.documents[idx].cgImage = image
-                        host.collection.documents[idx].imageSize = CGSize(width: image.width, height: image.height)
+                        var doc = host.collection.documents[idx]
+                        doc.cgImage = image
+                        doc.imageSize = CGSize(width: image.width, height: image.height)
+                        host.collection.documents[idx] = doc
                     }
                 }
             }

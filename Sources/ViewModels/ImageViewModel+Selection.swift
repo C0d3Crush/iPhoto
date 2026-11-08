@@ -100,10 +100,10 @@ extension ImageViewModel {
         trashUndoStack.append(paths)
         if trashUndoStack.count > 20 { trashUndoStack.removeFirst() }
         let ids = Set(docs.map { $0.id })
-        for i in collection.documents.indices where ids.contains(collection.documents[i].id) {
-            collection.documents[i].isTrashed = true
-        }
-        CatalogStore.shared.setTrashed(paths: paths, true)
+        var docsCopy = collection.documents
+        for i in docsCopy.indices where ids.contains(docsCopy[i].id) { docsCopy[i].isTrashed = true }
+        collection.documents = docsCopy
+        DispatchQueue.global(qos: .userInitiated).async { CatalogStore.shared.setTrashed(paths: paths, true) }
         collection.selectedIndices = []
         invalidateVisibleOrder()
         if compare.active, let l = compare.leftID, let r = compare.rightID,
@@ -125,10 +125,11 @@ extension ImageViewModel {
         guard !docs.isEmpty else { return }
         let prev = visibleDocuments
         let ids = Set(docs.map { $0.id })
-        for i in collection.documents.indices where ids.contains(collection.documents[i].id) {
-            collection.documents[i].isTrashed = false
-        }
-        CatalogStore.shared.setTrashed(paths: docs.map { $0.url.path }, false)
+        let pathsToRestore = docs.map { $0.url.path }
+        var docsCopy = collection.documents
+        for i in docsCopy.indices where ids.contains(docsCopy[i].id) { docsCopy[i].isTrashed = false }
+        collection.documents = docsCopy
+        DispatchQueue.global(qos: .userInitiated).async { CatalogStore.shared.setTrashed(paths: pathsToRestore, false) }
         collection.selectedIndices = []
         invalidateVisibleOrder()
         selectNeighborAfterExclusion(previousVisible: prev, excludedIDs: ids)

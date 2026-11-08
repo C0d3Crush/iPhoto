@@ -57,8 +57,10 @@ extension ImageViewModel {
     private func refreshAfterFileRestore(idx: Int) {
         resetAdjustments()
         if idx < collection.documents.count {
-            collection.documents[idx].cgImage = nil
-            collection.documents[idx].thumbnail = nil
+            var doc = collection.documents[idx]
+            doc.cgImage = nil
+            doc.thumbnail = nil
+            collection.documents[idx] = doc
         }
         loadVersionsForCurrentImage()
         loadCurrentImage()
@@ -90,9 +92,11 @@ extension ImageViewModel {
                 self.versions.redoStack.removeAll()
                 self.versions.pendingMetadataEntries = nil
                 if idx < self.collection.documents.count {
-                    self.collection.documents[idx].cgImage = image
-                    self.collection.documents[idx].thumbnail = nil
-                    self.collection.documents[idx].metadata = updatedMeta
+                    var doc = self.collection.documents[idx]
+                    doc.cgImage = image
+                    doc.thumbnail = nil
+                    doc.metadata = updatedMeta
+                    self.collection.documents[idx] = doc
                 }
                 self.adj.adjustedImage = nil
                 self.adj.displayImageVersion = UUID()

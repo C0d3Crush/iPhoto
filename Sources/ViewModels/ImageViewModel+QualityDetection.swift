@@ -281,7 +281,8 @@ extension ImageViewModel {
     func setBlurOverride(_ value: Bool, for doc: ImageDocument) {
         guard let idx = collectionIndex(for: doc) else { return }
         collection.documents[idx].blurOverride = value
-        CatalogStore.shared.setQualityOverride(path: doc.url.path, blur: value)
+        let p = doc.url.path
+        DispatchQueue.global(qos: .userInitiated).async { CatalogStore.shared.setQualityOverride(path: p, blur: value) }
         if value, let score = doc.blurScore {
             let old = quality.blurThreshold
             let new = (1 - Self.overrideLearningWeight) * old + Self.overrideLearningWeight * score
@@ -296,7 +297,8 @@ extension ImageViewModel {
     func setUnderExposureOverride(_ value: Bool, for doc: ImageDocument) {
         guard let idx = collectionIndex(for: doc) else { return }
         collection.documents[idx].underOverride = value
-        CatalogStore.shared.setQualityOverride(path: doc.url.path, under: value)
+        let p = doc.url.path
+        DispatchQueue.global(qos: .userInitiated).async { CatalogStore.shared.setQualityOverride(path: p, under: value) }
         if value, let ratio = doc.underRatio {
             let old = quality.shadowClipThreshold
             let new = (1 - Self.overrideLearningWeight) * old + Self.overrideLearningWeight * ratio
@@ -311,7 +313,8 @@ extension ImageViewModel {
     func setOverExposureOverride(_ value: Bool, for doc: ImageDocument) {
         guard let idx = collectionIndex(for: doc) else { return }
         collection.documents[idx].overOverride = value
-        CatalogStore.shared.setQualityOverride(path: doc.url.path, over: value)
+        let p = doc.url.path
+        DispatchQueue.global(qos: .userInitiated).async { CatalogStore.shared.setQualityOverride(path: p, over: value) }
         if value, let ratio = doc.overRatio {
             let old = quality.highlightClipThreshold
             let new = (1 - Self.overrideLearningWeight) * old + Self.overrideLearningWeight * ratio
@@ -326,7 +329,8 @@ extension ImageViewModel {
     func setEyesClosedOverride(_ value: Bool, for doc: ImageDocument) {
         guard let idx = collectionIndex(for: doc) else { return }
         collection.documents[idx].eyesClosedOverride = value
-        CatalogStore.shared.setQualityOverride(path: doc.url.path, eyesClosed: value)
+        let p = doc.url.path
+        DispatchQueue.global(qos: .userInitiated).async { CatalogStore.shared.setQualityOverride(path: p, eyesClosed: value) }
         if value, let ear = doc.eyeOpenness {
             // Threshold Richtung Bild-EAR ziehen — Nutzer sagt "diese Augen sind offen",
             // also Grenze runter (weniger streng). Deckel auf 0.30, sonst degeneriert.
