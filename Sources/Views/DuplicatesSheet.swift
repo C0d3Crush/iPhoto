@@ -3,7 +3,7 @@ import AppKit
 
 struct DuplicatesView: View {
     @EnvironmentObject var viewModel: ImageViewModel
-    @State private var keepOverrides: [Int: Int] = [:]
+    @State private var keepOverrides: [String: Int] = [:]
 
     private var groups: [[ImageDocument]] { viewModel.quality.duplicateGroups }
 
@@ -20,7 +20,7 @@ struct DuplicatesView: View {
                             DuplicateGroupCard(
                                 group: group,
                                 keepIndex: resolvedKeepIndex(groupIdx: idx, group: group),
-                                onKeepChange: { newIdx in keepOverrides[idx] = newIdx },
+                                onKeepChange: { newIdx in keepOverrides[groupKey(group)] = newIdx },
                                 onExecute: { executeGroup(idx: idx, group: group) }
                             )
                         }
@@ -76,8 +76,13 @@ struct DuplicatesView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func groupKey(_ group: [ImageDocument]) -> String {
+        group.map { $0.id.uuidString }.sorted().joined(separator: ",")
+    }
+
     private func resolvedKeepIndex(groupIdx: Int, group: [ImageDocument]) -> Int {
-        keepOverrides[groupIdx] ?? Self.recommendedKeepIndex(in: group)
+        let raw = keepOverrides[groupKey(group)] ?? Self.recommendedKeepIndex(in: group)
+        return min(raw, group.count - 1)
     }
 
     static func recommendedKeepIndex(in group: [ImageDocument]) -> Int {
@@ -97,7 +102,7 @@ struct DuplicatesView: View {
         let keep = resolvedKeepIndex(groupIdx: idx, group: group)
         let toTrash = group.enumerated().filter { $0.offset != keep }.map { $0.element }
         viewModel.moveToAppTrash(toTrash)
-        keepOverrides.removeValue(forKey: idx)
+        keepOverrides.removeValue(forKey: groupKey(group))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             viewModel.detectDuplicates()
         }

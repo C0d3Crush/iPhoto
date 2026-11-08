@@ -1283,21 +1283,19 @@ private struct FolderRow: View {
     @EnvironmentObject var viewModel: ImageViewModel
     @State private var isExpanded: Bool = false
 
-    private var folderImages: [ImageDocument] {
-        guard let folderURL = folder.resolveURL()?.url else { return [] }
-        let prefix = folderURL.standardized.path
-        return viewModel.collection.documents.filter {
-            $0.url.standardized.path.hasPrefix(prefix)
-        }
+    private var resolvedURL: URL? { folder.resolveURL()?.url }
+
+    private var allDocs: [ImageDocument] {
+        guard let url = resolvedURL else { return [] }
+        let prefix = url.standardized.path
+        return viewModel.collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
     }
 
     private var isRemovable: Bool { folder.isRemovableMedia }
     private var isAvailable: Bool { folder.isAvailable }
 
     private var folderIcon: String {
-        if isRemovable {
-            return isAvailable ? "externaldrive.fill" : "externaldrive.badge.exclamationmark"
-        }
+        if isRemovable { return isAvailable ? "externaldrive.fill" : "externaldrive.badge.exclamationmark" }
         return isExpanded ? "folder.fill" : "folder"
     }
 
@@ -1326,7 +1324,7 @@ private struct FolderRow: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    let count = folderImages.count
+                    let count = allDocs.count
                     if count > 0 {
                         Text("\(count)")
                             .font(.caption2)
@@ -1341,49 +1339,154 @@ private struct FolderRow: View {
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 4)
 
-            if isExpanded {
+            if isExpanded, let rootURL = resolvedURL {
+                let subs = sidebarSubfolders(of: rootURL, in: allDocs)
+                let direct = sidebarDirectDocs(of: rootURL, in: allDocs)
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(folderImages) { doc in
-                        let idx = viewModel.collectionIndex(for: doc) ?? 0
-                        let isCurrent = viewModel.collection.currentIndex == idx && isSelected
-                        Button {
-                            if viewModel.navSelection != .folder(folder.id) {
-                                viewModel.navSelection = .folder(folder.id)
-                            }
-                            viewModel.selectDocument(at: idx)
-                        } label: {
-                            HStack(spacing: 5) {
-                                if let thumb = doc.thumbnailImage ?? doc.placeholderThumbnailImage {
-                                    Image(nsImage: thumb)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 22, height: 15)
-                                        .clipped()
-                                        .cornerRadius(2)
-                                } else {
-                                    Image(systemName: "photo")
-                                        .font(.system(size: 9))
-                                        .foregroundColor(.secondary)
-                                        .frame(width: 22, height: 15)
-                                }
-                                Text(doc.filename)
-                                    .font(.caption2)
-                                    .lineLimit(1)
-                                    .foregroundColor(isCurrent ? .primary : .secondary)
-                            }
-                            .padding(.leading, 28)
-                            .padding(.trailing, 6)
-                            .padding(.vertical, 3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(isCurrent ? Color.accentColor.opacity(0.15) : Color.clear)
-                            .cornerRadius(4)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding(.horizontal, 4)
+                    ForEach(subs, id: \.path) { sub in
+                        SidebarSubfolderRow(folderURL: sub, depth: 0)
+                            .environmentObject(viewModel)
+                    }
+                    ForEach(direct) { doc in
+                        SidebarFileRow(doc: doc, folderID: folder.id, indent: 24)
+                            .environmentObject(viewModel)
                     }
                 }
             }
         }
+    }
+}
+
+// MARK: - Recursive subfolder tree for sidebar
+
+private struct SidebarSubfolderRow: View {
+    let folderURL: URL
+    let depth: Int
+    @EnvironmentObject var viewModel: ImageViewModel
+    @State private var isExpanded = false
+
+    private var allDocs: [ImageDocument] {
+        let prefix = folderURL.standardized.path + "/"
+        return viewModel.collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
+    }
+
+    private var indent: CGFloat { CGFloat(20 + depth * 12) }
+
+    private var isSelected: Bool {
+        viewModel.navSelection == .subfolder(folderURL.standardized.path)
+    }
+
+    var body: some View {
+        let subs = sidebarSubfolders(of: folderURL, in: allDocs)
+        let direct = sidebarDirectDocs(of: folderURL, in: allDocs)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                viewModel.navSelection = .subfolder(folderURL.standardized.path)
+                withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 10)
+                        .opacity(subs.isEmpty && direct.isEmpty ? 0 : 1)
+                    Image(systemName: isExpanded ? "folder.fill" : "folder")
+                        .font(.system(size: 10))
+                        .foregroundColor(isSelected ? .accentColor : .secondary)
+                    Text(folderURL.lastPathComponent)
+                        .font(.caption2)
+                        .foregroundColor(isSelected ? .primary : .secondary)
+                    Spacer()
+                    if !allDocs.isEmpty {
+                        Text("\(allDocs.count)")
+                            .font(.caption2)
+                            .foregroundColor(Color(NSColor.quaternaryLabelColor))
+                    }
+                }
+                .padding(.leading, indent)
+                .padding(.trailing, 6)
+                .padding(.vertical, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+                .cornerRadius(4)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 4)
+
+            if isExpanded {
+                ForEach(subs, id: \.path) { sub in
+                    SidebarSubfolderRow(folderURL: sub, depth: depth + 1)
+                        .environmentObject(viewModel)
+                }
+                ForEach(direct) { doc in
+                    SidebarFileRow(doc: doc, folderID: nil, indent: indent + 14)
+                        .environmentObject(viewModel)
+                }
+            }
+        }
+    }
+}
+
+private struct SidebarFileRow: View {
+    let doc: ImageDocument
+    let folderID: UUID?
+    let indent: CGFloat
+    @EnvironmentObject var viewModel: ImageViewModel
+
+    private var idx: Int { viewModel.collectionIndex(for: doc) ?? 0 }
+    private var isCurrent: Bool { viewModel.collection.currentIndex == idx }
+
+    var body: some View {
+        Button {
+            viewModel.selectDocument(at: idx)
+        } label: {
+            HStack(spacing: 5) {
+                if let thumb = doc.thumbnailImage ?? doc.placeholderThumbnailImage {
+                    Image(nsImage: thumb).resizable().scaledToFill()
+                        .frame(width: 22, height: 15).clipped().cornerRadius(2)
+                } else {
+                    Image(systemName: "photo").font(.system(size: 9))
+                        .foregroundColor(.secondary).frame(width: 22, height: 15)
+                }
+                Text(doc.filename).font(.caption2).lineLimit(1)
+                    .foregroundColor(isCurrent ? .primary : .secondary)
+            }
+            .padding(.leading, indent)
+            .padding(.trailing, 6)
+            .padding(.vertical, 3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isCurrent ? Color.accentColor.opacity(0.15) : Color.clear)
+            .cornerRadius(4)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 4)
+    }
+}
+
+private func sidebarSubfolders(of root: URL, in docs: [ImageDocument]) -> [URL] {
+    let rootPath = root.standardized.path + "/"
+    var seen = Set<String>()
+    var result: [URL] = []
+    for doc in docs {
+        let p = doc.url.standardized.path
+        guard p.hasPrefix(rootPath) else { continue }
+        let rel = String(p.dropFirst(rootPath.count))
+        guard let slash = rel.firstIndex(of: "/") else { continue }
+        let subName = String(rel[..<slash])
+        if seen.insert(subName).inserted {
+            result.append(root.appendingPathComponent(subName))
+        }
+    }
+    return result.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+}
+
+private func sidebarDirectDocs(of root: URL, in docs: [ImageDocument]) -> [ImageDocument] {
+    let rootPath = root.standardized.path + "/"
+    return docs.filter { doc in
+        let p = doc.url.standardized.path
+        guard p.hasPrefix(rootPath) else { return false }
+        return !String(p.dropFirst(rootPath.count)).contains("/")
     }
 }
 

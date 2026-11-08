@@ -10,7 +10,7 @@ import AppKit
 // innerhalb der Gruppe, weil visibleDocuments auf sie gefiltert wird.
 struct SimilarView: View {
     @EnvironmentObject var viewModel: ImageViewModel
-    @State private var pickOverrides: [Int: Int] = [:]
+    @State private var pickOverrides: [String: Int] = [:]
 
     // `quality.similarGroups` speichert Snapshots von ImageDocument (Value-Type):
     // wenn Thumbnails erst nach dem Grouping fertig werden, hätten die Snapshots
@@ -45,7 +45,7 @@ struct SimilarView: View {
                             SimilarGroupCard(
                                 group: group,
                                 pickIndex: resolvedPickIndex(groupIdx: idx, group: group),
-                                onPickChange: { newIdx in pickOverrides[idx] = newIdx },
+                                onPickChange: { newIdx in pickOverrides[groupKey(group)] = newIdx },
                                 onTileTap: { tileIdx in openInMainViewer(groupIdx: idx, tileIdx: tileIdx, group: group) },
                                 onTrashRest: { trashRest(idx: idx, group: group) }
                             )
@@ -98,8 +98,13 @@ struct SimilarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private func groupKey(_ group: [ImageDocument]) -> String {
+        group.map { $0.id.uuidString }.sorted().joined(separator: ",")
+    }
+
     private func resolvedPickIndex(groupIdx: Int, group: [ImageDocument]) -> Int {
-        pickOverrides[groupIdx] ?? Self.recommendedPickIndex(in: group)
+        let raw = pickOverrides[groupKey(group)] ?? Self.recommendedPickIndex(in: group)
+        return min(raw, group.count - 1)
     }
 
     // Heuristik für Erstauswahl: RAW bevorzugen, dann größte Datei (oft die beste Aufnahme).
@@ -131,7 +136,7 @@ struct SimilarView: View {
         let keep = resolvedPickIndex(groupIdx: idx, group: group)
         let toTrash = group.enumerated().filter { $0.offset != keep }.map { $0.element }
         viewModel.moveToAppTrash(toTrash)
-        pickOverrides.removeValue(forKey: idx)
+        pickOverrides.removeValue(forKey: groupKey(group))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             viewModel.detectSimilarImages()
         }

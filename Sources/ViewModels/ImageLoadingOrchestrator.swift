@@ -66,6 +66,10 @@ final class ImageLoadingOrchestrator {
     var metaTotal: Int = 0
     let metaTaskID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
     var prefetchInFlight: Set<URL> = []
+    // Completion callbacks to fire when a prefetch for a URL finishes.
+    // loadFullRes() registers here when the target URL is already being prefetched,
+    // so the prefetch result is reused instead of decoding the same image twice.
+    var prefetchCompletions: [URL: [() -> Void]] = [:]
 
     // Perf-Instrumentierung: Zeitpunkt, an dem der Nutzer ein neues Bild ausgewählt hat.
     // Speedmetriken (SWITCH cache/preview/full) messen von hier bis zum ersten Display.
@@ -219,6 +223,22 @@ final class ImageLoadingOrchestrator {
               token == loadToken,
               let idx = host.collection.documents.firstIndex(where: { $0.url == url }),
               host.collection.documents[idx].cgImage == nil else { return }
+
+        // Priority-inversion guard: if a prefetch is already decoding this URL,
+        // subscribe to its completion instead of launching a second decode.
+        if prefetchInFlight.contains(url) {
+            isLoadingFullRes = true
+            activeFullResToken = token
+            prefetchCompletions[url, default: []].append { [weak self] in
+                guard let self = self else { return }
+                self.isLoadingFullRes = false
+                self.activeFullResToken = nil
+                // cgImage is now set by the prefetch; upgradeToFullResIfNeeded will
+                // return early because cgImage != nil.
+            }
+            return
+        }
+
         isLoadingFullRes = true
         activeFullResToken = token
         let preloadedMetadata = host.collection.documents[idx].metadata
@@ -360,6 +380,36 @@ final class ImageLoadingOrchestrator {
             DispatchQueue.global(qos: .utility).async { [weak self] in
                 fullResDecodeSemaphore.wait()
                 defer { fullResDecodeSemaphore.signal() }
+
+                // Stale-neighbor check: after waiting for the semaphore the user
+                // may have navigated far away; skip decode to avoid wasting memory.
+                var isStillNeeded = false
+                DispatchQueue.main.sync { [weak self] in
+                    guard let self = self, let host = self.host,
+                          let cur = host.collection.currentDocument,
+                          let visPos = host.visiblePosition(for: cur.id) else { return }
+                    let vis = host.visibleDocuments
+                    for off in [-1, 1] {
+                        let pos = visPos + off
+                        guard pos >= 0, pos < vis.count,
+                              let ci = host.collectionIndex(for: vis[pos]) else { continue }
+                        if host.collection.documents[ci].url == url {
+                            isStillNeeded = true
+                            break
+                        }
+                    }
+                }
+                guard isStillNeeded else {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.prefetchInFlight.remove(url)
+                        if let completions = self.prefetchCompletions.removeValue(forKey: url) {
+                            for c in completions { c() }
+                        }
+                    }
+                    return
+                }
+
                 autoreleasepool {
                     let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                     defer { stopAccess() }
@@ -373,6 +423,10 @@ final class ImageLoadingOrchestrator {
                     DispatchQueue.main.async {
                         guard let self = self, let host = self.host else { return }
                         self.prefetchInFlight.remove(url)
+                        // Fire any loadFullRes completions waiting on this prefetch.
+                        if let completions = self.prefetchCompletions.removeValue(forKey: url) {
+                            for c in completions { c() }
+                        }
                         guard let image = image,
                               idx < host.collection.documents.count,
                               host.collection.documents[idx].url == url,

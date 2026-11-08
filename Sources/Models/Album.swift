@@ -72,4 +72,5 @@ enum NavSelection: Hashable {
     case people
     case personDetail(String)       // personID
     case projectFolder(String)      // path: immediate subdir of a project root folder
+    case subfolder(String)          // path: any subfolder of a watched folder (sidebar tree)
 }

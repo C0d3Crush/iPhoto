@@ -281,7 +281,7 @@ extension ImageViewModel {
             foldersToLoad = []
         case .trash, .backup:
             foldersToLoad = []
-        case .duplicates, .similar, .similarGroup, .blurry, .underexposed, .overexposed, .closedEyes, .eloRange, .people, .personDetail, .projectFolder:
+        case .duplicates, .similar, .similarGroup, .blurry, .underexposed, .overexposed, .closedEyes, .eloRange, .people, .personDetail, .projectFolder, .subfolder:
             foldersToLoad = []
         }
         for folder in foldersToLoad {

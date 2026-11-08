@@ -2,6 +2,16 @@
 
 ---
 
+## 1.106.0
+**Obsidian-Stil Unterordner-Navigation in Sidebar; keepOverrides stable Key; coverDocs gecacht; Prefetch-Doppeldekodierung verhindert**
+
+- Sidebar → Ordner: kollabierbare Unterordner-Baum-Navigation nach Obsidian-Vorbild — Unterordner rekursiv aufklappbar, Klick auf Unterordner filtert Hauptansicht auf dessen Inhalte; neuer `NavSelection.subfolder(String)` Pfad-basierter Scope
+- `DuplicatesView.keepOverrides` / `SimilarView.pickOverrides`: Schlüssel von `Int` (Gruppen-Index) auf stabile UUID-Gruppen-ID umgestellt — Index verschiebt sich nach Gruppen-Entfernung nicht mehr, falsches Bild wird nicht mehr gelöscht (#27)
+- `SmartFolderGridCell.coverDocs` und `AlbumGridCell`: nutzen jetzt pre-computed `smartFolderCoverIDs`/`albumCoverIDs`-Cache aus `scheduleSmartFolderCountRefresh` — O(N×M)-`smartFolderMatches`-Scan pro Render-Pass entfällt (#28)
+- `ImageLoadingOrchestrator.loadFullRes`: registriert sich in `prefetchCompletions` wenn die Ziel-URL bereits durch Prefetch dekodiert wird — kein Doppeldekodieren mehr bei schnellem Alben-Wechsel; Stale-Neighbor-Check nach Semaphore-Wait (#29)
+
+---
+
 ## 1.105.4
 **RAF-Thumbnail-Crash auf macOS 11 behoben; Qualitäts-Scan manuell; Album/SF-Cover gecacht**
 

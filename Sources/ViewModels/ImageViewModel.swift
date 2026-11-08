@@ -186,6 +186,11 @@ class ImageViewModel: ObservableObject {
     var smartFolderCounts: [UUID: Int] = [:]
     var sfCountRefreshScheduled = false
 
+    // Cover-ID-Caches: erste 4 Dokument-IDs pro SmartFolder/Album — verhindert
+    // O(N×M) smartFolderMatches und O(N) Set-Scan pro Render-Pass im AlbumGrid.
+    var smartFolderCoverIDs: [UUID: [UUID]] = [:]
+    var albumCoverIDs: [UUID: [UUID]] = [:]
+
     // MARK: - Computed properties
 
     var currentImage: CGImage? {

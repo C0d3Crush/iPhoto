@@ -194,6 +194,8 @@ extension ImageViewModel {
             filtered = docs.filter { paths.contains($0.url.path) }
         case .projectFolder(let path):
             filtered = docs.filter { $0.url.standardized.path.hasPrefix(path) }
+        case .subfolder(let path):
+            filtered = docs.filter { $0.url.standardized.path.hasPrefix(path) }
         }
         let sorted = applyStacking(to: applySortCriterion(to: filtered))
         guard !searchQuery.isEmpty else { return sorted }
@@ -422,6 +424,7 @@ extension ImageViewModel {
     private struct SFCountContext {
         let albumURLs: Set<URL>
         let albumsByID: [UUID: Set<URL>]
+        let albumDocIDs: [UUID: [UUID]]     // first-4 doc IDs per album (cover cache)
         let sfsByID: [UUID: SmartFolder]
         let shadowT: Double
         let highlightT: Double
@@ -436,17 +439,32 @@ extension ImageViewModel {
             self.sfCountRefreshScheduled = false
             let docs = self.collection.documents
             let folders = self.library.smartFolders
+            let albums = self.library.albums
             // Snapshot all main-thread state accessed by in-memory smartFolderMatches
             var albumsByID: [UUID: Set<URL>] = [:]
             var allAlbumURLs = Set<URL>()
-            for a in self.library.albums {
+            for a in albums {
                 let s = Set(a.photoURLs)
                 albumsByID[a.id] = s
                 allAlbumURLs.formUnion(s)
             }
+            // Pre-compute first-4 doc IDs per album for cover cache
+            var albumDocIDs: [UUID: [UUID]] = [:]
+            for a in albums {
+                let urlSet = albumsByID[a.id]!
+                var ids: [UUID] = []
+                for doc in docs {
+                    if urlSet.contains(doc.url) {
+                        ids.append(doc.id)
+                        if ids.count == 4 { break }
+                    }
+                }
+                albumDocIDs[a.id] = ids
+            }
             let ctx = SFCountContext(
                 albumURLs: allAlbumURLs,
                 albumsByID: albumsByID,
+                albumDocIDs: albumDocIDs,
                 sfsByID: Dictionary(uniqueKeysWithValues: self.library.smartFolders.map { ($0.id, $0) }),
                 shadowT: self.quality.shadowClipThreshold,
                 highlightT: self.quality.highlightClipThreshold,
@@ -455,17 +473,40 @@ extension ImageViewModel {
             DispatchQueue.global(qos: .utility).async { [weak self] in
                 guard let self = self else { return }
                 var counts: [UUID: Int] = [:]
+                // Compute cover IDs per smart folder (first 4 matching docs)
+                var sfCoverIDs: [UUID: [UUID]] = [:]
                 for sf in folders {
                     if let sqlCount = CatalogStore.shared.countForSmartFolder(sf) {
                         counts[sf.id] = sqlCount
                     } else {
                         counts[sf.id] = docs.reduce(0) { $0 + (self.smartFolderMatches($1, sf: sf, ctx: ctx, visiting: [sf.id]) ? 1 : 0) }
                     }
+                    // Cover IDs: first 4 matching docs (always via in-memory for the cover pass)
+                    var ids: [UUID] = []
+                    for doc in docs {
+                        if self.smartFolderMatches(doc, sf: sf, ctx: ctx, visiting: [sf.id]) {
+                            ids.append(doc.id)
+                            if ids.count == 4 { break }
+                        }
+                    }
+                    sfCoverIDs[sf.id] = ids
                 }
                 DispatchQueue.main.async { [weak self] in
-                    guard let self = self, counts != self.smartFolderCounts else { return }
-                    self.objectWillChange.send()
-                    self.smartFolderCounts = counts
+                    guard let self = self else { return }
+                    var changed = false
+                    if counts != self.smartFolderCounts {
+                        self.smartFolderCounts = counts
+                        changed = true
+                    }
+                    if sfCoverIDs != self.smartFolderCoverIDs {
+                        self.smartFolderCoverIDs = sfCoverIDs
+                        changed = true
+                    }
+                    if ctx.albumDocIDs != self.albumCoverIDs {
+                        self.albumCoverIDs = ctx.albumDocIDs
+                        changed = true
+                    }
+                    if changed { self.objectWillChange.send() }
                 }
             }
         }

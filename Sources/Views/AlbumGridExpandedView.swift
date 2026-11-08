@@ -322,14 +322,20 @@ private struct SmartFolderGridCell: View {
     @State private var showEdit = false
 
     private var coverDocs: [ImageDocument] {
-        var result: [ImageDocument] = []
-        for doc in viewModel.collection.documents {
-            if viewModel.smartFolderMatches(doc, sf: smartFolder) {
-                result.append(doc)
-                if result.count == 4 { break }
+        // Use pre-computed cover cache when available (populated by scheduleSmartFolderCountRefresh).
+        // Falls back to live O(N) scan on first render before cache is warm.
+        guard let ids = viewModel.smartFolderCoverIDs[smartFolder.id], !ids.isEmpty else {
+            var result: [ImageDocument] = []
+            for doc in viewModel.collection.documents {
+                if viewModel.smartFolderMatches(doc, sf: smartFolder) {
+                    result.append(doc)
+                    if result.count == 4 { break }
+                }
             }
+            return result
         }
-        return result
+        let byID = Dictionary(uniqueKeysWithValues: viewModel.collection.documents.map { ($0.id, $0) })
+        return ids.compactMap { byID[$0] }
     }
 
     private var coverImages: [NSImage] {
@@ -370,15 +376,16 @@ private struct SmartFolderGridCell: View {
 
     @ViewBuilder
     private var mosaicView: some View {
-        if coverImages.isEmpty {
+        let imgs = coverImages
+        if imgs.isEmpty {
             ZStack {
                 Color(NSColor.separatorColor).opacity(0.3)
                 Image(systemName: "folder.badge.gearshape")
                     .font(.system(size: 28)).foregroundColor(.secondary)
             }
-        } else if coverImages.count == 1 {
+        } else if imgs.count == 1 {
             GeometryReader { geo in
-                Image(nsImage: coverImages[0])
+                Image(nsImage: imgs[0])
                     .resizable()
                     .scaledToFill()
                     .frame(width: geo.size.width, height: geo.size.height)
@@ -390,12 +397,12 @@ private struct SmartFolderGridCell: View {
                 let half = geo.size.width / 2
                 VStack(spacing: 1) {
                     HStack(spacing: 1) {
-                        mosaicTile(coverImages[safe: 0], size: half)
-                        mosaicTile(coverImages[safe: 1], size: half)
+                        mosaicTile(imgs[safe: 0], size: half)
+                        mosaicTile(imgs[safe: 1], size: half)
                     }
                     HStack(spacing: 1) {
-                        mosaicTile(coverImages[safe: 2], size: half)
-                        mosaicTile(coverImages[safe: 3], size: half)
+                        mosaicTile(imgs[safe: 2], size: half)
+                        mosaicTile(imgs[safe: 3], size: half)
                     }
                 }
             }
@@ -436,11 +443,16 @@ private struct AlbumGridCell: View {
     @State private var showDetail = false
 
     // Wenn ein Cover explizit gesetzt ist, nur dieses eine Bild zeigen.
-    // Sonst: erste 4 Bilder des Albums als Mosaik.
+    // Sonst: erste 4 Bilder des Albums — aus dem Cover-Cache (O(1)) wenn warm,
+    // sonst einmaliger O(N) Scan als Fallback.
     private var coverDocs: [ImageDocument] {
         if let coverURL = album.coverPhotoURL,
            let doc = viewModel.collection.documents.first(where: { $0.url == coverURL }) {
             return [doc]
+        }
+        if let ids = viewModel.albumCoverIDs[album.id], !ids.isEmpty {
+            let byID = Dictionary(uniqueKeysWithValues: viewModel.collection.documents.map { ($0.id, $0) })
+            return ids.compactMap { byID[$0] }
         }
         let urlSet = Set(album.photoURLs)
         var pool: [ImageDocument] = []
@@ -499,18 +511,19 @@ private struct AlbumGridCell: View {
 
     @ViewBuilder
     private var mosaicView: some View {
-        let hasAny = coverImages.contains(where: { $0 != nil })
-        if coverImages.isEmpty || !hasAny {
+        let imgs = coverImages
+        let hasAny = imgs.contains(where: { $0 != nil })
+        if imgs.isEmpty || !hasAny {
             ZStack {
                 Color(NSColor.separatorColor).opacity(0.3)
                 Image(systemName: "photo.on.rectangle")
                     .font(.system(size: 28))
                     .foregroundColor(.secondary)
             }
-        } else if coverImages.count == 1 {
+        } else if imgs.count == 1 {
             GeometryReader { geo in
                 Group {
-                    if let img = coverImages[0] {
+                    if let img = imgs[0] {
                         Image(nsImage: img)
                             .resizable()
                             .scaledToFill()
@@ -528,12 +541,12 @@ private struct AlbumGridCell: View {
                 let half = geo.size.width / 2
                 VStack(spacing: 1) {
                     HStack(spacing: 1) {
-                        mosaicTile(coverImages.count > 0 ? coverImages[0] : nil, size: half)
-                        mosaicTile(coverImages.count > 1 ? coverImages[1] : nil, size: half)
+                        mosaicTile(imgs.count > 0 ? imgs[0] : nil, size: half)
+                        mosaicTile(imgs.count > 1 ? imgs[1] : nil, size: half)
                     }
                     HStack(spacing: 1) {
-                        mosaicTile(coverImages.count > 2 ? coverImages[2] : nil, size: half)
-                        mosaicTile(coverImages.count > 3 ? coverImages[3] : nil, size: half)
+                        mosaicTile(imgs.count > 2 ? imgs[2] : nil, size: half)
+                        mosaicTile(imgs.count > 3 ? imgs[3] : nil, size: half)
                     }
                 }
             }
