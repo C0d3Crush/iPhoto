@@ -44,6 +44,7 @@ private func printUsage() {
       iphoto-cli album list|create|delete|add|remove|images|reorder [--json]
       iphoto-cli album rename <album-id|name> <neuer-name> [--json]
       iphoto-cli album export <album-id|name> --output-dir <ordner> [--dry-run] [--overwrite] [--json]
+      iphoto-cli album purge-stale [--dry-run] [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
@@ -396,6 +397,14 @@ private func parseArgs(_ args: [String]) -> CLIArgs? {
 
 private func envDBPath() -> String? {
     ProcessInfo.processInfo.environment["IPHOTO_CATALOG_DB"]
+}
+
+private func envAlbumsJSONURL() -> URL {
+    if let p = ProcessInfo.processInfo.environment["IPHOTO_ALBUMS_JSON"] {
+        return URL(fileURLWithPath: p)
+    }
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("iPhoto/albums.json")
 }
 
 // MARK: - Commands
@@ -3054,8 +3063,41 @@ private func runAlbum(_ args: [String]) -> Int32 {
         }
         return failed.isEmpty ? 0 : 1
 
+    case "purge-stale":
+        // Remove references to deleted files from all albums; --dry-run only reports
+        let dryRun = args.contains("--dry-run")
+        let albumsURL = envAlbumsJSONURL()
+        guard let data = try? Data(contentsOf: albumsURL),
+              var albums = try? JSONDecoder().decode([Album].self, from: data) else {
+            fputs("Keine albums.json gefunden\n", stderr); return 1
+        }
+        var removed = 0
+        var changedAlbumIDs: [String] = []
+        for idx in albums.indices {
+            let before = albums[idx].photoURLs.count
+            let dead = albums[idx].photoURLs.filter { !FileManager.default.fileExists(atPath: $0.path) }
+            if !dead.isEmpty {
+                changedAlbumIDs.append(albums[idx].id.uuidString)
+                removed += dead.count
+                if !dryRun { albums[idx].photoURLs.removeAll { !FileManager.default.fileExists(atPath: $0.path) } }
+            }
+            _ = before
+        }
+        if !dryRun && removed > 0 {
+            if let out = try? JSONEncoder().encode(albums) { try? out.write(to: albumsURL) }
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["removed": removed, "albums_changed": changedAlbumIDs, "dry_run": dryRun]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: .prettyPrinted),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            if removed == 0 { print("Keine veralteten Verweise gefunden.") }
+            else { print("\(dryRun ? "[dry-run] " : "")\(removed) veraltete Verweis(e) in \(changedAlbumIDs.count) Album(en) \(dryRun ? "gefunden" : "entfernt").") }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export\n", stderr)
+        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export|purge-stale\n", stderr)
         return 1
     }
 }

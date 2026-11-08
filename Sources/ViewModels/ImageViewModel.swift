@@ -217,9 +217,10 @@ class ImageViewModel: ObservableObject {
         library.loadWatchedFolders()
         // Backward compat: Filesystem-Verzeichnisse für bestehende Alben anlegen
         for album in library.albums { syncAlbumToFilesystem(album) }
-        // Verweise auf gelöschte Dateien beim Start bereinigen
+        // Verweise auf gelöschte Dateien beim Start bereinigen (Snapshot auf Main, BG fileExists, Write auf Main)
+        let albumsSnapshot = library.albums
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            self?.purgeStaleAlbumReferences()
+            self?.purgeStaleAlbumReferences(snapshot: albumsSnapshot)
         }
         setupWatchedFolders()
 
@@ -800,8 +801,6 @@ class ImageViewModel: ObservableObject {
                 let metaURLs = newDocs.map { $0.url }
                 self.activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
                 self.activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
-                self.activity.enqueueWork { [weak self] in self?.scanQualityForLibrary() }
-                self.activity.enqueueWork { [weak self] in self?.scanMotifForLibrary() }
                 Log.perf(String(format: "IMPORT %d Dateien %.0f ms", newDocs.count, Date().timeIntervalSince(importStart) * 1000))
             }
         }

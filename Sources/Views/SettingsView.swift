@@ -295,6 +295,23 @@ struct SettingsView: View {
 
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
+                        Text("Qualität analysieren")
+                        Text("Analysiert Schärfe, Belichtung und pHash aller Bilder. Startet nicht automatisch beim Importieren.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Jetzt analysieren") {
+                        viewModel.scanQualityForLibrary()
+                        viewModel.scanMotifForLibrary()
+                    }
+                }
+                .padding(.vertical, 2)
+
+                Divider().padding(.vertical, 2)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("Thumbnails generieren")
                         Text("Startet die Thumbnail-Generierung für alle Bilder manuell.")
                             .font(.caption)

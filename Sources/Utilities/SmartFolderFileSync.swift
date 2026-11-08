@@ -53,9 +53,22 @@ enum SmartFolderFileSync {
             }
         }
 
-        // Neue Symlinks anlegen
-        var existingLinks = Set((try? fm.contentsOfDirectory(atPath: dir.path)) ?? [])
+        // Build reverse map: target path → link name, to skip already-linked files
+        var linkedTargets: [String: String] = [:]
+        if let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
+            for link in contents {
+                if let dest = try? fm.destinationOfSymbolicLink(atPath: link.path) {
+                    linkedTargets[URL(fileURLWithPath: dest).standardized.path] = link.lastPathComponent
+                }
+            }
+        }
+
+        var existingLinks = Set(linkedTargets.values)
         for docURL in matchingURLs {
+            let srcPath = docURL.standardized.path
+            // Already linked under any name: nothing to do
+            if linkedTargets[srcPath] != nil { continue }
+
             var linkName = docURL.lastPathComponent
             var counter  = 1
             while existingLinks.contains(linkName) {
@@ -68,6 +81,7 @@ enum SmartFolderFileSync {
             if !fm.fileExists(atPath: linkURL.path, isDirectory: nil) {
                 try? fm.createSymbolicLink(at: linkURL, withDestinationURL: docURL)
                 existingLinks.insert(linkName)
+                linkedTargets[srcPath] = linkName
             }
         }
         Log.info("iOrdner Filesystem-Sync: \"\(sf.name)\" → \(matchingURLs.count) Symlinks in \(dir.path)")

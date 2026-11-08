@@ -418,6 +418,16 @@ extension ImageViewModel {
         shuffledOrder = visibleDocuments.map { $0.id }.shuffled()
     }
 
+    // Snapshot of main-thread-only library/quality state for safe BG use in badge counting.
+    private struct SFCountContext {
+        let albumURLs: Set<URL>
+        let albumsByID: [UUID: Set<URL>]
+        let sfsByID: [UUID: SmartFolder]
+        let shadowT: Double
+        let highlightT: Double
+        let eyeT: Double
+    }
+
     func scheduleSmartFolderCountRefresh() {
         guard !sfCountRefreshScheduled else { return }
         sfCountRefreshScheduled = true
@@ -426,6 +436,22 @@ extension ImageViewModel {
             self.sfCountRefreshScheduled = false
             let docs = self.collection.documents
             let folders = self.library.smartFolders
+            // Snapshot all main-thread state accessed by in-memory smartFolderMatches
+            var albumsByID: [UUID: Set<URL>] = [:]
+            var allAlbumURLs = Set<URL>()
+            for a in self.library.albums {
+                let s = Set(a.photoURLs)
+                albumsByID[a.id] = s
+                allAlbumURLs.formUnion(s)
+            }
+            let ctx = SFCountContext(
+                albumURLs: allAlbumURLs,
+                albumsByID: albumsByID,
+                sfsByID: Dictionary(uniqueKeysWithValues: self.library.smartFolders.map { ($0.id, $0) }),
+                shadowT: self.quality.shadowClipThreshold,
+                highlightT: self.quality.highlightClipThreshold,
+                eyeT: self.quality.eyeOpennessThreshold
+            )
             DispatchQueue.global(qos: .utility).async { [weak self] in
                 guard let self = self else { return }
                 var counts: [UUID: Int] = [:]
@@ -433,7 +459,7 @@ extension ImageViewModel {
                     if let sqlCount = CatalogStore.shared.countForSmartFolder(sf) {
                         counts[sf.id] = sqlCount
                     } else {
-                        counts[sf.id] = docs.reduce(0) { $0 + (self.smartFolderMatches($1, sf: sf) ? 1 : 0) }
+                        counts[sf.id] = docs.reduce(0) { $0 + (self.smartFolderMatches($1, sf: sf, ctx: ctx, visiting: [sf.id]) ? 1 : 0) }
                     }
                 }
                 DispatchQueue.main.async { [weak self] in
@@ -446,10 +472,14 @@ extension ImageViewModel {
     }
 
     func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder) -> Bool {
-        smartFolderMatches(doc, sf: sf, visiting: [sf.id])
+        smartFolderMatches(doc, sf: sf, ctx: nil, visiting: [sf.id])
     }
 
     private func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder, visiting: Set<UUID>) -> Bool {
+        smartFolderMatches(doc, sf: sf, ctx: nil, visiting: visiting)
+    }
+
+    private func smartFolderMatches(_ doc: ImageDocument, sf: SmartFolder, ctx: SFCountContext?, visiting: Set<UUID>) -> Bool {
         guard !sf.criteria.isEmpty else { return true }
         let results = sf.criteria.map { c -> Bool in
             switch c.attribute {
@@ -537,20 +567,28 @@ extension ImageViewModel {
                 default:       return hasMotif
                 }
             case .notInAlbum:
-                let allAlbumURLs = Set(library.albums.flatMap { $0.photoURLs })
-                return !allAlbumURLs.contains(doc.url)
+                let urls = ctx?.albumURLs ?? Set(library.albums.flatMap { $0.photoURLs })
+                return !urls.contains(doc.url)
             case .album:
-                guard let albumID = UUID(uuidString: c.textValue),
-                      let album = library.albums.first(where: { $0.id == albumID }) else { return false }
-                let inAlbum = album.photoURLs.contains(doc.url)
+                guard let albumID = UUID(uuidString: c.textValue) else { return false }
+                let inAlbum: Bool
+                if let ctxURLs = ctx?.albumsByID[albumID] {
+                    inAlbum = ctxURLs.contains(doc.url)
+                } else {
+                    inAlbum = library.albums.first(where: { $0.id == albumID })?.photoURLs.contains(doc.url) ?? false
+                }
                 return applyEnumOp(c.op, lhs: inAlbum, rhs: true)
             case .smartFolderRef:
                 guard let refID = UUID(uuidString: c.textValue),
-                      !visiting.contains(refID),
-                      let refSf = library.smartFolders.first(where: { $0.id == refID }) else {
-                    return c.op == .isNot
+                      !visiting.contains(refID) else { return c.op == .isNot }
+                let refSf: SmartFolder?
+                if let snapshot = ctx {
+                    refSf = snapshot.sfsByID[refID]
+                } else {
+                    refSf = library.smartFolders.first(where: { $0.id == refID })
                 }
-                let isInRef = smartFolderMatches(doc, sf: refSf, visiting: visiting.union([refID]))
+                guard let refSf = refSf else { return c.op == .isNot }
+                let isInRef = smartFolderMatches(doc, sf: refSf, ctx: ctx, visiting: visiting.union([refID]))
                 return applyEnumOp(c.op, lhs: isInRef, rhs: true)
             case .colorRatio:
                 guard let ratio = colorChannelRatio(doc: doc, channel: c.textValue) else { return false }
@@ -562,16 +600,19 @@ extension ImageViewModel {
                 return applyNumericOp(c.op, value: pct, lo: c.numericValue, hi: c.numericValue2)
             case .isUnderexposed:
                 guard doc.qualityScanned else { return false }
-                let flag = !doc.underOverride && (doc.underRatio ?? 0) >= quality.shadowClipThreshold
+                let shadowT = ctx?.shadowT ?? quality.shadowClipThreshold
+                let flag = !doc.underOverride && (doc.underRatio ?? 0) >= shadowT
                 return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
             case .isOverexposed:
                 guard doc.qualityScanned else { return false }
-                let flag = !doc.overOverride && (doc.overRatio ?? 0) >= quality.highlightClipThreshold
+                let highlightT = ctx?.highlightT ?? quality.highlightClipThreshold
+                let flag = !doc.overOverride && (doc.overRatio ?? 0) >= highlightT
                 return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
             case .hasClosedEyes:
                 guard doc.qualityScanned else { return false }
+                let eyeT = ctx?.eyeT ?? quality.eyeOpennessThreshold
                 let flag: Bool
-                if let eo = doc.eyeOpenness { flag = eo < quality.eyeOpennessThreshold }
+                if let eo = doc.eyeOpenness { flag = eo < eyeT }
                 else { flag = false }
                 return applyEnumOp(c.op, lhs: flag, rhs: c.boolValue)
             }

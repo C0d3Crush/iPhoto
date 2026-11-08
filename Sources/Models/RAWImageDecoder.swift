@@ -214,29 +214,30 @@ struct RAWImageDecoder {
         guard let source = CGImageSourceCreateWithData(jpegData as CFData, nil) else { return nil }
 
         if let maxDim = maxDimension {
-            // Thumbnail-Pfad: direkt auf Zielgröße dekodieren — kein volles 37-MB-Bild im Speicher.
-            // kCGImageSourceCreateThumbnailWithTransform wendet EXIF-Rotation an, kein CIImage nötig.
             iphotoBreadcrumb("decodeEmbeddedJPEG: CGImageSourceCreateThumbnailAtIndex (\(name))")
             Log.trace("CGImageSourceCreateThumbnailAtIndex: \(maxDim)px \(name)")
-            // FromImageAlways: erzwingt JPEG-DCT-Sub-Sampling (1/8 Zwischenstufe) statt des
-            // vollen Bildes. FromImageIfAbsent crashte bei großen embedded JPEGs ohne IFD1-Thumbnail
-            // (z.B. neuere Fujifilm-Kameras mit 5 MB+ Preview) — ImageIO dekodierte dort das
-            // komplette JPEG (~52–100 MB Zwischenbild) → OOM → SIGSEGV/SIGILL.
-            let opts: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
+            let t0 = Date()
+            // Step 1: use IFD1 thumbnail if present (fast, never crashes).
+            // Step 2 (fallback): CGImageSourceCreateThumbnailFromImageAlways crashes on macOS 11
+            // for Fujifilm RAFs with offset=148 (newer compact bodies, 3–6 MB embedded JPEG) —
+            // SIGILL in ImageIO's DCT path. Use kCGImageSourceSubsampleFactor:8 instead:
+            // decodes at 1/8 resolution (~780×520 for 26 MP), no OOM, no SIGILL.
+            let optsIfAbsent: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxDim
             ]
-            let t0 = Date()
-            let lazyThumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary)
-            Log.trace("CreateThumbnailAtIndex fertig: \(Int(Date().timeIntervalSince(t0) * 1000)) ms \(name)")
-            // CGImageSourceCreateThumbnailAtIndex kann ein lazy CGImage zurückgeben,
-            // das intern noch auf jpegData zeigt. Sobald jpegData am Funktionsende
-            // freigegeben wird, greift SwiftUI beim späteren Rendern auf freigegebenen
-            // Speicher zu → SIGILL auf dem Main-Thread (Bug #40).
-            // Fix: Pixel sofort in einen neuen Bitmap-Context rendern — danach ist das
-            // CGImage vollständig eigenständig und unabhängig von der Quelldatei.
-            return lazyThumb.flatMap { materialize($0) }
+            if let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, optsIfAbsent as CFDictionary) {
+                Log.trace("CreateThumbnailAtIndex (IfAbsent) fertig: \(Int(Date().timeIntervalSince(t0) * 1000)) ms \(name)")
+                return materialize(thumb)
+            }
+            // No IFD1 thumbnail — fall back to 1/8-subsampled full decode.
+            Log.trace("CreateThumbnailAtIndex fehlgeschlagen, Fallback Subsample+Scale: \(name)")
+            let subsampleOpts: [CFString: Any] = [kCGImageSourceSubsampleFactor: 8 as CFNumber]
+            guard let subsampled = CGImageSourceCreateImageAtIndex(source, 0, subsampleOpts as CFDictionary) else { return nil }
+            let scaled = scaledDown(subsampled, maxDimension: maxDim)
+            Log.trace("CreateThumbnailAtIndex fertig (Subsample+Scale): \(Int(Date().timeIntervalSince(t0) * 1000)) ms \(name)")
+            return materialize(scaled)
         }
 
         // Vollbild-Pfad: volle Auflösung + manuelle EXIF-Rotation (für decode())

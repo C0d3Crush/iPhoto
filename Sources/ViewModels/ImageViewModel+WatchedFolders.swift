@@ -110,20 +110,40 @@ extension ImageViewModel {
             }
 
             try? fm.createDirectory(at: destURL, withIntermediateDirectories: true)
-            let existingNames = Set((try? fm.contentsOfDirectory(atPath: destURL.path).map { $0.lowercased() }) ?? [])
-            let newFiles = sourceFiles.filter { !existingNames.contains($0.lastPathComponent.lowercased()) }
+
+            // Dedup by name + size; rename on name collision with different content
+            var filesToCopy: [(src: URL, dest: URL)] = []
+            for file in sourceFiles {
+                let srcSize = (try? fm.attributesOfItem(atPath: file.path))?[.size] as? Int ?? -1
+                let destExact = destURL.appendingPathComponent(file.lastPathComponent)
+                if fm.fileExists(atPath: destExact.path) {
+                    let dstSize = (try? fm.attributesOfItem(atPath: destExact.path))?[.size] as? Int ?? -2
+                    if srcSize == dstSize { continue }  // already present
+                    var suffix = 1
+                    var uniqueDest: URL
+                    let base = (file.lastPathComponent as NSString).deletingPathExtension
+                    let ext  = (file.lastPathComponent as NSString).pathExtension
+                    repeat {
+                        let name = ext.isEmpty ? "\(base)_\(suffix)" : "\(base)_\(suffix).\(ext)"
+                        uniqueDest = destURL.appendingPathComponent(name)
+                        suffix += 1
+                    } while fm.fileExists(atPath: uniqueDest.path)
+                    filesToCopy.append((src: file, dest: uniqueDest))
+                } else {
+                    filesToCopy.append((src: file, dest: destExact))
+                }
+            }
 
             DispatchQueue.main.async {
-                self.activity.importProgress[folderID] = BackgroundActivityState.ImportProgress(folderName: folderName, completed: 0, total: newFiles.count)
-                self.activity.update(id: folderID, done: 0, total: newFiles.count)
+                self.activity.importProgress[folderID] = BackgroundActivityState.ImportProgress(folderName: folderName, completed: 0, total: filesToCopy.count)
+                self.activity.update(id: folderID, done: 0, total: filesToCopy.count)
             }
 
             var completed = 0
             var failedCount = 0
             var newURLs: [URL] = []
-            for file in newFiles {
-                let dest = destURL.appendingPathComponent(file.lastPathComponent)
-                if (try? fm.copyItem(at: file, to: dest)) != nil {
+            for (src, dest) in filesToCopy {
+                if (try? fm.copyItem(at: src, to: dest)) != nil {
                     newURLs.append(dest)
                 } else {
                     failedCount += 1
@@ -131,8 +151,8 @@ extension ImageViewModel {
                 completed += 1
                 let c = completed
                 DispatchQueue.main.async {
-                    self.activity.importProgress[folderID] = BackgroundActivityState.ImportProgress(folderName: folderName, completed: c, total: newFiles.count)
-                    self.activity.update(id: folderID, done: c, total: newFiles.count)
+                    self.activity.importProgress[folderID] = BackgroundActivityState.ImportProgress(folderName: folderName, completed: c, total: filesToCopy.count)
+                    self.activity.update(id: folderID, done: c, total: filesToCopy.count)
                 }
             }
 
@@ -175,8 +195,16 @@ extension ImageViewModel {
 
             var missingCount = 0
             if let destURL = folder.importDestinationURL {
-                let destNames = Set((try? fm.contentsOfDirectory(atPath: destURL.path).map { $0.lowercased() }) ?? [])
-                missingCount = imageFiles.filter { !destNames.contains($0.lastPathComponent.lowercased()) }.count
+                // A file is "missing" if no same-name+same-size copy exists in dest
+                for file in imageFiles {
+                    let srcSize = (try? fm.attributesOfItem(atPath: file.path))?[.size] as? Int ?? -1
+                    let destFile = destURL.appendingPathComponent(file.lastPathComponent)
+                    if fm.fileExists(atPath: destFile.path) {
+                        let dstSize = (try? fm.attributesOfItem(atPath: destFile.path))?[.size] as? Int ?? -2
+                        if srcSize == dstSize { continue }
+                    }
+                    missingCount += 1
+                }
             }
             stop()
 

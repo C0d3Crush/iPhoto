@@ -105,34 +105,69 @@ extension ImageViewModel {
             let fm = FileManager.default
             let sourceFiles = self.imageFiles(on: volumeURL)
             try? fm.createDirectory(at: destURL, withIntermediateDirectories: true)
-            let existingNames = Set((try? fm.contentsOfDirectory(atPath: destURL.path).map { $0.lowercased() }) ?? [])
-            let newFiles = sourceFiles.filter { !existingNames.contains($0.lastPathComponent.lowercased()) }
-            DispatchQueue.main.async { self.activity.update(id: volumeID, done: 0, total: newFiles.count) }
+
+            // Determine which files need copying. Same name + same size = already present.
+            var filesToCopy: [(src: URL, dest: URL)] = []
+            var alreadyPresent: [String: URL] = [:]  // srcPath → verified destURL
+            for file in sourceFiles {
+                let srcSize = (try? fm.attributesOfItem(atPath: file.path))?[.size] as? Int ?? -1
+                let destExact = destURL.appendingPathComponent(file.lastPathComponent)
+                if fm.fileExists(atPath: destExact.path) {
+                    let dstSize = (try? fm.attributesOfItem(atPath: destExact.path))?[.size] as? Int ?? -2
+                    if srcSize == dstSize {
+                        alreadyPresent[file.path] = destExact
+                        continue  // verified duplicate — skip copy
+                    }
+                    // Same name, different content: copy under a unique name
+                    var suffix = 1
+                    var uniqueDest: URL
+                    let base = (file.lastPathComponent as NSString).deletingPathExtension
+                    let ext  = (file.lastPathComponent as NSString).pathExtension
+                    repeat {
+                        let name = ext.isEmpty ? "\(base)_\(suffix)" : "\(base)_\(suffix).\(ext)"
+                        uniqueDest = destURL.appendingPathComponent(name)
+                        suffix += 1
+                    } while fm.fileExists(atPath: uniqueDest.path)
+                    filesToCopy.append((src: file, dest: uniqueDest))
+                } else {
+                    filesToCopy.append((src: file, dest: destExact))
+                }
+            }
+            DispatchQueue.main.async { self.activity.update(id: volumeID, done: 0, total: filesToCopy.count) }
 
             var newURLs: [URL] = []
+            // copiedMap tracks source → dest for files verified in this run (for safe freeUpSpace)
+            var copiedMap: [String: URL] = alreadyPresent
             var failedCount = 0
             var done = 0
-            for file in newFiles {
-                let dest = destURL.appendingPathComponent(file.lastPathComponent)
-                if (try? fm.copyItem(at: file, to: dest)) != nil {
-                    newURLs.append(dest)
+            for (src, dest) in filesToCopy {
+                if (try? fm.copyItem(at: src, to: dest)) != nil {
+                    // Verify by size
+                    let srcSize = (try? fm.attributesOfItem(atPath: src.path))?[.size] as? Int ?? -1
+                    let dstSize = (try? fm.attributesOfItem(atPath: dest.path))?[.size] as? Int ?? -2
+                    if srcSize == dstSize {
+                        newURLs.append(dest)
+                        copiedMap[src.path] = dest
+                    } else {
+                        failedCount += 1
+                        try? fm.removeItem(at: dest)
+                    }
                 } else {
                     failedCount += 1
                 }
                 done += 1
                 let d = done
-                DispatchQueue.main.async { self.activity.update(id: volumeID, done: d, total: newFiles.count) }
+                DispatchQueue.main.async { self.activity.update(id: volumeID, done: d, total: filesToCopy.count) }
             }
 
             var freedCount = 0
             var keptCount = 0
             if freeUpSpace {
-                let destNames = Set((try? fm.contentsOfDirectory(atPath: destURL.path).map { $0.lowercased() }) ?? [])
+                // Only delete source files whose copy was verified in this run
                 for file in sourceFiles {
-                    if destNames.contains(file.lastPathComponent.lowercased()),
-                       (try? fm.removeItem(at: file)) != nil {
+                    if copiedMap[file.path] != nil, (try? fm.removeItem(at: file)) != nil {
                         freedCount += 1
-                    } else {
+                    } else if copiedMap[file.path] == nil {
                         keptCount += 1
                     }
                 }

@@ -2,6 +2,20 @@
 
 ---
 
+## 1.105.4
+**RAF-Thumbnail-Crash auf macOS 11 behoben; Qualitäts-Scan manuell; Album/SF-Cover gecacht**
+
+- `decodeEmbeddedJPEG`: `kCGImageSourceCreateThumbnailFromImageAlways` durch `FromImageIfAbsent` + `SubsampleFactor:8`-Fallback ersetzt — behebt SIGILL-Absturz bei Fujifilm-RAFs mit Offset=148 (neuere Kompaktkameras) auf macOS 11.7
+- `importFiles`: Qualitäts- und Motivscan werden nicht mehr automatisch beim Import gestartet — nur noch manuell über Einstellungen → Für Geeks → „Jetzt analysieren" auslösbar
+- Einstellungen → Entwickler: neuer Button „Qualität analysieren" startet `scanQualityForLibrary` + `scanMotifForLibrary`
+- `purgeStaleAlbumReferences`: läuft jetzt komplett im Hintergrund (Snapshot auf Main, `fileExists` auf BG, Write-Back auf Main)
+- `scheduleSmartFolderCountRefresh`: alle album-/SF-abhängigen `library`-Zugriffe in `SFCountContext`-Snapshot verpackt — kein Main-Thread-Datenzugriff mehr aus BG-Block
+- `SmartFolderFileSync`: überspringt Symlinks mit bekanntem Ziel (Reverse-Map `linkedTargets`) — keine doppelten Links mehr bei wiederholtem Sync
+- Volume/Watched-Folder-Import: Dedup per Name+Größe statt Name allein; bei Namenskollision mit anderem Inhalt wird ein eindeutiger Name generiert; `freeUpSpace` löscht Quelldatei nur noch wenn Kopie verifiziert wurde
+- `album purge-stale`: neuer CLI-Befehl entfernt Verweise auf gelöschte Dateien aus allen Alben (`--dry-run` + `--json`); Test in `run_plugins.sh`
+
+---
+
 ## 1.105.3
 **Watched Folders überwacht jetzt Unterordner; CropEditor und Album-Select beschleunigt**
 

@@ -133,14 +133,25 @@ extension ImageViewModel {
         if changed { library.saveAlbums() }
     }
 
-    func purgeStaleAlbumReferences() {
-        var changed = false
-        for idx in library.albums.indices {
-            let before = library.albums[idx].photoURLs.count
-            library.albums[idx].photoURLs.removeAll { !FileManager.default.fileExists(atPath: $0.path) }
-            if library.albums[idx].photoURLs.count != before { changed = true }
+    // Called with a snapshot taken on Main; runs fileExists on BG, writes back on Main.
+    func purgeStaleAlbumReferences(snapshot: [Album]) {
+        var deadURLsByID: [UUID: Set<URL>] = [:]
+        for album in snapshot {
+            let dead = Set(album.photoURLs.filter { !FileManager.default.fileExists(atPath: $0.path) })
+            if !dead.isEmpty { deadURLsByID[album.id] = dead }
         }
-        if changed { library.saveAlbums() }
+        guard !deadURLsByID.isEmpty else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            var albums = self.library.albums
+            for idx in albums.indices {
+                if let dead = deadURLsByID[albums[idx].id] {
+                    albums[idx].photoURLs.removeAll { dead.contains($0) }
+                }
+            }
+            self.library.albums = albums
+            self.library.saveAlbums()
+        }
     }
 
     // MARK: - Album Filesystem Sync
@@ -153,8 +164,17 @@ extension ImageViewModel {
             .appendingPathComponent(Self.albumsSystemFolderName)
     }
 
+    static func sanitizedFolderName(_ name: String) -> String {
+        var s = name
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .replacingOccurrences(of: "\0", with: "")
+        while s.hasPrefix(".") { s = String(s.dropFirst()) }
+        return s.isEmpty ? "Album" : s
+    }
+
     func albumSystemPath(for album: Album) -> URL {
-        albumsSystemRoot.appendingPathComponent(album.name)
+        albumsSystemRoot.appendingPathComponent(Self.sanitizedFolderName(album.name))
     }
 
     // Manifest maps source-path → dest-filename so we never compare file content.
@@ -250,6 +270,11 @@ extension ImageViewModel {
 
     private func removeAlbumFromFilesystem(_ album: Album) {
         let dir = albumSystemPath(for: album)
+        // Safety: only delete a direct child of albumsSystemRoot to prevent path-traversal damage
+        guard dir.deletingLastPathComponent().standardized.path == albumsSystemRoot.standardized.path else {
+            Log.error("removeAlbumFromFilesystem: Pfad außerhalb des Album-Roots, Löschen abgebrochen: \(dir.path)")
+            return
+        }
         DispatchQueue.global(qos: .utility).async {
             try? FileManager.default.removeItem(at: dir)
         }

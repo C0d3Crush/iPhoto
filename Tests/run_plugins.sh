@@ -3043,6 +3043,44 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# album purge-stale
+# ---------------------------------------------------------------------------
+echo "--- album purge-stale ---"
+PURGE_DIR=$(mktemp -d)
+PURGE_IMG="$PURGE_DIR/real.jpg"
+PURGE_GHOST="$PURGE_DIR/ghost.jpg"
+cp "$TESTIMG" "$PURGE_IMG"
+# Create a minimal albums.json with one real and one ghost URL
+PURGE_DB="$PURGE_DIR/catalog.db"
+PURGE_ALBUM_ID=$(uuidgen)
+PURGE_JSON_FILE=$(mktemp -d)/albums.json
+mkdir -p "$(dirname "$PURGE_JSON_FILE")"
+cat > "$PURGE_JSON_FILE" <<ALBUMEOF
+[{"id":"$PURGE_ALBUM_ID","name":"PurgeTest","photoURLs":["$PURGE_IMG","$PURGE_GHOST"],"albumDescription":null,"coverPhotoURL":null,"parentID":null}]
+ALBUMEOF
+# dry-run should detect 1 stale reference
+PURGE_OUT=$(IPHOTO_CATALOG_DB="$PURGE_DB" IPHOTO_ALBUMS_JSON="$PURGE_JSON_FILE" "$CLI" album purge-stale --dry-run --json 2>/dev/null)
+PURGE_ERR=$?
+PURGE_REMOVED=$(echo "$PURGE_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('removed',0))" 2>/dev/null)
+PURGE_DRYRUN=$(echo "$PURGE_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('dry_run','false'))" 2>/dev/null)
+if [ "$PURGE_REMOVED" = "1" ] && [ "$PURGE_DRYRUN" = "True" ]; then
+    pass "album purge-stale --dry-run (1 veralteter Verweis erkannt)"
+else
+    fail "album purge-stale --dry-run" "removed=$PURGE_REMOVED dry_run=$PURGE_DRYRUN (erwartet: 1 / True)"
+fi
+# real run should remove the ghost
+PURGE_OUT2=$(IPHOTO_CATALOG_DB="$PURGE_DB" IPHOTO_ALBUMS_JSON="$PURGE_JSON_FILE" "$CLI" album purge-stale --json 2>/dev/null)
+PURGE_REMOVED2=$(echo "$PURGE_OUT2" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('removed',0))" 2>/dev/null)
+if [ "$PURGE_REMOVED2" = "1" ]; then
+    pass "album purge-stale (1 veralteter Verweis entfernt)"
+else
+    fail "album purge-stale" "removed=$PURGE_REMOVED2 (erwartet: 1)"
+fi
+rm -rf "$PURGE_DIR"
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
