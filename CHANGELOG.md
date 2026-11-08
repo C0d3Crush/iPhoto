@@ -2,12 +2,18 @@
 
 ---
 
-## 1.106.42
+## 1.106.43
 **Bugfix: Projekt-Ordner lädt keine Bilder wenn er ein Album-Ordner (iPhoto/Alben/…) ist**
 
-- `scanProjectFolder` filterte Symlinks generell aus (`isSymbolicLink != true`). Album-Ordner unter `~/Pictures/iPhoto/Alben/` enthalten aber nur Symlinks auf die echten Bilddateien — deshalb wurde nichts gefunden und die Kollektion blieb leer
-- Fix: Symlinks werden aufgelöst (`resolvingSymlinksInPath()`), der echte Dateipfad wird importiert. Damit funktionieren Album-Ordner als Projekt-Ordner korrekt; `isSystemManagedPath` blockiert nicht (der aufgelöste Pfad liegt außerhalb von `iPhoto/Alben/`)
-- Projekten mit regulären Ordnern (kein Symlink-Inhalt) ändert sich nichts
+- `importFiles` filterte alle Pfade unterhalb von `~/Pictures/iPhoto/Alben/` via `isSystemManagedPath` aus — auch wenn der Nutzer diesen Ordner explizit als Projekt-Ordner gewählt hat. Album-Ordner enthalten echte Datei-Kopien (keine Symlinks), die fälschlicherweise komplett blockiert wurden
+- Fix: Im Projekt-Modus wird `isSystemManagedPath` übersprungen (`isProjectMode || !isSystemManagedPath`). Der Nutzer hat den Ordner bewusst als Projekt-Ordner ausgewählt — der Filter dient nur dazu, intern verwaltete Pfade im klassischen Modus auszuschließen
+
+---
+
+## 1.106.42
+**Bugfix: Projekt-Ordner, vorheriger Versuch (Symlink-Auflösung)**
+
+- Falsches Root-Cause: Symlink-Auflösung eingefügt, aber Album-Ordner enthalten echte Kopien, keine Symlinks — kein Effekt. In v1.106.43 durch korrekten Fix ersetzt.
 
 ---
 

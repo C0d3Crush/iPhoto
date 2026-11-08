@@ -699,13 +699,9 @@ class ImageViewModel: ObservableObject {
                 guard self.projectLoadToken == token else { break }
                 let vals = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
                 if vals?.isRegularFile == true,
+                   vals?.isSymbolicLink != true,
                    ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
-                    // Resolve symlinks so album-folder projects (iPhoto/Alben/…) work:
-                    // album folders contain symlinks to real files; importing the resolved
-                    // path avoids isSystemManagedPath filtering in importFiles.
-                    let importURL = vals?.isSymbolicLink == true
-                        ? fileURL.resolvingSymlinksInPath() : fileURL
-                    found.append(importURL)
+                    found.append(fileURL)
                 }
             }
             DispatchQueue.main.async { [weak self] in
@@ -747,7 +743,9 @@ class ImageViewModel: ObservableObject {
 
     func importFiles(_ urls: [URL], selectFirst: Bool = true) {
         let importStart = Date()
-        let supported = urls.filter { isSupportedFormat($0) && !isSystemManagedPath($0) }
+        // In project mode the user explicitly picked the folder — skip the system-managed
+        // path filter so album folders (iPhoto/Alben/…) work as project folders.
+        let supported = urls.filter { isSupportedFormat($0) && (isProjectMode || !isSystemManagedPath($0)) }
         guard !supported.isEmpty else { return }
 
         let existingURLs = Set(collection.documents.map { $0.url })
