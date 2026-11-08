@@ -2,6 +2,16 @@
 
 ---
 
+## 1.106.8
+**Duplikat-Erkennung pHash-Signal; ThumbnailDiskCache atomares Schreiben + Eviction (#23 #50)**
+
+- `detectDuplicates`: pHash-only-Gruppen werden nicht mehr mit 256-KB-Byte-Hash verifiziert — re-encodete Kopien eines Bildes bleiben in einer Gruppe statt aufgesplittet zu werden; Byte-Verifikation läuft weiterhin für fn/dt-Signal-Gruppen (#50)
+- `detectDuplicates`: `doc.fileSize` statt `resourceValues(.fileSizeKey)` per Dokument; Catalog-`dateTakenByPath()` Batch-Query statt `metadata.first(where:)` per Dokument (#50)
+- `ThumbnailDiskCache.save`: schreibt in temporäre Datei und tauscht atomar aus (`replaceItemAt`) — kein halbgeschriebenes JPEG mehr bei parallelem Lese-Zugriff (#23)
+- `ThumbnailDiskCache`: Größen-Eviction bei 500 MB — älteste Dateien werden beim Schreiben entfernt bis der Cache unter das Limit fällt (#23)
+
+---
+
 ## 1.106.7
 **backup run CLI + 4 Tests (#67)**
 

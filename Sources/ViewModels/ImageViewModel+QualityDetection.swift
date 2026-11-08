@@ -49,21 +49,30 @@ extension ImageViewModel {
                 if ra != rb { parent[rb] = ra }
             }
 
+            // Batch-query catalog dates once instead of metadata.first(where:) per doc (#50).
+            let catalogDates = CatalogStore.shared.dateTakenByPath()
             var byKey: [String: [Int]] = [:]
+            var pHashOnlyRoots = Set<Int>()  // roots whose only signal is pHash (#50)
             var sizes: [Int] = Array(repeating: 0, count: n)
             for (idx, doc) in docs.enumerated() {
-                let size = (try? doc.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap({ $0 }) ?? 0
+                // Use pre-loaded fileSize field instead of resourceValues stat (#50).
+                let size = doc.fileSize > 0 ? Int(doc.fileSize)
+                    : ((try? doc.url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap({ $0 }) ?? 0)
                 sizes[idx] = size
+                var hasNonPHash = false
                 if let ph = doc.phash {
                     byKey["ph:\(ph)", default: []].append(idx)
                 }
                 if size > 0 {
                     byKey["fn:\(size)|\(doc.filename.lowercased())", default: []].append(idx)
-                    if let dateTaken = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value,
-                       !dateTaken.isEmpty {
+                    hasNonPHash = true
+                    let dateTaken = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value
+                        ?? catalogDates[doc.url.path] ?? ""
+                    if !dateTaken.isEmpty {
                         byKey["dt:\(dateTaken)|\(size)", default: []].append(idx)
                     }
                 }
+                if !hasNonPHash { pHashOnlyRoots.insert(idx) }
                 let done = idx + 1
                 if done % 50 == 0 || done == n {
                     DispatchQueue.main.async { [weak self] in
@@ -71,9 +80,16 @@ extension ImageViewModel {
                     }
                 }
             }
-            for indices in byKey.values where indices.count > 1 {
+            for (key, indices) in byKey where indices.count > 1 {
+                let isNonPHash = !key.hasPrefix("ph:")
                 let base = indices[0]
-                for i in 1..<indices.count { union(base, indices[i]) }
+                for i in 1..<indices.count {
+                    union(base, indices[i])
+                    if isNonPHash {
+                        // Any non-pHash signal marks these indices as byte-verifiable.
+                        pHashOnlyRoots.remove(find(base))
+                    }
+                }
             }
 
             // Kandidaten-Gruppen sammeln
@@ -82,12 +98,20 @@ extension ImageViewModel {
             let candidates = buckets.values.filter { $0.count > 1 }
 
             // Verifikation: erste 256 KB pro Datei hashen, Gruppen splitten wo Bytes
-            // definitiv abweichen. Datei-Öffnen ist schnell (~ms pro File), so bekommt
-            // der Nutzer echte Fortschritts-Anzeige und die Duplikat-Aussage ist belastbar.
+            // definitiv abweichen. pHash-only-Gruppen überspringen — re-encodete Kopien
+            // haben per Definition andere Bytes, gehören aber trotzdem zusammen (#50).
             var verified: [[ImageDocument]] = []
-            let filesToHash = candidates.reduce(0) { $0 + $1.count }
+            let filesToHash = candidates.reduce(0) { acc, group in
+                acc + (pHashOnlyRoots.contains(find(group.first ?? 0)) ? 0 : group.count) }
             var hashed = 0
             for group in candidates {
+                let root = find(group[0])
+                if pHashOnlyRoots.contains(root) {
+                    // pHash-only: accept as visual duplicates without byte verification.
+                    let subDocs = group.map { docs[$0] }.sorted { $0.url.path < $1.url.path }
+                    verified.append(subDocs)
+                    continue
+                }
                 var byContent: [String: [Int]] = [:]
                 for idx in group {
                     let sig = Self.contentSignature(url: docs[idx].url, size: sizes[idx])
