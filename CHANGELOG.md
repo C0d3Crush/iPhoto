@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.27
+**Perf: SmartFolder-Gruppen-Mutations batch-schreiben — kein O(N) CoW-Publish**
+
+- `renameGroup`: mutiert Gruppe auf lokaler Kopie, schreibt einmalig zurück — eliminiert N `@Published`-Publishes à vollständige Array-Kopie
+- `dissolveGroup`: gleiches Muster; sammelt zu synchronisierende Ordner vor dem Write-Back
+- `createFilmSimulationSmartFolders`: alle Mutations auf lokaler Kopie, ein Write-Back, danach Filesystem-Sync für geänderte Ordner
+
+---
+
 ## 1.106.26
 **Perf: CatalogStore-Album-Writes von Main-Thread auf Background-Queue**
 
