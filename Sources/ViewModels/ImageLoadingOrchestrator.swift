@@ -681,17 +681,19 @@ final class ImageLoadingOrchestrator {
             metadataQueue.addOperation { [weak self] in
                 self?.host?.activity.waitWhilePaused(id: metaID)
                 guard let self = self, let host = self.host else { return }
-                let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
-                defer { stopAccess() }
-                let metadata = host.metadataService.readPhotoMetadata(from: accessURL)
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    // Buffer the result; a single flush will apply all in one array write.
-                    if !metadata.isEmpty {
-                        self.metadataPendingFlush[url] = metadata
+                autoreleasepool {
+                    let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
+                    defer { stopAccess() }
+                    let metadata = host.metadataService.readPhotoMetadata(from: accessURL)
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        // Buffer the result; a single flush will apply all in one array write.
+                        if !metadata.isEmpty {
+                            self.metadataPendingFlush[url] = metadata
+                        }
+                        self.metaDone += 1
+                        self.scheduleMetadataFlush()
                     }
-                    self.metaDone += 1
-                    self.scheduleMetadataFlush()
                 }
             }
         }

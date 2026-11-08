@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.40
+**Perf: autoreleasepool in loadMetadataInBackground**
+
+- `loadMetadataInBackground` fehlte `autoreleasepool` im Operations-Body — `readPhotoMetadata` erstellt pro Bild CGImageSource-Objekte; ohne Pool akkumulierten diese bei 2343-Bilder-Bibliotheken bis zum Thread-Drain statt nach jeder Operation. Fix: `autoreleasepool { ... }` um den gesamten Decode-Block
+
+---
+
 ## 1.106.39
 **Perf: kCGImageSourceShouldCache: false in allen CGImageSource-Aufrufen**
 
