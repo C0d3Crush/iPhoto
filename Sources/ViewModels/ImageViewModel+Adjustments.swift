@@ -175,8 +175,11 @@ extension ImageViewModel {
                   let data = try? Data(contentsOf: url),
                   var preset = try? JSONDecoder().decode(Preset.self, from: data) else { return }
             preset.id = UUID()
-            CatalogStore.shared.savePreset(preset)
-            DispatchQueue.main.async { self?.adj.userPresets = CatalogStore.shared.allUserPresets() }
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                CatalogStore.shared.savePreset(preset)
+                let presets = CatalogStore.shared.allUserPresets()
+                DispatchQueue.main.async { self?.adj.userPresets = presets }
+            }
         }
     }
 

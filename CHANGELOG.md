@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.33
+**Perf: importRecipe + SmartFolder-Limit-Sort von Main-Thread entkoppelt**
+
+- `importRecipe`: `CatalogStore.shared.savePreset/allUserPresets` liefen im `NSOpenPanel`-Callback synchron auf Main; jetzt via `DispatchQueue.global(qos: .userInitiated).async`
+- `applySmartFolderLimit` (`.newest`/`.oldest`): statt O(N log N) `image(forPath:)`-Aufrufe in der Sortierfunktion nun ein einziger `dateTakenByPath()`-Batch-Query vor dem Sort — eliminiert N SQLite-Blocking-Calls auf dem Main-Thread
+- `catalogExifString`: `exif(forPath:)` wird nicht mehr eager (unkonditioniert) geladen, wenn nur Kamera-Make/Model gebraucht wird
+
+---
+
 ## 1.106.32
 **Perf: Preset-Saves + loadPersistedGroups von Main-Thread auf Background**
 

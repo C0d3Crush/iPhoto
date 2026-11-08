@@ -724,10 +724,18 @@ extension ImageViewModel {
             return Array(docs.sorted { $0.rating > $1.rating }.prefix(sf.limitCount))
         case .lowestRating:
             return Array(docs.sorted { $0.rating < $1.rating }.prefix(sf.limitCount))
-        case .newest:
-            return Array(docs.sorted { dateSortKey($0) > dateSortKey($1) }.prefix(sf.limitCount))
-        case .oldest:
-            return Array(docs.sorted { dateSortKey($0) < dateSortKey($1) }.prefix(sf.limitCount))
+        case .newest, .oldest:
+            // Batch: one SQLite query instead of one per comparator call (#10 pattern).
+            let catalogDates = CatalogStore.shared.dateTakenByPath()
+            let keyed: [(doc: ImageDocument, key: String)] = docs.map { doc in
+                if let v = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value, !v.isEmpty {
+                    return (doc, v)
+                }
+                return (doc, catalogDates[doc.url.path] ?? doc.filename)
+            }
+            let desc = sf.limitSelection == .newest
+            return Array(keyed.sorted { desc ? $0.key > $1.key : $0.key < $1.key }
+                .prefix(sf.limitCount).map { $0.doc })
         }
     }
 
@@ -770,13 +778,12 @@ extension ImageViewModel {
     private func catalogExifString(_ doc: ImageDocument, key: String) -> String {
         let inMem = metadataString(doc, key: key)
         if !inMem.isEmpty { return inMem }
-        let exif = CatalogStore.shared.exif(forPath: doc.url.path)
         switch key {
-        case "tiff.Make":             return CatalogStore.shared.image(forPath: doc.url.path)?.cameraMake ?? ""
-        case "tiff.Model":            return CatalogStore.shared.image(forPath: doc.url.path)?.cameraModel ?? ""
-        case "exif.LensModel":        return exif?.lensModel ?? ""
-        case "exif.FilmSimulation":   return exif?.filmSimulation ?? ""
-        default:                      return ""
+        case "tiff.Make":           return CatalogStore.shared.image(forPath: doc.url.path)?.cameraMake ?? ""
+        case "tiff.Model":          return CatalogStore.shared.image(forPath: doc.url.path)?.cameraModel ?? ""
+        case "exif.LensModel":      return CatalogStore.shared.exif(forPath: doc.url.path)?.lensModel ?? ""
+        case "exif.FilmSimulation": return CatalogStore.shared.exif(forPath: doc.url.path)?.filmSimulation ?? ""
+        default:                    return ""
         }
     }
 
