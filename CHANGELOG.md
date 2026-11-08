@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.29
+**Perf: pasteAdjustments — CatalogStore-Writes von Main-Thread auf Background**
+
+- `pasteAdjustments`: `CatalogStore.shared.saveAdjustments` wurde pro Bild synchron auf dem Main-Thread aufgerufen; bei Massen-Auswahl (N Bilder) blockierte das N × SQLite-Write den UI-Thread; jetzt in einem `DispatchQueue.global(qos: .userInitiated).async`-Block gebündelt
+
+---
+
 ## 1.106.28
 **Perf: deleteAlbumFolder — CoW-Publishes eliminiert**
 

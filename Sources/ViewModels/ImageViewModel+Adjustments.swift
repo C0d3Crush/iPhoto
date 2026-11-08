@@ -185,14 +185,20 @@ extension ImageViewModel {
         let targets: [Int] = collection.selectedIndices.isEmpty
             ? [collection.currentIndex]
             : Array(collection.selectedIndices)
+        var otherPaths: [String] = []
         for idx in targets where idx < collection.documents.count {
             if idx == collection.currentIndex {
                 adj.adjustments = src
             } else {
-                CatalogStore.shared.saveAdjustments(
-                    path: collection.documents[idx].url.path,
-                    adjustments: src
-                )
+                otherPaths.append(collection.documents[idx].url.path)
+            }
+        }
+        if !otherPaths.isEmpty {
+            let snapshot = src
+            DispatchQueue.global(qos: .userInitiated).async {
+                for path in otherPaths {
+                    CatalogStore.shared.saveAdjustments(path: path, adjustments: snapshot)
+                }
             }
         }
     }
