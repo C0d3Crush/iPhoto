@@ -65,13 +65,17 @@ extension ImageViewModel {
     /// „Ordner weg", nicht „Alben weg").
     func deleteAlbumFolder(_ folder: AlbumFolder) {
         let newParent = folder.parentID
-        for i in library.albums.indices where library.albums[i].parentID == folder.id {
-            library.albums[i].parentID = newParent
+        var albums = library.albums
+        for i in albums.indices where albums[i].parentID == folder.id {
+            albums[i].parentID = newParent
         }
-        for i in library.albumFolders.indices where library.albumFolders[i].parentID == folder.id {
-            library.albumFolders[i].parentID = newParent
+        library.albums = albums
+        var folders = library.albumFolders
+        for i in folders.indices where folders[i].parentID == folder.id {
+            folders[i].parentID = newParent
         }
-        library.albumFolders.removeAll { $0.id == folder.id }
+        folders.removeAll { $0.id == folder.id }
+        library.albumFolders = folders
         if navSelection == .albumFolder(folder.id) { navSelection = .library as NavSelection? }
         library.saveAlbumFolders()
         library.saveAlbums()

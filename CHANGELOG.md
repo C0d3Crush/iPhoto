@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.28
+**Perf: deleteAlbumFolder — CoW-Publishes eliminiert**
+
+- `deleteAlbumFolder`: mutiert `albums` und `albumFolders` auf lokalen Kopien, schreibt je einmalig zurück — eliminiert O(N) `@Published`-CoW-Kopien bei Ordner-Löschung mit vielen enthaltenen Alben
+
+---
+
 ## 1.106.27
 **Perf: SmartFolder-Gruppen-Mutations batch-schreiben — kein O(N) CoW-Publish**
 
