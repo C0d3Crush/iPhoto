@@ -37,7 +37,7 @@ struct PeoplePanel: View {
             Image(systemName: "person.slash")
                 .foregroundColor(.secondary)
                 .font(.system(size: 11))
-            Text(CatalogStore.shared.pathsNeedingFaceScan().contains(doc.url.path)
+            Text(viewModel.people.pendingFaceScanPaths.contains(doc.url.path)
                  ? "Noch nicht gescannt"
                  : "Kein Gesicht erkannt")
                 .font(.caption)

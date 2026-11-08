@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.14
+**PeoplePanel: kein sync SQLite pro View-Render mehr (#6)**
+
+- `PeopleState`: neues `@Published var pendingFaceScanPaths: Set<String>` — in-memory Cache für noch nicht gescannte Pfade (#6)
+- `loadPeople()`: befüllt `pendingFaceScanPaths` im BG-Thread neben den übrigen People-Daten (#6)
+- `PeoplePanel.noFacesRow`: `CatalogStore.shared.pathsNeedingFaceScan()` → `viewModel.people.pendingFaceScanPaths.contains` (O(1), kein I/O) (#6)
+
+---
+
 ## 1.106.13
 **ELO-Update O(N) firstIndex → O(1) + Batch-Write; Compare-Preview O(1) (#9)**
 

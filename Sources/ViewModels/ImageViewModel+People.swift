@@ -7,8 +7,9 @@ extension ImageViewModel {
     func loadPeople() {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
-            let allPeople = CatalogStore.shared.allPeople()
-            let allFaces  = CatalogStore.shared.allFaces()
+            let allPeople  = CatalogStore.shared.allPeople()
+            let allFaces   = CatalogStore.shared.allFaces()
+            let pending    = Set(CatalogStore.shared.pathsNeedingFaceScan())
 
             var byPerson: [String: [FaceRecord]] = [:]
             var unassigned: [FaceRecord] = []
@@ -20,9 +21,10 @@ extension ImageViewModel {
                 }
             }
             DispatchQueue.main.async { [weak self] in
-                self?.people.people       = allPeople
-                self?.people.facesPerPerson = byPerson
-                self?.people.unassignedFaces = unassigned
+                self?.people.people              = allPeople
+                self?.people.facesPerPerson      = byPerson
+                self?.people.unassignedFaces     = unassigned
+                self?.people.pendingFaceScanPaths = pending
             }
         }
     }
