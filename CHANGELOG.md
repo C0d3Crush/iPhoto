@@ -2,6 +2,14 @@
 
 ---
 
+## 1.106.24
+**Perf: addSelectedToAlbum + removeURLsFromAllAlbums Batch-Write**
+
+- `addSelectedToAlbum`: sammelt alle neuen URLs in einem Array und schreibt sie einmalig per `append(contentsOf:)` zurück — eliminiert O(N) `@Published`-CoW-Kopien bei Massen-Auswahl (vorher N Publishes à vollständige Array-Kopie)
+- `removeURLsFromAllAlbums`: mutiert jetzt auf einer lokalen Kopie und schreibt einmalig zurück (`library.albums = albums`) — statt M einzelner Subscript-Writes (einer pro Album)
+
+---
+
 ## 1.106.23
 **Bugfix: materialize()-Fallback lieferte dangling CGImage → SIGILL auf Main-Thread (Bug #41)**
 

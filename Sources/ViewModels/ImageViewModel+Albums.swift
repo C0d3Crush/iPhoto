@@ -104,14 +104,19 @@ extension ImageViewModel {
     func addSelectedToAlbum(albumID: UUID) {
         guard let idx = library.albums.firstIndex(where: { $0.id == albumID }) else { return }
         var existingURLs = Set(library.albums[idx].photoURLs)
+        var newURLs: [URL] = []
         for colIdx in collection.selectedIndices {
             guard colIdx < collection.documents.count else { continue }
             let url = collection.documents[colIdx].url
             guard existingURLs.insert(url).inserted else { continue }
-            library.albums[idx].photoURLs.append(url)
-            CatalogStore.shared.addImage(path: url.path, toAlbum: albumID.uuidString,
-                                         order: library.albums[idx].photoURLs.count - 1)
+            newURLs.append(url)
         }
+        guard !newURLs.isEmpty else { return }
+        let baseOrder = library.albums[idx].photoURLs.count
+        for (i, url) in newURLs.enumerated() {
+            CatalogStore.shared.addImage(path: url.path, toAlbum: albumID.uuidString, order: baseOrder + i)
+        }
+        library.albums[idx].photoURLs.append(contentsOf: newURLs)
         library.saveAlbums()
         syncAlbumToFilesystem(library.albums[idx])
     }
@@ -125,13 +130,17 @@ extension ImageViewModel {
     }
 
     func removeURLsFromAllAlbums(_ urls: Set<URL>) {
+        var albums = library.albums
         var changed = false
-        for idx in library.albums.indices {
-            let before = library.albums[idx].photoURLs.count
-            library.albums[idx].photoURLs.removeAll { urls.contains($0) }
-            if library.albums[idx].photoURLs.count != before { changed = true }
+        for idx in albums.indices {
+            let before = albums[idx].photoURLs.count
+            albums[idx].photoURLs.removeAll { urls.contains($0) }
+            if albums[idx].photoURLs.count != before { changed = true }
         }
-        if changed { library.saveAlbums() }
+        if changed {
+            library.albums = albums
+            library.saveAlbums()
+        }
     }
 
     // Called with a snapshot taken on Main; runs fileExists on BG, writes back on Main.
