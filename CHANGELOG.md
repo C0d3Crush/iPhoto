@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.26
+**Perf: CatalogStore-Album-Writes von Main-Thread auf Background-Queue**
+
+- `createAlbum`, `deleteAlbum`, `renameAlbum`, `updateAlbum`, `addToAlbum`, `addSelectedToAlbum`, `removeFromAlbum`, `deleteSelectedSidebarAlbums`: alle `CatalogStore.shared`-Aufrufe (`saveAlbum`, `deleteAlbum`, `addImage`, `removeImage`) dispatchen jetzt via `DispatchQueue.global(qos: .userInitiated).async` — eliminiert synchrones SQLite-Blocking auf dem Main-Thread bei jeder Album-Mutation
+
+---
+
 ## 1.106.25
 **Perf: LibraryStore-Saves async — kein JSON-Encode + Disk-Write auf Main-Thread**
 

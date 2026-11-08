@@ -35,7 +35,10 @@ extension ImageViewModel {
         let album = Album(name: name)
         library.albums.append(album)
         library.saveAlbums()
-        CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: album.name)
+        let idStr = album.id.uuidString, nameStr = album.name
+        DispatchQueue.global(qos: .userInitiated).async {
+            CatalogStore.shared.saveAlbum(id: idStr, name: nameStr)
+        }
         navSelection = .album(album.id) as NavSelection?
         syncAlbumToFilesystem(album)
     }
@@ -45,16 +48,20 @@ extension ImageViewModel {
         library.albums.removeAll { $0.id == album.id }
         if navSelection == .album(album.id) { navSelection = .library as NavSelection? }
         library.saveAlbums()
-        CatalogStore.shared.deleteAlbum(id: album.id.uuidString)
+        let idStr = album.id.uuidString
+        DispatchQueue.global(qos: .userInitiated).async {
+            CatalogStore.shared.deleteAlbum(id: idStr)
+        }
     }
 
     func deleteSelectedSidebarAlbums() {
         let ids = sidebarSelectedAlbumIDs
         guard ids.count > 1 else { return }
         let toDelete = library.albums.filter { ids.contains($0.id) }
-        for album in toDelete {
-            removeAlbumFromFilesystem(album)
-            CatalogStore.shared.deleteAlbum(id: album.id.uuidString)
+        for album in toDelete { removeAlbumFromFilesystem(album) }
+        let idStrs = toDelete.map { $0.id.uuidString }
+        DispatchQueue.global(qos: .userInitiated).async {
+            for idStr in idStrs { CatalogStore.shared.deleteAlbum(id: idStr) }
         }
         library.albums.removeAll { ids.contains($0.id) }
         if case .album(let id) = navSelection, ids.contains(id) { navSelection = .library }
@@ -68,7 +75,10 @@ extension ImageViewModel {
         let oldDir = albumSystemPath(for: album)
         library.albums[idx].name = name
         library.saveAlbums()
-        CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: name)
+        let idStr = album.id.uuidString
+        DispatchQueue.global(qos: .userInitiated).async {
+            CatalogStore.shared.saveAlbum(id: idStr, name: name)
+        }
         syncAlbumToFilesystem(library.albums[idx], removingOldAt: oldDir)
     }
 
@@ -86,7 +96,10 @@ extension ImageViewModel {
         library.albums[idx].albumDescription = description?.isEmpty == false ? description : nil
         library.saveAlbums()
         if nameChanged {
-            CatalogStore.shared.saveAlbum(id: album.id.uuidString, name: name)
+            let idStr = album.id.uuidString
+            DispatchQueue.global(qos: .userInitiated).async {
+                CatalogStore.shared.saveAlbum(id: idStr, name: name)
+            }
             syncAlbumToFilesystem(library.albums[idx], removingOldAt: oldDir)
         }
     }
@@ -96,8 +109,11 @@ extension ImageViewModel {
         guard !library.albums[idx].photoURLs.contains(document.url) else { return }
         library.albums[idx].photoURLs.append(document.url)
         library.saveAlbums()
-        CatalogStore.shared.addImage(path: document.url.path, toAlbum: albumID.uuidString,
-                                     order: library.albums[idx].photoURLs.count - 1)
+        let path = document.url.path, albumIDStr = albumID.uuidString
+        let order = library.albums[idx].photoURLs.count - 1
+        DispatchQueue.global(qos: .userInitiated).async {
+            CatalogStore.shared.addImage(path: path, toAlbum: albumIDStr, order: order)
+        }
         syncAlbumToFilesystem(library.albums[idx])
     }
 
@@ -113,8 +129,12 @@ extension ImageViewModel {
         }
         guard !newURLs.isEmpty else { return }
         let baseOrder = library.albums[idx].photoURLs.count
-        for (i, url) in newURLs.enumerated() {
-            CatalogStore.shared.addImage(path: url.path, toAlbum: albumID.uuidString, order: baseOrder + i)
+        let albumIDStr = albumID.uuidString
+        let entries = newURLs.enumerated().map { (i, url) in (url.path, baseOrder + i) }
+        DispatchQueue.global(qos: .userInitiated).async {
+            for (path, order) in entries {
+                CatalogStore.shared.addImage(path: path, toAlbum: albumIDStr, order: order)
+            }
         }
         library.albums[idx].photoURLs.append(contentsOf: newURLs)
         library.saveAlbums()
@@ -125,7 +145,10 @@ extension ImageViewModel {
         guard let idx = library.albums.firstIndex(where: { $0.id == albumID }) else { return }
         library.albums[idx].photoURLs.removeAll { $0 == document.url }
         library.saveAlbums()
-        CatalogStore.shared.removeImage(path: document.url.path, fromAlbum: albumID.uuidString)
+        let path = document.url.path, albumIDStr = albumID.uuidString
+        DispatchQueue.global(qos: .userInitiated).async {
+            CatalogStore.shared.removeImage(path: path, fromAlbum: albumIDStr)
+        }
         syncAlbumToFilesystem(library.albums[idx])
     }
 
