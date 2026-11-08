@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.39
+**Perf: kCGImageSourceShouldCache: false in allen CGImageSource-Aufrufen**
+
+- `loadThumbnailCGImage` (People-Scan), `FaceCropTile.cropFace`, `ImageViewModel+HDR.exposureBias` und alle `MetadataService`-Aufrufe verwendeten `nil` als Options-Dict für `CGImageSourceCreateWithURL` / `CGImageSourceCreateWithData` — ImageIO cachte die dekodierten Pixel in seinem globalen Cache, auch nach Freigabe der lokalen `CGImageSource`-Referenz. Fix: `kCGImageSourceShouldCache: false` überall ergänzt, konsistent mit `RAWImageDecoder.thumbnail()` und dem Fix aus v1.106.38
+
+---
+
 ## 1.106.38
 **Bugfix: SIGKILL (OOM) beim Laden großer RAF-Bibliotheken — ImageIO-Cache deaktiviert**
 

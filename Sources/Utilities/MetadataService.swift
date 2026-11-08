@@ -22,7 +22,8 @@ final class MetadataService {
 
             if #available(macOS 12.0, *) {
                 // macOS 12+: ImageIO unterstützt RAF nativ
-                guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return [] }
+                let srcOpts = [kCGImageSourceShouldCache: false] as CFDictionary
+                guard let src = CGImageSourceCreateWithURL(url as CFURL, srcOpts) else { return [] }
                 props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] ?? [:]
                 let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
                 let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
@@ -37,7 +38,8 @@ final class MetadataService {
                 props = jpegData.flatMap { propertiesFromJPEGData($0) } ?? [:]
             }
         } else {
-            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return [] }
+            let srcOpts = [kCGImageSourceShouldCache: false] as CFDictionary
+            guard let src = CGImageSourceCreateWithURL(url as CFURL, srcOpts) else { return [] }
             props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] ?? [:]
             // Fuji JPEG: MakerNote aus rohen Dateidaten parsen (ImageIO liefert MakerNote nicht)
             let ext = url.pathExtension.lowercased()
@@ -179,7 +181,8 @@ final class MetadataService {
         guard !ImageDocument.rawExtensions.contains(ext) else { throw MetadataError.unsupported }
 
         let rawData = try Data(contentsOf: url)
-        guard let src = CGImageSourceCreateWithData(rawData as CFData, nil) else {
+        let srcOpts = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let src = CGImageSourceCreateWithData(rawData as CFData, srcOpts) else {
             throw MetadataError.cannotReadFile
         }
         guard let type = CGImageSourceGetType(src) else {

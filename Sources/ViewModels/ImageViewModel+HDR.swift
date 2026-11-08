@@ -75,14 +75,15 @@ extension ImageViewModel {
 
     static func exposureBias(at url: URL) -> Double? {
         let ext = url.pathExtension.lowercased()
+        let srcOpts = [kCGImageSourceShouldCache: false] as CFDictionary
         if ext == "raf" {
             if #available(macOS 12.0, *) {
-                return exifBias(src: CGImageSourceCreateWithURL(url as CFURL, nil))
+                return exifBias(src: CGImageSourceCreateWithURL(url as CFURL, srcOpts))
             } else {
                 return exifBias(jpegData: rafEmbeddedJPEGData(url: url))
             }
         }
-        return exifBias(src: CGImageSourceCreateWithURL(url as CFURL, nil))
+        return exifBias(src: CGImageSourceCreateWithURL(url as CFURL, srcOpts))
     }
 
     private static func exifBias(src: CGImageSource?) -> Double? {
@@ -96,7 +97,7 @@ extension ImageViewModel {
 
     private static func exifBias(jpegData: Data?) -> Double? {
         guard let d = jpegData,
-              let src = CGImageSourceCreateWithData(d as CFData, nil)
+              let src = CGImageSourceCreateWithData(d as CFData, [kCGImageSourceShouldCache: false] as CFDictionary)
         else { return nil }
         return exifBias(src: src)
     }

@@ -46,7 +46,8 @@ struct FaceCropTile: View {
 
     private func cropFace(path: String, bbox: CGRect, targetSize: CGFloat) -> NSImage? {
         let url = URL(fileURLWithPath: path)
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let srcOpts = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, srcOpts) else { return nil }
         let opts: [CFString: Any] = [
             kCGImageSourceThumbnailMaxPixelSize: Int(targetSize * 2),
             kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
