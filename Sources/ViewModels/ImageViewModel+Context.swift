@@ -126,11 +126,9 @@ extension ImageViewModel {
             }
             filtered = docs.filter { unionURLs.contains($0.url) }
         case .folder(let id):
-            guard let folder = library.watchedFolders.first(where: { $0.id == id }),
-                  let (folderURL, stop) = folder.resolveURL() else { return [] }
-            defer { stop() }
-            let prefix = folderURL.standardized.path
-            filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
+            // Use cached path to avoid bookmark-resolve + disk I/O on every compute (#13).
+            guard let prefix = watchedFolderPathCache[id] else { return [] }
+            filtered = docs.filter { $0.standardizedPath.hasPrefix(prefix) }
         case .smartFolder(let id):
             guard let sf = library.smartFolders.first(where: { $0.id == id }) else { return [] }
             var sfFiltered: [ImageDocument]
@@ -156,7 +154,7 @@ extension ImageViewModel {
         case .volume(let id):
             guard let volume = library.detectedVolumes.first(where: { $0.id == id }) else { return [] }
             let prefix = volume.url.standardized.path
-            filtered = docs.filter { $0.url.standardized.path.hasPrefix(prefix) }
+            filtered = docs.filter { $0.standardizedPath.hasPrefix(prefix) }
         case .trash:
             filtered = collection.documents.filter { $0.isTrashed }
         case .backup:
@@ -194,9 +192,9 @@ extension ImageViewModel {
             let paths = Set(faces.map { $0.imagePath })
             filtered = docs.filter { paths.contains($0.url.path) }
         case .projectFolder(let path):
-            filtered = docs.filter { $0.url.standardized.path.hasPrefix(path) }
+            filtered = docs.filter { $0.standardizedPath.hasPrefix(path) }
         case .subfolder(let path):
-            filtered = docs.filter { $0.url.standardized.path.hasPrefix(path) }
+            filtered = docs.filter { $0.standardizedPath.hasPrefix(path) }
         }
         let sorted = applyStacking(to: applySortCriterion(to: filtered))
         guard !searchQuery.isEmpty else { return sorted }

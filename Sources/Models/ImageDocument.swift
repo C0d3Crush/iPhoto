@@ -79,6 +79,8 @@ struct ImageDocument: Identifiable, Equatable {
     var motifScanned: Bool = false
 
     var filename: String { url.lastPathComponent }
+    /// Standardized path computed once at init — avoids per-filter URL.standardized allocation (#13).
+    let standardizedPath: String
 
     static let rawExtensions: Set<String> = [
         "cr2", "cr3", "nef", "nrw", "arw", "srf", "sr2",
@@ -95,6 +97,7 @@ struct ImageDocument: Identifiable, Equatable {
     init(url: URL) {
         self.id = UUID()
         self.url = url
+        self.standardizedPath = url.standardized.path
         self.cgImage = nil
         self.thumbnail = nil
         self.imageSize = .zero

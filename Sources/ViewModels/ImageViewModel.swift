@@ -151,6 +151,9 @@ class ImageViewModel: ObservableObject {
     /// Serial queue for all album filesystem sync operations — prevents thread explosion
     /// and races between concurrent renames/deletes/adds (#24).
     let albumFSQueue = DispatchQueue(label: "com.c0d3cru5h.iphoto.albumFS", qos: .utility)
+    /// Cached standardized paths per WatchedFolder.id — avoids bookmark-resolve in
+    /// every computeVisibleDocuments call (#13). Rebuilt after add/remove/setup.
+    var watchedFolderPathCache: [UUID: String] = [:]
 
     // Reihenfolge-Cache für visibleDocuments: Filter+Sortierung (800+ teure
     // localizedStandardCompare) wird als ID-Liste gecacht, die Dokument-Inhalte

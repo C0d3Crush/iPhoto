@@ -24,6 +24,7 @@ extension ImageViewModel {
         library.saveWatchedFolders()
         syncFolder(folder)
         startWatching(folder)
+        rebuildWatchedFolderPathCache()
         navSelection = .folder(folder.id)
     }
 
@@ -35,10 +36,11 @@ extension ImageViewModel {
         if let (folderURL, stop) = folder.resolveURL() {
             let prefix = folderURL.standardized.path
             stop()
-            collection.documents.removeAll { $0.url.standardized.path.hasPrefix(prefix) }
+            collection.documents.removeAll { $0.standardizedPath.hasPrefix(prefix) }
         }
         if navSelection == .folder(folder.id) { navSelection = .library }
         library.saveWatchedFolders()
+        rebuildWatchedFolderPathCache()
     }
 
     func toggleAutoSync(for folder: WatchedFolder) {
@@ -480,6 +482,18 @@ extension ImageViewModel {
         for folder in library.watchedFolders {
             startWatching(folder)
         }
+        rebuildWatchedFolderPathCache()
+    }
+
+    func rebuildWatchedFolderPathCache() {
+        var cache: [UUID: String] = [:]
+        for folder in library.watchedFolders {
+            if let (url, stop) = folder.resolveURL() {
+                cache[folder.id] = url.standardized.path
+                stop()
+            }
+        }
+        watchedFolderPathCache = cache
     }
 
     private func ensureDefaultLibraryFolder() {

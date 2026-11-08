@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.5
+**computeVisibleDocuments: standardizedPath gecacht; WatchedFolder-Pfad gecacht (#13)**
+
+- `ImageDocument.standardizedPath`: neues `let`-Feld, einmalig im `init` als `url.standardized.path` berechnet — eliminiert per-Dokument-URL-Allokation in allen `hasPrefix`-Filtern von `computeVisibleDocuments`
+- `watchedFolderPathCache: [UUID: String]`: neues Feld in `ImageViewModel`, gecacht nach `setupWatchedFolders`, `addFolderDialog` und `deleteWatchedFolder` — kein `folder.resolveURL()` (Bookmark-Resolve + Disk-I/O) mehr bei jeder Neuberechnung von `visibleDocuments` (#13)
+- Alle `url.standardized.path.hasPrefix`-Filter in `computeVisibleDocuments` nutzen jetzt `standardizedPath`
+
+---
+
 ## 1.106.4
 **Metadaten-Batch-Flush: O(N²) → O(N) beim Album-Import (#14)**
 
