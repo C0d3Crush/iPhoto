@@ -2,6 +2,13 @@
 
 ---
 
+## 1.105.4
+**Code-Qualität: VerboseLogView in eigene Datei ausgelagert**
+
+- `VerboseLogView`, `LogPanelView`, `ConsolePanelView` und Hilftypen aus `NavSidebarView.swift` (1854 Zeilen) in `VerboseLogView.swift` extrahiert; keine Verhaltensänderung
+
+---
+
 ## 1.105.3
 **Watched Folders überwacht jetzt Unterordner; CropEditor und Album-Select beschleunigt**
 
