@@ -70,6 +70,9 @@ private func printUsage() {
       iphoto-cli watched add <pfad> [--auto-sync] [--json]
       iphoto-cli watched remove <name|id> [--json]
       iphoto-cli watched check [<name|id>] [--json]
+      iphoto-cli project list|show <name|id>|create <name> [--folder <pfad>]...|delete <name|id> [--json]
+      iphoto-cli project rename <name|id> <neuer-name> [--json]
+      iphoto-cli project add-folder|remove-folder <name|id> <pfad> [--json]
       iphoto-cli backup get [--json]
       iphoto-cli backup set [--quality 0.85] [--mode rename|skip|overwrite] [--dest <pfad>]
                             [--downscale|--no-downscale] [--long-side 2560]
@@ -195,6 +198,8 @@ private func printUsage() {
     adjustments: gespeicherte Bearbeitungen auflisten/lesen/löschen; set schreibt Reglerwerte ohne Rendern,
               copy überträgt sie auf andere Bilder (eine Transaktion; --exclude-geometry behält Crop/Drehung)
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
+    project:  Projekte (projects.json, wie Projekt-Auswahl in der App) auflisten/anlegen/umbenennen/löschen,
+              Ordner hinzufügen/entfernen; fehlende Ordner in --json als missing_folders; Datei per IPHOTO_PROJECTS_FILE
     """)
 }
 
@@ -1955,94 +1960,6 @@ private func saveWatchedFoldersList(_ folders: [WatchedFolder]) {
                                              withIntermediateDirectories: true)
     if let data = try? JSONEncoder().encode(folders) {
         try? data.write(to: url)
-    }
-}
-
-// MARK: - Project CLI (#72)
-
-private func runProject(_ args: [String]) -> Int32 {
-    let sub = args.first ?? "list"
-    let jsonOut = args.contains("--json")
-
-    let store = ProjectStore.shared
-
-    switch sub {
-    case "list":
-        if jsonOut {
-            struct PJ: Encodable { let id: String; let name: String; let folders: [String]; let lastOpened: String? }
-            let items = store.projects.map { p -> PJ in
-                let last = p.lastOpenedAt.map { ISO8601DateFormatter().string(from: $0) }
-                return PJ(id: p.id.uuidString, name: p.name, folders: p.folderPaths, lastOpened: last)
-            }
-            if let d = try? JSONEncoder().encode(items), let s = String(data: d, encoding: .utf8) { print(s) }
-        } else {
-            if store.projects.isEmpty { print("Keine Projekte."); return 0 }
-            for p in store.projects {
-                let folders = p.folderPaths.joined(separator: ", ")
-                print("[\(p.id.uuidString)] \(p.name) — \(folders)")
-            }
-        }
-        return 0
-
-    case "create":
-        let positionals = args.dropFirst().filter { !$0.hasPrefix("--") }
-        guard let name = positionals.first else {
-            fputs("Verwendung: iphoto-cli project create <name> <ordner1> [<ordner2> ...]\n", stderr); return 1
-        }
-        let folders = Array(positionals.dropFirst())
-        guard !folders.isEmpty else {
-            fputs("Mindestens ein Ordnerpfad erforderlich.\n", stderr); return 1
-        }
-        let p = store.createProject(name: name, folderPaths: folders)
-        if jsonOut {
-            if let d = try? JSONEncoder().encode(["id": p.id.uuidString, "name": p.name]), let s = String(data: d, encoding: .utf8) { print(s) }
-        } else {
-            print("Projekt erstellt: [\(p.id.uuidString)] \(p.name)")
-        }
-        return 0
-
-    case "delete":
-        let idOrName = args.dropFirst().filter { !$0.hasPrefix("--") }.first ?? ""
-        guard let proj = store.projects.first(where: { $0.id.uuidString == idOrName || $0.name == idOrName }) else {
-            fputs("Projekt nicht gefunden: \(idOrName)\n", stderr); return 1
-        }
-        store.deleteProject(proj)
-        print("Projekt gelöscht: \(proj.name)")
-        return 0
-
-    case "scan":
-        let idOrName = args.dropFirst().filter { !$0.hasPrefix("--") }.first ?? ""
-        guard let proj = store.projects.first(where: { $0.id.uuidString == idOrName || $0.name == idOrName }) else {
-            fputs("Projekt nicht gefunden: \(idOrName)\n", stderr); return 1
-        }
-        let fm = FileManager.default
-        var total = 0
-        for path in proj.folderPaths {
-            let root = URL(fileURLWithPath: path)
-            guard let enumerator = fm.enumerator(
-                at: root,
-                includingPropertiesForKeys: [.isRegularFileKey],
-                options: [.skipsHiddenFiles, .skipsPackageDescendants]
-            ) else { continue }
-            for case let fileURL as URL in enumerator {
-                guard (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
-                guard ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) else { continue }
-                total += 1
-                if !jsonOut { print(fileURL.path) }
-            }
-        }
-        if jsonOut {
-            struct ScanResult: Encodable { let project: String; let files: Int }
-            if let d = try? JSONEncoder().encode(ScanResult(project: proj.name, files: total)),
-               let s = String(data: d, encoding: .utf8) { print(s) }
-        } else {
-            print("\(total) Bild(er) in \"\(proj.name)\" gefunden.")
-        }
-        return 0
-
-    default:
-        fputs("Unbekannter Unterbefehl: \(sub)\nVerfügbar: list, create, delete, scan\n", stderr)
-        return 1
     }
 }
 
@@ -6735,6 +6652,254 @@ private func runCollect(_ args: [String]) -> Int32 {
     return failed.isEmpty ? 0 : 1
 }
 
+// MARK: - project (Projekte in projects.json verwalten, analog ProjectStore)
+
+private func projectsFileURL() -> URL {
+    if let override = ProcessInfo.processInfo.environment["IPHOTO_PROJECTS_FILE"], !override.isEmpty {
+        return URL(fileURLWithPath: (override as NSString).expandingTildeInPath)
+    }
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("iPhoto")
+        .appendingPathComponent("projects.json")
+}
+
+/// Lädt projects.json im selben Format wie `ProjectStore` (Default-JSONEncoder).
+/// nil = Datei existiert, ist aber nicht dekodierbar; leeres Array = Datei fehlt.
+private func loadProjectsFile(_ url: URL) -> [Project]? {
+    guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+    guard let data = try? Data(contentsOf: url),
+          let projects = try? JSONDecoder().decode([Project].self, from: data) else { return nil }
+    return projects
+}
+
+private func saveProjectsFile(_ projects: [Project], to url: URL) -> Bool {
+    do {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        let data = try JSONEncoder().encode(projects)
+        try data.write(to: url, options: .atomic)
+        return true
+    } catch {
+        fputs("Fehler: projects.json konnte nicht geschrieben werden: \(error.localizedDescription)\n", stderr)
+        return false
+    }
+}
+
+private func projectJSON(_ p: Project) -> [String: Any] {
+    let iso = ISO8601DateFormatter()
+    var d: [String: Any] = [
+        "id": p.id.uuidString,
+        "name": p.name,
+        "folders": p.folderPaths,
+        "folder_count": p.folderPaths.count,
+        "missing_folders": p.folderPaths.filter { !FileManager.default.fileExists(atPath: $0) },
+        "created_at": iso.string(from: p.createdAt)
+    ]
+    if let last = p.lastOpenedAt { d["last_opened_at"] = iso.string(from: last) }
+    return d
+}
+
+private func printProjectJSON(_ obj: Any) {
+    if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+       let s = String(data: d, encoding: .utf8) { print(s) }
+}
+
+/// Sucht ein Projekt per UUID (case-insensitive) oder exaktem Namen (case-insensitive).
+private func findProjectIndex(_ projects: [Project], _ key: String) -> Int? {
+    let k = key.lowercased()
+    if let i = projects.firstIndex(where: { $0.id.uuidString.lowercased() == k }) { return i }
+    return projects.firstIndex(where: { $0.name.lowercased() == k })
+}
+
+private func runProject(_ args: [String]) -> Int32 {
+    let usage = """
+    Verwendung: iphoto-cli project list [--json]
+                iphoto-cli project show <name|id> [--json]
+                iphoto-cli project create <name> [--folder <pfad>]... [--json]
+                iphoto-cli project rename <name|id> <neuer-name> [--json]
+                iphoto-cli project delete <name|id> [--json]
+                iphoto-cli project add-folder <name|id> <pfad> [--json]
+                iphoto-cli project remove-folder <name|id> <pfad> [--json]
+
+    """
+    let sub = args.first ?? "list"
+    let jsonMode = args.contains("--json")
+    let rest = Array(args.dropFirst())
+
+    // Positionsargumente + wiederholbares --folder einsammeln
+    var positionals: [String] = []
+    var folderArgs: [String] = []
+    var i = 0
+    while i < rest.count {
+        let a = rest[i]
+        if a == "--folder" {
+            i += 1
+            guard i < rest.count, !rest[i].isEmpty else {
+                fputs("Fehler: --folder braucht einen Pfad\n", stderr); return 1
+            }
+            folderArgs.append(rest[i])
+        } else if a == "--json" {
+            // bereits ausgewertet
+        } else if a.hasPrefix("--") {
+            fputs("Fehler: Unbekannte Option '\(a)'\n", stderr); fputs(usage, stderr); return 1
+        } else {
+            positionals.append(a)
+        }
+        i += 1
+    }
+
+    let fileURL = projectsFileURL()
+    guard var projects = loadProjectsFile(fileURL) else {
+        fputs("Fehler: projects.json ist beschädigt und konnte nicht gelesen werden: \(fileURL.path)\n", stderr)
+        return 1
+    }
+
+    func standardized(_ p: String) -> String {
+        URL(fileURLWithPath: (p as NSString).expandingTildeInPath).standardizedFileURL.path
+    }
+
+    switch sub {
+    case "list":
+        let sorted = projects.sorted {
+            ($0.lastOpenedAt ?? $0.createdAt) > ($1.lastOpenedAt ?? $1.createdAt)
+        }
+        if jsonMode {
+            printProjectJSON(sorted.map(projectJSON))
+        } else if sorted.isEmpty {
+            print("Keine Projekte vorhanden.")
+        } else {
+            for p in sorted {
+                print("\(p.name) — \(p.folderPaths.count) Ordner")
+                print("   ID: \(p.id.uuidString)")
+            }
+        }
+        return 0
+
+    case "show":
+        guard let key = positionals.first else { fputs(usage, stderr); return 1 }
+        guard let idx = findProjectIndex(projects, key) else {
+            fputs("Fehler: Projekt '\(key)' nicht gefunden\n", stderr); return 1
+        }
+        let p = projects[idx]
+        if jsonMode {
+            printProjectJSON(projectJSON(p))
+        } else {
+            print("\(p.name)")
+            print("   ID: \(p.id.uuidString)")
+            for f in p.folderPaths {
+                let mark = FileManager.default.fileExists(atPath: f) ? "✓" : "✗"
+                print("   \(mark) \(f)")
+            }
+        }
+        return 0
+
+    case "create":
+        guard let rawName = positionals.first else { fputs(usage, stderr); return 1 }
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { fputs("Fehler: Projektname darf nicht leer sein\n", stderr); return 1 }
+        guard !projects.contains(where: { $0.name.lowercased() == name.lowercased() }) else {
+            fputs("Fehler: Projekt '\(name)' existiert bereits\n", stderr); return 1
+        }
+        var folders: [String] = []
+        var seen = Set<String>()
+        for f in folderArgs {
+            let path = standardized(f)
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
+                fputs("Fehler: Ordner nicht gefunden: \(path)\n", stderr); return 1
+            }
+            if seen.insert(path).inserted { folders.append(path) }
+        }
+        let p = Project(name: name, folderPaths: folders)
+        projects.append(p)
+        guard saveProjectsFile(projects, to: fileURL) else { return 1 }
+        if jsonMode {
+            var d = projectJSON(p); d["ok"] = true
+            printProjectJSON(d)
+        } else {
+            print("Projekt erstellt: \(p.name) (\(p.id.uuidString))")
+        }
+        return 0
+
+    case "rename":
+        guard positionals.count >= 2 else { fputs(usage, stderr); return 1 }
+        guard let idx = findProjectIndex(projects, positionals[0]) else {
+            fputs("Fehler: Projekt '\(positionals[0])' nicht gefunden\n", stderr); return 1
+        }
+        let newName = positionals[1].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newName.isEmpty else { fputs("Fehler: Projektname darf nicht leer sein\n", stderr); return 1 }
+        let targetID = projects[idx].id
+        guard !projects.contains(where: { $0.id != targetID && $0.name.lowercased() == newName.lowercased() }) else {
+            fputs("Fehler: Projekt '\(newName)' existiert bereits\n", stderr); return 1
+        }
+        let oldName = projects[idx].name
+        projects[idx].name = newName
+        guard saveProjectsFile(projects, to: fileURL) else { return 1 }
+        if jsonMode {
+            printProjectJSON(["id": targetID.uuidString, "old_name": oldName, "name": newName, "ok": true])
+        } else {
+            print("Projekt umbenannt: \(oldName) → \(newName)")
+        }
+        return 0
+
+    case "delete":
+        guard let key = positionals.first else { fputs(usage, stderr); return 1 }
+        guard let idx = findProjectIndex(projects, key) else {
+            fputs("Fehler: Projekt '\(key)' nicht gefunden\n", stderr); return 1
+        }
+        let removed = projects.remove(at: idx)
+        guard saveProjectsFile(projects, to: fileURL) else { return 1 }
+        if jsonMode {
+            printProjectJSON(["id": removed.id.uuidString, "name": removed.name, "ok": true])
+        } else {
+            print("Projekt gelöscht: \(removed.name)")
+        }
+        return 0
+
+    case "add-folder", "remove-folder":
+        guard positionals.count >= 2 else { fputs(usage, stderr); return 1 }
+        guard let idx = findProjectIndex(projects, positionals[0]) else {
+            fputs("Fehler: Projekt '\(positionals[0])' nicht gefunden\n", stderr); return 1
+        }
+        let path = standardized(positionals[1])
+        if sub == "add-folder" {
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
+                fputs("Fehler: Ordner nicht gefunden: \(path)\n", stderr); return 1
+            }
+            guard !projects[idx].folderPaths.contains(path) else {
+                fputs("Fehler: Ordner ist bereits Teil des Projekts: \(path)\n", stderr); return 1
+            }
+            projects[idx].folderPaths.append(path)
+        } else {
+            // Entfernen akzeptiert auch nicht mehr existierende Ordner (offline/gelöscht)
+            let raw = positionals[1]
+            guard let fIdx = projects[idx].folderPaths.firstIndex(where: { $0 == path || $0 == raw }) else {
+                fputs("Fehler: Ordner ist nicht Teil des Projekts: \(path)\n", stderr); return 1
+            }
+            projects[idx].folderPaths.remove(at: fIdx)
+        }
+        guard saveProjectsFile(projects, to: fileURL) else { return 1 }
+        if jsonMode {
+            var d = projectJSON(projects[idx]); d["ok"] = true
+            printProjectJSON(d)
+        } else {
+            let verb = sub == "add-folder" ? "hinzugefügt" : "entfernt"
+            print("Ordner \(verb): \(path) (\(projects[idx].name), \(projects[idx].folderPaths.count) Ordner)")
+        }
+        return 0
+
+    case "--help", "-h", "help":
+        print(usage, terminator: "")
+        return 0
+
+    default:
+        fputs("Fehler: Unbekannter Unterbefehl 'project \(sub)'\n", stderr)
+        fputs(usage, stderr)
+        return 1
+    }
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -6862,6 +7027,9 @@ if firstArg == "perf" {
 }
 if firstArg == "collect" {
     exit(runCollect(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "project" {
+    exit(runProject(Array(rawArgs.dropFirst(2))))
 }
 
 guard let parsed = parseArgs(rawArgs) else { exit(1) }

@@ -179,6 +179,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Models/StackDetector.swift \
     $ROOT/Sources/Models/SmartFolder.swift \
     $ROOT/Sources/Models/SearchParser.swift \
+    $ROOT/Sources/Models/Project.swift \
     $ROOT/Sources/Utilities/Data+Extensions.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \
     $ROOT/Sources/Utilities/Log.swift \
@@ -210,7 +211,6 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/ThumbnailDiskCache.swift \
     $ROOT/Sources/Utilities/ProjectStore.swift \
     $ROOT/Sources/Utilities/BackupService.swift \
-    $ROOT/Sources/Models/Project.swift \
     $ROOT/Sources/Models/BackupSettings.swift \
     $ROOT/Sources/CLI/main.swift"
 

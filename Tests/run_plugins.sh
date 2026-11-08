@@ -3136,54 +3136,129 @@ rm -rf "$PURGE_DIR"
 
 echo ""
 
+# project list / create / show / rename / add-folder / remove-folder / delete
 # ---------------------------------------------------------------------------
-# project list / create / scan / delete (#72)
-# ---------------------------------------------------------------------------
-PROJ_DIR=$(mktemp -d)
-PROJ_IMG="$PROJ_DIR/foto.png"
-cp "$INPUT_PNG" "$PROJ_IMG"
-PROJ_JSON="$PROJ_DIR/projects.json"
+echo "--- Project ---"
+export IPHOTO_PROJECTS_FILE="$TMPDIR/projects.json"
+PROJ_DIR_A="$TMPDIR/proj_a"; PROJ_DIR_B="$TMPDIR/proj_b"
+mkdir -p "$PROJ_DIR_A" "$PROJ_DIR_B"
 
-echo "--- project CLI ---"
-
-# create
-PROJ_CREATE=$(IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project create "TestVault" "$PROJ_DIR" --json 2>/dev/null)
-PROJ_ID=$(echo "$PROJ_CREATE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
-if [ -n "$PROJ_ID" ]; then
-    pass "project create (ID: $PROJ_ID)"
+PROJ_EMPTY_EXIT=0
+PROJ_EMPTY=$("$BIN" project list --json 2>&1) || PROJ_EMPTY_EXIT=$?
+if [ "$PROJ_EMPTY_EXIT" -eq 0 ] && echo "$PROJ_EMPTY" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d == []" 2>/dev/null; then
+    pass "project list --json (leer → [])"
 else
-    fail "project create" "kein id in JSON: $PROJ_CREATE"
+    fail "project list --json leer" "Exit $PROJ_EMPTY_EXIT: $PROJ_EMPTY"
 fi
 
-# list
-PROJ_LIST=$(IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project list --json 2>/dev/null)
-PROJ_COUNT=$(echo "$PROJ_LIST" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
-if [ "$PROJ_COUNT" = "1" ]; then
-    pass "project list (1 Projekt)"
+PROJ_CREATE_EXIT=0
+PROJ_CREATE=$("$BIN" project create "Urlaub" --folder "$PROJ_DIR_A" --json 2>&1) || PROJ_CREATE_EXIT=$?
+if [ "$PROJ_CREATE_EXIT" -eq 0 ] && echo "$PROJ_CREATE" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['name']=='Urlaub' and d['folder_count']==1" 2>/dev/null; then
+    pass "project create --folder (ok:true, 1 Ordner)"
 else
-    fail "project list" "erwartet 1, got $PROJ_COUNT"
+    fail "project create" "Exit $PROJ_CREATE_EXIT: $PROJ_CREATE"
 fi
 
-# scan
-PROJ_SCAN=$(IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project scan "TestVault" --json 2>/dev/null)
-PROJ_FILES=$(echo "$PROJ_SCAN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('files',0))" 2>/dev/null)
-if [ "$PROJ_FILES" -ge 1 ] 2>/dev/null; then
-    pass "project scan ($PROJ_FILES Datei(en) gefunden)"
+PROJ_DUP_EXIT=0
+"$BIN" project create "urlaub" > /dev/null 2>&1 || PROJ_DUP_EXIT=$?
+if [ "$PROJ_DUP_EXIT" -ne 0 ]; then
+    pass "project create doppelter Name (Exitcode != 0)"
 else
-    fail "project scan" "erwartet ≥1, got $PROJ_FILES"
+    fail "project create doppelter Name" "Hätte fehlschlagen sollen"
 fi
 
-# delete
-IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project delete "TestVault" > /dev/null 2>&1
-PROJ_LIST2=$(IPHOTO_PROJECTS_JSON="$PROJ_JSON" "$BIN" project list --json 2>/dev/null)
-PROJ_COUNT2=$(echo "$PROJ_LIST2" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
-if [ "$PROJ_COUNT2" = "0" ]; then
-    pass "project delete"
+PROJ_BADDIR_EXIT=0
+"$BIN" project create "Kaputt" --folder /nonexistent/xyz > /dev/null 2>&1 || PROJ_BADDIR_EXIT=$?
+PROJ_COUNT=$("$BIN" project list --json 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+if [ "$PROJ_BADDIR_EXIT" -ne 0 ] && [ "$PROJ_COUNT" = "1" ]; then
+    pass "project create ungültiger Ordner (Exitcode != 0, nichts gespeichert)"
 else
-    fail "project delete" "erwartet 0 Projekte, got $PROJ_COUNT2"
+    fail "project create ungültiger Ordner" "Exit $PROJ_BADDIR_EXIT, Anzahl $PROJ_COUNT"
 fi
 
-rm -rf "$PROJ_DIR"
+PROJ_ADD_EXIT=0
+PROJ_ADD=$("$BIN" project add-folder "Urlaub" "$PROJ_DIR_B" --json 2>&1) || PROJ_ADD_EXIT=$?
+if [ "$PROJ_ADD_EXIT" -eq 0 ] && echo "$PROJ_ADD" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['folder_count']==2" 2>/dev/null; then
+    pass "project add-folder (2 Ordner)"
+else
+    fail "project add-folder" "Exit $PROJ_ADD_EXIT: $PROJ_ADD"
+fi
+
+PROJ_ADD_DUP_EXIT=0
+"$BIN" project add-folder "Urlaub" "$PROJ_DIR_B" > /dev/null 2>&1 || PROJ_ADD_DUP_EXIT=$?
+if [ "$PROJ_ADD_DUP_EXIT" -ne 0 ]; then
+    pass "project add-folder doppelt (Exitcode != 0)"
+else
+    fail "project add-folder doppelt" "Hätte fehlschlagen sollen"
+fi
+
+rmdir "$PROJ_DIR_B"
+PROJ_SHOW_EXIT=0
+PROJ_SHOW=$("$BIN" project show "urlaub" --json 2>&1) || PROJ_SHOW_EXIT=$?
+if [ "$PROJ_SHOW_EXIT" -eq 0 ] && echo "$PROJ_SHOW" | python3 -c "import sys,json; d=json.load(sys.stdin); assert len(d['missing_folders'])==1 and d['missing_folders'][0].endswith('proj_b')" 2>/dev/null; then
+    pass "project show --json (fehlender Ordner in missing_folders)"
+else
+    fail "project show" "Exit $PROJ_SHOW_EXIT: $PROJ_SHOW"
+fi
+
+PROJ_RMF_EXIT=0
+PROJ_RMF=$("$BIN" project remove-folder "Urlaub" "$PROJ_DIR_B" --json 2>&1) || PROJ_RMF_EXIT=$?
+if [ "$PROJ_RMF_EXIT" -eq 0 ] && echo "$PROJ_RMF" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['folder_count']==1 and d['missing_folders']==[]" 2>/dev/null; then
+    pass "project remove-folder (fehlender Ordner entfernbar)"
+else
+    fail "project remove-folder" "Exit $PROJ_RMF_EXIT: $PROJ_RMF"
+fi
+
+PROJ_REN_EXIT=0
+PROJ_REN=$("$BIN" project rename "Urlaub" "Sommer 2026" --json 2>&1) || PROJ_REN_EXIT=$?
+if [ "$PROJ_REN_EXIT" -eq 0 ] && echo "$PROJ_REN" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['old_name']=='Urlaub' and d['name']=='Sommer 2026'" 2>/dev/null; then
+    pass "project rename (ok:true)"
+else
+    fail "project rename" "Exit $PROJ_REN_EXIT: $PROJ_REN"
+fi
+
+PROJ_SHOW_MISS_EXIT=0
+"$BIN" project show "Urlaub" > /dev/null 2>&1 || PROJ_SHOW_MISS_EXIT=$?
+if [ "$PROJ_SHOW_MISS_EXIT" -ne 0 ]; then
+    pass "project show alter Name nach rename (Exitcode != 0)"
+else
+    fail "project show alter Name" "Hätte fehlschlagen sollen"
+fi
+
+PROJ_DEL_EXIT=0
+PROJ_DEL=$("$BIN" project delete "Sommer 2026" --json 2>&1) || PROJ_DEL_EXIT=$?
+PROJ_AFTER=$("$BIN" project list --json 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+if [ "$PROJ_DEL_EXIT" -eq 0 ] && [ "$PROJ_AFTER" = "0" ]; then
+    pass "project delete (Liste danach leer)"
+else
+    fail "project delete" "Exit $PROJ_DEL_EXIT, Anzahl $PROJ_AFTER: $PROJ_DEL"
+fi
+
+PROJ_DEL_MISS_EXIT=0
+"$BIN" project delete "gibtsnicht" > /dev/null 2>&1 || PROJ_DEL_MISS_EXIT=$?
+if [ "$PROJ_DEL_MISS_EXIT" -ne 0 ]; then
+    pass "project delete unbekannt (Exitcode != 0)"
+else
+    fail "project delete unbekannt" "Hätte fehlschlagen sollen"
+fi
+
+echo "kaputt{" > "$TMPDIR/projects_corrupt.json"
+PROJ_CORRUPT_EXIT=0
+IPHOTO_PROJECTS_FILE="$TMPDIR/projects_corrupt.json" "$BIN" project create "X" > /dev/null 2>&1 || PROJ_CORRUPT_EXIT=$?
+if [ "$PROJ_CORRUPT_EXIT" -ne 0 ] && grep -q "kaputt{" "$TMPDIR/projects_corrupt.json"; then
+    pass "project create mit beschädigter Datei (Exitcode != 0, Datei unverändert)"
+else
+    fail "project create beschädigte Datei" "Exit $PROJ_CORRUPT_EXIT oder Datei überschrieben"
+fi
+
+PROJ_BADSUB_EXIT=0
+"$BIN" project frobnicate > /dev/null 2>&1 || PROJ_BADSUB_EXIT=$?
+if [ "$PROJ_BADSUB_EXIT" -ne 0 ]; then
+    pass "project unbekannter Unterbefehl (Exitcode != 0)"
+else
+    fail "project unbekannter Unterbefehl" "Hätte fehlschlagen sollen"
+fi
+unset IPHOTO_PROJECTS_FILE
 
 echo ""
 
