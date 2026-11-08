@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.42
+**Bugfix: Projekt-Ordner lädt keine Bilder wenn er ein Album-Ordner (iPhoto/Alben/…) ist**
+
+- `scanProjectFolder` filterte Symlinks generell aus (`isSymbolicLink != true`). Album-Ordner unter `~/Pictures/iPhoto/Alben/` enthalten aber nur Symlinks auf die echten Bilddateien — deshalb wurde nichts gefunden und die Kollektion blieb leer
+- Fix: Symlinks werden aufgelöst (`resolvingSymlinksInPath()`), der echte Dateipfad wird importiert. Damit funktionieren Album-Ordner als Projekt-Ordner korrekt; `isSystemManagedPath` blockiert nicht (der aufgelöste Pfad liegt außerhalb von `iPhoto/Alben/`)
+- Projekten mit regulären Ordnern (kein Symlink-Inhalt) ändert sich nichts
+
+---
+
 ## 1.106.41
 **Perf: SmartFolder-Ergebnis-Cache — eliminiert blockierende SQLite-Reads bei Rating-Änderungen**
 

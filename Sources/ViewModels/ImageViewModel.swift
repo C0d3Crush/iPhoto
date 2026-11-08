@@ -699,9 +699,13 @@ class ImageViewModel: ObservableObject {
                 guard self.projectLoadToken == token else { break }
                 let vals = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
                 if vals?.isRegularFile == true,
-                   vals?.isSymbolicLink != true,
                    ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
-                    found.append(fileURL)
+                    // Resolve symlinks so album-folder projects (iPhoto/Alben/…) work:
+                    // album folders contain symlinks to real files; importing the resolved
+                    // path avoids isSystemManagedPath filtering in importFiles.
+                    let importURL = vals?.isSymbolicLink == true
+                        ? fileURL.resolvingSymlinksInPath() : fileURL
+                    found.append(importURL)
                 }
             }
             DispatchQueue.main.async { [weak self] in
