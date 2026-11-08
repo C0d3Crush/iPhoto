@@ -108,10 +108,12 @@ struct RAWImageDecoder {
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxDimension
             ]
-            // materialize: Bug #40 gilt auch für JPEG/HEIC — lazy CGImage kann nach
-            // Source-Freigabe auf freien Speicher zeigen → SIGILL beim SwiftUI-Render.
-            if let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary) {
-                return materialize(thumb) ?? thumb
+            // materialize: Bug #40/#41 — CGImageSourceCreateThumbnailAtIndex liefert
+            // ein lazy CGImage das nach Source-Freigabe auf freien Speicher zeigt →
+            // SIGILL beim SwiftUI-Render. Fallback auf thumb ist verboten (dangling).
+            if let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, opts as CFDictionary),
+               let m = materialize(thumb) {
+                return m
             }
         }
 
@@ -131,10 +133,11 @@ struct RAWImageDecoder {
         }
         // applyExifOrientation gibt bei .up-Rotation das Original-CGImage zurück,
         // das intern noch auf ImageIOs Source-Cache zeigt. Nach source-Freigabe
-        // → SIGILL bei SwiftUI-Render (Bug #40, Vollbild-Pfad).
-        // materialize erzwingt eigenständigen Buffer unabhängig von source.
+        // → SIGILL bei SwiftUI-Render (Bug #40/#41, Vollbild-Pfad).
+        // materialize erzwingt eigenständigen Buffer — kein ?? oriented Fallback,
+        // da oriented auch das dangling lazy CGImage sein kann.
         let oriented = applyExifOrientation(image, source: source)
-        return materialize(oriented) ?? oriented
+        return materialize(oriented)
     }
 
     // Liest den JPEG-Preview der im RAF-Dateiheader referenziert ist.
@@ -252,7 +255,9 @@ struct RAWImageDecoder {
 
     // Zwingt ein lazy CGImage (das intern noch auf den ImageIO-Datenpuffer zeigt)
     // in einen eigenständigen Bitmap-Buffer. Verhindert SIGILL wenn der Quelldatei-
-    // Puffer freigegeben wird bevor SwiftUI das Bild rendert (Bug #40).
+    // Puffer freigegeben wird bevor SwiftUI das Bild rendert (Bug #40, #41).
+    // Gibt nil zurück wenn der Kontext nicht erstellt werden kann — Caller DARF
+    // NICHT auf das Original-CGImage als Fallback zurückfallen, da es dangling ist.
     private static func materialize(_ image: CGImage) -> CGImage? {
         let w = image.width, h = image.height
         guard w > 0, h > 0 else { return image }
@@ -260,7 +265,7 @@ struct RAWImageDecoder {
         let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
         guard let ctx = CGContext(data: nil, width: w, height: h,
                                   bitsPerComponent: 8, bytesPerRow: 0,
-                                  space: space, bitmapInfo: bitmapInfo) else { return image }
+                                  space: space, bitmapInfo: bitmapInfo) else { return nil }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
         return ctx.makeImage()
     }

@@ -2,6 +2,16 @@
 
 ---
 
+## 1.106.23
+**Bugfix: materialize()-Fallback lieferte dangling CGImage → SIGILL auf Main-Thread (Bug #41)**
+
+- `materialize()`: `guard let ctx = CGContext(...) else { return image }` gab bei fehlgeschlagener Kontext-Erstellung das Original-CGImage zurück — dieses lazy CGImage zeigt noch auf den `jpegData`-Puffer der nach Rückkehr aus `decodeEmbeddedJPEG` freigegeben wird; SwiftUI rendert es 5–30 s später → SIGILL; Rückgabe jetzt `nil` statt `image`
+- `thumbnail()`: `return materialize(thumb) ?? thumb` hätte bei `materialize`-Fehler auf das dangling lazy CGImage zurückgefallen; umgebaut auf `guard let m = materialize(thumb)` ohne Fallback
+- `decodeViaImageIO()`: `return materialize(oriented) ?? oriented` ebenfalls unsicher (bei `.up`-Rotation ist `oriented == image` lazy); entfernt `?? oriented`
+- 10 Crash-Reports mit identischem Muster (5 s delay, `[SIGNAL_LAST_OP]` = `CGImageSourceCreateThumbnailAtIndex`) erklärt und behoben
+
+---
+
 ## 1.106.22
 **Perf: NavSidebar-Ordnerfilter verwendet gecachten standardizedPath**
 
