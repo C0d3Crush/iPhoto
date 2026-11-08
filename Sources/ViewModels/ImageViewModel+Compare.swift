@@ -30,13 +30,19 @@ extension ImageViewModel {
     }
 
     var compareLeftDocument: ImageDocument? {
-        guard let id = compare.leftID else { return nil }
-        return collection.documents.first(where: { $0.id == id && !$0.isTrashed && !$0.isBackedUp })
+        guard let id = compare.leftID,
+              let idx = collection.documentIndexByID[id],
+              idx < collection.documents.count else { return nil }
+        let doc = collection.documents[idx]
+        return (!doc.isTrashed && !doc.isBackedUp) ? doc : nil
     }
 
     var compareRightDocument: ImageDocument? {
-        guard let id = compare.rightID else { return nil }
-        return collection.documents.first(where: { $0.id == id && !$0.isTrashed && !$0.isBackedUp })
+        guard let id = compare.rightID,
+              let idx = collection.documentIndexByID[id],
+              idx < collection.documents.count else { return nil }
+        let doc = collection.documents[idx]
+        return (!doc.isTrashed && !doc.isBackedUp) ? doc : nil
     }
 
     // MARK: ELO-Verteilung
@@ -164,19 +170,24 @@ extension ImageViewModel {
     // MARK: Compare Undo
 
     func undoCompare(_ entry: CompareUndoEntry) {
-        for i in collection.documents.indices {
-            let doc = collection.documents[i]
-            if doc.id == entry.leftID {
-                collection.documents[i].elo = entry.leftElo
-                collection.documents[i].eloMatches = entry.leftMatches
-                CatalogStore.shared.saveElo(path: doc.url.path, elo: entry.leftElo, eloMatches: entry.leftMatches)
-            } else if doc.id == entry.rightID {
-                collection.documents[i].elo = entry.rightElo
-                collection.documents[i].eloMatches = entry.rightMatches
-                CatalogStore.shared.saveElo(path: doc.url.path, elo: entry.rightElo, eloMatches: entry.rightMatches)
-            }
+        struct SaveOp { let path: String; let elo: Double; let matches: Int }
+        var ops: [SaveOp] = []
+        var docs = collection.documents
+        if let idx = collection.documentIndexByID[entry.leftID], idx < docs.count {
+            docs[idx].elo = entry.leftElo
+            docs[idx].eloMatches = entry.leftMatches
+            ops.append(SaveOp(path: docs[idx].url.path, elo: entry.leftElo, matches: entry.leftMatches))
         }
+        if let idx = collection.documentIndexByID[entry.rightID], idx < docs.count {
+            docs[idx].elo = entry.rightElo
+            docs[idx].eloMatches = entry.rightMatches
+            ops.append(SaveOp(path: docs[idx].url.path, elo: entry.rightElo, matches: entry.rightMatches))
+        }
+        collection.documents = docs
         invalidateVisibleOrder()
+        DispatchQueue.global(qos: .userInitiated).async {
+            for op in ops { CatalogStore.shared.saveElo(path: op.path, elo: op.elo, eloMatches: op.matches) }
+        }
     }
 
     // MARK: ELO-Konvergenz

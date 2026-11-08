@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.16
+**Compare-Modus: O(1)-Lookups + Batch-Writes + async SQLite (#1 #9)**
+
+- `compareLeftDocument` / `compareRightDocument`: `first(where: { $0.id })` → `documentIndexByID[id]` (O(1)) (#1)
+- `undoCompare`: Schleife + 2 separate Subscript-Writes → `documentIndexByID`-Lookups + 1 Batch-Write + async SQLite (#1)
+- `undoCompare`: `CatalogStore.saveElo` asynchron in BG-Queue statt sync auf Main (#1)
+
+---
+
 ## 1.106.15
 **run_perf.sh PASS on failure behoben; run_cli.sh in CI (#36 #16)**
 
