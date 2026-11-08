@@ -133,13 +133,19 @@ extension ImageViewModel {
 
     func saveCurrentAsPreset(name: String, author: String? = nil) {
         let p = Preset(name: name, author: author, adjustments: adj.adjustments)
-        CatalogStore.shared.savePreset(p)
-        adj.userPresets = CatalogStore.shared.allUserPresets()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            CatalogStore.shared.savePreset(p)
+            let presets = CatalogStore.shared.allUserPresets()
+            DispatchQueue.main.async { self?.adj.userPresets = presets }
+        }
     }
 
     func deletePreset(_ preset: Preset) {
-        CatalogStore.shared.deletePreset(id: preset.id)
-        adj.userPresets = CatalogStore.shared.allUserPresets()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            CatalogStore.shared.deletePreset(id: preset.id)
+            let presets = CatalogStore.shared.allUserPresets()
+            DispatchQueue.main.async { self?.adj.userPresets = presets }
+        }
     }
 
     func exportRecipe(_ preset: Preset) {

@@ -2,6 +2,14 @@
 
 ---
 
+## 1.106.32
+**Perf: Preset-Saves + loadPersistedGroups von Main-Thread auf Background**
+
+- `saveCurrentAsPreset`, `deletePreset`: `CatalogStore.shared.savePreset/deletePreset/allUserPresets` liefen synchron auf Main; jetzt via `DispatchQueue.global(qos: .userInitiated).async` mit Main-Thread-Callback für UI-State
+- `loadPersistedGroupsIfAvailable`: `loadDuplicateGroups()` + `loadSimilarGroups()` wurden bei jedem Import synchron auf Main gelesen; jetzt auf `DispatchQueue.global(qos: .utility).async` verlagert — eliminiert SQLite-Blocking beim Start mit großen Duplikat-Datenbanken
+
+---
+
 ## 1.106.31
 **Perf: People-Mutations von Main-Thread auf Background**
 

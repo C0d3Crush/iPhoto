@@ -171,19 +171,23 @@ extension ImageViewModel {
     func loadPersistedGroupsIfAvailable() {
         let byPath = Dictionary(collection.documents.map { ($0.url.path, $0) },
                                 uniquingKeysWith: { a, _ in a })
-        let dupPaths = CatalogStore.shared.loadDuplicateGroups()
-        let simPaths = CatalogStore.shared.loadSimilarGroups()
-        let dupGroups = dupPaths
-            .map { grp in grp.compactMap { byPath[$0] } }
-            .filter { $0.count > 1 }
-            .map { $0.sorted { $0.url.path < $1.url.path } }
-            .sorted { $0[0].filename < $1[0].filename }
-        let simGroups = simPaths
-            .map { grp in grp.compactMap { byPath[$0] } }
-            .filter { $0.count > 1 }
-        quality.duplicateGroups = dupGroups
-        quality.similarGroups = simGroups
-        Log.info("Persistierte Gruppen geladen: \(dupGroups.count) Duplikate, \(simGroups.count) Similar")
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let dupPaths = CatalogStore.shared.loadDuplicateGroups()
+            let simPaths = CatalogStore.shared.loadSimilarGroups()
+            let dupGroups = dupPaths
+                .map { grp in grp.compactMap { byPath[$0] } }
+                .filter { $0.count > 1 }
+                .map { $0.sorted { $0.url.path < $1.url.path } }
+                .sorted { $0[0].filename < $1[0].filename }
+            let simGroups = simPaths
+                .map { grp in grp.compactMap { byPath[$0] } }
+                .filter { $0.count > 1 }
+            Log.info("Persistierte Gruppen geladen: \(dupGroups.count) Duplikate, \(simGroups.count) Similar")
+            DispatchQueue.main.async { [weak self] in
+                self?.quality.duplicateGroups = dupGroups
+                self?.quality.similarGroups = simGroups
+            }
+        }
     }
 
     /// Aktualisiert blurry/under/over-Listen aus den beim Import persistierten Werten.
