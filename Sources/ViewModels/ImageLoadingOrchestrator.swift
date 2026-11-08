@@ -737,21 +737,25 @@ final class ImageLoadingOrchestrator {
 
     func scanExifForLibrary() {
         guard let host = host else { return }
-        var paths = CatalogStore.shared.pathsNeedingExifScan()
-        if host.isProjectMode {
-            let inCollection = Set(host.collection.documents.map { $0.url.path })
-            paths = paths.filter { inCollection.contains($0) }
-        }
-        guard !paths.isEmpty else { return }
-
+        // Snapshot main-thread-only state before dispatching; CatalogStore query moves to BG.
+        let inProjectMode = host.isProjectMode
+        let projectPaths: Set<String>? = inProjectMode
+            ? Set(host.collection.documents.map { $0.url.path }) : nil
         let taskID = UUID()
-        host.activity.enqueue(id: taskID, label: "Metadaten lesen", icon: "info.circle",
-                              done: 0, total: paths.count)
 
         DispatchQueue.global(qos: .background).async { [weak self] in
             guard let self = self, let host = self.host else { return }
-            let scanStart = Date()
+            var paths = CatalogStore.shared.pathsNeedingExifScan()
+            if let projectPaths = projectPaths {
+                paths = paths.filter { projectPaths.contains($0) }
+            }
+            guard !paths.isEmpty else { return }
             let total = paths.count
+            DispatchQueue.main.async { [weak self] in
+                self?.host?.activity.enqueue(id: taskID, label: "Metadaten lesen",
+                                             icon: "info.circle", done: 0, total: total)
+            }
+            let scanStart = Date()
             var done = 0
             for path in paths {
                 host.activity.waitWhilePaused(id: taskID)
@@ -813,22 +817,25 @@ final class ImageLoadingOrchestrator {
     // (siehe project_perf_diagnosis.md, Bug #33).
     func scanQualityForLibrary() {
         guard let host = host else { return }
-        var paths = CatalogStore.shared.pathsNeedingQualityScan()
-        if host.isProjectMode {
-            let inCollection = Set(host.collection.documents.map { $0.url.path })
-            paths = paths.filter { inCollection.contains($0) }
-        }
-        guard !paths.isEmpty else { return }
+        let inProjectMode = host.isProjectMode
+        let projectPaths: Set<String>? = inProjectMode
+            ? Set(host.collection.documents.map { $0.url.path }) : nil
 
         let taskID = UUID()
-        host.activity.enqueue(id: taskID, label: "Qualität analysieren",
-                              icon: "wand.and.stars",
-                              done: 0, total: paths.count, summaryVerb: "analysiert")
-
         DispatchQueue.global(qos: .background).async { [weak self] in
             guard let self = self, let host = self.host else { return }
-            let scanStart = Date()
+            var paths = CatalogStore.shared.pathsNeedingQualityScan()
+            if let projectPaths = projectPaths {
+                paths = paths.filter { projectPaths.contains($0) }
+            }
+            guard !paths.isEmpty else { return }
             let total = paths.count
+            DispatchQueue.main.async { [weak self] in
+                self?.host?.activity.enqueue(id: taskID, label: "Qualität analysieren",
+                                             icon: "wand.and.stars",
+                                             done: 0, total: total, summaryVerb: "analysiert")
+            }
+            let scanStart = Date()
             var done = 0
             var pending: [(String, QualityAssessor.Result)] = []
             pending.reserveCapacity(128)
@@ -905,21 +912,24 @@ final class ImageLoadingOrchestrator {
     // Gleiche Batch-Strategie wie Quality-Scan (100er-Batches, einmaliger Array-Write).
     func scanMotifForLibrary() {
         guard let host = host else { return }
-        var paths = CatalogStore.shared.pathsNeedingMotifScan()
-        if host.isProjectMode {
-            let inCollection = Set(host.collection.documents.map { $0.url.path })
-            paths = paths.filter { inCollection.contains($0) }
-        }
-        guard !paths.isEmpty else { return }
+        let inProjectMode = host.isProjectMode
+        let projectPaths: Set<String>? = inProjectMode
+            ? Set(host.collection.documents.map { $0.url.path }) : nil
 
         let taskID = UUID()
-        host.activity.enqueue(id: taskID, label: "Motive erkennen",
-                              icon: "eye.fill",
-                              done: 0, total: paths.count, summaryVerb: "analysiert")
-
         DispatchQueue.global(qos: .background).async { [weak self] in
             guard let self = self, let host = self.host else { return }
+            var paths = CatalogStore.shared.pathsNeedingMotifScan()
+            if let projectPaths = projectPaths {
+                paths = paths.filter { projectPaths.contains($0) }
+            }
+            guard !paths.isEmpty else { return }
             let total = paths.count
+            DispatchQueue.main.async { [weak self] in
+                self?.host?.activity.enqueue(id: taskID, label: "Motive erkennen",
+                                             icon: "eye.fill",
+                                             done: 0, total: total, summaryVerb: "analysiert")
+            }
             var done = 0
             var pending: [(String, [String])] = []
             pending.reserveCapacity(128)

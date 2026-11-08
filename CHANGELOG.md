@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.30
+**Perf: Scan-Funktionen — CatalogStore-Query von Main-Thread auf Background**
+
+- `scanExifForLibrary`, `scanQualityForLibrary`, `scanMotifForLibrary`: `CatalogStore.shared.pathsNeeding*Scan()` wurde synchron auf dem Main-Thread aufgerufen (via `enqueueWork`); auf Bibliotheken mit 1000+ Bildern blockierte diese SQL-Abfrage den UI-Thread messbar; jetzt in die jeweilige Background-Queue verlagert — Main-Thread-Snapshot (`isProjectMode`, Collection-Pfade) wird vorher auf Main erfasst
+
+---
+
 ## 1.106.29
 **Perf: pasteAdjustments — CatalogStore-Writes von Main-Thread auf Background**
 
