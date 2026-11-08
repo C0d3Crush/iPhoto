@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.20
+**ELO-Update: RatingStore + CatalogStore async statt sync auf Main**
+
+- `applyEloUpdate`: 2 SQLite-Writes (`RatingStore.shared.save` + `CatalogStore.shared.saveElo`) werden jetzt per `DispatchQueue.global(qos: .userInitiated).async` im Hintergrund ausgeführt — kein Sync-I/O mehr pro Duel-Klick auf dem Main-Thread
+
+---
+
 ## 1.106.19
 **Bug #39: Compare-SIGILL bei fehlenden Dateien + elo stats Format + Wärme/Farbstich-Range**
 
