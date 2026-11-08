@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.31
+**Perf: People-Mutations von Main-Thread auf Background**
+
+- `createPerson`, `renamePerson`, `deletePerson`: `CatalogStore.shared.insertPerson/updatePerson/deletePerson` blockierten den Main-Thread; jetzt via `DispatchQueue.global(qos: .userInitiated).async` — in-memory State wird sofort auf Main aktualisiert, SQLite-Persist läuft parallel
+
+---
+
 ## 1.106.30
 **Perf: Scan-Funktionen — CatalogStore-Query von Main-Thread auf Background**
 

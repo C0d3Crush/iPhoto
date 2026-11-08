@@ -93,32 +93,32 @@ extension ImageViewModel {
     @discardableResult
     func createPerson(name: String) -> PersonRecord {
         let person = PersonRecord(id: UUID().uuidString, name: name, coverFaceID: nil)
-        CatalogStore.shared.insertPerson(person)
-        DispatchQueue.main.async { [weak self] in
-            self?.people.people.append(person)
+        DispatchQueue.global(qos: .userInitiated).async {
+            CatalogStore.shared.insertPerson(person)
         }
+        people.people.append(person)
         return person
     }
 
     func renamePerson(_ person: PersonRecord, to name: String) {
         var updated = person
         updated.name = name
-        CatalogStore.shared.updatePerson(updated)
-        DispatchQueue.main.async { [weak self] in
-            if let idx = self?.people.people.firstIndex(where: { $0.id == person.id }) {
-                self?.people.people[idx] = updated
-            }
+        DispatchQueue.global(qos: .userInitiated).async {
+            CatalogStore.shared.updatePerson(updated)
+        }
+        if let idx = people.people.firstIndex(where: { $0.id == person.id }) {
+            people.people[idx] = updated
         }
     }
 
     func deletePerson(_ person: PersonRecord) {
-        CatalogStore.shared.deletePerson(id: person.id)
-        DispatchQueue.main.async { [weak self] in
-            self?.people.people.removeAll { $0.id == person.id }
-            self?.people.facesPerPerson.removeValue(forKey: person.id)
-            let freed = self?.people.facesPerPerson[person.id] ?? []
-            self?.people.unassignedFaces.append(contentsOf: freed)
+        DispatchQueue.global(qos: .userInitiated).async {
+            CatalogStore.shared.deletePerson(id: person.id)
         }
+        people.people.removeAll { $0.id == person.id }
+        let freed = people.facesPerPerson[person.id] ?? []
+        people.facesPerPerson.removeValue(forKey: person.id)
+        people.unassignedFaces.append(contentsOf: freed)
     }
 
     // MARK: - Clustering
