@@ -217,7 +217,7 @@ final class ImageLoadingOrchestrator {
             if let preview = try? RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 1500) {
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, let host = self.host, self.loadToken == token else { return }
-                    guard let idx = host.collection.documents.firstIndex(where: { $0.url == url }) else { return }
+                    guard let idx = host.collection.documentIndexByURL[url] else { return }
                     host.collection.documents[idx].previewImage = preview
                     host.isLoading = false
                     host.fitToWindowRequested = true
@@ -249,7 +249,7 @@ final class ImageLoadingOrchestrator {
         guard !isLoadingFullRes,
               activeFullResToken == nil,
               token == loadToken,
-              let idx = host.collection.documents.firstIndex(where: { $0.url == url }),
+              let idx = host.collection.documentIndexByURL[url],
               host.collection.documents[idx].cgImage == nil else { return }
 
         // Priority-inversion guard: if a prefetch is already decoding this URL,
@@ -312,7 +312,7 @@ final class ImageLoadingOrchestrator {
                         self?.activeFullResToken = nil
                         return
                     }
-                    guard let idx = host.collection.documents.firstIndex(where: { $0.url == url }) else {
+                    guard let idx = host.collection.documentIndexByURL[url] else {
                         self.isLoadingFullRes = false
                         self.activeFullResToken = nil
                         return
@@ -524,16 +524,18 @@ final class ImageLoadingOrchestrator {
                     DispatchQueue.main.async {
                         guard let self = self, let host = self.host else { return }
                         self.thumbInFlight.remove(url)
-                        if let idx = host.collection.documents.firstIndex(where: { $0.url == url }) {
-                            if let img = nsImage, host.collection.documents[idx].thumbnailImage == nil {
-                                host.collection.documents[idx].placeholderThumbnailImage = img
-                                if let r = colorR { host.collection.documents[idx].colorRatioR = r }
-                                if let g = colorG { host.collection.documents[idx].colorRatioG = g }
-                                if let b = colorB { host.collection.documents[idx].colorRatioB = b }
-                            } else if let msg = decodeError,
-                                      host.collection.documents[idx].errorMessage == nil {
-                                host.collection.documents[idx].errorMessage = msg
+                        // Batch all field updates into one write to avoid 4× O(N) CoW copies (#3).
+                        if let idx = host.collection.documentIndexByURL[url] {
+                            var doc = host.collection.documents[idx]
+                            if let img = nsImage, doc.thumbnailImage == nil {
+                                doc.placeholderThumbnailImage = img
+                                if let r = colorR { doc.colorRatioR = r }
+                                if let g = colorG { doc.colorRatioG = g }
+                                if let b = colorB { doc.colorRatioB = b }
+                            } else if let msg = decodeError, doc.errorMessage == nil {
+                                doc.errorMessage = msg
                             }
+                            host.collection.documents[idx] = doc
                         }
                         self.thumbDone += 1
                         host.activity.update(id: self.thumbnailTaskID,
@@ -584,7 +586,7 @@ final class ImageLoadingOrchestrator {
                     DispatchQueue.main.async {
                         guard let self = self, let host = self.host else { return }
                         self.hiResInFlight.remove(url)
-                        if let idx = host.collection.documents.firstIndex(where: { $0.url == url }),
+                        if let idx = host.collection.documentIndexByURL[url],
                            host.collection.documents[idx].errorMessage == nil {
                             host.collection.documents[idx].errorMessage = error.localizedDescription
                         }
@@ -595,10 +597,12 @@ final class ImageLoadingOrchestrator {
                 DispatchQueue.main.async {
                     guard let self = self, let host = self.host else { return }
                     self.hiResInFlight.remove(url)
-                    guard let idx = host.collection.documents.firstIndex(where: { $0.url == url }) else { return }
-                    host.collection.documents[idx].thumbnail = thumb
-                    host.collection.documents[idx].thumbnailImage = nsImage
-                    host.collection.documents[idx].placeholderThumbnailImage = nil
+                    guard let idx = host.collection.documentIndexByURL[url] else { return }
+                    var doc = host.collection.documents[idx]
+                    doc.thumbnail = thumb
+                    doc.thumbnailImage = nsImage
+                    doc.placeholderThumbnailImage = nil
+                    host.collection.documents[idx] = doc
                 }
             }
         }

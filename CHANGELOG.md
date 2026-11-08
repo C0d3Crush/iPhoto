@@ -2,6 +2,16 @@
 
 ---
 
+## 1.106.9
+**Thumbnail-Completion O(N) → O(1); 3 @Published-Writes → 1 Batch-Write (#3)**
+
+- `ImageCollection`: `documentIndexByURL: [UUID: Int]` und `documentIndexByID: [UUID: Int]` — O(1)-Nachschlag, beide Caches werden atomar in `documents.didSet` aktuell gehalten (#3)
+- `ImageLoadingOrchestrator`: alle `firstIndex(where: { $0.url == url })` durch `documentIndexByURL[url]` ersetzt — O(N²) → O(N) bei Thumbnail-Batch-Completion (#3)
+- Thumbnail-Main-Write: 4 Felder (`placeholderThumbnailImage`, `colorRatioR/G/B`) werden in einem einzigen Copy-Modify-Write zusammengefasst statt 4 separater `@Published`-Subscript-Zuweisungen (#3)
+- `requestVisibleThumbnail`: 3 Felder (`thumbnail`, `thumbnailImage`, `placeholderThumbnailImage`) ebenfalls in einem Copy-Modify-Write gebündelt (#3)
+
+---
+
 ## 1.106.8
 **Duplikat-Erkennung pHash-Signal; ThumbnailDiskCache atomares Schreiben + Eviction (#23 #50)**
 

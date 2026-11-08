@@ -11,10 +11,16 @@ class ImageCollection: ObservableObject {
         didSet {
             dispatchPrecondition(condition: .onQueue(.main))
             documentsRevision &+= 1
-            var idx = documentIndexByID
-            idx.removeAll(keepingCapacity: true)
-            for (i, doc) in documents.enumerated() { idx[doc.id] = i }
-            documentIndexByID = idx
+            var byID = documentIndexByID
+            var byURL = documentIndexByURL
+            byID.removeAll(keepingCapacity: true)
+            byURL.removeAll(keepingCapacity: true)
+            for (i, doc) in documents.enumerated() {
+                byID[doc.id] = i
+                byURL[doc.url] = i
+            }
+            documentIndexByID = byID
+            documentIndexByURL = byURL
         }
     }
     /// Zählt jede Mutation von documents — erlaubt Cache-Konsumenten (visibleDocuments)
@@ -22,6 +28,8 @@ class ImageCollection: ObservableObject {
     private(set) var documentsRevision: UInt64 = 0
     /// O(1)-Nachschlag: UUID → Index in documents. Immer synchron mit documents.
     private(set) var documentIndexByID: [UUID: Int] = [:]
+    /// O(1)-Nachschlag: URL → Index in documents. Immer synchron mit documents (#3).
+    private(set) var documentIndexByURL: [URL: Int] = [:]
     @Published var currentIndex: Int = 0 {
         didSet { dispatchPrecondition(condition: .onQueue(.main)) }
     }
