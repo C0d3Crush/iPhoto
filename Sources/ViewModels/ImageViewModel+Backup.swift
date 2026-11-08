@@ -43,30 +43,43 @@ extension ImageViewModel {
             let (root, stopRoot) = settings.resolveDestination()
             defer { stopRoot() }
 
+            // Parallelize backup with up to 4 concurrent ops; NSLock guards writtenInBatch (#66).
+            let queue = OperationQueue()
+            queue.maxConcurrentOperationCount = 4
+            let batchLock = NSLock()
+            var writtenInBatch = Set<String>()
+            let resultsLock = NSLock()
             var summary = BackupSummary()
             var succeededDocs: [ImageDocument] = []
-            var writtenInBatch = Set<String>()
-            for (i, doc) in docs.enumerated() {
-                // Sicherheits-Scope für die Quelle beibehalten (importierte Volumes
-                // brauchen das Bookmark).
-                let (accessURL, stopAccess) = BookmarkStore.shared.access(url: doc.url)
-                let result = BackupService.backup(source: accessURL, root: root, settings: settings, writtenInBatch: &writtenInBatch)
-                stopAccess()
-                switch result {
-                case .written(let url):
-                    summary.written += 1
-                    succeededDocs.append(doc)
-                    Log.info("BACKUP \(doc.filename) → \(url.path)")
-                case .skipped(let url):
-                    summary.skipped += 1
-                    Log.info("BACKUP skip (existiert): \(doc.filename) → \(url.lastPathComponent)")
-                case .failed(let reason):
-                    summary.failed.append((doc.filename, reason))
-                    Log.error("BACKUP fail \(doc.filename): \(reason)")
+            var doneCount = 0
+
+            for doc in docs {
+                let doc = doc
+                queue.addOperation {
+                    let (accessURL, stopAccess) = BookmarkStore.shared.access(url: doc.url)
+                    let result = BackupService.backup(source: accessURL, root: root, settings: settings,
+                                                      writtenInBatch: &writtenInBatch, batchLock: batchLock)
+                    stopAccess()
+                    resultsLock.lock()
+                    switch result {
+                    case .written(let url):
+                        summary.written += 1
+                        succeededDocs.append(doc)
+                        Log.info("BACKUP \(doc.filename) → \(url.path)")
+                    case .skipped(let url):
+                        summary.skipped += 1
+                        Log.info("BACKUP skip (existiert): \(doc.filename) → \(url.lastPathComponent)")
+                    case .failed(let reason):
+                        summary.failed.append((doc.filename, reason))
+                        Log.error("BACKUP fail \(doc.filename): \(reason)")
+                    }
+                    doneCount += 1
+                    let done = doneCount
+                    resultsLock.unlock()
+                    DispatchQueue.main.async { self.activity.update(id: taskID, done: done, total: count) }
                 }
-                let done = i + 1
-                DispatchQueue.main.async { self.activity.update(id: taskID, done: done, total: count) }
             }
+            queue.waitUntilAllOperationsAreFinished()
 
             DispatchQueue.main.async {
                 self.activity.dequeue(id: taskID)

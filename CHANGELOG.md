@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.17
+**BackupService: 3× Datei-Open → 2×; sequenziell → 4× parallel (#66)**
+
+- `BackupService.backup`: `readImageProperties` wird einmal aufgerufen und sowohl für EXIF-Datum als auch Metadaten-Copy wiederverwendet — kein drittes `CGImageSourceCreateWithURL` mehr (#66)
+- `backupDocuments`: Schleife → `OperationQueue(maxConcurrentOperationCount: 4)` — Backups laufen bis zu 4-fach parallel; `NSLock` sichert `writtenInBatch` und Ergebnisaggregation (#66)
+- Weitere `collection.documents.firstIndex` → `documentIndexByID`/`documentIndexByURL` O(1)-Ersetzungen in Albums/Selection
+
+---
+
 ## 1.106.16
 **Compare-Modus: O(1)-Lookups + Batch-Writes + async SQLite (#1 #9)**
 

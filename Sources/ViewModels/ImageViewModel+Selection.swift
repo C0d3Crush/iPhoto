@@ -361,7 +361,7 @@ extension ImageViewModel {
     }
 
     func removeDocument(_ doc: ImageDocument) {
-        guard let idx = collection.documents.firstIndex(where: { $0.id == doc.id }) else { return }
+        guard let idx = collection.documentIndexByID[doc.id] else { return }
         if collection.selectedIndices.contains(idx) && collection.selectedIndices.count > 1 {
             removeSelected()
             return

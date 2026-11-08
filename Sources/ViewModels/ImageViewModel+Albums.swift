@@ -23,7 +23,7 @@ extension ImageViewModel {
             }
 
             if let firstURL = photoURLs.first,
-               let idx = self.collection.documents.firstIndex(where: { $0.url.standardizedFileURL == firstURL.standardizedFileURL }) {
+               let idx = self.collection.documentIndexByURL[firstURL.standardized] {
                 Log.info("Wähle erstes Album-Foto bei Index \(idx)")
                 self.collection.select(index: idx)
                 self.loadCurrentImage()

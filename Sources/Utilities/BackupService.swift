@@ -26,12 +26,17 @@ enum BackupService {
     /// muss auf einer Background-Queue laufen.
     /// `writtenInBatch` verhindert, dass zwei Quelldateien mit gleichem Namen sich gegenseitig
     /// überschreiben — auch im `.overwrite`-Modus (der nur für *vorherige Runs* gilt).
+    /// `batchLock` serialisiert Zugriffe auf `writtenInBatch` bei paralleler Ausführung (#66).
     static func backup(source: URL, root: URL, settings: BackupSettings,
-                       writtenInBatch: inout Set<String>) -> Result {
+                       writtenInBatch: inout Set<String>,
+                       batchLock: NSLock? = nil) -> Result {
+        // Open the image source ONCE — reused for date extraction AND metadata copy (#66).
+        let sourceProps = readImageProperties(source: source)
+
         // Zielordner <root>/<Jahr>/<Monat>/ aus Aufnahmedatum (EXIF DateTimeOriginal)
         // → File-mtime als Fallback. So landen Backups jahresweise sortiert wie in
         // Fotos.app, unabhängig davon wann sie erzeugt wurden.
-        let captureDate = readCaptureDate(source: source) ?? fileModificationDate(source) ?? Date()
+        let captureDate = extractCaptureDate(from: sourceProps) ?? fileModificationDate(source) ?? Date()
         let subfolder = yearMonthSubfolder(date: captureDate)
         let targetDir = root.appendingPathComponent(subfolder, isDirectory: true)
         do {
@@ -43,9 +48,12 @@ enum BackupService {
         let stem = source.deletingPathExtension().lastPathComponent
         let baseTarget = targetDir.appendingPathComponent("\(stem).jpg")
         let target: URL
+        batchLock?.lock()
+        let alreadyWritten = writtenInBatch.contains(baseTarget.path)
+        batchLock?.unlock()
         // If this exact path was already written in this batch, force rename to avoid
         // silently overwriting a file we just created (same filename from two different dirs).
-        let effectiveMode: BackupSettings.CollisionMode = writtenInBatch.contains(baseTarget.path) ? .rename : settings.collisionMode
+        let effectiveMode: BackupSettings.CollisionMode = alreadyWritten ? .rename : settings.collisionMode
         switch resolveCollision(baseTarget: baseTarget, mode: effectiveMode) {
         case .use(let url):   target = url
         case .skip(let url):  return .skipped(existingURL: url)
@@ -69,12 +77,11 @@ enum BackupService {
         let srgb = convertToSRGB(outImage) ?? outImage
 
         // Metadaten: optional Original-Properties (EXIF/TIFF/GPS/Orientation) mitschreiben.
-        // ImageIO benutzt die weitergereichten Properties als Basis für das neue JPEG.
+        // Reuses sourceProps from above — no second CGImageSourceCreateWithURL (#66).
         var props: [CFString: Any] = [:]
         props[kCGImageDestinationLossyCompressionQuality] = settings.jpegQuality
-        if settings.copyMetadata,
-           let sourceProps = readImageProperties(source: source) {
-            merge(&props, with: sourceProps)
+        if settings.copyMetadata, let sp = sourceProps {
+            merge(&props, with: sp)
             // Nach sRGB-Konvertierung ist die Orientation bereits angewandt — sonst würde
             // Preview das Bild ein zweites Mal rotieren.
             props[kCGImagePropertyOrientation] = 1
@@ -89,7 +96,9 @@ enum BackupService {
         guard CGImageDestinationFinalize(dest) else {
             return .failed(reason: "Schreiben fehlgeschlagen: \(target.lastPathComponent)")
         }
+        batchLock?.lock()
         writtenInBatch.insert(target.path)
+        batchLock?.unlock()
         return .written(target)
     }
 
@@ -128,8 +137,8 @@ enum BackupService {
         return f
     }()
 
-    private static func readCaptureDate(source: URL) -> Date? {
-        guard let props = readImageProperties(source: source),
+    private static func extractCaptureDate(from props: [CFString: Any]?) -> Date? {
+        guard let props = props,
               let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any],
               let dateString = exif[kCGImagePropertyExifDateTimeOriginal] as? String else {
             return nil
