@@ -11,11 +11,17 @@ class ImageCollection: ObservableObject {
         didSet {
             dispatchPrecondition(condition: .onQueue(.main))
             documentsRevision &+= 1
+            var idx = documentIndexByID
+            idx.removeAll(keepingCapacity: true)
+            for (i, doc) in documents.enumerated() { idx[doc.id] = i }
+            documentIndexByID = idx
         }
     }
     /// Zählt jede Mutation von documents — erlaubt Cache-Konsumenten (visibleDocuments)
     /// zu erkennen, ob aufgelöste Dokument-Kopien noch aktuell sind.
     private(set) var documentsRevision: UInt64 = 0
+    /// O(1)-Nachschlag: UUID → Index in documents. Immer synchron mit documents.
+    private(set) var documentIndexByID: [UUID: Int] = [:]
     @Published var currentIndex: Int = 0 {
         didSet { dispatchPrecondition(condition: .onQueue(.main)) }
     }

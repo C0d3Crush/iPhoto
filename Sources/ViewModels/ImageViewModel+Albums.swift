@@ -103,10 +103,11 @@ extension ImageViewModel {
 
     func addSelectedToAlbum(albumID: UUID) {
         guard let idx = library.albums.firstIndex(where: { $0.id == albumID }) else { return }
+        var existingURLs = Set(library.albums[idx].photoURLs)
         for colIdx in collection.selectedIndices {
             guard colIdx < collection.documents.count else { continue }
             let url = collection.documents[colIdx].url
-            guard !library.albums[idx].photoURLs.contains(url) else { continue }
+            guard existingURLs.insert(url).inserted else { continue }
             library.albums[idx].photoURLs.append(url)
             CatalogStore.shared.addImage(path: url.path, toAlbum: albumID.uuidString,
                                          order: library.albums[idx].photoURLs.count - 1)

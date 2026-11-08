@@ -2,6 +2,17 @@
 
 ---
 
+## 1.106.2
+**O(1)-Index-Lookup; Album-Filter per Set; statische DateFormatter; paralleler Batch-Export**
+
+- `ImageCollection.documentIndexByID`: neues `[UUID: Int]`-Dict, synchron mit `documents` gehalten — `collectionIndex(for:)` von O(N) auf O(1) (#12)
+- `NavSelection.album`-Filter: `album.photoURLs` wird vor dem `filter`-Call in ein `Set<URL>` konvertiert — O(N×M) → O(N) (#11)
+- `addSelectedToAlbum`: baut einmalig ein `Set<URL>` aus bestehenden Album-URLs auf statt pro Selection-Index `Array.contains` aufzurufen (#21)
+- `searchDateParse` / `searchDateKey`: nutzen jetzt vier statische `DateFormatter`-Instanzen — kein Allocate/Deallocate pro Filter-Aufruf mehr (#15)
+- `ImageExporter.exportBatch`: sequentielle `for`-Schleife durch `OperationQueue` mit `maxConcurrentOperationCount: 4` ersetzt — Decode+Write laufen parallel, `NSLock` für thread-sicheren Fortschritts-Zähler (#41)
+
+---
+
 ## 1.106.1
 **ThumbnailDiskCache eager decode; SimilarView kein Disk-I/O im Body; DateFormatter gecacht; Projekt-Ordner werden überwacht; project CLI + Tests**
 

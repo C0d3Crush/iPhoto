@@ -207,7 +207,7 @@ class ImageViewModel: ObservableObject {
     var imageSize: CGSize { collection.currentDocument?.imageSize ?? .zero }
 
     func collectionIndex(for document: ImageDocument) -> Int? {
-        collection.documents.firstIndex(where: { $0.id == document.id })
+        collection.documentIndexByID[document.id]
     }
 
     // MARK: - Init

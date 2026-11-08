@@ -114,7 +114,8 @@ extension ImageViewModel {
             filtered = docs
         case .album(let id):
             guard let album = library.albums.first(where: { $0.id == id }) else { return [] }
-            filtered = docs.filter { album.photoURLs.contains($0.url) }
+            let albumURLSet = Set(album.photoURLs)
+            filtered = docs.filter { albumURLSet.contains($0.url) }
         case .albumFolder(let id):
             // Rekursiv alle Fotos aus Alben unterhalb dieses Ordners aggregieren.
             // Duplikate zwischen Alben werden ausgeblendet (Set-Union der URLs).
@@ -391,20 +392,22 @@ extension ImageViewModel {
         }
     }
 
+    private static let _sdpYear: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy"; return f }()
+    private static let _sdpYearMonth: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM"; return f }()
+    private static let _sdpFull: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f }()
+    private static let _sdkFmt: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy:MM:dd HH:mm:ss"; return f }()
+
     private func searchDateParse(_ s: String) -> Date? {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "en_US_POSIX")
-        if s.count == 4  { fmt.dateFormat = "yyyy";       return fmt.date(from: s) }
-        if s.count == 7  { fmt.dateFormat = "yyyy-MM";    return fmt.date(from: s) }
-        fmt.dateFormat = "yyyy-MM-dd"; return fmt.date(from: s)
+        switch s.count {
+        case 4:  return ImageViewModel._sdpYear.date(from: s)
+        case 7:  return ImageViewModel._sdpYearMonth.date(from: s)
+        default: return ImageViewModel._sdpFull.date(from: s)
+        }
     }
 
     private func searchDateKey(_ doc: ImageDocument) -> Date {
         let raw = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value ?? ""
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "en_US_POSIX")
-        fmt.dateFormat = "yyyy:MM:dd HH:mm:ss"
-        return fmt.date(from: raw) ?? Date.distantPast
+        return ImageViewModel._sdkFmt.date(from: raw) ?? Date.distantPast
     }
 
     private func dateSortKey(_ doc: ImageDocument) -> String {
