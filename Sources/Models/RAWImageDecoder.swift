@@ -103,11 +103,24 @@ struct RAWImageDecoder {
 
         // Versuch 2: ImageIO-Thumbnail für JPEG/PNG/HEIC/TIFF und RAW auf macOS 12+
         if let source = CGImageSourceCreateWithURL(url as CFURL, nil) {
-            let opts: [CFString: Any] = [
+            // Dimensionen vorab lesen (nur Header/EXIF — kein Full-Decode) und
+            // SubsampleFactor berechnen: 24 MP JPEG → ×4 → 1500 px ≈ 200 ms statt 2500 ms.
+            var subsampleFactor = 1
+            let propOpts = [kCGImageSourceShouldCacheImmediately: false] as CFDictionary
+            if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, propOpts) as? [CFString: Any],
+               let pw = props[kCGImagePropertyPixelWidth] as? Int,
+               let ph = props[kCGImagePropertyPixelHeight] as? Int {
+                let maxSide = max(pw, ph)
+                if      maxSide >= maxDimension * 8 { subsampleFactor = 8 }
+                else if maxSide >= maxDimension * 4 { subsampleFactor = 4 }
+                else if maxSide >= maxDimension * 2 { subsampleFactor = 2 }
+            }
+            var opts: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxDimension
             ]
+            if subsampleFactor > 1 { opts[kCGImageSourceSubsampleFactor] = subsampleFactor as CFNumber }
             // materialize: Bug #40/#41 — CGImageSourceCreateThumbnailAtIndex liefert
             // ein lazy CGImage das nach Source-Freigabe auf freien Speicher zeigt →
             // SIGILL beim SwiftUI-Render. Fallback auf thumb ist verboten (dangling).

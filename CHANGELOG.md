@@ -2,6 +2,14 @@
 
 ---
 
+## 1.106.34
+**Perf: Preview-Decode 24 MP JPEG 2500 ms → ~200 ms via SubsampleFactor**
+
+- `RAWImageDecoder.thumbnail(maxDimension:)`: Dimensionen per `CGImageSourceCopyPropertiesAtIndex` vorab lesen (nur EXIF-Header, kein Full-Decode), optimalen `kCGImageSourceSubsampleFactor` (2/4/8) berechnen und zu den Thumbnail-Optionen hinzufügen — ImageIO dekodiert dadurch nur die DCT-Koeffizienten auf der Zielauflösung statt das vollständige 24 MP Bild zu lesen
+- Vorher: `DSC02239.JPG` (Sony 6000×4000) konsistent `SWITCH preview-decoded ~2500 ms`; nach Fix erwartet ≤ 300 ms (factor 4 → 1500×1000)
+
+---
+
 ## 1.106.33
 **Perf: importRecipe + SmartFolder-Limit-Sort von Main-Thread entkoppelt**
 
