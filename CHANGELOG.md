@@ -2,6 +2,16 @@
 
 ---
 
+## 1.106.11
+**Rating/Flag/Label: N @Published-Writes → 1 Batch-Write + kein sync SQLite auf Main (#4)**
+
+- `toggleFlag`, `setRating(for:)`, `setFlagStatus(for:)`, `setColorLabel(for:)`: Mutations über mehrere Indizes werden in einem einzigen Array-Copy-Modify-Write zusammengefasst → `documents.didSet` feuert einmal statt N-mal (#4)
+- `persistRating(at:)`: SQLite-Write immer asynchron (`.userInitiated` BG-Queue) — kein Blockieren des Main-Threads mehr (#4)
+- `persistRatings(at:)`: < 20 Items werden nicht länger synchron auf dem Main-Thread persistiert (#4)
+- `affectedIndices(for:)`: `firstIndex(where: { $0.id })` → `documentIndexByID[doc.id]` (O(1)) (#4)
+
+---
+
 ## 1.106.10
 **loadAdjustments: kein sync SQLite-Read auf Main-Thread mehr; In-Memory-Cache (#2)**
 
