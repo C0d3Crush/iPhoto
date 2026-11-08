@@ -461,15 +461,6 @@ extension ImageViewModel {
         return ImageViewModel._sdkFmt.date(from: raw) ?? Date.distantPast
     }
 
-    private func dateSortKey(_ doc: ImageDocument) -> String {
-        // Try in-memory EXIF first, then catalog, then filename as fallback
-        if let v = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value, !v.isEmpty {
-            return v
-        }
-        if let d = CatalogStore.shared.image(forPath: doc.url.path)?.dateTaken { return d }
-        return doc.filename
-    }
-
     func applyRandomShuffle() {
         shuffledOrder = visibleDocuments.map { $0.id }.shuffled()
     }

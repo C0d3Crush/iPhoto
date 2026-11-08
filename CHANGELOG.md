@@ -2,6 +2,14 @@
 
 ---
 
+## 1.106.36
+**Perf: image(forPath:) In-Memory-Cache + totes dateSortKey entfernt**
+
+- `CatalogStore.image(forPath:)` hatte keinen Cache — jeder Aufruf war ein `queue.sync`-SQLite-SELECT; in `smartFolderMatches` (.orientation, .captureDate, .cameraMake/.cameraModel) konnte das bei Bibliotheken ohne vollständige In-Memory-Metadaten N blockierende Reads pro Render-Pass erzeugen. Fix: Gleicher Lazy-Cache-Mechanismus wie `exif(forPath:)` (`imageCache` + `imageCacheMisses` + `NSLock`); `upsertImage` befüllt den Cache, `removeImage` invalidiert ihn
+- `dateSortKey()` war tote private Funktion (seit `applySmartFolderLimit` auf `dateTakenByPath()` umgestellt wurde) — entfernt
+
+---
+
 ## 1.106.35
 **Perf: 1500px-Preview Disk-Cache + Gesichts-Scan SubsampleFactor**
 

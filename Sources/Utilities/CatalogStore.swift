@@ -35,6 +35,13 @@ final class CatalogStore {
     private var exifCacheMisses = Set<String>()
     private let exifCacheLock = NSLock()
 
+    // In-memory image metadata cache (width/height/dateTaken/cameraMake/cameraModel).
+    // Same lazy-cache pattern as exifCache — eliminates blocking queue.sync per doc in
+    // smartFolderMatches (.orientation, .captureDate, .cameraMake/.cameraModel criteria).
+    private var imageCache: [String: CatalogImage] = [:]
+    private var imageCacheMisses = Set<String>()
+    private let imageCacheLock = NSLock()
+
     // JSON-Legacy-Migration nur für den Standard-Katalog — injizierte Pfade (Tests)
     // dürfen nicht die echten albums.json des Nutzers importieren.
     private let isDefaultCatalog: Bool
@@ -332,14 +339,38 @@ final class CatalogStore {
             bind(stmt, 11, iso8601())
             step(stmt); sqlite3_finalize(stmt)
         }
+        // Keep in-memory cache in sync (id unknown after ON CONFLICT — not used by callers).
+        imageCacheLock.lock()
+        imageCache[path] = CatalogImage(id: "", path: path, filename: filename,
+                                        sizeBytes: sizeBytes, width: width, height: height,
+                                        dateTaken: dateTaken, cameraMake: cameraMake,
+                                        cameraModel: cameraModel, isRAW: isRAW, importedAt: "")
+        imageCacheMisses.remove(path)
+        imageCacheLock.unlock()
     }
 
     func image(forPath path: String) -> CatalogImage? {
-        queue.sync {
+        imageCacheLock.lock()
+        let cached = imageCache[path]
+        let knownMiss = imageCacheMisses.contains(path)
+        imageCacheLock.unlock()
+        if let hit = cached { return hit }
+        if knownMiss { return nil }
+        return queue.sync {
             let stmt = prepare("SELECT id,path,filename,size_bytes,width,height,date_taken,camera_make,camera_model,is_raw,imported_at FROM images WHERE path=?")
             bind(stmt, 1, path)
-            guard step(stmt) == SQLITE_ROW else { sqlite3_finalize(stmt); return nil }
-            let img = rowToImage(stmt); sqlite3_finalize(stmt); return img
+            guard step(stmt) == SQLITE_ROW else {
+                sqlite3_finalize(stmt)
+                imageCacheLock.lock()
+                imageCacheMisses.insert(path)
+                imageCacheLock.unlock()
+                return nil
+            }
+            let img = rowToImage(stmt); sqlite3_finalize(stmt)
+            imageCacheLock.lock()
+            imageCache[path] = img
+            imageCacheLock.unlock()
+            return img
         }
     }
 
@@ -391,6 +422,10 @@ final class CatalogStore {
             let stmt = prepare("DELETE FROM images WHERE path=?")
             bind(stmt, 1, path); step(stmt); sqlite3_finalize(stmt)
         }
+        imageCacheLock.lock()
+        imageCache.removeValue(forKey: path)
+        imageCacheMisses.remove(path)
+        imageCacheLock.unlock()
     }
 
     func upsertExif(path: String, focalLength: Double?, iso: Int?, aperture: Double?, lensModel: String?, hdr: Bool = false, filmSimulation: String? = nil, sequenceNumber: Int? = nil, autoBracketing: Bool = false) {
