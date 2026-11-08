@@ -2,6 +2,13 @@
 
 ---
 
+## 1.106.22
+**Perf: NavSidebar-Ordnerfilter verwendet gecachten standardizedPath**
+
+- `FolderRow.allDocs`, `SidebarSubfolderRow.allDocs`, `sidebarSubfolders`, `sidebarDirectDocs`: nutzen jetzt `doc.standardizedPath` statt `doc.url.standardized.path` pro Dokument — eliminiert URL-Standardisierungs-Allokation pro Filter-Durchlauf beim Sidebar-Rendering
+
+---
+
 ## 1.106.21
 **Perf: DateFormatter-Allokation + NumberFormatter-Allokation eliminiert**
 

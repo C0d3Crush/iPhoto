@@ -1263,7 +1263,7 @@ private struct FolderRow: View {
     private var allDocs: [ImageDocument] {
         guard let url = resolvedURL else { return [] }
         let prefix = url.standardized.path
-        return viewModel.collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
+        return viewModel.collection.documents.filter { $0.standardizedPath.hasPrefix(prefix) }
     }
 
     private var isRemovable: Bool { folder.isRemovableMedia }
@@ -1342,7 +1342,7 @@ private struct SidebarSubfolderRow: View {
 
     private var allDocs: [ImageDocument] {
         let prefix = folderURL.standardized.path + "/"
-        return viewModel.collection.documents.filter { $0.url.standardized.path.hasPrefix(prefix) }
+        return viewModel.collection.documents.filter { $0.standardizedPath.hasPrefix(prefix) }
     }
 
     private var indent: CGFloat { CGFloat(20 + depth * 12) }
@@ -1444,7 +1444,7 @@ private func sidebarSubfolders(of root: URL, in docs: [ImageDocument]) -> [URL] 
     var seen = Set<String>()
     var result: [URL] = []
     for doc in docs {
-        let p = doc.url.standardized.path
+        let p = doc.standardizedPath
         guard p.hasPrefix(rootPath) else { continue }
         let rel = String(p.dropFirst(rootPath.count))
         guard let slash = rel.firstIndex(of: "/") else { continue }
@@ -1459,7 +1459,7 @@ private func sidebarSubfolders(of root: URL, in docs: [ImageDocument]) -> [URL] 
 private func sidebarDirectDocs(of root: URL, in docs: [ImageDocument]) -> [ImageDocument] {
     let rootPath = root.standardized.path + "/"
     return docs.filter { doc in
-        let p = doc.url.standardized.path
+        let p = doc.standardizedPath
         guard p.hasPrefix(rootPath) else { return false }
         return !String(p.dropFirst(rootPath.count)).contains("/")
     }
