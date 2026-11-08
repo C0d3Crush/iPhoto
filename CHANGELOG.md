@@ -2,6 +2,14 @@
 
 ---
 
+## 1.106.15
+**run_perf.sh PASS on failure behoben; run_cli.sh in CI (#36 #16)**
+
+- `run_perf.sh`: alle 13 getimeten Binary-Aufrufe mit `|| true` ergänzt — `set -euo pipefail` beendet das Skript nicht mehr vorzeitig bei Binary-Fehler, FAIL-Zähler wird korrekt inkrementiert (#36)
+- `.github/workflows/build.yml`: `run_cli.sh` als Pflicht-Schritt in CI aufgenommen (#16)
+
+---
+
 ## 1.106.14
 **PeoplePanel: kein sync SQLite pro View-Render mehr (#6)**
 

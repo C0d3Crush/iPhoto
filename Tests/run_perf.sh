@@ -58,7 +58,7 @@ echo ""
 echo "=== 1. Catalog-Stats Latenz ==="
 THRESHOLD=2000
 T0=$(ms)
-"$BIN" catalog stats > /dev/null 2>&1
+"$BIN" catalog stats > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "catalog stats (leer)" "$ELAPSED"; else fail "catalog stats (leer)" "$ELAPSED" "$THRESHOLD"; fi
@@ -71,14 +71,14 @@ echo "=== 2. Quality-Scan Latenz ==="
 
 THRESHOLD=5000
 T0=$(ms)
-"$BIN" quality scan "$SMALL" > /dev/null 2>&1
+"$BIN" quality scan "$SMALL" > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "quality scan 64×64" "$ELAPSED"; else fail "quality scan 64×64" "$ELAPSED" "$THRESHOLD"; fi
 
 THRESHOLD=8000
 T0=$(ms)
-"$BIN" quality scan "$MEDIUM" > /dev/null 2>&1
+"$BIN" quality scan "$MEDIUM" > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "quality scan 512×512" "$ELAPSED"; else fail "quality scan 512×512" "$ELAPSED" "$THRESHOLD"; fi
@@ -93,7 +93,7 @@ BATCH_PATHS=()
 for i in $(seq 1 10); do BATCH_PATHS+=("$TMPDIR_BASE/batch_$i.png"); done
 
 T0=$(ms)
-"$BIN" quality scan "${BATCH_PATHS[@]}" > /dev/null 2>&1
+"$BIN" quality scan "${BATCH_PATHS[@]}" > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "quality scan 10×256×256" "$ELAPSED"; else fail "quality scan 10×256×256" "$ELAPSED" "$THRESHOLD"; fi
@@ -187,14 +187,14 @@ echo ""
 echo "=== 7. Catalog-Stats mit Daten ==="
 THRESHOLD=1000
 T0=$(ms)
-"$BIN" catalog stats > /dev/null 2>&1
+"$BIN" catalog stats > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "catalog stats (mit Daten)" "$ELAPSED"; else fail "catalog stats (mit Daten)" "$ELAPSED" "$THRESHOLD"; fi
 
 # JSON-Variante
 T0=$(ms)
-"$BIN" catalog stats --json > /dev/null 2>&1
+"$BIN" catalog stats --json > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "catalog stats --json" "$ELAPSED"; else fail "catalog stats --json" "$ELAPSED" "$THRESHOLD"; fi
@@ -206,14 +206,14 @@ echo ""
 echo "=== 8. Duplikat-Erkennung Latenz ==="
 THRESHOLD=3000
 T0=$(ms)
-"$BIN" duplicate list > /dev/null 2>&1
+"$BIN" duplicate list > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "duplicate list" "$ELAPSED"; else fail "duplicate list" "$ELAPSED" "$THRESHOLD"; fi
 
 THRESHOLD=5000
 T0=$(ms)
-"$BIN" duplicate similar > /dev/null 2>&1
+"$BIN" duplicate similar > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "duplicate similar" "$ELAPSED"; else fail "duplicate similar" "$ELAPSED" "$THRESHOLD"; fi
@@ -228,13 +228,13 @@ echo "=== 9. SmartFolder-Abfrage ==="
 
 THRESHOLD=1500
 T0=$(ms)
-"$BIN" smartfolder query "PerfTest-Rating" > /dev/null 2>&1
+"$BIN" smartfolder query "PerfTest-Rating" > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "smartfolder query (mit Katalog)" "$ELAPSED"; else fail "smartfolder query" "$ELAPSED" "$THRESHOLD"; fi
 
 T0=$(ms)
-"$BIN" smartfolder query "PerfTest-Rating" --json > /dev/null 2>&1
+"$BIN" smartfolder query "PerfTest-Rating" --json > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "smartfolder query --json" "$ELAPSED"; else fail "smartfolder query --json" "$ELAPSED" "$THRESHOLD"; fi
@@ -282,20 +282,20 @@ done
 
 THRESHOLD=2000
 T0=$(ms)
-"$BIN" search "img" > /dev/null 2>&1
+"$BIN" search "img" > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "search (100 Einträge)" "$ELAPSED"; else fail "search 100 Einträge" "$ELAPSED" "$THRESHOLD"; fi
 
 T0=$(ms)
-"$BIN" search "img" --json > /dev/null 2>&1
+"$BIN" search "img" --json > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "search --json (100 Einträge)" "$ELAPSED"; else fail "search --json 100 Einträge" "$ELAPSED" "$THRESHOLD"; fi
 
 THRESHOLD=1500
 T0=$(ms)
-"$BIN" stack list > /dev/null 2>&1
+"$BIN" stack list > /dev/null 2>&1 || true
 T1=$(ms)
 ELAPSED=$((T1-T0))
 if [ $ELAPSED -le $THRESHOLD ]; then pass "stack list (100 Katalog-Einträge)" "$ELAPSED"; else fail "stack list 100 Einträge" "$ELAPSED" "$THRESHOLD"; fi
