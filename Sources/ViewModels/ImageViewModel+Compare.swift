@@ -27,6 +27,7 @@ extension ImageViewModel {
         compare.leftID = nil
         compare.rightID = nil
         compare.lastPair = []
+        compare.failedPreviewURLs = []
     }
 
     var compareLeftDocument: ImageDocument? {
@@ -79,7 +80,9 @@ extension ImageViewModel {
     ///    Duelle statt einseitiger Blowouts.
     func nextComparePair() {
         iphotoBreadcrumb("nextComparePair: start")
-        let candidates = visibleDocuments.filter { !$0.isTrashed && !$0.isBackedUp }
+        let candidates = visibleDocuments.filter {
+            !$0.isTrashed && !$0.isBackedUp && !compare.failedPreviewURLs.contains($0.url)
+        }
         guard candidates.count >= 2 else {
             compare.leftID = nil
             compare.rightID = nil
@@ -241,8 +244,13 @@ extension ImageViewModel {
                 DispatchQueue.main.async {
                     guard let self = self else { return }
                     self.compare.loadInFlight.remove(url)
-                    guard let preview = preview,
-                          let idx = self.collection.documentIndexByURL[url],
+                    guard let preview = preview else {
+                        // Permanently exclude unloadable files so compare never hangs on a nil-preview pair.
+                        self.compare.failedPreviewURLs.insert(url)
+                        self.nextComparePair()
+                        return
+                    }
+                    guard let idx = self.collection.documentIndexByURL[url],
                           self.collection.documents[idx].previewImage == nil else { return }
                     var doc = self.collection.documents[idx]
                     doc.previewImage = preview

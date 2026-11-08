@@ -86,8 +86,8 @@ enum AdjustmentRenderer {
         }
         var wbApplied = false
         if snap.warmth != 0 || snap.tint != 0 {
-            let kelvin  = Float(6500.0 - snap.warmth * 2500.0)
-            let tintVal = Float(-snap.tint * 150.0)
+            let kelvin  = Float(6500.0 - snap.warmth * 50.0)
+            let tintVal = Float(-snap.tint * 3.0)
             if keys.contains("inputNeutralTemperature") { rf.setValue(kelvin,  forKey: "inputNeutralTemperature") }
             if keys.contains("inputNeutralTint")        { rf.setValue(tintVal, forKey: "inputNeutralTint") }
             wbApplied = true
@@ -135,7 +135,7 @@ enum AdjustmentRenderer {
         if !wbApplied, snap.warmth != 0 || snap.tint != 0, let f = CIFilter(name: "CITemperatureAndTint") {
             f.setValue(out, forKey: kCIInputImageKey)
             f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-            f.setValue(CIVector(x: CGFloat(6500 - snap.warmth * 2500), y: CGFloat(-snap.tint * 150)),
+            f.setValue(CIVector(x: CGFloat(6500 - snap.warmth * 50), y: CGFloat(-snap.tint * 3)),
                        forKey: "inputTargetNeutral")
             if let r = f.outputImage { out = r }
         }
@@ -340,7 +340,7 @@ enum AdjustmentRenderer {
             if (d.warmth != 0 || d.tint != 0), let f = CIFilter(name: "CITemperatureAndTint") {
                 f.setValue(deltaCI, forKey: kCIInputImageKey)
                 f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-                f.setValue(CIVector(x: CGFloat(6500 - d.warmth * 2500), y: CGFloat(-d.tint * 150)),
+                f.setValue(CIVector(x: CGFloat(6500 - d.warmth * 50), y: CGFloat(-d.tint * 3)),
                            forKey: "inputTargetNeutral")
                 if let out = f.outputImage { deltaCI = out }
             }

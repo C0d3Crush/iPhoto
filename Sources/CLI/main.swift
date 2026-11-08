@@ -768,8 +768,8 @@ private func applyAdjustments(_ input: CIImage, state: AdjustmentState) -> CIIma
     if state.warmth != 0 || state.tint != 0, let f = CIFilter(name: "CITemperatureAndTint") {
         f.setValue(ci, forKey: kCIInputImageKey)
         f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-        f.setValue(CIVector(x: CGFloat(6500 - state.warmth * 2500),
-                            y: CGFloat(-state.tint * 150)),
+        f.setValue(CIVector(x: CGFloat(6500 - state.warmth * 50),
+                            y: CGFloat(-state.tint * 3)),
                    forKey: "inputTargetNeutral")
         if let r = f.outputImage { ci = r }
     }
@@ -4319,30 +4319,42 @@ private func runElo(_ args: [String]) -> Int32 {
         let elos = values.map { $0.elo }.sorted()
         let n = elos.count
         let totalMatches = values.reduce(0) { $0 + $1.matches }
+        let duels = totalMatches / 2
+        let played = values.filter { $0.matches > 0 }.count
         let mean = n > 0 ? elos.reduce(0, +) / Double(n) : 0
         let median: Double = n == 0 ? 0 : (n % 2 == 1 ? elos[n / 2] : (elos[n / 2 - 1] + elos[n / 2]) / 2)
-        var hist: [Int: Int] = [:]
-        for e in elos { hist[Int((e / Double(bucket)).rounded(.down)) * bucket, default: 0] += 1 }
-        let buckets = hist.keys.sorted()
+        // Fixed 6-bucket ELO distribution (same as app's compareEloBuckets)
+        let fixedBuckets: [(label: String, lo: Double, hi: Double)] = [
+            ("< 1300",    -.infinity, 1300),
+            ("1300–1400", 1300,       1400),
+            ("1400–1500", 1400,       1500),
+            ("1500–1600", 1500,       1600),
+            ("1600–1700", 1600,       1700),
+            ("≥ 1700",    1700,       .infinity)
+        ]
         if jsonMode {
-            var d: [String: Any] = [
-                "count": n, "total_matches": totalMatches, "bucket_size": bucket,
-                "unplayed": values.filter { $0.matches == 0 }.count,
-                "buckets": buckets.map { ["from": $0, "to": $0 + bucket, "count": hist[$0]!] }
-            ]
-            if n > 0 {
-                d["min"] = elos.first!; d["max"] = elos.last!
-                d["mean"] = mean; d["median"] = median
+            let bucketArr: [[String: Any]] = fixedBuckets.map { b in
+                let count = elos.filter { $0 >= b.lo && $0 < b.hi }.count
+                return ["label": b.label, "count": count] as [String: Any]
             }
+            var d: [String: Any] = [
+                "count": n, "duels": duels, "played": played, "buckets": bucketArr
+            ]
+            d["min"]    = n > 0 ? elos.first! : NSNull()
+            d["max"]    = n > 0 ? elos.last!  : NSNull()
+            d["median"] = n > 0 ? median       : NSNull()
             if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
                let s = String(data: dd, encoding: .utf8) { print(s) }
         } else {
+            var hist: [Int: Int] = [:]
+            for e in elos { hist[Int((e / Double(bucket)).rounded(.down)) * bucket, default: 0] += 1 }
+            let dynBuckets = hist.keys.sorted()
             guard n > 0 else { print("(keine ELO-Einträge im Katalog)"); return 0 }
-            print(String(format: "Einträge: %d  Duelle gesamt: %d", n, totalMatches))
+            print(String(format: "Einträge: %d  Duelle gesamt: %d  Gespielt: %d", n, duels, played))
             print(String(format: "Min: %.1f  Max: %.1f  Mittel: %.1f  Median: %.1f",
                          elos.first!, elos.last!, mean, median))
             let maxCount = hist.values.max() ?? 1
-            for b in buckets {
+            for b in dynBuckets {
                 let c = hist[b]!
                 let bar = String(repeating: "█", count: max(1, c * 30 / maxCount))
                 print(String(format: "%5d–%-5d %5d  %@", b, b + bucket, c, bar))
@@ -4798,8 +4810,8 @@ private let adjustmentSetFields: [(flag: String, range: ClosedRange<Double>, app
     ("--saturation",     0...2,      { $0.saturation = $1 }),
     ("--vibrance",       -1...1,     { $0.vibrance = $1 }),
     ("--hue",            -180...180, { $0.hue = $1 }),
-    ("--warmth",         -1...1, { $0.warmth = $1 }),
-    ("--tint",           -1...1, { $0.tint = $1 }),
+    ("--warmth",         -50...50, { $0.warmth = $1 }),
+    ("--tint",           -50...50, { $0.tint = $1 }),
     ("--clarity",        -1...1, { $0.clarity = $1 }),
     ("--texture",        -1...1, { $0.texture = $1 }),
     ("--dehaze",         -1...1, { $0.dehaze = $1 }),
@@ -4888,8 +4900,9 @@ private func runAdjustmentsSet(_ args: [String], catalog: CatalogStore, jsonMode
         var d = adjustmentSummaryDict(state)
         d["path"] = imagePath
         d["ok"] = true
-        var changed: [String] = updates.map { String(adjustmentSetFields[$0.0].flag.dropFirst(2)) }
-        if turns != nil { changed.append("turns") }
+        var changed: [String: Any] = [:]
+        for (idx, v) in updates { changed[String(adjustmentSetFields[idx].flag.dropFirst(2))] = v }
+        if let t = turns { changed["turns"] = t }
         d["changed"] = changed
         d["reset"] = reset
         printAdjustmentsJSON(d)
@@ -4907,11 +4920,13 @@ private func runAdjustmentsSet(_ args: [String], catalog: CatalogStore, jsonMode
 /// Alle Ziele werden in einer einzigen SQLite-Transaktion geschrieben.
 private func runAdjustmentsCopy(_ args: [String], catalog: CatalogStore, jsonMode: Bool) -> Int32 {
     let usage = "Verwendung: iphoto-cli adjustments copy <quelle> <ziel1> [<ziel2>...] [--exclude-geometry] [--exclude-local] [--skip-existing] [--dry-run] [--json]\n"
-    let known: Set<String> = ["--json", "--exclude-geometry", "--exclude-local", "--skip-existing", "--dry-run"]
+    let known: Set<String> = ["--json", "--include-crop", "--exclude-geometry", "--exclude-local", "--skip-existing", "--dry-run"]
     if let bad = args.first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
         fputs("Fehler: Unbekannte Option \(bad)\n", stderr); fputs(usage, stderr); return 1
     }
-    let excludeGeometry = args.contains("--exclude-geometry")
+    // Geometry (crop/rotation/turns) excluded by default; opt-in via --include-crop.
+    let includeCrop     = args.contains("--include-crop")
+    let excludeGeometry = !includeCrop || args.contains("--exclude-geometry")
     let excludeLocal    = args.contains("--exclude-local")
     let skipExisting    = args.contains("--skip-existing")
     let dryRun          = args.contains("--dry-run")
@@ -4959,6 +4974,7 @@ private func runAdjustmentsCopy(_ args: [String], catalog: CatalogStore, jsonMod
             "skipped": skipped,
             "copied": dryRun ? items.count : written,
             "dry_run": dryRun,
+            "include_crop": includeCrop,
             "exclude_geometry": excludeGeometry,
             "exclude_local": excludeLocal,
             "ok": dryRun || written == items.count

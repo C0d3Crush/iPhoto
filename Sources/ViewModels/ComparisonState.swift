@@ -16,6 +16,9 @@ final class ComparisonState: ObservableObject {
     @Published var dailyCount: Int = ComparisonState.loadDailyCount() { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     var loadInFlight: Set<URL> = []
     var lastPair: Set<UUID> = []
+    /// URLs for which preview loading permanently failed (file missing/unreadable).
+    /// Excluded from nextComparePair so compare never hangs on an unloadable pair.
+    var failedPreviewURLs: Set<URL> = []
 
     static func todayString() -> String {
         let f = DateFormatter()

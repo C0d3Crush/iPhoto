@@ -2,6 +2,17 @@
 
 ---
 
+## 1.106.19
+**Bug #39: Compare-SIGILL bei fehlenden Dateien + elo stats Format + Wärme/Farbstich-Range**
+
+- Compare-Modus: `ensureComparePreview` markiert nicht ladbare Dateien dauerhaft in `failedPreviewURLs` und ruft sofort `nextComparePair()` auf — Compare-View bleibt nie auf einem unlösbaren Paar hängen, was den verzögerten SIGILL verhindert (#39)
+- `elo stats --json`: 6 fixe ELO-Buckets mit `label`-Feld (wie App-Histogramm); `duels` = Gesamtduelle, `played` = gespielte Bilder; `min`/`max`/`median` immer vorhanden (null bei leerem Katalog)
+- Wärme-/Farbstich-Slider: Range von `±1` auf `±50` erweitert; Rendering-Formel angepasst (`* 50` statt `* 2500`)
+- `adjustments set --json`: `changed`-Feld ist jetzt ein Dict (Feldname → Wert) statt Liste
+- `adjustments copy`: Geometrie (Zuschnitt/Rotation/Drehungen) standardmäßig ausgeschlossen; `--include-crop` als Opt-in; `include_crop`-Feld in JSON-Ausgabe
+
+---
+
 ## 1.106.18
 **Batch-Writes + async SQLite in Save/Selection/Quality/Adjustments**
 

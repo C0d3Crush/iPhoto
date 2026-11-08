@@ -2719,7 +2719,7 @@ ep() { IPHOTO_CATALOG_DB="$EP_DB" "$BIN" "$@"; }
 
 # Leerer Katalog: stats liefert count 0
 EP_OUT=$(ep elo stats --json 2>/dev/null) || true
-if echo "$EP_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==0 and d['buckets']==[]" 2>/dev/null; then
+if echo "$EP_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==0 and len(d['buckets'])==6 and d['min'] is None" 2>/dev/null; then
     pass "elo stats --json (leerer Katalog)"
 else
     fail "elo stats (leer)" "$EP_OUT"
@@ -2762,9 +2762,10 @@ fi
 EP_OUT=$(ep elo stats --json 2>/dev/null) || true
 if echo "$EP_OUT" | python3 -c "
 import sys,json; d=json.load(sys.stdin)
-assert d['count']==3 and d['total_matches']==14 and d['unplayed']==1
+assert d['count']==3 and d['duels']==7 and d['played']==2
 assert d['min']==1400 and d['max']==1800 and abs(d['median']-1450)<0.01
-assert {b['from']:b['count'] for b in d['buckets']}=={1400:2,1800:1}
+b={x['label']:x['count'] for x in d['buckets']}
+assert b['1400–1500']==2 and b['≥ 1700']==1 and b['< 1300']==0
 " 2>/dev/null; then
     pass "elo stats --json (Count/Median/Buckets)"
 else
@@ -2774,9 +2775,9 @@ fi
 EP_OUT=$(ep elo stats --bucket 500 --json 2>/dev/null) || true
 if echo "$EP_OUT" | python3 -c "
 import sys,json; d=json.load(sys.stdin)
-assert d['bucket_size']==500 and {b['from']:b['count'] for b in d['buckets']}=={1000:2,1500:1}
+assert len(d['buckets'])==6 and d['count']==3
 " 2>/dev/null; then
-    pass "elo stats --bucket 500"
+    pass "elo stats --bucket 500 (JSON immer 6 Buckets)"
 else
     fail "elo stats --bucket" "$EP_OUT"
 fi

@@ -36,8 +36,8 @@ struct AdjustmentsPanel: View {
             .init(label: "Farbton",          key: \.hue,           range: -180...180,    format: "%+.0f°",  neutral: 0),
         ]),
         AdjSection(id: "weiss", label: "Weißabgleich", icon: "thermometer.medium", hasAuto: false, rows: [
-            .init(label: "Wärme",            key: \.warmth,        range: -1...1,        format: "%+.2f",   neutral: 0),
-            .init(label: "Farbstich",        key: \.tint,          range: -1...1,        format: "%+.2f",   neutral: 0),
+            .init(label: "Wärme",            key: \.warmth,        range: -50...50,      format: "%+.0f",   neutral: 0),
+            .init(label: "Farbstich",        key: \.tint,          range: -50...50,      format: "%+.0f",   neutral: 0),
         ]),
         AdjSection(id: "aufl", label: "Auflösung", icon: "sparkles", hasAuto: true, rows: [
             .init(label: "Klarheit",         key: \.clarity,       range: -1...1,        format: "%+.2f",   neutral: 0),
