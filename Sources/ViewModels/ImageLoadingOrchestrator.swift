@@ -83,6 +83,29 @@ final class ImageLoadingOrchestrator {
     var switchStartedAt: Date? = nil
     var switchLoggedFirstFrame: Bool = false
 
+    // Computes per-channel (R, G, B) averages as 0–100 % from a CGImage on a BG thread (#31).
+    static func computeColorRatios(_ cgImg: CGImage) -> (Double?, Double?, Double?) {
+        let w = cgImg.width, h = cgImg.height
+        guard w > 0, h > 0 else { return (nil, nil, nil) }
+        let bpp = 4, bpr = bpp * w
+        var pixels = [UInt8](repeating: 0, count: bpr * h)
+        guard let ctx = CGContext(
+            data: &pixels, width: w, height: h,
+            bitsPerComponent: 8, bytesPerRow: bpr,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return (nil, nil, nil) }
+        ctx.draw(cgImg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var rSum: Double = 0, gSum: Double = 0, bSum: Double = 0
+        var i = 0
+        while i < pixels.count {
+            rSum += Double(pixels[i]); gSum += Double(pixels[i+1]); bSum += Double(pixels[i+2])
+            i += bpp
+        }
+        let n = Double(w * h) * 2.55
+        return (rSum / n, gSum / n, bSum / n)
+    }
+
     // Loggt Millisekunden seit `switchStartedAt` mit Kategorielabel (cache/preview/full).
     // Nur der *erste* Frame pro Switch zählt — sonst überschriebe der spätere
     // Full-Res-Decode die eigentliche Nutzer-Wahrnehmung des Bild-Switchens.
@@ -478,6 +501,9 @@ final class ImageLoadingOrchestrator {
                     defer { stopAccess() }
                     let nsImage: NSImage?
                     var decodeError: String? = nil
+                    var colorR: Double? = nil
+                    var colorG: Double? = nil
+                    var colorB: Double? = nil
                     do {
                         let cg: CGImage
                         if let cached = ThumbnailDiskCache.shared.load(for: accessURL, maxDimension: 80) {
@@ -487,6 +513,8 @@ final class ImageLoadingOrchestrator {
                             ThumbnailDiskCache.shared.save(decoded, for: accessURL, maxDimension: 80)
                             cg = decoded
                         }
+                        // Compute R/G/B averages once here on BG thread (#31).
+                        (colorR, colorG, colorB) = Self.computeColorRatios(cg)
                         nsImage = NSImage(cgImage: cg, size: .zero)
                     } catch {
                         Log.error("Thumbnail-Decode fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
@@ -499,6 +527,9 @@ final class ImageLoadingOrchestrator {
                         if let idx = host.collection.documents.firstIndex(where: { $0.url == url }) {
                             if let img = nsImage, host.collection.documents[idx].thumbnailImage == nil {
                                 host.collection.documents[idx].placeholderThumbnailImage = img
+                                if let r = colorR { host.collection.documents[idx].colorRatioR = r }
+                                if let g = colorG { host.collection.documents[idx].colorRatioG = g }
+                                if let b = colorB { host.collection.documents[idx].colorRatioB = b }
                             } else if let msg = decodeError,
                                       host.collection.documents[idx].errorMessage == nil {
                                 host.collection.documents[idx].errorMessage = msg

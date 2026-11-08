@@ -78,6 +78,12 @@ struct ImageDocument: Identifiable, Equatable {
     var motifTags: [String]? = nil
     var motifScanned: Bool = false
 
+    // Cached R/G/B channel averages (0–100 %) for colorRatio smart-folder criteria.
+    // Computed once when the thumbnail is decoded on a BG thread (#31).
+    var colorRatioR: Double? = nil
+    var colorRatioG: Double? = nil
+    var colorRatioB: Double? = nil
+
     var filename: String { url.lastPathComponent }
     /// Standardized path computed once at init — avoids per-filter URL.standardized allocation (#13).
     let standardizedPath: String

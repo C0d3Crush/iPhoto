@@ -2,6 +2,17 @@
 
 ---
 
+## 1.106.6
+**VersionStore serial queue + Retention; colorRatio gecacht (#31 #64)**
+
+- `VersionStore`: private serielle `DispatchQueue` serialisiert alle `index.json`-Mutationen — kein Race mehr zwischen parallelen `backupFile`/`deleteVersion`-Aufrufen; `versionDir` legt Verzeichnis nur noch in `backupFile` an statt bei jedem Read (#64)
+- `VersionStore.backupFile`: Retention-Policy — max. 20 Versionen pro Datei, älteste werden beim Überschreiten automatisch gelöscht (#64)
+- `VersionStore.deleteVersion`: läuft jetzt asynchron auf der seriellen Queue statt synchron auf dem Main-Thread (#64)
+- `ImageDocument.colorRatioR/G/B`: neue gecachte Felder für R/G/B-Kanal-Mittelwerte; werden bei der Thumbnail-Dekodierung im BG-Thread berechnet (`computeColorRatios`)
+- `colorChannelRatio`: liest gecachten Wert statt pro Auswertung Bitmap zu allozieren und zu zeichnen (#31)
+
+---
+
 ## 1.106.5
 **computeVisibleDocuments: standardizedPath gecacht; WatchedFolder-Pfad gecacht (#13)**
 
