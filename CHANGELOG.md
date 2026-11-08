@@ -2,6 +2,14 @@
 
 ---
 
+## 1.106.0
+**CLI: Projekte verwalten (`iphoto-cli project`)**
+
+- Neuer Befehl `iphoto-cli project list|show|create|rename|delete|add-folder|remove-folder` bearbeitet dieselbe `projects.json` wie die Projekt-Auswahl der App
+- `--json` liefert pro Projekt ID, Name, Ordner, Anlage-/Öffnungsdatum und `missing_folders` (nicht mehr erreichbare Ordner)
+- Namen sind eindeutig (Groß-/Kleinschreibung egal); Ordner werden beim Hinzufügen auf Existenz geprüft, fehlende Ordner lassen sich trotzdem entfernen
+- Beschädigte `projects.json` wird nie überschrieben; Datei per `IPHOTO_PROJECTS_FILE` überschreibbar (Tests)
+
 ## 1.105.4
 **Code-Qualität: VerboseLogView in eigene Datei ausgelagert**
 

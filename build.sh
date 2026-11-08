@@ -179,6 +179,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Models/StackDetector.swift \
     $ROOT/Sources/Models/SmartFolder.swift \
     $ROOT/Sources/Models/SearchParser.swift \
+    $ROOT/Sources/Models/Project.swift \
     $ROOT/Sources/Utilities/Data+Extensions.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \
     $ROOT/Sources/Utilities/Log.swift \
