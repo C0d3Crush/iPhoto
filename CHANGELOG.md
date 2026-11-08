@@ -2,6 +2,16 @@
 
 ---
 
+## 1.106.12
+**yearGroups-Cache im ViewModel: O(N)-Regrouping nur noch bei echter Änderung (#7)**
+
+- `ImageViewModel`: `yearGroupsCache`, `yearGroupsCacheRevision`, `yearGroupsCacheKey` als Session-Cache für die Jahresgruppen-Berechnung (#7)
+- `ImageViewModel+Context.swift`: `var yearGroups` — gecachte Property, identisch schlüssel-gecacht wie `visibleDocuments`; wird nur neu berechnet wenn sich `navSelection`, `sortCriterion`, `visibleOrderVersion` oder `documentsRevision` ändert (#7)
+- `invalidateVisibleOrder()`: setzt `yearGroupsCache = nil` mit (#7)
+- `LibraryFullGridView`: delegiert `yearGroups`-Berechnung an den ViewModel-Cache statt O(N)-Regrouping pro SwiftUI-Body-Evaluation (#7)
+
+---
+
 ## 1.106.11
 **Rating/Flag/Label: N @Published-Writes → 1 Batch-Write + kein sync SQLite auf Main (#4)**
 

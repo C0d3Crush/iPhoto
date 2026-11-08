@@ -86,6 +86,44 @@ extension ImageViewModel {
     func invalidateVisibleOrder() {
         visibleOrderVersion &+= 1
         visiblePositionCache = nil
+        yearGroupsCache = nil
+    }
+
+    /// Year-groups for LibraryFullGridView, cached per visibleDocuments (#7).
+    /// Avoids O(N) regrouping on every SwiftUI body re-evaluation.
+    var yearGroups: [(year: String, documents: [ImageDocument])] {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let key = VisibleOrderKey(count: collection.documents.count, nav: navSelection,
+                                  sort: sortCriterion, shuffle: shuffledOrder,
+                                  version: visibleOrderVersion, expanded: expandedStacks,
+                                  search: searchQuery)
+        if let cached = yearGroupsCache,
+           key == yearGroupsCacheKey,
+           yearGroupsCacheRevision == collection.documentsRevision {
+            return cached
+        }
+        let docs = visibleDocuments
+        var grouped: [String: [ImageDocument]] = [:]
+        for doc in docs {
+            let year: String
+            if let val = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value,
+               val.count >= 4, let y = Int(val.prefix(4)), y > 1800 {
+                year = String(y)
+            } else {
+                year = "Ohne Datum"
+            }
+            grouped[year, default: []].append(doc)
+        }
+        let sorted = grouped.keys.sorted { a, b in
+            if a == "Ohne Datum" { return false }
+            if b == "Ohne Datum" { return true }
+            return a > b
+        }
+        let result = sorted.map { (year: $0, documents: grouped[$0]!) }
+        yearGroupsCache = result
+        yearGroupsCacheKey = key
+        yearGroupsCacheRevision = collection.documentsRevision
+        return result
     }
 
     private static func buildPositions(_ docs: [ImageDocument]) -> [UUID: Int] {

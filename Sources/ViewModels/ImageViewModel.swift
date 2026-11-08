@@ -180,6 +180,11 @@ class ImageViewModel: ObservableObject {
     // in next()/previous()/evictDistantImages/Grid-Views (bisher O(N) pro Aufruf,
     // bei 10k+ Bildern spürbar). Gebaut synchron zu visibleResolvedCache.
     var visiblePositionCache: [UUID: Int]? = nil
+    // yearGroups-Cache für LibraryFullGridView (#7): verhindert N-faches O(N)-Regrouping
+    // pro SwiftUI-Render-Zyklus. Invalidiert gemeinsam mit visibleResolvedCache.
+    var yearGroupsCache: [(year: String, documents: [ImageDocument])]? = nil
+    var yearGroupsCacheRevision: UInt64 = 0
+    var yearGroupsCacheKey: VisibleOrderKey? = nil
 
     // Serienbild-/Bracketing-Stapel (Fuji 0x1101 SequenceNumber):
     // Anführer-Pfad → aufgeklappt; Zähler/Zuordnung als Nebenprodukt der Order-Berechnung.

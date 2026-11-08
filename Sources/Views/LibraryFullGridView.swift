@@ -18,23 +18,7 @@ struct LibraryFullGridView: View {
     @StateObject private var scroller = AppKitScroller()
 
     private var yearGroups: [YearGroup] {
-        var grouped: [String: [ImageDocument]] = [:]
-        for doc in viewModel.visibleDocuments {
-            let year: String
-            if let val = doc.metadata.first(where: { $0.key == "exif.DateTimeOriginal" })?.value,
-               val.count >= 4, let y = Int(val.prefix(4)), y > 1800 {
-                year = String(y)
-            } else {
-                year = "Ohne Datum"
-            }
-            grouped[year, default: []].append(doc)
-        }
-        let sorted = grouped.keys.sorted { a, b in
-            if a == "Ohne Datum" { return false }
-            if b == "Ohne Datum" { return true }
-            return a > b
-        }
-        return sorted.map { YearGroup(year: $0, documents: grouped[$0]!) }
+        viewModel.yearGroups.map { YearGroup(year: $0.year, documents: $0.documents) }
     }
 
     private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv"]
