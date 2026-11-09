@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.44
+**Refactor: AlbumBannerView und ToolbarSearchField aus ContentView extrahiert**
+
+- `AlbumBannerView` (248 Zeilen) in eigene Datei `Sources/Views/AlbumBannerView.swift` ausgelagert
+- `ToolbarSearchField` (193 Zeilen) in eigene Datei `Sources/Views/ToolbarSearchField.swift` ausgelagert
+- `ContentView.swift` von 1343 auf 885 Zeilen reduziert — bessere Lesbarkeit und schnelleres Navigieren
+
+---
+
 ## 1.106.43
 **Bugfix: Projekt-Ordner lädt keine Bilder wenn er ein Album-Ordner (iPhoto/Alben/…) ist**
 
