@@ -2,6 +2,15 @@
 
 ---
 
+## 1.106.45
+**Refactor: Sidebar-Zeilenvarianten und Sheets aus NavSidebarView extrahiert**
+
+- Zeilenkomponenten (`AlbumRow`, `FolderRow`, `SidebarSubfolderRow`, `SidebarFileRow`, `VolumeRow`, `NavSectionDropDelegate`) in `NavSidebarRows.swift` ausgelagert
+- Sheet-Komponenten (`AlbumNameSheet`, `MoveToGroupSheet`, `GroupRenameSheet`) in `NavSidebarSheets.swift` ausgelagert
+- `NavSidebarView.swift` von 1661 auf 1170 Zeilen reduziert — Hauptnavigationslogik klar von UI-Unterkomponenten getrennt
+
+---
+
 ## 1.106.44
 **Refactor: AlbumBannerView und ToolbarSearchField aus ContentView extrahiert**
 
