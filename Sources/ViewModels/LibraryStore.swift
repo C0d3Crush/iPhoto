@@ -74,6 +74,10 @@ final class LibraryStore: ObservableObject {
     // Fehlende Datei = Erststart (kein Fehler). Vorhandene, aber unlesbare Datei
     // wird gemeldet — der nächste save() würde sie sonst kommentarlos überschreiben.
     private func load<T: Decodable>(_ type: T.Type, from url: URL, description: String) -> T? {
+        // Barriere: ausstehende async-Saves (auch anderer Instanzen) erst abschließen,
+        // sonst liest ein Load direkt nach einem Save den alten Stand. Load passiert nur
+        // beim Start — die Queue ist dann praktisch immer leer, Kosten ≈ 0.
+        LibraryStore.persistQueue.sync {}
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         do {
             let data = try Data(contentsOf: url)
@@ -97,9 +101,13 @@ final class LibraryStore: ObservableObject {
 
     // Encoder + atomic write auf Utility-Queue — kein Haupt-Thread-Blocking für
     // JSON-Encode (100–600 µs bei 30+ Alben) + Disk-Write (.atomic = rename-after-write).
+    // Seriell statt global-concurrent: zwei schnell aufeinanderfolgende Saves derselben
+    // Datei dürfen sich nicht überholen (sonst gewinnt evtl. der ältere Stand).
+    private static let persistQueue = DispatchQueue(label: "iPhoto.LibraryStore.persist", qos: .utility)
+
     private func asyncPersist<T: Encodable>(_ value: T, to url: URL, description: String) {
         let capturedURL = url
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        LibraryStore.persistQueue.async { [weak self] in
             guard let data = try? JSONEncoder().encode(value) else { return }
             do {
                 try data.write(to: capturedURL, options: .atomic)

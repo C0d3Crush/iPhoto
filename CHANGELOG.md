@@ -2,6 +2,14 @@
 
 ---
 
+## 1.107.1
+**Bugfix: Alben/Ordner-Speichern in fester Reihenfolge**
+
+- Speichern von Alben, intelligenten und überwachten Ordnern läuft jetzt über eine serielle Queue — schnell aufeinanderfolgende Änderungen können sich nicht mehr überholen (vorher konnte ein älterer Stand gewinnen)
+- Laden wartet auf ausstehende Speichervorgänge — behebt die seit 1.106.x roten LibraryStore-Tests in CI
+
+---
+
 ## 1.107.0
 **CLI: Bildarchiv-Markierungen per `iphoto-cli archive` verwalten**
 
