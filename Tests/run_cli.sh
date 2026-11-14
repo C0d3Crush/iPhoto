@@ -149,7 +149,7 @@ QSCAN=$("$BIN" quality scan "$INPUT" 2>&1)
 if echo "$QSCAN" | grep -qE 'blur=|analysiert'; then pass "quality scan (Blur-Score ausgegeben)"; else fail "quality scan" "$QSCAN"; fi
 
 # quality scan --json
-QSCAN_JSON=$("$BIN" quality scan "$INPUT" --json 2>&1)
+QSCAN_JSON=$("$BIN" quality scan "$INPUT" --json 2>/dev/null) || true
 if echo "$QSCAN_JSON" | python3 -c "import sys,json; lst=json.load(sys.stdin); assert isinstance(lst,list) and 'blur' in lst[0]" 2>/dev/null; then
     pass "quality scan --json (valides JSON mit 'blur')"; else fail "quality scan --json" "$QSCAN_JSON"; fi
 
@@ -168,7 +168,7 @@ mkdir -p "$QSCAN_DIR"; cp "$INPUT" "$QSCAN_DIR/img1.png"; cp "$INPUT" "$QSCAN_DI
 QSCAN_D=$("$BIN" quality scan "$QSCAN_DIR" 2>&1)
 if echo "$QSCAN_D" | grep -q "Gesamt: 2"; then pass "quality scan <Ordner> (2 Bilder)"; else fail "quality scan <Ordner>" "$QSCAN_D"; fi
 
-QSCAN_DJ=$("$BIN" quality scan "$QSCAN_DIR" --json 2>&1)
+QSCAN_DJ=$("$BIN" quality scan "$QSCAN_DIR" --json 2>/dev/null) || true
 if echo "$QSCAN_DJ" | python3 -c "import sys,json; a=json.load(sys.stdin); assert len(a)==2" 2>/dev/null; then
     pass "quality scan <Ordner> --json (2 Einträge)"; else fail "quality scan <Ordner> --json" "$QSCAN_DJ"; fi
 

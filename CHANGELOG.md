@@ -2,6 +2,13 @@
 
 ---
 
+## 1.107.2
+**Tests: `quality scan --json` in CI stabil**
+
+- CLI-Tests lesen bei `quality scan --json` nur noch stdout — Vision-Framework-Logzeilen auf stderr verfälschen das JSON nicht mehr (CI wieder grün)
+
+---
+
 ## 1.107.1
 **Bugfix: Alben/Ordner-Speichern in fester Reihenfolge**
 
