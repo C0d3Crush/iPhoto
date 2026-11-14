@@ -2,6 +2,16 @@
 
 ---
 
+## 1.107.0
+**CLI: Bildarchiv-Markierungen per `iphoto-cli archive` verwalten**
+
+- `archive list` zeigt alle als archiviert (gesichert) markierten Bilder
+- `archive mark <pfad> …` / `archive unmark <pfad> …|--all` setzen bzw. entfernen die Archiv-Markierung in einer Transaktion
+- `archive pending` listet Katalogbilder, die noch nicht archiviert sind (Papierkorb ausgeschlossen, `--include-trashed` nimmt ihn mit), inkl. Gesamtgröße
+- Alle Befehle mit `--json`; neue Tests in `Tests/run_plugins.sh`
+
+---
+
 ## 1.106.45
 **Refactor: Sidebar-Zeilenvarianten und Sheets aus NavSidebarView extrahiert**
 

@@ -107,6 +107,10 @@ private func printUsage() {
       iphoto-cli trash mark-rejected [--dry-run] [--json]
       iphoto-cli trash restore <bildpfad>|--all [--json]
       iphoto-cli trash empty [--json]
+      iphoto-cli archive list [--json]
+      iphoto-cli archive mark <bildpfad> [...] [--json]
+      iphoto-cli archive unmark <bildpfad> [...]|--all [--json]
+      iphoto-cli archive pending [--include-trashed] [--json]
       iphoto-cli elo get <bildpfad> [--json]
       iphoto-cli elo list [--json]
       iphoto-cli elo set <bildpfad> <wert> [--matches N] [--json]
@@ -2790,6 +2794,91 @@ private func runTrash(_ args: [String]) -> Int32 {
 
     default:
         fputs("Verwendung: iphoto-cli trash list|mark|mark-rejected|restore|empty [opts]\n", stderr)
+        return 1
+    }
+}
+
+// MARK: - Archive (Bildarchiv / backed_up)
+
+private func runArchive(_ args: [String]) -> Int32 {
+    let usage = "Verwendung: iphoto-cli archive list|mark|unmark|pending [opts]\n"
+    guard let sub = args.first else { fputs(usage, stderr); return 1 }
+    let jsonMode = args.contains("--json")
+    let rest = Array(args.dropFirst())
+    let positional = rest.filter { !$0.hasPrefix("-") }
+    let flags = rest.filter { $0.hasPrefix("-") }
+
+    func emit(_ obj: [String: Any]) {
+        if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: d, encoding: .utf8) { print(s) }
+    }
+
+    switch sub {
+    case "list":
+        guard positional.isEmpty, flags.allSatisfy({ $0 == "--json" }) else {
+            fputs("Verwendung: iphoto-cli archive list [--json]\n", stderr); return 1
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        let paths = catalog.backedUpPaths().sorted()
+        if jsonMode {
+            emit(["paths": paths, "count": paths.count])
+        } else if paths.isEmpty {
+            print("(keine archivierten Bilder)")
+        } else {
+            paths.forEach { print($0) }
+        }
+        return 0
+
+    case "mark":
+        guard !positional.isEmpty, flags.allSatisfy({ $0 == "--json" }) else {
+            fputs("Verwendung: iphoto-cli archive mark <bildpfad> [...] [--json]\n", stderr); return 1
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        let unique = Array(Set(positional)).sorted()
+        catalog.setBackedUp(paths: unique, true)
+        if jsonMode { emit(["count": unique.count, "ok": true]) }
+        else { print("\(unique.count) Bild(er) als archiviert markiert") }
+        return 0
+
+    case "unmark":
+        let all = rest.contains("--all")
+        guard flags.allSatisfy({ $0 == "--json" || $0 == "--all" }),
+              all ? positional.isEmpty : !positional.isEmpty else {
+            fputs("Verwendung: iphoto-cli archive unmark <bildpfad> [...]|--all [--json]\n", stderr); return 1
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        let existing = catalog.backedUpPaths()
+        let targets = all ? Array(existing) : positional.filter { existing.contains($0) }
+        catalog.setBackedUp(paths: targets, false)
+        if jsonMode { emit(["count": targets.count, "ok": true]) }
+        else { print("\(targets.count) Archiv-Markierung(en) entfernt") }
+        return 0
+
+    case "pending":
+        // Katalogbilder, die noch nicht archiviert und nicht im Papierkorb sind.
+        let allowed: Set<String> = ["--json", "--include-trashed"]
+        guard positional.isEmpty, flags.allSatisfy({ allowed.contains($0) }) else {
+            fputs("Verwendung: iphoto-cli archive pending [--include-trashed] [--json]\n", stderr); return 1
+        }
+        let catalog = CatalogStore(dbPath: envDBPath())
+        let backed = catalog.backedUpPaths()
+        let trashed: Set<String> = rest.contains("--include-trashed") ? [] : catalog.trashedPaths()
+        let pending = catalog.allImages()
+            .filter { !backed.contains($0.path) && !trashed.contains($0.path) }
+            .sorted { $0.path < $1.path }
+        let bytes = pending.reduce(Int64(0)) { $0 + $1.sizeBytes }
+        if jsonMode {
+            emit(["paths": pending.map { $0.path }, "count": pending.count, "bytes": bytes])
+        } else {
+            pending.forEach { print($0.path) }
+            let fmt = ByteCountFormatter()
+            fmt.countStyle = .file
+            print("\(pending.count) Bild(er) noch nicht archiviert (\(fmt.string(fromByteCount: bytes)))")
+        }
+        return 0
+
+    default:
+        fputs(usage, stderr)
         return 1
     }
 }
@@ -6957,6 +7046,9 @@ if firstArg == "storage" {
 }
 if firstArg == "trash" {
     exit(runTrash(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "archive" {
+    exit(runArchive(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "adjustments" {
     exit(runAdjustments(Array(rawArgs.dropFirst(2))))

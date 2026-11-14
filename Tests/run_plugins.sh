@@ -3263,6 +3263,75 @@ unset IPHOTO_PROJECTS_FILE
 echo ""
 
 # ---------------------------------------------------------------------------
+# archive (Bildarchiv: list/mark/unmark/pending)
+# ---------------------------------------------------------------------------
+echo "--- archive ---"
+AR_DB="$TMPDIR/ar_catalog.db"
+AR_A="$TMPDIR/ar_a.png"; AR_B="$TMPDIR/ar_b.png"; AR_C="$TMPDIR/ar_c.png"
+cp "$INPUT_PNG" "$AR_A"; cp "$INPUT_PNG" "$AR_B"; cp "$INPUT_PNG" "$AR_C"
+arc() { IPHOTO_CATALOG_DB="$AR_DB" "$BIN" "$@"; }
+
+AR_EXIT=0
+AR_OUT=$(arc archive list --json 2>&1) || AR_EXIT=$?
+if [ $AR_EXIT -eq 0 ] && echo "$AR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==0 and d['paths']==[]" 2>/dev/null; then
+    pass "archive list --json (leer)"
+else
+    fail "archive list --json (leer)" "Exit $AR_EXIT: $AR_OUT"
+fi
+
+arc catalog add "$AR_A" "$AR_B" "$AR_C" > /dev/null 2>&1 || true
+arc trash mark "$AR_C" > /dev/null 2>&1 || true
+
+AR_EXIT=0
+AR_OUT=$(arc archive mark "$AR_A" "$AR_A" --json 2>&1) || AR_EXIT=$?
+AR_LIST=$(arc archive list --json 2>&1) || true
+if [ $AR_EXIT -eq 0 ] && echo "$AR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['count']==1" 2>/dev/null \
+   && echo "$AR_LIST" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==1 and d['paths'][0].endswith('ar_a.png')" 2>/dev/null; then
+    pass "archive mark --json (Duplikate zusammengefasst)"
+else
+    fail "archive mark --json" "Exit $AR_EXIT: $AR_OUT | $AR_LIST"
+fi
+
+AR_EXIT=0
+AR_OUT=$(arc archive pending --json 2>&1) || AR_EXIT=$?
+if [ $AR_EXIT -eq 0 ] && echo "$AR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==1 and d['paths'][0].endswith('ar_b.png') and d['bytes']>0" 2>/dev/null; then
+    pass "archive pending --json (archiviert + Papierkorb ausgeschlossen)"
+else
+    fail "archive pending --json" "Exit $AR_EXIT: $AR_OUT"
+fi
+
+AR_OUT=$(arc archive pending --include-trashed --json 2>&1) || true
+if echo "$AR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==2" 2>/dev/null; then
+    pass "archive pending --include-trashed"
+else
+    fail "archive pending --include-trashed" "$AR_OUT"
+fi
+
+AR_EXIT=0
+AR_OUT=$(arc archive unmark --all --json 2>&1) || AR_EXIT=$?
+AR_LIST=$(arc archive list --json 2>&1) || true
+if [ $AR_EXIT -eq 0 ] && echo "$AR_OUT" | python3 -c "import sys,json; assert json.load(sys.stdin)['count']==1" 2>/dev/null \
+   && echo "$AR_LIST" | python3 -c "import sys,json; assert json.load(sys.stdin)['count']==0" 2>/dev/null; then
+    pass "archive unmark --all"
+else
+    fail "archive unmark --all" "Exit $AR_EXIT: $AR_OUT | $AR_LIST"
+fi
+
+AR_ERR=0
+arc archive mark > /dev/null 2>&1 || AR_ERR=$?
+if [ $AR_ERR -ne 0 ]; then pass "archive mark ohne Pfad (Fehler)"; else fail "archive mark ohne Pfad" "Hätte fehlschlagen sollen"; fi
+
+AR_ERR=0
+arc archive unmark "$AR_A" --all > /dev/null 2>&1 || AR_ERR=$?
+if [ $AR_ERR -ne 0 ]; then pass "archive unmark Pfad + --all (Fehler)"; else fail "archive unmark Pfad + --all" "Hätte fehlschlagen sollen"; fi
+
+AR_ERR=0
+arc archive frobnicate > /dev/null 2>&1 || AR_ERR=$?
+if [ $AR_ERR -ne 0 ]; then pass "archive unbekannter Unterbefehl (Fehler)"; else fail "archive unbekannter Unterbefehl" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
