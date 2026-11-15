@@ -2,6 +2,16 @@
 
 ---
 
+## 1.107.3
+**Refactor: NavSidebarSection und SearchBarView in eigene Dateien extrahiert**
+
+- `NavSidebarSection`-Enum aus `NavSidebarView.swift` in `NavSidebarSection.swift` verschoben — der Typ wird in drei weiteren Dateien genutzt und gehört nicht in eine View-Datei
+- `SearchBarView` aus `NavSidebarView.swift` in `SearchBarView.swift` verschoben — eigenständige Komponente, bereits von `AlbumGridExpandedView` und `NavSidebarView` verwendet
+- Unbenutztes `kNavSectionDragType`-Konstante entfernt (toter Code)
+- `NavSidebarView.swift` von 1170 auf 880 Zeilen reduziert
+
+---
+
 ## 1.107.2
 **Tests: `quality scan --json` in CI stabil**
 
