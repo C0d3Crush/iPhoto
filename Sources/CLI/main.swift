@@ -59,6 +59,8 @@ private func printUsage() {
       iphoto-cli motif rename <alt> <neu> [--dry-run] [--json]
       iphoto-cli motif remove <tag> [--dry-run] [--json]
       iphoto-cli duplicate list|similar [--json]
+      iphoto-cli duplicate regroup [--threshold 0-64] [--dry-run] [--json]
+      iphoto-cli duplicate clear [--exact|--similar|--all] [--json]
       iphoto-cli config show|get <key>|set <key> <wert>|export [--path <pfad>]|import <pfad>
       iphoto-cli metadata get <bildpfad> [--json]
       iphoto-cli metadata set <bildpfad> [--title X] [--caption X] [--keywords X]
@@ -186,6 +188,7 @@ private func printUsage() {
               predict: Gewinnchance + ELO-Prognose ohne Speichern; stats: Verteilung/Histogramm
               suggest: nächste Duell-Paare (wenig gespielt + ähnliches ELO)
     duplicate:Duplikate und ähnliche Bilder aus dem Katalog anzeigen
+              regroup: Ähnlichkeitsgruppen aus gespeicherten pHashes neu berechnen; clear: Gruppen zurücksetzen
     config:   Einstellungen anzeigen, lesen (get <key>), schreiben (set <key> <wert>), ex-/importieren
     query:    App-Suchsyntax (bewertung:5 typ:raw vor:2024 nach:2023-06 kamera:x album:x markiert:pick
               unscharf:ja motiv:x elo:>=1600 farbe:rot + Freitext) parsen oder gegen den Katalog ausführen
@@ -5184,8 +5187,98 @@ private func runDuplicate(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "regroup":
+        // duplicate regroup [--threshold N] [--dry-run] [--json]
+        // Berechnet die Ähnlichkeitsgruppen aus den bereits persistierten pHashes neu
+        // (identisch zu "Neu gruppieren" in der App): kein Decode, ein Bulk-SELECT +
+        // Seed-and-Pull im Rust-Core. Papierkorb-Bilder werden ausgelassen.
+        let usage = "Verwendung: iphoto-cli duplicate regroup [--threshold 0-64] [--dry-run] [--json]\n"
+        var threshold = SimilarityGrouper.defaultMaxHammingDistance
+        var rest = Array(args.dropFirst())
+        if let ti = rest.firstIndex(of: "--threshold") {
+            guard ti + 1 < rest.count, let t = Int(rest[ti + 1]), (0...64).contains(t) else {
+                fputs("Fehler: --threshold erwartet eine Ganzzahl 0–64\n", stderr)
+                fputs(usage, stderr); return 1
+            }
+            threshold = t
+            rest.removeSubrange(ti...(ti + 1))
+        }
+        let unknown = rest.filter { $0 != "--json" && $0 != "--dry-run" }
+        guard unknown.isEmpty else {
+            fputs("Fehler: Unbekannte Argumente: \(unknown.joined(separator: " "))\n", stderr)
+            fputs(usage, stderr); return 1
+        }
+        let dryRun = rest.contains("--dry-run")
+        let trashed = catalog.trashedPaths()
+        let records = catalog.allQualityRecords()
+        var docs: [ImageDocument] = []
+        docs.reserveCapacity(records.count)
+        for (path, rec) in records where !trashed.contains(path) {
+            guard let h = rec.phash, let v = rec.phashV else { continue }
+            var doc = ImageDocument(url: URL(fileURLWithPath: path))
+            doc.phash = h
+            doc.phashV = v
+            docs.append(doc)
+        }
+        let groups = SimilarityGrouper.groups(from: docs, maxDistance: threshold)
+            .map { $0.map { $0.url.path } }
+        if !dryRun { catalog.setSimilarGroups(groups) }
+        if jsonMode {
+            let d: [String: Any] = ["groups": groups, "group_count": groups.count,
+                                    "images_grouped": groups.reduce(0) { $0 + $1.count },
+                                    "hashed": docs.count, "threshold": threshold,
+                                    "dry_run": dryRun]
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            for (i, g) in groups.enumerated() {
+                print("Gruppe \(i+1):")
+                g.forEach { print("  \($0)") }
+            }
+            let verb = dryRun ? "(Trockenlauf, nicht gespeichert)" : "gespeichert"
+            print("\(groups.count) Gruppe(n) aus \(docs.count) Bild(ern) mit pHash, Schwelle \(threshold) — \(verb)")
+        }
+        return 0
+
+    case "clear":
+        // duplicate clear [--exact|--similar|--all] [--json]
+        // Setzt die gespeicherten Gruppen-IDs zurück (z. B. vor einem frischen Scan).
+        let rest = Array(args.dropFirst())
+        let allowed: Set<String> = ["--json", "--exact", "--similar", "--all"]
+        let unknown = rest.filter { !allowed.contains($0) }
+        guard unknown.isEmpty else {
+            fputs("Fehler: Unbekannte Argumente: \(unknown.joined(separator: " "))\n", stderr)
+            fputs("Verwendung: iphoto-cli duplicate clear [--exact|--similar|--all] [--json]\n", stderr)
+            return 1
+        }
+        let anyScope = rest.contains("--exact") || rest.contains("--similar")
+        let clearExact = rest.contains("--all") || !anyScope || rest.contains("--exact")
+        let clearSimilar = rest.contains("--all") || !anyScope || rest.contains("--similar")
+        var exactCleared = 0, similarCleared = 0
+        if clearExact {
+            exactCleared = catalog.loadDuplicateGroups().count
+            catalog.setDuplicateGroups([])
+        }
+        if clearSimilar {
+            similarCleared = catalog.loadSimilarGroups().count
+            catalog.setSimilarGroups([])
+        }
+        if jsonMode {
+            var d: [String: Any] = ["ok": true]
+            if clearExact { d["duplicate_groups_cleared"] = exactCleared }
+            if clearSimilar { d["similar_groups_cleared"] = similarCleared }
+            if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: dd, encoding: .utf8) { print(s) }
+        } else {
+            if clearExact { print("Duplikat-Gruppen entfernt: \(exactCleared)") }
+            if clearSimilar { print("Ähnlichkeits-Gruppen entfernt: \(similarCleared)") }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli duplicate list|similar [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli duplicate list|similar [--json]\n" +
+              "           iphoto-cli duplicate regroup [--threshold 0-64] [--dry-run] [--json]\n" +
+              "           iphoto-cli duplicate clear [--exact|--similar|--all] [--json]\n", stderr)
         return 1
     }
 }

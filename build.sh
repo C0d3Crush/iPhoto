@@ -207,6 +207,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/SmartFolderSQLGenerator.swift \
     $ROOT/Sources/Utilities/VersionStore.swift \
     $ROOT/Sources/Utilities/EloRating.swift \
+    $ROOT/Sources/Utilities/SimilarityGrouper.swift \
     $ROOT/Sources/Utilities/AppConfig.swift \
     $ROOT/Sources/Utilities/ThumbnailDiskCache.swift \
     $ROOT/Sources/Utilities/ProjectStore.swift \

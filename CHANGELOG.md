@@ -2,6 +2,15 @@
 
 ---
 
+## 1.108.0
+**CLI: Ähnlichkeitsgruppen neu berechnen und zurücksetzen**
+
+- Neu: `iphoto-cli duplicate regroup [--threshold 0-64] [--dry-run] [--json]` — berechnet die Gruppen ähnlicher Bilder aus den bereits gespeicherten pHashes neu (wie „Neu gruppieren" in der App), ohne Bilder zu dekodieren; Bilder im Papierkorb werden ausgelassen
+- Neu: `iphoto-cli duplicate clear [--exact|--similar|--all] [--json]` — setzt gespeicherte Duplikat- und/oder Ähnlichkeitsgruppen zurück
+- `SimilarityGrouper` ist jetzt Teil des CLI-Builds; neue Tests in `Tests/run_plugins.sh`
+
+---
+
 ## 1.107.3
 **Refactor: NavSidebarSection und SearchBarView in eigene Dateien extrahiert**
 

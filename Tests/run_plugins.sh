@@ -3332,6 +3332,80 @@ if [ $AR_ERR -ne 0 ]; then pass "archive unbekannter Unterbefehl (Fehler)"; else
 echo ""
 
 # ---------------------------------------------------------------------------
+# duplicate regroup / clear
+# ---------------------------------------------------------------------------
+echo "--- DUPLICATE REGROUP / CLEAR ---"
+
+DG_DB="$TMPDIR/dg_catalog.db"
+dgc() { IPHOTO_CATALOG_DB="$DG_DB" "$BIN" "$@"; }
+dgc duplicate list > /dev/null 2>&1 || true
+python3 - "$DG_DB" <<'PYEOF'
+import sqlite3, sys
+A = 0x0F0F0F0F0F0F0F0F
+rows = [("a.jpg", A), ("b.jpg", A ^ 0x3), ("d.jpg", A ^ 0x3FF), ("c.jpg", 0x7000F000F000F000), ("t.jpg", A ^ 0x1)]
+c = sqlite3.connect(sys.argv[1])
+for i, (fn, h) in enumerate(rows):
+    c.execute("INSERT INTO images(id,path,filename,is_raw,width,height,size_bytes,imported_at,quality_scanned,phash,phash_v) "
+              "VALUES(?,?,?,0,1,1,1,datetime('now'),1,?,?)",
+              ("dg-%d" % i, "/tmp/dg/" + fn, fn, h, h))
+c.execute("INSERT INTO trash(image_path, trashed_at) VALUES('/tmp/dg/t.jpg', datetime('now'))")
+c.commit(); c.close()
+PYEOF
+
+# Dry-run: Gruppen berechnet, aber nicht gespeichert; Papierkorb (t.jpg) ausgelassen
+DG_EXIT=0
+DG_OUT=$(dgc duplicate regroup --dry-run --json 2>/dev/null) || DG_EXIT=$?
+DG_SIM=$(dgc duplicate similar --json 2>/dev/null) || true
+if [ $DG_EXIT -eq 0 ] && echo "$DG_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['dry_run'] is True and d['threshold']==6 and d['hashed']==4, d
+assert d['groups']==[['/tmp/dg/a.jpg','/tmp/dg/b.jpg']], d['groups']" 2>/dev/null \
+   && echo "$DG_SIM" | python3 -c "import sys,json; assert json.load(sys.stdin)==[]" 2>/dev/null; then
+    pass "duplicate regroup --dry-run --json"
+else
+    fail "duplicate regroup --dry-run --json" "Exit $DG_EXIT: $DG_OUT | $DG_SIM"
+fi
+
+# Schreiben mit höherer Schwelle: d.jpg (10 Bit Abstand) wird mitgezogen
+DG_EXIT=0
+DG_OUT=$(dgc duplicate regroup --threshold 12 --json 2>/dev/null) || DG_EXIT=$?
+DG_SIM=$(dgc duplicate similar --json 2>/dev/null) || true
+if [ $DG_EXIT -eq 0 ] && echo "$DG_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin); assert d['group_count']==1 and d['images_grouped']==3, d" 2>/dev/null \
+   && echo "$DG_SIM" | python3 -c "
+import sys,json; g=json.load(sys.stdin); assert len(g)==1 and sorted(g[0])==['/tmp/dg/a.jpg','/tmp/dg/b.jpg','/tmp/dg/d.jpg'], g" 2>/dev/null; then
+    pass "duplicate regroup --threshold 12 (persistiert)"
+else
+    fail "duplicate regroup --threshold 12" "Exit $DG_EXIT: $DG_OUT | $DG_SIM"
+fi
+
+# clear --similar: Gruppen weg
+DG_EXIT=0
+DG_OUT=$(dgc duplicate clear --similar --json 2>/dev/null) || DG_EXIT=$?
+DG_SIM=$(dgc duplicate similar --json 2>/dev/null) || true
+if [ $DG_EXIT -eq 0 ] && echo "$DG_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin); assert d['similar_groups_cleared']==1 and 'duplicate_groups_cleared' not in d, d" 2>/dev/null \
+   && echo "$DG_SIM" | python3 -c "import sys,json; assert json.load(sys.stdin)==[]" 2>/dev/null; then
+    pass "duplicate clear --similar --json"
+else
+    fail "duplicate clear --similar --json" "Exit $DG_EXIT: $DG_OUT | $DG_SIM"
+fi
+
+DG_ERR=0
+dgc duplicate regroup --threshold 99 > /dev/null 2>&1 || DG_ERR=$?
+if [ $DG_ERR -ne 0 ]; then pass "duplicate regroup --threshold 99 (Fehler)"; else fail "duplicate regroup --threshold 99" "Hätte fehlschlagen sollen"; fi
+
+DG_ERR=0
+dgc duplicate regroup --threshold > /dev/null 2>&1 || DG_ERR=$?
+if [ $DG_ERR -ne 0 ]; then pass "duplicate regroup --threshold ohne Wert (Fehler)"; else fail "duplicate regroup --threshold ohne Wert" "Hätte fehlschlagen sollen"; fi
+
+DG_ERR=0
+dgc duplicate clear --bogus > /dev/null 2>&1 || DG_ERR=$?
+if [ $DG_ERR -ne 0 ]; then pass "duplicate clear unbekanntes Flag (Fehler)"; else fail "duplicate clear unbekanntes Flag" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
