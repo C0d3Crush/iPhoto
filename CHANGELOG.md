@@ -2,6 +2,14 @@
 
 ---
 
+## 1.108.1
+**Refactor: Bibliotheks-Scans aus ImageLoadingOrchestrator extrahiert**
+
+- `scanExifForLibrary`, `scanQualityForLibrary`, `scanMotifForLibrary` in `ImageLoadingOrchestrator+LibraryScans.swift` verschoben — diese drei Scan-Funktionen teilen keinen Zustand mit der Import-Metadaten-Pipeline und bilden eine eigene logische Einheit
+- `ImageLoadingOrchestrator.swift` von 1001 auf 754 Zeilen reduziert
+
+---
+
 ## 1.108.0
 **CLI: Ähnlichkeitsgruppen neu berechnen und zurücksetzen**
 
