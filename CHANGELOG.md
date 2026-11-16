@@ -2,6 +2,15 @@
 
 ---
 
+## 1.109.0
+**CLI: Alben duplizieren und zusammenführen**
+
+- Neu: `iphoto-cli album duplicate <album-id|name> <neuer-name> [--json]` — legt eine Kopie des Albums mit identischer Bildreihenfolge an
+- Neu: `iphoto-cli album merge <quelle> <ziel> [--keep-source] [--dry-run] [--json]` — hängt die Bilder der Quelle ohne Duplikate ans Ziel-Album an und löscht die Quelle danach (außer mit `--keep-source`); `--dry-run` zeigt nur, was passieren würde
+- Neue Tests in `Tests/run_plugins.sh` für beide Befehle inkl. Fehlerfällen (unbekanntes Album, Quelle = Ziel, unbekannte Option)
+
+---
+
 ## 1.108.1
 **Refactor: Bibliotheks-Scans aus ImageLoadingOrchestrator extrahiert**
 

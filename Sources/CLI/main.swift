@@ -41,10 +41,12 @@ private func printUsage() {
       iphoto-cli people reset [--json]
       iphoto-cli people export-names [--output <datei.csv>] [--json]
       iphoto-cli people import-names <datei.csv> [--json]
-      iphoto-cli album list|create|delete|add|remove|images|reorder [--json]
+      iphoto-cli album list|create|delete|add|remove|images|reorder|duplicate|merge [--json]
       iphoto-cli album rename <album-id|name> <neuer-name> [--json]
       iphoto-cli album export <album-id|name> --output-dir <ordner> [--dry-run] [--overwrite] [--json]
       iphoto-cli album purge-stale [--dry-run] [--json]
+      iphoto-cli album duplicate <album-id|name> <neuer-name> [--json]
+      iphoto-cli album merge <quelle> <ziel> [--keep-source] [--dry-run] [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
@@ -3228,6 +3230,87 @@ private func runAlbum(_ args: [String]) -> Int32 {
         }
         return failed.isEmpty ? 0 : 1
 
+    case "duplicate":
+        // album duplicate <album-id|name> <neuer-name> [--json] — Kopie mit gleicher Bildreihenfolge
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count == 2 else {
+            fputs("Verwendung: iphoto-cli album duplicate <album-id|name> <neuer-name> [--json]\n", stderr); return 1
+        }
+        let newName = positional[1].trimmingCharacters(in: .whitespaces)
+        guard !newName.isEmpty else {
+            fputs("Fehler: Neuer Name darf nicht leer sein\n", stderr); return 1
+        }
+        let albums = catalog.allAlbums()
+        guard let src = albums.first(where: { $0.id == positional[0] }) ?? albums.first(where: { $0.name == positional[0] }) else {
+            fputs("Fehler: Album nicht gefunden: \(positional[0])\n", stderr); return 1
+        }
+        let newID = UUID().uuidString
+        let paths = catalog.images(inAlbum: src.id)
+        catalog.saveAlbum(id: newID, name: newName)
+        for (i, p) in paths.enumerated() { catalog.addImage(path: p, toAlbum: newID, order: i) }
+        if jsonMode {
+            let obj: [String: Any] = ["id": newID, "name": newName, "source_id": src.id,
+                                      "source_name": src.name, "count": paths.count, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Album dupliziert: \(src.name) → \(newName) (\(paths.count) Bild(er), \(newID))")
+        }
+        return 0
+
+    case "merge":
+        // album merge <quelle> <ziel> [--keep-source] [--dry-run] [--json]
+        // Hängt Bilder der Quelle (ohne Duplikate) ans Ziel an; Quelle wird danach gelöscht.
+        let keepSource = args.contains("--keep-source")
+        let dryRun = args.contains("--dry-run")
+        let known: Set<String> = ["--keep-source", "--dry-run", "--json"]
+        if let bad = args.dropFirst().first(where: { $0.hasPrefix("-") && !known.contains($0) }) {
+            fputs("Fehler: Unbekannte Option: \(bad)\n", stderr); return 1
+        }
+        let positional = args.dropFirst().filter { !$0.hasPrefix("-") }
+        guard positional.count == 2 else {
+            fputs("Verwendung: iphoto-cli album merge <quelle-id|name> <ziel-id|name> [--keep-source] [--dry-run] [--json]\n", stderr); return 1
+        }
+        let albums = catalog.allAlbums()
+        func find(_ key: String) -> (id: String, name: String)? {
+            albums.first(where: { $0.id == key }) ?? albums.first(where: { $0.name == key })
+        }
+        guard let src = find(positional[0]) else {
+            fputs("Fehler: Quell-Album nicht gefunden: \(positional[0])\n", stderr); return 1
+        }
+        guard let dst = find(positional[1]) else {
+            fputs("Fehler: Ziel-Album nicht gefunden: \(positional[1])\n", stderr); return 1
+        }
+        guard src.id != dst.id else {
+            fputs("Fehler: Quelle und Ziel sind dasselbe Album\n", stderr); return 1
+        }
+        let dstPaths = catalog.images(inAlbum: dst.id)
+        var seen = Set(dstPaths)
+        var added: [String] = []
+        var already = 0
+        for p in catalog.images(inAlbum: src.id) {
+            if seen.insert(p).inserted { added.append(p) } else { already += 1 }
+        }
+        if !dryRun {
+            for (i, p) in added.enumerated() { catalog.addImage(path: p, toAlbum: dst.id, order: dstPaths.count + i) }
+            if !keepSource { catalog.deleteAlbum(id: src.id) }
+        }
+        let sourceDeleted = !dryRun && !keepSource
+        if jsonMode {
+            let obj: [String: Any] = ["source_id": src.id, "source_name": src.name,
+                                      "target_id": dst.id, "target_name": dst.name,
+                                      "added": added.count, "already_present": already,
+                                      "target_count": dstPaths.count + added.count,
+                                      "source_deleted": sourceDeleted, "dry_run": dryRun, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            let prefix = dryRun ? "[dry-run] " : ""
+            print("\(prefix)\(src.name) → \(dst.name): \(added.count) Bild(er) hinzugefügt, \(already) bereits vorhanden")
+            if sourceDeleted { print("Quell-Album gelöscht: \(src.name)") }
+        }
+        return 0
+
     case "purge-stale":
         // Remove references to deleted files from all albums; --dry-run only reports
         let dryRun = args.contains("--dry-run")
@@ -3262,7 +3345,7 @@ private func runAlbum(_ args: [String]) -> Int32 {
         return 0
 
     default:
-        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export|purge-stale\n", stderr)
+        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export|duplicate|merge|purge-stale\n", stderr)
         return 1
     }
 }

@@ -3406,6 +3406,92 @@ if [ $DG_ERR -ne 0 ]; then pass "duplicate clear unbekanntes Flag (Fehler)"; els
 echo ""
 
 # ---------------------------------------------------------------------------
+# album duplicate / album merge
+# ---------------------------------------------------------------------------
+echo "--- album duplicate / merge ---"
+AM_DB="$TMPDIR/am_catalog.db"
+am() { IPHOTO_CATALOG_DB="$AM_DB" "$BIN" "$@"; }
+AM_A=$(am album create "Reise" --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null || true)
+AM_B=$(am album create "Best of" --json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null || true)
+am album add "$AM_A" /tmp/am/x.jpg /tmp/am/y.jpg /tmp/am/z.jpg > /dev/null 2>&1 || true
+am album add "$AM_B" /tmp/am/y.jpg > /dev/null 2>&1 || true
+
+# duplicate → neues Album mit gleicher Reihenfolge, Quelle unverändert
+AM_EXIT=0
+AM_OUT=$(am album duplicate "Reise" "Reise Kopie" --json 2>&1) || AM_EXIT=$?
+AM_NEW=$(echo "$AM_OUT" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null || true)
+AM_IMGS=$(am album images "$AM_NEW" --json 2>/dev/null || true)
+AM_SRC=$(am album images "$AM_A" --json 2>/dev/null || true)
+if [ $AM_EXIT -eq 0 ] && [ -n "$AM_NEW" ] && [ "$AM_NEW" != "$AM_A" ] \
+   && echo "$AM_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==3 and d['name']=='Reise Kopie' and d['source_name']=='Reise'" 2>/dev/null \
+   && echo "$AM_IMGS" | python3 -c "import sys,json; assert json.load(sys.stdin)==['/tmp/am/x.jpg','/tmp/am/y.jpg','/tmp/am/z.jpg']" 2>/dev/null \
+   && echo "$AM_SRC" | python3 -c "import sys,json; assert len(json.load(sys.stdin))==3" 2>/dev/null; then
+    pass "album duplicate --json (3 Bilder, Reihenfolge erhalten)"
+else
+    fail "album duplicate --json" "Exit $AM_EXIT: $AM_OUT | $AM_IMGS"
+fi
+
+# duplicate unbekannt / fehlender Name → Fehler
+AM_ERR=0
+am album duplicate "gibtsnicht" "X" > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album duplicate unbekannt (→ Fehler)"; else fail "album duplicate unbekannt" "Hätte fehlschlagen sollen"; fi
+AM_ERR=0
+am album duplicate "Reise" > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album duplicate ohne neuen Namen (→ Fehler)"; else fail "album duplicate ohne Namen" "Hätte fehlschlagen sollen"; fi
+
+# merge --dry-run → nichts verändert
+AM_EXIT=0
+AM_OUT=$(am album merge "Reise" "Best of" --dry-run --json 2>&1) || AM_EXIT=$?
+AM_CNT=$(am album list --json 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+AM_BIMGS=$(am album images "$AM_B" --json 2>/dev/null || true)
+if [ $AM_EXIT -eq 0 ] && [ "$AM_CNT" = "3" ] \
+   && echo "$AM_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['added']==2 and d['already_present']==1 and d['dry_run'] is True and d['source_deleted'] is False" 2>/dev/null \
+   && echo "$AM_BIMGS" | python3 -c "import sys,json; assert json.load(sys.stdin)==['/tmp/am/y.jpg']" 2>/dev/null; then
+    pass "album merge --dry-run --json (2 neu, 1 vorhanden, nichts geändert)"
+else
+    fail "album merge --dry-run" "Exit $AM_EXIT: $AM_OUT | $AM_CNT | $AM_BIMGS"
+fi
+
+# merge --keep-source → Ziel ergänzt, Quelle bleibt
+AM_EXIT=0
+AM_OUT=$(am album merge "Reise Kopie" "$AM_B" --keep-source --json 2>&1) || AM_EXIT=$?
+AM_BIMGS=$(am album images "$AM_B" --json 2>/dev/null || true)
+AM_CNT=$(am album list --json 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+if [ $AM_EXIT -eq 0 ] && [ "$AM_CNT" = "3" ] \
+   && echo "$AM_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['added']==2 and d['target_count']==3 and d['source_deleted'] is False" 2>/dev/null \
+   && echo "$AM_BIMGS" | python3 -c "import sys,json; assert json.load(sys.stdin)==['/tmp/am/y.jpg','/tmp/am/x.jpg','/tmp/am/z.jpg']" 2>/dev/null; then
+    pass "album merge --keep-source --json (Ziel ergänzt, Quelle bleibt)"
+else
+    fail "album merge --keep-source" "Exit $AM_EXIT: $AM_OUT | $AM_BIMGS | $AM_CNT"
+fi
+
+# merge (Standard) → Quelle gelöscht, keine Duplikate im Ziel
+AM_EXIT=0
+AM_OUT=$(am album merge "$AM_A" "Best of" --json 2>&1) || AM_EXIT=$?
+AM_NAMES=$(am album list --json 2>/dev/null | python3 -c "import sys,json; print(','.join(sorted(a['name'] for a in json.load(sys.stdin))))" 2>/dev/null || echo "?")
+AM_BIMGS=$(am album images "$AM_B" --json 2>/dev/null || true)
+if [ $AM_EXIT -eq 0 ] && [ "$AM_NAMES" = "Best of,Reise Kopie" ] \
+   && echo "$AM_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['added']==0 and d['already_present']==3 and d['source_deleted'] is True" 2>/dev/null \
+   && echo "$AM_BIMGS" | python3 -c "import sys,json; assert len(json.load(sys.stdin))==3" 2>/dev/null; then
+    pass "album merge --json (Quelle gelöscht, keine Duplikate)"
+else
+    fail "album merge" "Exit $AM_EXIT: $AM_OUT | $AM_NAMES | $AM_BIMGS"
+fi
+
+# merge Fehlerfälle
+AM_ERR=0
+am album merge "Best of" "Best of" > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album merge Quelle=Ziel (→ Fehler)"; else fail "album merge Quelle=Ziel" "Hätte fehlschlagen sollen"; fi
+AM_ERR=0
+am album merge "gibtsnicht" "Best of" > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album merge unbekannte Quelle (→ Fehler)"; else fail "album merge unbekannt" "Hätte fehlschlagen sollen"; fi
+AM_ERR=0
+am album merge "Reise Kopie" "Best of" --bogus > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album merge unbekannte Option (→ Fehler)"; else fail "album merge --bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
