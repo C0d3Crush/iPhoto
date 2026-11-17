@@ -3742,6 +3742,192 @@ if [ $PS_ERR -ne 0 ]; then pass "plugins status unbekannte Option (→ Fehler)";
 echo ""
 
 # ---------------------------------------------------------------------------
+# albumfolder move — Ordner verschachteln / auf Root-Ebene holen (Zyklus-Schutz)
+# ---------------------------------------------------------------------------
+echo "--- AlbumFolder move ---"
+
+export IPHOTO_ALBUMFOLDERS_FILE="$TMPDIR/albumFolders_move.json"
+jget() { python3 -c "import sys,json; v=json.load(sys.stdin).get('$1'); print('null' if v is None else v)" 2>/dev/null; }
+
+AFM_A=$("$BIN" albumfolder create "MoveA" --json 2>&1 | jget id || true)
+AFM_B=$("$BIN" albumfolder create "MoveB" --json 2>&1 | jget id || true)
+AFM_C=$("$BIN" albumfolder create "MoveC" --json 2>&1 | jget id || true)
+
+if [ -n "$AFM_A" ] && [ -n "$AFM_B" ] && [ -n "$AFM_C" ]; then
+    # B → in A (per Name)
+    AFM_OUT=$("$BIN" albumfolder move MoveB --parent MoveA --json 2>&1) || true
+    if [ "$(echo "$AFM_OUT" | jget parent_id)" = "$AFM_A" ] && [ "$(echo "$AFM_OUT" | jget changed)" = "True" ]; then
+        pass "albumfolder move --parent (per Name, parent_id gesetzt)"
+    else
+        fail "albumfolder move --parent" "Unerwartete Ausgabe: $AFM_OUT"
+    fi
+
+    # C → in B (per ID), danach in list sichtbar
+    "$BIN" albumfolder move "$AFM_C" --parent "$AFM_B" > /dev/null 2>&1 || true
+    AFM_LIST=$("$BIN" albumfolder list --json 2>&1) || true
+    if echo "$AFM_LIST" | python3 -c "
+import sys,json
+m={f['name']:f for f in json.load(sys.stdin)}
+assert m['MoveC'].get('parent_id')=='$AFM_B' and m['MoveB'].get('parent_id')=='$AFM_A' and 'parent_id' not in m['MoveA']
+" 2>/dev/null; then
+        pass "albumfolder move per ID (list zeigt Hierarchie A > B > C)"
+    else
+        fail "albumfolder move per ID" "Hierarchie falsch: $AFM_LIST"
+    fi
+
+    # Idempotent: gleicher Parent → changed:false
+    AFM_OUT=$("$BIN" albumfolder move MoveB --parent MoveA --json 2>&1) || true
+    if [ "$(echo "$AFM_OUT" | jget changed)" = "False" ]; then
+        pass "albumfolder move idempotent (changed:false)"
+    else
+        fail "albumfolder move idempotent" "Unerwartete Ausgabe: $AFM_OUT"
+    fi
+
+    # Zyklus: A in eigenen Enkel C → Fehler, Hierarchie bleibt
+    AFM_ERR=0
+    "$BIN" albumfolder move MoveA --parent MoveC > /dev/null 2>&1 || AFM_ERR=$?
+    AFM_LIST=$("$BIN" albumfolder list --json 2>&1) || true
+    if [ $AFM_ERR -ne 0 ] && echo "$AFM_LIST" | python3 -c "
+import sys,json
+m={f['name']:f for f in json.load(sys.stdin)}
+assert 'parent_id' not in m['MoveA']
+" 2>/dev/null; then
+        pass "albumfolder move in eigenen Nachfahren (→ Fehler, unverändert)"
+    else
+        fail "albumfolder move Zyklus" "Exit $AFM_ERR, Liste: $AFM_LIST"
+    fi
+
+    # In sich selbst → Fehler
+    AFM_ERR=0
+    "$BIN" albumfolder move MoveA --parent MoveA > /dev/null 2>&1 || AFM_ERR=$?
+    if [ $AFM_ERR -ne 0 ]; then pass "albumfolder move in sich selbst (→ Fehler)"; else fail "albumfolder move in sich selbst" "Hätte fehlschlagen sollen"; fi
+
+    # --root: C zurück auf Root-Ebene
+    AFM_OUT=$("$BIN" albumfolder move MoveC --root --json 2>&1) || true
+    if [ "$(echo "$AFM_OUT" | jget parent_id)" = "null" ] && [ "$(echo "$AFM_OUT" | jget changed)" = "True" ]; then
+        pass "albumfolder move --root (parent_id null)"
+    else
+        fail "albumfolder move --root" "Unerwartete Ausgabe: $AFM_OUT"
+    fi
+
+    # Nach --root ist A → C wieder erlaubt (kein Zyklus mehr)
+    AFM_ERR=0
+    "$BIN" albumfolder move MoveA --parent MoveC > /dev/null 2>&1 || AFM_ERR=$?
+    if [ $AFM_ERR -eq 0 ]; then pass "albumfolder move nach --root erlaubt"; else fail "albumfolder move nach --root" "Exit $AFM_ERR"; fi
+else
+    fail "albumfolder move" "Test-Ordner konnten nicht angelegt werden"
+fi
+
+# Fehlerfälle
+AFM_ERR=0
+"$BIN" albumfolder move GibtsNicht --root > /dev/null 2>&1 || AFM_ERR=$?
+if [ $AFM_ERR -ne 0 ]; then pass "albumfolder move unbekannter Ordner (→ Fehler)"; else fail "albumfolder move unbekannter Ordner" "Hätte fehlschlagen sollen"; fi
+AFM_ERR=0
+"$BIN" albumfolder move MoveB --parent GibtsNicht > /dev/null 2>&1 || AFM_ERR=$?
+if [ $AFM_ERR -ne 0 ]; then pass "albumfolder move unbekanntes Ziel (→ Fehler)"; else fail "albumfolder move unbekanntes Ziel" "Hätte fehlschlagen sollen"; fi
+AFM_ERR=0
+"$BIN" albumfolder move MoveB > /dev/null 2>&1 || AFM_ERR=$?
+if [ $AFM_ERR -ne 0 ]; then pass "albumfolder move ohne Ziel (→ Fehler)"; else fail "albumfolder move ohne Ziel" "Hätte fehlschlagen sollen"; fi
+AFM_ERR=0
+"$BIN" albumfolder move MoveB --parent MoveA --root > /dev/null 2>&1 || AFM_ERR=$?
+if [ $AFM_ERR -ne 0 ]; then pass "albumfolder move --parent + --root (→ Fehler)"; else fail "albumfolder move --parent + --root" "Hätte fehlschlagen sollen"; fi
+AFM_ERR=0
+"$BIN" albumfolder move MoveB --root --bogus > /dev/null 2>&1 || AFM_ERR=$?
+if [ $AFM_ERR -ne 0 ]; then pass "albumfolder move unbekannte Option (→ Fehler)"; else fail "albumfolder move --bogus" "Hätte fehlschlagen sollen"; fi
+
+unset IPHOTO_ALBUMFOLDERS_FILE
+echo ""
+
+# ---------------------------------------------------------------------------
+# watched set — Auto-Sync und Import-Ziel eines überwachten Ordners ändern
+# ---------------------------------------------------------------------------
+echo "--- Watched set ---"
+
+export IPHOTO_WATCHED_FILE="$TMPDIR/watchedFolders_set.json"
+WS_DIR="$TMPDIR/watched_set_src"
+WS_DEST="$TMPDIR/watched_set_dest"
+mkdir -p "$WS_DIR" "$WS_DEST"
+
+WS_ID=$("$BIN" watched add "$WS_DIR" --json 2>&1 | jget id || true)
+if [ -n "$WS_ID" ]; then
+    WS_OUT=$("$BIN" watched set "$WS_ID" --auto-sync on --json 2>&1) || true
+    if [ "$(echo "$WS_OUT" | jget auto_sync)" = "True" ] && [ "$(echo "$WS_OUT" | jget changed)" = "True" ]; then
+        pass "watched set --auto-sync on (auto_sync:true)"
+    else
+        fail "watched set --auto-sync on" "Unerwartete Ausgabe: $WS_OUT"
+    fi
+
+    # persistiert: list zeigt auto_sync:true
+    WS_LIST=$("$BIN" watched list --json 2>&1) || true
+    if echo "$WS_LIST" | python3 -c "
+import sys,json
+f=[e for e in json.load(sys.stdin) if e['id']=='$WS_ID'][0]
+assert f['auto_sync'] is True
+" 2>/dev/null; then
+        pass "watched set persistiert (list zeigt auto_sync)"
+    else
+        fail "watched set persistiert" "Liste: $WS_LIST"
+    fi
+
+    # idempotent
+    WS_OUT=$("$BIN" watched set "$WS_ID" --auto-sync on --json 2>&1) || true
+    if [ "$(echo "$WS_OUT" | jget changed)" = "False" ]; then
+        pass "watched set idempotent (changed:false)"
+    else
+        fail "watched set idempotent" "Unerwartete Ausgabe: $WS_OUT"
+    fi
+
+    # Import-Ziel setzen (per Ordnername) + Auto-Sync aus in einem Aufruf
+    WS_OUT=$("$BIN" watched set watched_set_src --import-dest "$WS_DEST" --auto-sync off --json 2>&1) || true
+    if echo "$WS_OUT" | python3 -c "
+import sys,json,os
+d=json.load(sys.stdin)
+assert d['auto_sync'] is False and d['import_dest'] and os.path.basename(d['import_dest'])=='watched_set_dest'
+" 2>/dev/null; then
+        pass "watched set --import-dest + --auto-sync off"
+    else
+        fail "watched set --import-dest" "Unerwartete Ausgabe: $WS_OUT"
+    fi
+
+    # Import-Ziel löschen
+    WS_OUT=$("$BIN" watched set "$WS_ID" --clear-import-dest --json 2>&1) || true
+    if [ "$(echo "$WS_OUT" | jget import_dest)" = "null" ] && [ "$(echo "$WS_OUT" | jget changed)" = "True" ]; then
+        pass "watched set --clear-import-dest (import_dest null)"
+    else
+        fail "watched set --clear-import-dest" "Unerwartete Ausgabe: $WS_OUT"
+    fi
+
+    # Fehlerfälle mit existierendem Ordner
+    WS_ERR=0
+    "$BIN" watched set "$WS_ID" > /dev/null 2>&1 || WS_ERR=$?
+    if [ $WS_ERR -ne 0 ]; then pass "watched set ohne Option (→ Fehler)"; else fail "watched set ohne Option" "Hätte fehlschlagen sollen"; fi
+    WS_ERR=0
+    "$BIN" watched set "$WS_ID" --auto-sync vielleicht > /dev/null 2>&1 || WS_ERR=$?
+    if [ $WS_ERR -ne 0 ]; then pass "watched set --auto-sync ungültig (→ Fehler)"; else fail "watched set --auto-sync ungültig" "Hätte fehlschlagen sollen"; fi
+    WS_ERR=0
+    "$BIN" watched set "$WS_ID" --import-dest /nonexistent/path/xyz > /dev/null 2>&1 || WS_ERR=$?
+    if [ $WS_ERR -ne 0 ]; then pass "watched set --import-dest fehlt auf Disk (→ Fehler)"; else fail "watched set --import-dest ungültig" "Hätte fehlschlagen sollen"; fi
+    WS_ERR=0
+    "$BIN" watched set "$WS_ID" --import-dest "$WS_DEST" --clear-import-dest > /dev/null 2>&1 || WS_ERR=$?
+    if [ $WS_ERR -ne 0 ]; then pass "watched set --import-dest + --clear-import-dest (→ Fehler)"; else fail "watched set dest + clear" "Hätte fehlschlagen sollen"; fi
+else
+    fail "watched set" "Test-Ordner konnte nicht hinzugefügt werden"
+fi
+
+WS_ERR=0
+"$BIN" watched set gibtsnicht-xyz --auto-sync on > /dev/null 2>&1 || WS_ERR=$?
+if [ $WS_ERR -ne 0 ]; then pass "watched set unbekannter Ordner (→ Fehler)"; else fail "watched set unbekannter Ordner" "Hätte fehlschlagen sollen"; fi
+WS_ERR=0
+"$BIN" watched set --auto-sync on > /dev/null 2>&1 || WS_ERR=$?
+if [ $WS_ERR -ne 0 ]; then pass "watched set ohne Ordner (→ Fehler)"; else fail "watched set ohne Ordner" "Hätte fehlschlagen sollen"; fi
+WS_ERR=0
+"$BIN" watched set gibtsnicht-xyz --auto-sync on --bogus > /dev/null 2>&1 || WS_ERR=$?
+if [ $WS_ERR -ne 0 ]; then pass "watched set unbekannte Option (→ Fehler)"; else fail "watched set --bogus" "Hätte fehlschlagen sollen"; fi
+
+unset IPHOTO_WATCHED_FILE
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

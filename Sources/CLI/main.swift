@@ -58,6 +58,7 @@ private func printUsage() {
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
       iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans [--json]
       iphoto-cli albumfolder list|create|rename|delete [--json]
+      iphoto-cli albumfolder move <id|name> --parent <id|name> | --root [--json]
       iphoto-cli motif get <bildpfad> [--json]
       iphoto-cli motif list [--json]
       iphoto-cli motif set <bildpfad> <tag1,tag2,...> [--json]
@@ -79,6 +80,7 @@ private func printUsage() {
       iphoto-cli watched add <pfad> [--auto-sync] [--json]
       iphoto-cli watched remove <name|id> [--json]
       iphoto-cli watched check [<name|id>] [--json]
+      iphoto-cli watched set <name|id> [--auto-sync on|off] [--import-dest <pfad>|--clear-import-dest] [--json]
       iphoto-cli project list|show <name|id>|create <name> [--folder <pfad>]...|delete <name|id> [--json]
       iphoto-cli project rename <name|id> <neuer-name> [--json]
       iphoto-cli project add-folder|remove-folder <name|id> <pfad> [--json]
@@ -212,6 +214,9 @@ private func printUsage() {
     adjustments: gespeicherte Bearbeitungen auflisten/lesen/löschen; set schreibt Reglerwerte ohne Rendern,
               copy überträgt sie auf andere Bilder (eine Transaktion; --exclude-geometry behält Crop/Drehung)
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
+    albumfolder: move hängt einen Album-Ordner in einen anderen (--parent) oder auf die Root-Ebene (--root);
+              Zyklen werden abgelehnt; Datei per IPHOTO_ALBUMFOLDERS_FILE
+    watched:  set schaltet Auto-Sync an/aus und setzt/löscht das Import-Ziel; Datei per IPHOTO_WATCHED_FILE
     project:  Projekte (projects.json, wie Projekt-Auswahl in der App) auflisten/anlegen/umbenennen/löschen,
               Ordner hinzufügen/entfernen; fehlende Ordner in --json als missing_folders; Datei per IPHOTO_PROJECTS_FILE
     """)
@@ -2104,7 +2109,11 @@ private func runPeople(_ args: [String]) -> Int32 {
 // MARK: - WatchedFolder
 
 private func watchedFoldersFileURL() -> URL {
-    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    // Test-/Skript-Override, damit die echte watchedFolders.json unberührt bleibt
+    if let override = ProcessInfo.processInfo.environment["IPHOTO_WATCHED_FILE"], !override.isEmpty {
+        return URL(fileURLWithPath: override)
+    }
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("iPhoto")
         .appendingPathComponent("watchedFolders.json")
 }
@@ -2248,8 +2257,90 @@ private func runWatched(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "set":
+        // Entspricht toggleAutoSync / setImportDestination in der App (nur das Feld, kein Rescan).
+        let usage = "Verwendung: iphoto-cli watched set <name|id> [--auto-sync on|off] [--import-dest <pfad>|--clear-import-dest] [--json]\n"
+        var positionals: [String] = []
+        var autoSync: Bool? = nil
+        var importDest: String? = nil
+        var clearDest = false
+        var i = 1
+        while i < args.count {
+            let a = args[i]
+            switch a {
+            case "--auto-sync":
+                i += 1
+                guard i < args.count else { fputs("Fehler: --auto-sync braucht on|off\n", stderr); return 1 }
+                switch args[i].lowercased() {
+                case "on", "true", "1":   autoSync = true
+                case "off", "false", "0": autoSync = false
+                default:
+                    fputs("Fehler: --auto-sync erlaubt: on|off (war '\(args[i])')\n", stderr); return 1
+                }
+            case "--import-dest":
+                i += 1
+                guard i < args.count else { fputs("Fehler: --import-dest braucht einen Pfad\n", stderr); return 1 }
+                importDest = URL(fileURLWithPath: args[i]).standardizedFileURL.path
+            case "--clear-import-dest":
+                clearDest = true
+            case "--json":
+                break
+            default:
+                if a.hasPrefix("--") { fputs("Fehler: Unbekannte Option '\(a)'\n", stderr); return 1 }
+                positionals.append(a)
+            }
+            i += 1
+        }
+        guard positionals.count == 1 else { fputs(usage, stderr); return 1 }
+        guard autoSync != nil || importDest != nil || clearDest else {
+            fputs("Fehler: Nichts zu ändern — --auto-sync, --import-dest oder --clear-import-dest angeben\n", stderr)
+            return 1
+        }
+        guard !(importDest != nil && clearDest) else {
+            fputs("Fehler: --import-dest und --clear-import-dest schließen sich aus\n", stderr); return 1
+        }
+        if let dest = importDest {
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: dest, isDirectory: &isDir), isDir.boolValue else {
+                fputs("Fehler: Import-Ziel ist kein vorhandenes Verzeichnis: \(dest)\n", stderr); return 1
+            }
+        }
+        let query = positionals[0]
+        var folders = loadWatchedFoldersList()
+        guard let idx = folders.firstIndex(where: {
+            $0.id.uuidString.lowercased() == query.lowercased() ||
+            $0.name.lowercased() == query.lowercased() ||
+            $0.bookmarkPath == query
+        }) else {
+            fputs("Fehler: Ordner '\(query)' nicht gefunden\n", stderr)
+            return 1
+        }
+        var folder = folders[idx]
+        let before = (folder.autoSync, folder.importDestinationPath)
+        if let v = autoSync { folder.autoSync = v }
+        if let dest = importDest { folder.importDestinationPath = dest }
+        if clearDest { folder.importDestinationPath = nil }
+        let changed = before.0 != folder.autoSync || before.1 != folder.importDestinationPath
+        if changed {
+            folders[idx] = folder
+            saveWatchedFoldersList(folders)
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["id": folder.id.uuidString, "name": folder.name,
+                                      "auto_sync": folder.autoSync,
+                                      "import_dest": folder.importDestinationPath.map { $0 as Any } ?? NSNull(),
+                                      "changed": changed, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            let sync = folder.autoSync ? "an" : "aus"
+            let dest = folder.importDestinationPath ?? "(keins)"
+            print("\(folder.name): Auto-Sync \(sync), Import-Ziel \(dest)\(changed ? "" : " — unverändert")")
+        }
+        return 0
+
     default:
-        fputs("Fehler: Unbekannter watched-Unterbefehl '\(sub)'. Erlaubt: list, add, remove, check\n", stderr)
+        fputs("Fehler: Unbekannter watched-Unterbefehl '\(sub)'. Erlaubt: list, add, remove, check, set\n", stderr)
         return 1
     }
 }
@@ -3042,7 +3133,11 @@ private func runArchive(_ args: [String]) -> Int32 {
 // MARK: - AlbumFolder
 
 private func albumFoldersFileURL() -> URL {
-    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    // Test-/Skript-Override, damit die echte albumFolders.json unberührt bleibt
+    if let override = ProcessInfo.processInfo.environment["IPHOTO_ALBUMFOLDERS_FILE"], !override.isEmpty {
+        return URL(fileURLWithPath: override)
+    }
+    return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("iPhoto")
         .appendingPathComponent("albumFolders.json")
 }
@@ -3168,8 +3263,82 @@ private func runAlbumFolder(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "move":
+        // Entspricht moveAlbumFolder in der App: Ziel muss existieren, keine Zyklen.
+        let usage = "Verwendung: iphoto-cli albumfolder move <id|name> --parent <id|name> | --root [--json]\n"
+        var positionals: [String] = []
+        var parentQuery: String? = nil
+        var toRoot = false
+        var i = 1
+        while i < args.count {
+            let a = args[i]
+            switch a {
+            case "--parent":
+                i += 1
+                guard i < args.count else { fputs("Fehler: --parent braucht <id|name>\n", stderr); return 1 }
+                parentQuery = args[i]
+            case "--root":
+                toRoot = true
+            case "--json":
+                break
+            default:
+                if a.hasPrefix("--") { fputs("Fehler: Unbekannte Option '\(a)'\n", stderr); return 1 }
+                positionals.append(a)
+            }
+            i += 1
+        }
+        guard positionals.count == 1, (parentQuery != nil) != toRoot else { fputs(usage, stderr); return 1 }
+        var folders = loadAlbumFoldersList()
+        func indexOf(_ query: String) -> Int? {
+            let q = query.lowercased()
+            return folders.firstIndex(where: { $0.id.uuidString.lowercased() == q || $0.name.lowercased() == q })
+        }
+        guard let idx = indexOf(positionals[0]) else {
+            fputs("Fehler: Album-Ordner '\(positionals[0])' nicht gefunden\n", stderr); return 1
+        }
+        let folderID = folders[idx].id
+        var newParent: UUID? = nil
+        if let pq = parentQuery {
+            guard let pIdx = indexOf(pq) else {
+                fputs("Fehler: Ziel-Ordner '\(pq)' nicht gefunden\n", stderr); return 1
+            }
+            let targetID = folders[pIdx].id
+            guard targetID != folderID else {
+                fputs("Fehler: Ordner kann nicht in sich selbst verschoben werden\n", stderr); return 1
+            }
+            // Zyklus-Schutz: vom Ziel aus die Vorfahren-Kette hochlaufen (O(Tiefe) dank Dictionary)
+            var parentByID: [UUID: UUID] = [:]
+            for f in folders { if let p = f.parentID { parentByID[f.id] = p } }
+            var visited = Set<UUID>()
+            var cursor: UUID? = parentByID[targetID]
+            while let cur = cursor, visited.insert(cur).inserted {
+                if cur == folderID {
+                    fputs("Fehler: Ziel '\(folders[pIdx].name)' liegt innerhalb von '\(folders[idx].name)' — Zyklus nicht erlaubt\n", stderr)
+                    return 1
+                }
+                cursor = parentByID[cur]
+            }
+            newParent = targetID
+        }
+        let changed = folders[idx].parentID != newParent
+        if changed {
+            folders[idx].parentID = newParent
+            saveAlbumFoldersList(folders)
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["id": folderID.uuidString, "name": folders[idx].name,
+                                      "parent_id": newParent.map { $0.uuidString as Any } ?? NSNull(),
+                                      "changed": changed, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            let target = newParent.flatMap { p in folders.first(where: { $0.id == p })?.name } ?? "Root-Ebene"
+            print("Ordner verschoben: \(folders[idx].name) → \(target)\(changed ? "" : " (unverändert)")")
+        }
+        return 0
+
     default:
-        fputs("Fehler: Unbekannter albumfolder-Unterbefehl '\(sub)'. Erlaubt: list, create, rename, delete\n", stderr)
+        fputs("Fehler: Unbekannter albumfolder-Unterbefehl '\(sub)'. Erlaubt: list, create, rename, delete, move\n", stderr)
         return 1
     }
 }

@@ -2,6 +2,16 @@
 
 ---
 
+## 1.113.0
+**CLI: Album-Ordner verschieben, Auto-Sync & Import-Ziel für überwachte Ordner**
+
+- Neu: `iphoto-cli albumfolder move <id|name> --parent <id|name> | --root [--json]` — hängt einen Album-Ordner in einen anderen Ordner oder holt ihn zurück auf die oberste Ebene. Wie in der App wird verhindert, dass ein Ordner in sich selbst oder einen seiner Unterordner verschoben wird
+- Neu: `iphoto-cli watched set <name|id> [--auto-sync on|off] [--import-dest <pfad>|--clear-import-dest] [--json]` — schaltet Auto-Sync für einen überwachten Ordner an/aus und setzt oder löscht dessen Import-Ziel
+- Für Skripte und Tests lassen sich die Dateien per `IPHOTO_ALBUMFOLDERS_FILE` bzw. `IPHOTO_WATCHED_FILE` umleiten — die echte Bibliothek bleibt unberührt
+- Neue Tests in `Tests/run_plugins.sh` inkl. Fehlerfällen (Zyklus, unbekannter Ordner/Ziel, ungültige Werte, unbekannte Option)
+
+---
+
 ## 1.112.0
 **CLI: Plugins/Panels an- und ausschalten**
 
