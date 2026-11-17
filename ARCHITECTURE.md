@@ -49,6 +49,15 @@ Reine SwiftUI-Views ohne eigene Logik. Alle Aktionen delegieren an `ImageViewMod
 | Datei | Zweck |
 |-------|-------|
 | `ContentView.swift` | Haupt-Layout: NavSidebar links, ZoomableScrollView Mitte, Inspector rechts |
+| `AlbumBannerView.swift` | Album-Banner über dem Grid (aus `ContentView` extrahiert) |
+| `ToolbarSearchField.swift` | Suchfeld in der Toolbar (aus `ContentView` extrahiert) |
+| `SearchBarView.swift` | Suchleiste mit Filter-Syntax (aus `NavSidebarView` extrahiert) |
+| `NavSidebarView.swift` | Linke Navigations-Sidebar: Bibliothek, Alben, Ordner, Smart Folders, Volumes, Papierkorb … |
+| `NavSidebarSection.swift` | Enum der Sidebar-Sektionen + persistierte Reihenfolge (`nav.sectionOrder`) |
+| `NavSidebarRows.swift` | Zeilen-Views der Sidebar (`AlbumRow`, `FolderRow`, `SidebarSubfolderRow`, `SidebarFileRow`, `VolumeRow`) + `NavSectionDropDelegate` |
+| `NavSidebarSheets.swift` | Sidebar-Sheets (`AlbumNameSheet`, `MoveToGroupSheet`, `GroupRenameSheet`) |
+| `ProjectPickerView.swift` | Projekt-Auswahl (Projekte = benannte Ordner-Sets, siehe `ProjectStore`) |
+| `VerboseLogView.swift` | Log- und Konsolen-Panel („Für Geeks") |
 | `LibraryGridView.swift` | Horizontaler Thumbnail-Strip unten |
 | `SidebarView.swift` | Horizontaler Thumbnail-Strip (Album-/Ordner-Ansicht) |
 | `ThumbnailCell.swift` | Einzelne Thumbnail-Zelle mit Bewertungs-Badge |
@@ -60,6 +69,8 @@ Reine SwiftUI-Views ohne eigene Logik. Alle Aktionen delegieren an `ImageViewMod
 | `VersionHistorySheet.swift` | Gespeicherte Bildversionen anzeigen und wiederherstellen |
 | `CropEditorView.swift` | Interaktiver Zuschnitt-Editor |
 | `CurvesView.swift` | Tonwertkurven-Editor mit 5 Kontrollpunkten |
+
+Die Tabelle listet die zentralen Views; weitere Panels und Sheets (Export, Compare, People, HotPixel, Tether, Settings …) liegen im selben Ordner.
 
 ### ViewModel (`Sources/ViewModels/`)
 
@@ -88,7 +99,8 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `ImageViewModel+Volumes.swift` | Eingehängte Volumes erkennen |
 | `ImageViewModel+WatchedFolders.swift` | Überwachte Ordner, Auto-Import |
 | `ImageLoadingOrchestrator.swift` | Koordiniert Phase-1/2/3-Laden; emittiert `SWITCH`-Metriken |
-| `LibraryStore.swift` | JSON-Persistenz für Alben, SmartFolders, WatchedFolders |
+| `ImageLoadingOrchestrator+LibraryScans.swift` | Bibliotheksweite Hintergrund-Scans (`scanExifForLibrary`, `scanQualityForLibrary`, `scanMotifForLibrary`); 100er-Batch-Flush mit einem Array-Write auf Main |
+| `LibraryStore.swift` | JSON-Persistenz für Alben, Album-Ordner, SmartFolders, WatchedFolders; Saves asynchron über eine serielle Queue, die vor jedem Load geleert wird |
 | `AdjustmentSessionState.swift` | Flüchtiger Edit-Session-Zustand |
 | `BackgroundActivityState.swift` | Fortschrittsanzeige für Hintergrund-Scans |
 | `ComparisonState.swift` | State für Side-by-Side |
@@ -98,7 +110,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 
 **Datenladen (3 Phasen):**
 1. **Phase 1** (sofort): vorhandenes 160 px Thumbnail anzeigen, `fitToWindowRequested = true`
-2. **Phase 2** (`userInitiated`): 1500 px Vorschau dekodieren, Hauptviewer updaten
+2. **Phase 2** (`userInitiated`): 1500 px Vorschau aus dem `ThumbnailDiskCache` laden, sonst dekodieren und dort ablegen; Hauptviewer updaten
 3. **Phase 3** (nach 1,5 s Betrachtungszeit oder Zoom >1): Vollbild dekodieren
 
 ### Models (`Sources/Models/`)
@@ -127,27 +139,29 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `DetectedVolume.swift` | Eingehängtes Volume (Name, URL, Kapazität) |
 | `HDRMerger.swift` | HDR-Merge-Logik (Belichtungsreihe → HDR-Stack) |
 | `HotPixelResult.swift` | Ergebnis der Hotpixel-Analyse |
+| `Project.swift` | Projekt-Struct (Name + Ordnerpfade, `lastOpenedAt`) |
 | `SearchParser.swift` | Parst `iphoto-cli search`-Tokens in `CatalogStore`-Abfragen |
 
 ### Utilities (`Sources/Utilities/`)
 
 | Datei | Zweck |
 |-------|-------|
-| `CatalogStore.swift` | **SQLite-Katalog** — primäre Persistenz (Schema + Migration) |
-| `CatalogStore+Ratings.swift` | ELO, Sterne, Flags, Farbmarken |
+| `CatalogStore.swift` | **SQLite-Katalog** — primäre Persistenz (Schema + Migration); In-Memory-Cache für `image(forPath:)` (Startup-Preload) und SmartFolder-Ergebnisse |
+| `CatalogStore+Ratings.swift` | ELO, Sterne, Flags, Farbmarken, Bildarchiv-Markierungen (`backed_up`) |
 | `CatalogStore+Adjustments.swift` | `AdjustmentState` pro Bild speichern/laden |
 | `CatalogStore+Albums.swift` | Album-CRUD + `album_images` |
 | `CatalogStore+Backup.swift` | Backup-Job-State persistieren |
 | `CatalogStore+People.swift` | `faces` + `people` Tabellen |
 | `CatalogStore+Quality.swift` | Qualitäts-Columns + Overrides |
 | `CatalogStore+Motifs.swift` | Motiv-Tag-Columns |
+| `CatalogStore+Integrity.swift` | Integritäts-Check: verwaiste Zeilen in `ratings`/`trash`/`album_images`/`adjustments`/`faces` finden und löschen (`catalog orphans`) |
 | `ImageExporter.swift` | JPEG/PNG/TIFF/HEIF-Export; Metal-GPU sRGB-Konvertierung (CIContext) |
 | `ImageExporter+Batch.swift` | `exportBatch()` als Extension (CLI-kompatibel, kein AppKit) |
 | `AnalysisEngine.swift` | Histogramm (vImage/SIMD), Waveform, RGB-Parade (teils via Rust-FFI) |
 | `MetadataService.swift` | EXIF/IPTC lesen (ImageIO) und schreiben (CGImageDestination) |
 | `BookmarkStore.swift` | Security-Scoped Bookmarks für Sandbox-Dateizugriff |
 | `VersionStore.swift` | Backup-Versionen (Dateisystem + JSON-Index) |
-| `ThumbnailDiskCache.swift` | Disk-basierter Thumbnail-Cache (160 px, LRU) |
+| `ThumbnailDiskCache.swift` | Disk-Cache für 80/160 px Thumbnails und 1500 px Previews (Limit 1 GB, älteste Dateien werden verdrängt) |
 | `FaceDetector.swift` | Vision-Framework-Wrapper für Gesichtserkennung |
 | `FaceClusterer.swift` | Embedding-Clustering (DBSCAN) → `people`-Zuordnung |
 | `ClosedEyeDetector.swift` | Eye-Aspect-Ratio-Erkennung (geschlossene Augen) |
@@ -163,6 +177,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `SmartFolderSQLGenerator.swift` | Übersetzt SmartFolder-Filter in SQL-Abfragen |
 | `SmartFolderFileSync.swift` | Synchronisiert Smart-Folder-Ergebnisse auf Disk |
 | `AppConfig.swift` | Key-Value-Konfigurationsdatei (`config.json`) |
+| `ProjectStore.swift` | Projekte laden/speichern (`projects.json`), zuletzt geöffnetes Projekt |
 | `PluginStore.swift` | Plugin-Verzeichnis einlesen, laden, auflisten |
 | `InpaintProcessor.swift` | Bridge zu Python/CMT-Inpainting-Skript |
 | `LensFilters.swift` | Vignette + Verzeichnung via CoreImage |
@@ -195,6 +210,7 @@ Performance-kritische Algorithmen sind in eine Rust-Library (`libiphoto_rs`) aus
 | `hotpixel.rs` | Hotpixel-Erkennung |
 | `waveform.rs` | Waveform-Daten für `AnalysisEngine` |
 | `similarity.rs` | Hamming-Distanz für pHash-Vergleiche |
+| `oklab.rs` | OkLab-basierter LUT-Builder für Vibrance und Hue-Rotation |
 
 ---
 
@@ -212,7 +228,7 @@ ImageViewModel.importFiles()
         └── loadCurrentImage()
                 │
                 ├── Phase 1: doc.thumbnail anzeigen (sofort, 160 px aus ThumbnailDiskCache)
-                ├── Phase 2: RAWImageDecoder.thumbnail(1500 px)  (.userInitiated)
+                ├── Phase 2: 1500 px Preview — ThumbnailDiskCache, sonst RAWImageDecoder.thumbnail()  (.userInitiated)
                 └── Phase 3: RAWImageDecoder.decode()  (nach 1,5 s / Zoom)
                         │
                         ├── MetadataService.readPhotoMetadata()
@@ -250,17 +266,20 @@ ImageExporter.exportSingle()
 
 ## Persistenz
 
-Alle persistenten Daten liegen in `~/Library/Application Support/iPhoto/`:
+Persistente Daten liegen in `~/Library/Application Support/iPhoto/` (Thumbnail-Cache: `~/Library/Caches/iPhoto/`):
 
 | Datei/Ordner | Format | Inhalt |
 |---|---|---|
-| `catalog.db` | SQLite (WAL) | **Primäre Datenquelle**: Bilder, Bewertungen, ELO, Alben, Presets, Anpassungen, Gesichter |
+| `catalog.db` | SQLite (WAL) | **Primäre Datenquelle**: Bilder, Bewertungen, ELO, Alben, Presets, Anpassungen, Gesichter, Bildarchiv-Markierungen |
 | `ratings.json` | JSON | Legacy-Bewertungen (Fallback, bleibt parallel) |
 | `albums.json` | JSON | Legacy-Alben (Fallback, wird bei erstem Start migriert) |
 | `bookmarks.json` | JSON | Security-Scoped Bookmarks für importierte URLs |
 | `watchedFolders.json` | JSON | Überwachte Ordner (URL + Bookmark) |
+| `albumFolders.json` | JSON | Album-Ordner (Gruppierung von Alben) |
+| `smartFolders.json` | JSON | Smart-Folder-Definitionen |
+| `projects.json` | JSON | Projekte (`ProjectStore`) |
 | `versions/<hash>/` | Verzeichnisse | Backup-Versionen je Bild (index.json + Pixeldateien) |
-| `thumbnails/` | JPEG-Dateien | ThumbnailDiskCache (160 px, LRU) |
+| `~/Library/Caches/iPhoto/thumbs/` | Bilddateien | ThumbnailDiskCache (80/160 px Thumbnails + 1500 px Previews, max. 1 GB) |
 | `config.json` | JSON | App-Konfiguration (`AppConfig`) |
 
 Logging: `~/Library/Logs/iPhoto/iPhoto.log`
@@ -276,12 +295,14 @@ images       (id, path UNIQUE, filename, size_bytes, width, height,
               blur_override, under_override, over_override, eyes_closed_override,
               eye_openness, quality_scanned,
               duplicate_group_id, similar_group_id,
-              face_scanned, motif_scanned)
+              face_scanned, motif_tags, motif_scanned)
 
 ratings      (image_path PK, rating, flag, color_label, updated_at,
               elo REAL DEFAULT 1500, elo_matches INTEGER DEFAULT 0)
 
 trash        (image_path PK, trashed_at)
+
+backed_up    (image_path PK, backed_at)
 
 albums       (id PK, name, created_at)
 
@@ -330,6 +351,9 @@ iphoto-cli adjust <datei> --output <ziel> [--exposure N] [--brightness N] [--con
                   [--saturation N] [--warmth N] [--clarity N] [--sharpen N]
                   [--crop x,y,w,h] [--rotate 90|180|270] [--preset <name>]
 iphoto-cli adjustments list|get|delete [<bildpfad>] [--json]
+iphoto-cli adjustments set <bildpfad> [--exposure N] [--contrast N] ... [--reset] [--json]
+iphoto-cli adjustments copy <quelle> <ziel1> [...] [--exclude-geometry] [--exclude-local]
+                            [--include-crop] [--skip-existing] [--dry-run] [--json]
 iphoto-cli local-adjustments list|clear <bildpfad> [--json]
 
 # Presets
@@ -343,16 +367,26 @@ iphoto-cli rating export [--output <datei.json|.csv>] [--format json|csv] [--inc
 iphoto-cli rating import <datei.json|.csv> [--skip-existing] [--dry-run] [--json]
 iphoto-cli rating batch-set <bild1> [...] [--set N] [--flag ...] [--json]
 iphoto-cli elo get|list|set|match|reset [<bildpfad>] [--winner left|right|draw] [--json]
+iphoto-cli elo predict <links> <rechts> [--json]
+iphoto-cli elo stats [--bucket N] [--json]
+iphoto-cli elo suggest [--count N] [--include-trashed] [--json]
 
 # Katalog & Suche
-iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline [--json]
+iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans [--json]
 iphoto-cli catalog cameras [--json]
 iphoto-cli catalog timeline [--by year|month|day] [--json]
+iphoto-cli catalog orphans [--fix] [--json]
 iphoto-cli search <text> [--flag ...] [--rating N] [--color ...] [--camera ...] [--date ...] [--json]
 iphoto-cli duplicate list|similar [--json]
+iphoto-cli duplicate regroup [--threshold 0-64] [--dry-run] [--json]
+iphoto-cli duplicate clear [--exact|--similar|--all] [--json]
 
 # Alben & Ordner
 iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export [--json]
+iphoto-cli album duplicate <album-id|name> <neuer-name> [--json]
+iphoto-cli album merge <quelle> <ziel> [--keep-source] [--dry-run] [--json]
+iphoto-cli album purge-stale [--dry-run] [--json]
+iphoto-cli project list|show|create|rename|delete|add-folder|remove-folder [--json]
 iphoto-cli albumfolder list|create|rename|delete [--json]
 iphoto-cli bookmarks list [--missing] [--json]
 iphoto-cli bookmarks stats|path [--json]
@@ -385,6 +419,8 @@ iphoto-cli people scan|list|faces|cluster|rename|delete|reset|export-names|impor
 
 # Motiv-Tags
 iphoto-cli motif get|list|set|find|stats <bildpfad> [<tags>] [--json]
+iphoto-cli motif rename <alt> <neu> [--dry-run] [--json]
+iphoto-cli motif remove <tag> [--dry-run] [--json]
 
 # Weitere
 iphoto-cli hdr <ordner> --output-dir <ziel> [--json]
@@ -392,11 +428,19 @@ iphoto-cli inpaint <datei> --output <ziel> [--python ...] [--cmt ...] [--json]
 iphoto-cli query filters|parse|run [<suchtext>] [--blur-threshold N] [--include-trashed] [--json]
 iphoto-cli stack list|query [<bildpfad>] [--json]
 iphoto-cli trash list|mark|mark-rejected|restore|empty [--json]
+iphoto-cli archive list|mark|unmark|pending [<bildpfad> ...] [--all] [--include-trashed] [--json]
+iphoto-cli collect --output-dir <ordner> [--flag ...] [--color ...] [--min-rating N]
+                   [--include-trashed] [--dry-run] [--overwrite] [--json]
 iphoto-cli version list|backup|restore|delete [--json]
 iphoto-cli cache stats|clear [--json]
 iphoto-cli backup get|set [--quality N] [--mode rename|skip|overwrite] [--json]
+iphoto-cli backup run <datei…> [--dest <pfad>] [--mode ...] [--long-side N] [--quality N] [--json]
+iphoto-cli storage info [--json]
+iphoto-cli perf path [--json]
+iphoto-cli perf switch [--log <datei>] [--last-session] [--label <tag>] [--slowest N] [--json]
 iphoto-cli config show|get|set|export|import [<key>] [<wert>] [--json]
 iphoto-cli plugins list|dir [--json]
+iphoto-cli plugin run --command <befehl> --path <bildpfad>
 iphoto-cli bugreport list|show|fix|reopen|path [--fixed|--all] [--json]
 iphoto-cli viewmode get|set <grid|list|columns|gallery> [--json]
 ```

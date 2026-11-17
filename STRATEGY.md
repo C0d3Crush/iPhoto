@@ -7,7 +7,7 @@
 
 ---
 
-## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.100.0)*
+## 0. Ehrliche Bestandsaufnahme — wo du stehst *(Stand v1.109.0)*
 
 **Was steht (stark!):**
 - Produktionsreife App-Basis: SQLite-Katalog (WAL, Migration), vollständige CRUD für
@@ -30,8 +30,12 @@
   `smartfolder sql/count` (SQL-Inspektion), `query filters/parse/run`, `bugreport`,
   `exif stats` (Verteilung nach Kamera/Objektiv/ISO/Blende/Brennweite/Film),
   `gear summary/cameras/lenses/focal/iso/aperture` (Ausrüstungsstatistik),
-  `catalog cameras` (Bilder pro Kamera) und `catalog timeline` (Bilder pro Zeitraum) u.v.m.
-- 3-Phasen-Ladelogik + ThumbnailDiskCache: Bild-Switching in Millisekunden.
+  `catalog cameras` (Bilder pro Kamera) und `catalog timeline` (Bilder pro Zeitraum),
+  `catalog orphans` (Integritäts-Check), `project` (Projekte = Ordner-Sets),
+  `archive` (Bildarchiv-Markierungen), `collect` (Auswahl in Ordner kopieren),
+  `album duplicate/merge`, `duplicate regroup/clear`, `adjustments set/copy`,
+  `elo predict/stats/suggest`, `perf switch` (SWITCH-Latenzauswertung) u.v.m.
+- 3-Phasen-Ladelogik + ThumbnailDiskCache (inkl. 1500-px-Preview-Tier): Bild-Switching in Millisekunden.
 - Benchmark- + Skalierungstests bis 1000 Bilder, CI auf macOS-latest.
 
 **Was noch aktiv weiterentwickelt wird:**
@@ -286,7 +290,7 @@ aber falls du es langfristig tragfähig willst, sind das die abo-freien Wege:
 
 ## 11. Meilensteine / Definition von Erfolg
 
-**Erreicht (v1.100.0):**
+**Erreicht (v1.109.0):**
 - [x] Phase 0: `AdjustmentState`-Refactor durch, verhaltensgleich.
 - [x] Phase 1: RAW-Pipeline, 3-Phasen-Laden, Rust-Core, ThumbnailDiskCache.
 - [x] Phase 2: Edits im Katalog, Preset-System, Undo/Redo, Batch-Export.
@@ -317,7 +321,7 @@ Rezepte werden geteilt, Contributors kommen. Alles darüber ist Bonus, nicht Pfl
 
 ---
 
-## 12. Was JETZT konkret zu tun ist *(Stand v1.100.0)*
+## 12. Was JETZT konkret zu tun ist *(Stand v1.109.0)*
 
 1. ✅ Phasen 0–3 (Kern) abgeschlossen — die App ist ein funktionierender RAW-Editor
    mit Preset-System, Rezept-Sharing, People, ELO, Qualitätsanalyse und ~65 CLI-Befehlen.
