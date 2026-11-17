@@ -86,6 +86,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `ImageViewModel+Ratings.swift` | Sterne, Flags, Farbmarken |
 | `ImageViewModel+Selection.swift` | Mehrfachauswahl |
 | `ImageViewModel+Thumbnails.swift` | Thumbnail-Cache, `ThumbnailDiskCache`-Integration |
+| `ImageViewModel+Projects.swift` | Projekt öffnen/schließen, Projektordner-Scan |
 | `ImageViewModel+People.swift` | Gesichtserkennung, Clustering, Namen |
 | `ImageViewModel+SmartFolders.swift` | Smart-Folder-Abfragen + Sync |
 | `ImageViewModel+HDR.swift` | HDR-Merge-Workflow |
