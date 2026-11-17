@@ -53,6 +53,7 @@ private func printUsage() {
       iphoto-cli album merge <quelle> <ziel> [--keep-source] [--dry-run] [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
+      iphoto-cli quality stats [--blur-threshold N] [--shadow R] [--highlight R] [--eye-threshold R] [--include-trashed] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
       iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans [--json]
@@ -3616,10 +3617,111 @@ private func runQuality(_ args: [String]) -> Int32 {
     case "override":
         return runQualityOverride(Array(args.dropFirst()), catalog: catalog, jsonMode: jsonMode)
 
+    case "stats":
+        return runQualityStats(Array(args.dropFirst()), catalog: catalog, jsonMode: jsonMode)
+
     default:
-        fputs("Verwendung: iphoto-cli quality scan|list|get|override\n", stderr)
+        fputs("Verwendung: iphoto-cli quality scan|list|get|override|stats\n", stderr)
         return 1
     }
+}
+
+// Aggregierte Quality-Übersicht: wie viele Bilder gescannt/offen sind und wie viele die
+// Blur-/Belichtungs-/Augen-Schwellen reißen. Gleiche Flag-Logik wie `refreshQualityLists()`
+// in der App (Overrides unterdrücken das Flag, Papierkorb zählt nicht mit). Zwei SELECTs
+// (alle Records + offene Pfade), danach ein einziger O(N)-Durchlauf.
+private func runQualityStats(_ args: [String], catalog: CatalogStore, jsonMode: Bool) -> Int32 {
+    let usage = "Verwendung: iphoto-cli quality stats [--blur-threshold N] [--shadow R] [--highlight R] [--eye-threshold R] [--include-trashed] [--json]\n"
+    var blurT = BlurDetector.defaultThreshold
+    var shadowT = ExposureDetector.defaultShadowClipThreshold
+    var highlightT = ExposureDetector.defaultHighlightClipThreshold
+    var eyeT = ClosedEyeDetector.defaultThreshold
+    var includeTrashed = false
+    var i = 0
+    while i < args.count {
+        let a = args[i]
+        switch a {
+        case "--json":
+            break
+        case "--include-trashed":
+            includeTrashed = true
+        case "--blur-threshold", "--shadow", "--highlight", "--eye-threshold":
+            guard i + 1 < args.count, let v = Double(args[i + 1]), v.isFinite, v > 0 else {
+                fputs("Fehler: \(a) braucht eine positive Zahl\n" + usage, stderr); return 1
+            }
+            if a == "--blur-threshold" { blurT = v }
+            else if a == "--shadow" { shadowT = v }
+            else if a == "--highlight" { highlightT = v }
+            else { eyeT = v }
+            i += 1
+        default:
+            fputs("Fehler: Unbekanntes Argument '\(a)'\n" + usage, stderr); return 1
+        }
+        i += 1
+    }
+
+    let trashed: Set<String> = includeTrashed ? [] : catalog.trashedPaths()
+    let records = catalog.allQualityRecords()
+    var pending = 0
+    for path in catalog.pathsNeedingQualityScan() where !trashed.contains(path) { pending += 1 }
+
+    var scanned = 0, blurry = 0, under = 0, over = 0, eyes = 0, flagged = 0, withEyeData = 0
+    var ovBlur = 0, ovUnder = 0, ovOver = 0, ovEyes = 0
+    var blurN = 0
+    var blurSum = 0.0, blurMin = Double.infinity, blurMax = -Double.infinity
+    for (path, q) in records where !trashed.contains(path) {
+        scanned += 1
+        if q.blurOverride { ovBlur += 1 }
+        if q.underOverride { ovUnder += 1 }
+        if q.overOverride { ovOver += 1 }
+        if q.eyesClosedOverride { ovEyes += 1 }
+        if let b = q.blurScore {
+            blurN += 1; blurSum += b
+            if b < blurMin { blurMin = b }
+            if b > blurMax { blurMax = b }
+        }
+        if q.eyeOpenness != nil { withEyeData += 1 }
+        var any = false
+        if !q.blurOverride, let b = q.blurScore, b < blurT { blurry += 1; any = true }
+        if !q.underOverride, let r = q.underRatio, r >= shadowT { under += 1; any = true }
+        if !q.overOverride, let r = q.overRatio, r >= highlightT { over += 1; any = true }
+        if !q.eyesClosedOverride, let e = q.eyeOpenness, e < eyeT { eyes += 1; any = true }
+        if any { flagged += 1 }
+    }
+    let total = scanned + pending
+    let blurAvg = blurN > 0 ? blurSum / Double(blurN) : 0
+
+    if jsonMode {
+        func r2(_ v: Double) -> Double { (v * 100).rounded() / 100 }
+        var d: [String: Any] = [
+            "total": total, "scanned": scanned, "pending": pending,
+            "flagged": flagged, "clean": scanned - flagged,
+            "blurry": blurry, "underexposed": under, "overexposed": over, "eyes_closed": eyes,
+            "with_eye_data": withEyeData,
+            "include_trashed": includeTrashed,
+            "overrides": ["blur": ovBlur, "under": ovUnder, "over": ovOver, "eyes_closed": ovEyes],
+            "thresholds": ["blur": blurT, "shadow": shadowT, "highlight": highlightT, "eye": eyeT]
+        ]
+        if blurN > 0 {
+            d["blur"] = ["min": r2(blurMin), "max": r2(blurMax), "average": r2(blurAvg)]
+        } else {
+            d["blur"] = NSNull()
+        }
+        if let dd = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]),
+           let s = String(data: dd, encoding: .utf8) { print(s) }
+    } else {
+        print("Bilder:          \(total)  (gescannt \(scanned), offen \(pending))")
+        print("Auffällig:       \(flagged)  (unauffällig \(scanned - flagged))")
+        print(String(format: "Unscharf:        %ld  (Blur < %.1f)", blurry, blurT))
+        print(String(format: "Unterbelichtet:  %ld  (Schatten ≥ %.2f)", under, shadowT))
+        print(String(format: "Überbelichtet:   %ld  (Lichter ≥ %.2f)", over, highlightT))
+        print(String(format: "Augen zu:        %ld  (Öffnung < %.2f, %ld Bild(er) mit Gesicht)", eyes, eyeT, withEyeData))
+        print("Overrides:       blur \(ovBlur), under \(ovUnder), over \(ovOver), eyes-closed \(ovEyes)")
+        if blurN > 0 {
+            print(String(format: "Blur-Score:      min %.1f  Ø %.1f  max %.1f", blurMin, blurAvg, blurMax))
+        }
+    }
+    return 0
 }
 
 // Nutzer-Korrekturen der Quality-Flags ("Bild ist doch nicht unscharf") — gleiche Spalten,

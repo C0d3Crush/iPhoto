@@ -3563,6 +3563,108 @@ if [ $PM_ERR -ne 0 ]; then pass "people merge unbekannte Option (→ Fehler)"; e
 echo ""
 
 # ---------------------------------------------------------------------------
+# quality stats
+# ---------------------------------------------------------------------------
+echo "--- QUALITY STATS ---"
+
+QS_DB="$TMPDIR/qs_catalog.db"
+qs() { IPHOTO_CATALOG_DB="$QS_DB" "$BIN" "$@"; }
+
+# Leerer Katalog: alles 0, blur = null
+QS_EXIT=0
+QS_OUT=$(qs quality stats --json 2>/dev/null) || QS_EXIT=$?
+if [ $QS_EXIT -eq 0 ] && echo "$QS_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['total']==0 and d['scanned']==0 and d['pending']==0 and d['flagged']==0, d
+assert d['blur'] is None and d['include_trashed'] is False, d
+assert d['thresholds']['blur']==120 and d['thresholds']['eye']==0.18, d" 2>/dev/null; then
+    pass "quality stats --json (leerer Katalog)"
+else
+    fail "quality stats --json (leer)" "Exit $QS_EXIT: $QS_OUT"
+fi
+
+python3 - "$QS_DB" <<'PYEOF'
+import sqlite3, sys
+# (filename, scanned, blur, under, over, eye, blur_override)
+# phash/phash_v müssen gesetzt sein — sonst setzt die Katalog-Migration quality_scanned zurück.
+rows = [("sharp.jpg",   1, 300.0, 0.01, 0.01, 0.30, 0),
+        ("blurry.jpg",  1,  50.0, 0.01, 0.01, None, 0),
+        ("dark.jpg",    1, 200.0, 0.50, 0.00, None, 0),
+        ("bright.jpg",  1, 200.0, 0.00, 0.50, 0.05, 0),
+        ("ovr.jpg",     1,  40.0, 0.00, 0.00, None, 1),
+        ("pending.jpg", 0,  None, None, None, None, 0),
+        ("trash.jpg",   1,  10.0, 0.00, 0.00, None, 0)]
+c = sqlite3.connect(sys.argv[1])
+for i, (fn, sc, b, u, o, e, bo) in enumerate(rows):
+    c.execute("INSERT INTO images(id,path,filename,is_raw,width,height,size_bytes,imported_at,"
+              "quality_scanned,blur_score,under_ratio,over_ratio,eye_openness,blur_override,phash,phash_v) "
+              "VALUES(?,?,?,0,1,1,1,datetime('now'),?,?,?,?,?,?,1,1)",
+              ("qs-%d" % i, "/tmp/qs/" + fn, fn, sc, b, u, o, e, bo))
+c.execute("INSERT INTO trash(image_path, trashed_at) VALUES('/tmp/qs/trash.jpg', datetime('now'))")
+c.commit(); c.close()
+PYEOF
+
+# Standard-Schwellen: Papierkorb ausgelassen, Override unterdrückt Blur-Flag
+QS_EXIT=0
+QS_OUT=$(qs quality stats --json 2>/dev/null) || QS_EXIT=$?
+if [ $QS_EXIT -eq 0 ] && echo "$QS_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['total']==6 and d['scanned']==5 and d['pending']==1, d
+assert d['blurry']==1 and d['underexposed']==1 and d['overexposed']==1 and d['eyes_closed']==1, d
+assert d['flagged']==3 and d['clean']==2 and d['with_eye_data']==2, d
+assert d['overrides']=={'blur':1,'under':0,'over':0,'eyes_closed':0}, d
+assert d['blur']=={'min':40,'max':300,'average':158}, d" 2>/dev/null; then
+    pass "quality stats --json (Zählung, Override, Papierkorb ausgelassen)"
+else
+    fail "quality stats --json" "Exit $QS_EXIT: $QS_OUT"
+fi
+
+# --include-trashed zählt das Papierkorb-Bild mit
+QS_EXIT=0
+QS_OUT=$(qs quality stats --include-trashed --json 2>/dev/null) || QS_EXIT=$?
+if [ $QS_EXIT -eq 0 ] && echo "$QS_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['total']==7 and d['scanned']==6 and d['blurry']==2 and d['blur']['min']==10, d
+assert d['include_trashed'] is True, d" 2>/dev/null; then
+    pass "quality stats --include-trashed --json"
+else
+    fail "quality stats --include-trashed" "Exit $QS_EXIT: $QS_OUT"
+fi
+
+# Eigene Schwellen
+QS_EXIT=0
+QS_OUT=$(qs quality stats --blur-threshold 250 --shadow 0.6 --eye-threshold 0.01 --json 2>/dev/null) || QS_EXIT=$?
+if [ $QS_EXIT -eq 0 ] && echo "$QS_OUT" | python3 -c "
+import sys,json; d=json.load(sys.stdin)
+assert d['blurry']==3 and d['underexposed']==0 and d['overexposed']==1 and d['eyes_closed']==0, d
+assert d['flagged']==3 and d['thresholds']['blur']==250, d" 2>/dev/null; then
+    pass "quality stats mit eigenen Schwellen"
+else
+    fail "quality stats mit eigenen Schwellen" "Exit $QS_EXIT: $QS_OUT"
+fi
+
+# Textausgabe
+QS_EXIT=0
+QS_OUT=$(qs quality stats 2>/dev/null) || QS_EXIT=$?
+if [ $QS_EXIT -eq 0 ] && echo "$QS_OUT" | grep -q "gescannt 5, offen 1" && echo "$QS_OUT" | grep -q "Unscharf: *1 "; then
+    pass "quality stats (Textausgabe)"
+else
+    fail "quality stats (Textausgabe)" "Exit $QS_EXIT: $QS_OUT"
+fi
+
+# Fehlerfälle
+QS_ERR=0
+qs quality stats --bogus > /dev/null 2>&1 || QS_ERR=$?
+if [ $QS_ERR -ne 0 ]; then pass "quality stats unbekannte Option (→ Fehler)"; else fail "quality stats --bogus" "Hätte fehlschlagen sollen"; fi
+QS_ERR=0
+qs quality stats --blur-threshold abc > /dev/null 2>&1 || QS_ERR=$?
+if [ $QS_ERR -ne 0 ]; then pass "quality stats --blur-threshold abc (→ Fehler)"; else fail "quality stats --blur-threshold abc" "Hätte fehlschlagen sollen"; fi
+QS_ERR=0
+qs quality stats --shadow > /dev/null 2>&1 || QS_ERR=$?
+if [ $QS_ERR -ne 0 ]; then pass "quality stats --shadow ohne Wert (→ Fehler)"; else fail "quality stats --shadow ohne Wert" "Hätte fehlschlagen sollen"; fi
+QS_ERR=0
+qs quality stats --highlight -1 > /dev/null 2>&1 || QS_ERR=$?
+if [ $QS_ERR -ne 0 ]; then pass "quality stats --highlight -1 (→ Fehler)"; else fail "quality stats --highlight -1" "Hätte fehlschlagen sollen"; fi
 # plugins status / enable / disable — Aktivierungsstatus der Panels
 # ---------------------------------------------------------------------------
 echo "--- Plugins status/enable/disable ---"

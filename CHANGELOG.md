@@ -2,12 +2,20 @@
 
 ---
 
-## 1.111.0
+## 1.112.0
 **CLI: Plugins/Panels an- und ausschalten**
 
 - Neu: `iphoto-cli plugins status [--json]` — zeigt für jedes Plugin/Panel, ob es aktiv ist, den Standardwert und ob der Zustand manuell überschrieben wurde
 - Neu: `iphoto-cli plugins enable <plugin-id> [--json]` und `iphoto-cli plugins disable <plugin-id> [--json]` — schaltet ein Panel an bzw. aus (gleiche Einstellungsschlüssel wie die App)
 - Neue Tests in `Tests/run_plugins.sh` inkl. Fehlerfällen (unbekannte ID, fehlende ID, unbekannte Option)
+
+---
+
+## 1.111.0
+**CLI: Quality-Übersicht**
+
+- Neu: `iphoto-cli quality stats [--blur-threshold N] [--shadow R] [--highlight R] [--eye-threshold R] [--include-trashed] [--json]` — zeigt auf einen Blick, wie viele Bilder gescannt bzw. noch offen sind und wie viele als unscharf, unter-/überbelichtet oder „Augen zu" gelten, dazu Anzahl der Nutzer-Overrides und Blur-Score (min/Ø/max). Gleiche Regeln wie in der App: Overrides unterdrücken das Flag, Bilder im Papierkorb zählen nur mit `--include-trashed`
+- Neue Tests in `Tests/run_plugins.sh` inkl. Fehlerfällen (unbekannte Option, ungültiger/fehlender Schwellenwert)
 
 ---
 
