@@ -3563,6 +3563,83 @@ if [ $PM_ERR -ne 0 ]; then pass "people merge unbekannte Option (→ Fehler)"; e
 echo ""
 
 # ---------------------------------------------------------------------------
+# plugins status / enable / disable — Aktivierungsstatus der Panels
+# ---------------------------------------------------------------------------
+echo "--- Plugins status/enable/disable ---"
+PS_JSON=$("$BIN" plugins status --json 2>&1)
+if echo "$PS_JSON" | python3 -c "
+import sys, json
+lst = json.load(sys.stdin)
+assert isinstance(lst, list) and len(lst) >= 9, f'nur {len(lst)} Einträge'
+for r in lst:
+    assert isinstance(r['id'], str) and isinstance(r['enabled'], bool)
+    assert isinstance(r['defaultEnabled'], bool) and isinstance(r['overridden'], bool)
+" 2>/dev/null; then
+    pass "plugins status --json (valides Array mit enabled-Feldern)"
+else
+    fail "plugins status --json" "Unerwartete Ausgabe: $PS_JSON"
+fi
+
+PS_TEXT=$("$BIN" plugins status 2>&1)
+if echo "$PS_TEXT" | grep -q "Plugins/Panels aktiv"; then
+    pass "plugins status (Textausgabe mit Zusammenfassung)"
+else
+    fail "plugins status" "Unerwartete Ausgabe: $PS_TEXT"
+fi
+
+# Erstes Plugin umschalten und danach den Ausgangszustand wiederherstellen
+PS_ID=$(echo "$PS_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])" 2>/dev/null || true)
+PS_WAS=$(echo "$PS_JSON" | python3 -c "import sys,json; print('enable' if json.load(sys.stdin)[0]['enabled'] else 'disable')" 2>/dev/null || true)
+ps_state() {
+    "$BIN" plugins status --json 2>/dev/null | python3 -c "
+import sys, json
+print([r for r in json.load(sys.stdin) if r['id'] == sys.argv[1]][0]['enabled'])" "$1" 2>/dev/null || true
+}
+if [ -n "$PS_ID" ]; then
+    PS_EXIT=0
+    PS_OUT=$("$BIN" plugins disable "$PS_ID" --json 2>&1) || PS_EXIT=$?
+    if [ $PS_EXIT -eq 0 ] && echo "$PS_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] is True and d['enabled'] is False" 2>/dev/null \
+       && [ "$(ps_state "$PS_ID")" = "False" ]; then
+        pass "plugins disable <id> --json (Status danach: aus)"
+    else
+        fail "plugins disable" "Exit $PS_EXIT: $PS_OUT | Status: $(ps_state "$PS_ID")"
+    fi
+
+    PS_EXIT=0
+    PS_OUT=$("$BIN" plugins enable "$PS_ID" 2>&1) || PS_EXIT=$?
+    if [ $PS_EXIT -eq 0 ] && echo "$PS_OUT" | grep -q "aktiviert" && [ "$(ps_state "$PS_ID")" = "True" ]; then
+        pass "plugins enable <id> (Status danach: an)"
+    else
+        fail "plugins enable" "Exit $PS_EXIT: $PS_OUT | Status: $(ps_state "$PS_ID")"
+    fi
+
+    # Idempotent: erneutes enable meldet changed=false
+    PS_OUT=$("$BIN" plugins enable "$PS_ID" --json 2>&1) || true
+    if echo "$PS_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['changed'] is False and d['enabled'] is True" 2>/dev/null; then
+        pass "plugins enable idempotent (changed=false)"
+    else
+        fail "plugins enable idempotent" "Unerwartete Ausgabe: $PS_OUT"
+    fi
+
+    "$BIN" plugins "$PS_WAS" "$PS_ID" > /dev/null 2>&1 || true
+else
+    fail "plugins enable/disable" "Keine Plugin-ID aus status --json lesbar: $PS_JSON"
+fi
+
+# Fehlerfälle
+PS_ERR=0
+"$BIN" plugins enable gibtsnicht-xyz > /dev/null 2>&1 || PS_ERR=$?
+if [ $PS_ERR -ne 0 ]; then pass "plugins enable unbekannte ID (→ Fehler)"; else fail "plugins enable unbekannte ID" "Hätte fehlschlagen sollen"; fi
+PS_ERR=0
+"$BIN" plugins disable > /dev/null 2>&1 || PS_ERR=$?
+if [ $PS_ERR -ne 0 ]; then pass "plugins disable ohne ID (→ Fehler)"; else fail "plugins disable ohne ID" "Hätte fehlschlagen sollen"; fi
+PS_ERR=0
+"$BIN" plugins status --bogus > /dev/null 2>&1 || PS_ERR=$?
+if [ $PS_ERR -ne 0 ]; then pass "plugins status unbekannte Option (→ Fehler)"; else fail "plugins status --bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

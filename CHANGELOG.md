@@ -2,6 +2,15 @@
 
 ---
 
+## 1.111.0
+**CLI: Plugins/Panels an- und ausschalten**
+
+- Neu: `iphoto-cli plugins status [--json]` — zeigt für jedes Plugin/Panel, ob es aktiv ist, den Standardwert und ob der Zustand manuell überschrieben wurde
+- Neu: `iphoto-cli plugins enable <plugin-id> [--json]` und `iphoto-cli plugins disable <plugin-id> [--json]` — schaltet ein Panel an bzw. aus (gleiche Einstellungsschlüssel wie die App)
+- Neue Tests in `Tests/run_plugins.sh` inkl. Fehlerfällen (unbekannte ID, fehlende ID, unbekannte Option)
+
+---
+
 ## 1.110.0
 **CLI: Personen zusammenführen**
 

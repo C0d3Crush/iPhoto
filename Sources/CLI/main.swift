@@ -29,6 +29,9 @@ private func printUsage() {
       iphoto-cli inpaint <datei> --output <ziel> [--python /usr/bin/python3] [--cmt ~/cmt] [--checkpoint ~/cmt/checkpoints]
       iphoto-cli plugins list [--json]
       iphoto-cli plugins dir
+      iphoto-cli plugins status [--json]
+      iphoto-cli plugins enable <plugin-id> [--json]
+      iphoto-cli plugins disable <plugin-id> [--json]
       iphoto-cli plugin run --command <befehl> --path <bildpfad>
       iphoto-cli viewmode get [--json]
       iphoto-cli viewmode set <grid|list|columns|gallery> [--json]
@@ -178,7 +181,7 @@ private func printUsage() {
     preset:   Zeigt Built-in-Presets oder wendet einen an
     analyse:  Analysiert Schärfe und Belichtung (Blur + Exposure)
     inpaint:  KI-basiertes Inpainting via CMT (benötigt Python + CMT-Installation); --json
-    plugins:  Listet installierte Plugins/Panels auf oder zeigt den Plugin-Ordner; dir --json
+    plugins:  Listet installierte Plugins/Panels auf oder zeigt den Plugin-Ordner; dir --json; status/enable/disable schalten Panels an/aus
     album:    Alben erstellen, bearbeiten, umbenennen, Bilder hinzufügen/entfernen, in Ordner exportieren
     quality:  Qualitätsanalyse (Blur, Belichtung, Closed-Eye) scannen und lesen; list --sort blur|rating|elo
     version:  Versionshistorie eines Bildes sichern, anzeigen oder wiederherstellen
@@ -1570,6 +1573,93 @@ private func runPlugins(_ subArgs: [String]) -> Int32 {
             print("  \(infos.count) Plugins/Panels")
         }
         return 0
+    case "status", "enable", "disable":
+        // Aktivierungsstatus der Panels — gleiche UserDefaults-Schlüssel wie PluginStore
+        // (storageKey aus dem Plugin-JSON, sonst "plugin.<id>").
+        for a in subArgs.dropFirst() where a.hasPrefix("--") && a != "--json" {
+            fputs("Fehler: Unbekannte Option '\(a)' für 'plugins \(sub)'\n", stderr)
+            return 1
+        }
+        let stateURLs = (try? FileManager.default.contentsOfDirectory(
+            at: pluginDir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
+        ).filter { $0.pathExtension == "json" }) ?? []
+
+        var states: [(id: String, name: String, order: Int, defaultEnabled: Bool, key: String)] = []
+        for url in stateURLs {
+            guard let data = try? Data(contentsOf: url),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let id = obj["id"] as? String,
+                  let name = obj["name"] as? String else { continue }
+            let storageKey = obj["storageKey"] as? String ?? ""
+            states.append((
+                id: id,
+                name: name,
+                order: obj["order"] as? Int ?? 99,
+                defaultEnabled: obj["defaultEnabled"] as? Bool ?? true,
+                key: storageKey.isEmpty ? "plugin.\(id)" : storageKey
+            ))
+        }
+        states.sort { $0.order != $1.order ? $0.order < $1.order : $0.name < $1.name }
+        let defaults = UserDefaults.standard
+
+        if sub == "status" {
+            var rows: [[String: Any]] = []
+            for p in states {
+                let stored = defaults.object(forKey: p.key) as? Bool
+                rows.append([
+                    "id": p.id,
+                    "name": p.name,
+                    "enabled": stored ?? p.defaultEnabled,
+                    "defaultEnabled": p.defaultEnabled,
+                    "overridden": stored != nil
+                ])
+            }
+            if jsonOutput {
+                if let d = try? JSONSerialization.data(withJSONObject: rows, options: []),
+                   let s = String(data: d, encoding: .utf8) { print(s) }
+            } else {
+                var enabledCount = 0
+                for row in rows {
+                    let on = row["enabled"] as? Bool ?? false
+                    if on { enabledCount += 1 }
+                    let mark = on ? "[an] " : "[aus]"
+                    let note = (row["overridden"] as? Bool ?? false) ? "" : "  (Standard)"
+                    let rowID = row["id"] as? String ?? ""
+                    let rowName = row["name"] as? String ?? ""
+                    print("  \(mark)  \(rowID)  —  \(rowName)\(note)")
+                }
+                print("  \(enabledCount) von \(rows.count) Plugins/Panels aktiv")
+            }
+            return 0
+        }
+
+        let positional = subArgs.dropFirst().filter { !$0.hasPrefix("--") }
+        guard let targetID = positional.first else {
+            fputs("Fehler: 'plugins \(sub)' benötigt eine Plugin-ID (siehe 'plugins status')\n", stderr)
+            return 1
+        }
+        guard let target = states.first(where: { $0.id == targetID }) else {
+            fputs("Fehler: Unbekanntes Plugin '\(targetID)' (siehe 'plugins status')\n", stderr)
+            return 1
+        }
+        let newValue = sub == "enable"
+        let previous = (defaults.object(forKey: target.key) as? Bool) ?? target.defaultEnabled
+        defaults.set(newValue, forKey: target.key)
+        defaults.synchronize()
+        if jsonOutput {
+            let obj: [String: Any] = [
+                "id": target.id,
+                "enabled": newValue,
+                "changed": previous != newValue,
+                "ok": true
+            ]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: []),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            let verb = newValue ? "aktiviert" : "deaktiviert"
+            print("Plugin '\(target.id)' \(verb)")
+        }
+        return 0
     case "run":
         // plugin run --command <shell-cmd> --path <bildpfad>
         // Führt einen Shell-Befehl aus ({path} wird durch den Bildpfad ersetzt) und gibt stdout aus.
@@ -1602,7 +1692,7 @@ private func runPlugins(_ subArgs: [String]) -> Int32 {
         return 0
 
     default:
-        fputs("Fehler: Unbekannter plugins-Unterbefehl '\(sub)'. Erlaubt: list, dir, run\n", stderr)
+        fputs("Fehler: Unbekannter plugins-Unterbefehl '\(sub)'. Erlaubt: list, dir, status, enable, disable, run\n", stderr)
         return 1
     }
 }
