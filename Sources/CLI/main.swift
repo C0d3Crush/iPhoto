@@ -38,6 +38,7 @@ private func printUsage() {
       iphoto-cli people cluster [--epsilon 0.12] [--json]
       iphoto-cli people rename <id> <name> [--json]
       iphoto-cli people delete <id> [--json]
+      iphoto-cli people merge <quelle-id> <ziel-id> [--dry-run] [--json]
       iphoto-cli people reset [--json]
       iphoto-cli people export-names [--output <datei.csv>] [--json]
       iphoto-cli people import-names <datei.csv> [--json]
@@ -1929,6 +1930,65 @@ private func runPeople(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "merge":
+        // people merge <quelle-id> <ziel-id> [--dry-run] [--json]
+        // Hängt alle Gesichter der Quelle an die Ziel-Person und löscht die Quelle.
+        // Name/Cover des Ziels bleiben; fehlen sie dort, werden sie von der Quelle übernommen.
+        let mergeUsage = "Verwendung: iphoto-cli people merge <quelle-id> <ziel-id> [--dry-run] [--json]\n"
+        var mergeIDs: [String] = []
+        var dryRun = false
+        for a in args.dropFirst() {
+            if a == "--json" { continue }
+            if a == "--dry-run" { dryRun = true; continue }
+            if a.hasPrefix("-") { fputs("Fehler: Unbekannte Option: \(a)\n", stderr); return 1 }
+            mergeIDs.append(a)
+        }
+        guard mergeIDs.count == 2 else { fputs(mergeUsage, stderr); return 1 }
+        let sourceID = mergeIDs[0], targetID = mergeIDs[1]
+        guard sourceID != targetID else {
+            fputs("Fehler: Quelle und Ziel sind identisch\n", stderr); return 1
+        }
+        let mergePeople = catalog.allPeople()
+        guard let source = mergePeople.first(where: { $0.id == sourceID }) else {
+            fputs("Fehler: Person '\(sourceID)' nicht im Katalog\n", stderr); return 1
+        }
+        guard let target = mergePeople.first(where: { $0.id == targetID }) else {
+            fputs("Fehler: Person '\(targetID)' nicht im Katalog\n", stderr); return 1
+        }
+        // Ein Durchlauf über alle Gesichter: Quelle einsammeln, Ziel zählen
+        var assignments: [String: String?] = [:]
+        var targetFaces = 0
+        for f in catalog.allFaces() {
+            if f.clusterID == sourceID { assignments[f.id] = .some(targetID) }
+            else if f.clusterID == targetID { targetFaces += 1 }
+        }
+        var merged = target
+        if merged.name == nil { merged.name = source.name }
+        if merged.coverFaceID == nil { merged.coverFaceID = source.coverFaceID }
+        if !dryRun {
+            catalog.batchUpdateFaceClusters(assignments)   // eine Transaktion
+            if merged.name != target.name || merged.coverFaceID != target.coverFaceID {
+                catalog.updatePerson(merged)
+            }
+            catalog.deletePerson(id: sourceID)
+        }
+        if jsonMode {
+            var obj: [String: Any] = [
+                "source": sourceID, "target": targetID,
+                "moved_faces": assignments.count,
+                "target_faces": targetFaces + assignments.count,
+                "dry_run": dryRun, "ok": true
+            ]
+            if let n = merged.name { obj["name"] = n }
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            let label = merged.name ?? "(unbenannt)"
+            let verb = dryRun ? "Würde zusammenführen" : "Zusammengeführt"
+            print("\(verb): \(sourceID) → \(targetID) [\(label)], \(assignments.count) Gesicht(er) verschoben")
+        }
+        return 0
+
     case "reset":
         // people reset [--json] — alle Cluster-Zuordnungen lösen, unbenannte Personen löschen
         let before = catalog.allPeople()
@@ -1945,7 +2005,7 @@ private func runPeople(_ args: [String]) -> Int32 {
         return 0
 
     default:
-        fputs("Fehler: Unbekannter people-Unterbefehl '\(sub)'. Erlaubt: list, faces, cluster, rename, delete, reset, export-names, import-names\n", stderr)
+        fputs("Fehler: Unbekannter people-Unterbefehl '\(sub)'. Erlaubt: list, faces, cluster, rename, delete, merge, reset, export-names, import-names\n", stderr)
         return 1
     }
 }

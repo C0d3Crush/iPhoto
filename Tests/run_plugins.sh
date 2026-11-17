@@ -3492,6 +3492,77 @@ if [ $AM_ERR -ne 0 ]; then pass "album merge unbekannte Option (→ Fehler)"; el
 echo ""
 
 # ---------------------------------------------------------------------------
+# people merge
+# ---------------------------------------------------------------------------
+echo "--- PEOPLE MERGE ---"
+
+PM_DB="$TMPDIR/pm_catalog.db"
+IPHOTO_CATALOG_DB="$PM_DB" "$BIN" people list > /dev/null 2>&1 || true
+python3 - "$PM_DB" <<'PYEOF'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.executemany("INSERT INTO people (id, name, cover_face_id) VALUES (?,?,?)",
+              [("p-anna", "Anna", None), ("p-auto", None, "f3"), ("p-ben", "Ben", None)])
+c.executemany("INSERT INTO faces (id, image_path, bbox_x, bbox_y, bbox_w, bbox_h, confidence, cluster_id) VALUES (?,?,0.1,0.1,0.2,0.2,0.9,?)",
+              [("f1", "/tmp/pm/a.jpg", "p-anna"), ("f2", "/tmp/pm/b.jpg", "p-auto"),
+               ("f3", "/tmp/pm/c.jpg", "p-auto"), ("f4", "/tmp/pm/d.jpg", "p-ben")])
+c.commit(); c.close()
+PYEOF
+pm() { IPHOTO_CATALOG_DB="$PM_DB" "$BIN" "$@"; }
+pm_state() {
+python3 - "$PM_DB" <<'PYEOF'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+people = sorted(r[0] for r in c.execute("SELECT id FROM people"))
+faces = dict(c.execute("SELECT id, cluster_id FROM faces"))
+print(",".join(people) + "|" + ",".join(f"{k}={faces[k]}" for k in sorted(faces)))
+PYEOF
+}
+
+# dry-run: meldet 2 Gesichter, ändert nichts
+PM_EXIT=0
+PM_OUT=$(pm people merge p-auto p-anna --dry-run --json 2>&1) || PM_EXIT=$?
+PM_STATE=$(pm_state)
+if [ $PM_EXIT -eq 0 ] \
+   && echo "$PM_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and d['dry_run'] and d['moved_faces']==2 and d['target_faces']==3" 2>/dev/null \
+   && [ "$PM_STATE" = "p-anna,p-auto,p-ben|f1=p-anna,f2=p-auto,f3=p-auto,f4=p-ben" ]; then
+    pass "people merge --dry-run (Katalog unverändert)"
+else
+    fail "people merge --dry-run" "Exit $PM_EXIT: $PM_OUT | $PM_STATE"
+fi
+
+# echter Merge: Gesichter wandern, Quelle gelöscht, Name bleibt
+PM_EXIT=0
+PM_OUT=$(pm people merge p-auto p-anna --json 2>&1) || PM_EXIT=$?
+PM_STATE=$(pm_state)
+if [ $PM_EXIT -eq 0 ] \
+   && echo "$PM_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['ok'] and not d['dry_run'] and d['moved_faces']==2 and d['target_faces']==3 and d['name']=='Anna'" 2>/dev/null \
+   && [ "$PM_STATE" = "p-anna,p-ben|f1=p-anna,f2=p-anna,f3=p-anna,f4=p-ben" ]; then
+    pass "people merge --json (Gesichter verschoben, Quelle gelöscht)"
+else
+    fail "people merge --json" "Exit $PM_EXIT: $PM_OUT | $PM_STATE"
+fi
+
+# Fehlerfälle
+PM_ERR=0
+pm people merge p-anna p-anna > /dev/null 2>&1 || PM_ERR=$?
+if [ $PM_ERR -ne 0 ]; then pass "people merge Quelle=Ziel (→ Fehler)"; else fail "people merge Quelle=Ziel" "Hätte fehlschlagen sollen"; fi
+PM_ERR=0
+pm people merge gibtsnicht p-anna > /dev/null 2>&1 || PM_ERR=$?
+if [ $PM_ERR -ne 0 ]; then pass "people merge unbekannte Quelle (→ Fehler)"; else fail "people merge unbekannte Quelle" "Hätte fehlschlagen sollen"; fi
+PM_ERR=0
+pm people merge p-ben gibtsnicht > /dev/null 2>&1 || PM_ERR=$?
+if [ $PM_ERR -ne 0 ]; then pass "people merge unbekanntes Ziel (→ Fehler)"; else fail "people merge unbekanntes Ziel" "Hätte fehlschlagen sollen"; fi
+PM_ERR=0
+pm people merge p-ben > /dev/null 2>&1 || PM_ERR=$?
+if [ $PM_ERR -ne 0 ]; then pass "people merge ohne Ziel (→ Fehler)"; else fail "people merge ohne Ziel" "Hätte fehlschlagen sollen"; fi
+PM_ERR=0
+pm people merge p-ben p-anna --bogus > /dev/null 2>&1 || PM_ERR=$?
+if [ $PM_ERR -ne 0 ]; then pass "people merge unbekannte Option (→ Fehler)"; else fail "people merge --bogus" "Hätte fehlschlagen sollen"; fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

@@ -2,6 +2,14 @@
 
 ---
 
+## 1.110.0
+**CLI: Personen zusammenführen**
+
+- Neu: `iphoto-cli people merge <quelle-id> <ziel-id> [--dry-run] [--json]` — verschiebt alle Gesichter der Quell-Person zur Ziel-Person und löscht die Quelle; Name und Titelbild des Ziels bleiben erhalten und werden nur übernommen, wenn sie dort fehlen. `--dry-run` zeigt nur, was passieren würde
+- Neue Tests in `Tests/run_plugins.sh` inkl. Fehlerfällen (Quelle = Ziel, unbekannte Person, fehlendes Argument, unbekannte Option)
+
+---
+
 ## 1.109.1
 **Interne Aufräumarbeiten: Projekt-Logik ausgelagert**
 
