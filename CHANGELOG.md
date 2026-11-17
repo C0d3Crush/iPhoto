@@ -2,6 +2,13 @@
 
 ---
 
+## 1.109.1
+**Interne Aufräumarbeiten: Projekt-Logik ausgelagert**
+
+- Projekt-Öffnen und Projektordner-Scan liegen jetzt in `ImageViewModel+Projects.swift`; `ImageViewModel.swift` schrumpft von 975 auf 877 Zeilen. Keine Verhaltensänderung.
+
+---
+
 ## 1.109.0
 **CLI: Alben duplizieren und zusammenführen**
 
