@@ -2,6 +2,14 @@
 
 ---
 
+## 1.111.0
+**CLI: Quality-Übersicht**
+
+- Neu: `iphoto-cli quality stats [--blur-threshold N] [--shadow R] [--highlight R] [--eye-threshold R] [--include-trashed] [--json]` — zeigt auf einen Blick, wie viele Bilder gescannt bzw. noch offen sind und wie viele als unscharf, unter-/überbelichtet oder „Augen zu" gelten, dazu Anzahl der Nutzer-Overrides und Blur-Score (min/Ø/max). Gleiche Regeln wie in der App: Overrides unterdrücken das Flag, Bilder im Papierkorb zählen nur mit `--include-trashed`
+- Neue Tests in `Tests/run_plugins.sh` inkl. Fehlerfällen (unbekannte Option, ungültiger/fehlender Schwellenwert)
+
+---
+
 ## 1.110.0
 **CLI: Personen zusammenführen**
 
