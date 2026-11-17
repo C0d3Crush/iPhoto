@@ -2,6 +2,16 @@
 
 ---
 
+## 1.114.0
+**CLI: Alben in Ordner verschieben & Album-Beschreibung pflegen**
+
+- Neu: `iphoto-cli album move <album-id|name> --folder <ordner-id|name> | --root [--json]` — hängt ein Album der Seitenleiste in einen Album-Ordner oder holt es zurück auf die oberste Ebene
+- Neu: `iphoto-cli album describe <album-id|name> [--set <text> | --clear] [--json]` — liest, setzt oder löscht die Beschreibung eines Albums (leerer Text entfernt sie, wie in der App)
+- Behoben: `albumfolder delete` berücksichtigt jetzt `IPHOTO_ALBUMS_JSON` beim Hochstufen der enthaltenen Alben — Skripte und Tests fassen die echte Bibliothek nicht mehr an
+- Neue Tests in `Tests/run_plugins.sh` inkl. Fehlerfällen (unbekanntes Album/Ordner, widersprüchliche Optionen, fehlende albums.json)
+
+---
+
 ## 1.113.0
 **CLI: Album-Ordner verschieben, Auto-Sync & Import-Ziel für überwachte Ordner**
 

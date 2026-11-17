@@ -3928,6 +3928,154 @@ unset IPHOTO_WATCHED_FILE
 echo ""
 
 # ---------------------------------------------------------------------------
+# album move / describe — Album (albums.json) in Ordner hängen, Beschreibung pflegen
+# ---------------------------------------------------------------------------
+echo "--- Album move / describe ---"
+
+export IPHOTO_ALBUMFOLDERS_FILE="$TMPDIR/albumFolders_albummove.json"
+export IPHOTO_ALBUMS_JSON="$TMPDIR/albums_move.json"
+AM_ID1="11111111-2222-3333-4444-555555555555"
+AM_ID2="66666666-7777-8888-9999-AAAAAAAAAAAA"
+cat > "$IPHOTO_ALBUMS_JSON" <<AMEOF
+[{"id":"$AM_ID1","name":"Urlaub","photoURLs":[]},{"id":"$AM_ID2","name":"Familie","photoURLs":[],"albumDescription":"Alt"}]
+AMEOF
+amget() { python3 -c "import sys,json; v=json.load(sys.stdin).get('$1'); print('null' if v is None else v)" 2>/dev/null; }
+AM_FOLDER=$("$BIN" albumfolder create "Reisen" --json 2>&1 | amget id || true)
+
+# move per Name in Ordner
+AM_OUT=$("$BIN" album move Urlaub --folder Reisen --json 2>&1) || true
+if [ -n "$AM_FOLDER" ] && [ "$(echo "$AM_OUT" | amget parent_id)" = "$AM_FOLDER" ] && [ "$(echo "$AM_OUT" | amget changed)" = "True" ]; then
+    pass "album move --folder (per Name, parent_id gesetzt)"
+else
+    fail "album move --folder" "Unerwartete Ausgabe: $AM_OUT"
+fi
+
+# persistiert in albums.json, anderes Album unberührt
+if python3 -c "
+import json
+m={a['name']:a for a in json.load(open('$IPHOTO_ALBUMS_JSON'))}
+assert m['Urlaub'].get('parentID','').lower()=='$AM_FOLDER'.lower() and m['Familie'].get('parentID') is None
+assert m['Familie'].get('albumDescription')=='Alt'
+" 2>/dev/null; then
+    pass "album move persistiert (albums.json, andere Alben unverändert)"
+else
+    fail "album move persistiert" "albums.json: $(cat "$IPHOTO_ALBUMS_JSON")"
+fi
+
+# idempotent
+AM_OUT=$("$BIN" album move "$AM_ID1" --folder "$AM_FOLDER" --json 2>&1) || true
+if [ "$(echo "$AM_OUT" | amget changed)" = "False" ]; then
+    pass "album move idempotent per ID (changed:false)"
+else
+    fail "album move idempotent" "Unerwartete Ausgabe: $AM_OUT"
+fi
+
+# albumfolder delete befördert das Album zurück auf Root (über IPHOTO_ALBUMS_JSON)
+"$BIN" album move Familie --folder Reisen > /dev/null 2>&1 || true
+"$BIN" albumfolder create "Temp" > /dev/null 2>&1 || true
+"$BIN" album move Familie --folder Temp > /dev/null 2>&1 || true
+"$BIN" albumfolder delete Temp > /dev/null 2>&1 || true
+if python3 -c "
+import json
+m={a['name']:a for a in json.load(open('$IPHOTO_ALBUMS_JSON'))}
+assert m['Familie'].get('parentID') is None and m['Urlaub'].get('parentID') is not None
+" 2>/dev/null; then
+    pass "albumfolder delete befördert Alben (respektiert IPHOTO_ALBUMS_JSON)"
+else
+    fail "albumfolder delete befördert Alben" "albums.json: $(cat "$IPHOTO_ALBUMS_JSON")"
+fi
+
+# --root
+AM_OUT=$("$BIN" album move Urlaub --root --json 2>&1) || true
+if [ "$(echo "$AM_OUT" | amget parent_id)" = "null" ] && [ "$(echo "$AM_OUT" | amget changed)" = "True" ]; then
+    pass "album move --root (parent_id null)"
+else
+    fail "album move --root" "Unerwartete Ausgabe: $AM_OUT"
+fi
+
+# Fehlerfälle move
+AM_ERR=0
+"$BIN" album move Urlaub --folder GibtEsNicht > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album move unbekannter Ordner (→ Fehler)"; else fail "album move unbekannter Ordner" "Hätte fehlschlagen sollen"; fi
+
+AM_ERR=0
+"$BIN" album move GibtEsNicht --root > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album move unbekanntes Album (→ Fehler)"; else fail "album move unbekanntes Album" "Hätte fehlschlagen sollen"; fi
+
+AM_ERR=0
+"$BIN" album move Urlaub > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album move ohne Ziel (→ Fehler)"; else fail "album move ohne Ziel" "Hätte fehlschlagen sollen"; fi
+
+AM_ERR=0
+"$BIN" album move Urlaub --folder Reisen --root > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album move --folder + --root (→ Fehler)"; else fail "album move --folder + --root" "Hätte fehlschlagen sollen"; fi
+
+AM_ERR=0
+"$BIN" album move Urlaub --root --bogus > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album move unbekannte Option (→ Fehler)"; else fail "album move --bogus" "Hätte fehlschlagen sollen"; fi
+
+# describe: lesen
+AM_OUT=$("$BIN" album describe Familie --json 2>&1) || true
+if [ "$(echo "$AM_OUT" | amget description)" = "Alt" ] && [ "$(echo "$AM_OUT" | amget changed)" = "False" ]; then
+    pass "album describe (liest vorhandene Beschreibung)"
+else
+    fail "album describe lesen" "Unerwartete Ausgabe: $AM_OUT"
+fi
+
+# describe: setzen + erneut lesen
+AM_OUT=$("$BIN" album describe Urlaub --set "Sommer an der See" --json 2>&1) || true
+AM_OUT2=$("$BIN" album describe "$AM_ID1" --json 2>&1) || true
+if [ "$(echo "$AM_OUT" | amget changed)" = "True" ] && [ "$(echo "$AM_OUT2" | amget description)" = "Sommer an der See" ]; then
+    pass "album describe --set (persistiert)"
+else
+    fail "album describe --set" "Ausgabe: $AM_OUT / $AM_OUT2"
+fi
+
+# describe: gleicher Text → changed:false
+AM_OUT=$("$BIN" album describe Urlaub --set "Sommer an der See" --json 2>&1) || true
+if [ "$(echo "$AM_OUT" | amget changed)" = "False" ]; then
+    pass "album describe --set idempotent (changed:false)"
+else
+    fail "album describe --set idempotent" "Unerwartete Ausgabe: $AM_OUT"
+fi
+
+# describe: --clear
+AM_OUT=$("$BIN" album describe Familie --clear --json 2>&1) || true
+if [ "$(echo "$AM_OUT" | amget description)" = "null" ] && [ "$(echo "$AM_OUT" | amget changed)" = "True" ]; then
+    pass "album describe --clear (description null)"
+else
+    fail "album describe --clear" "Unerwartete Ausgabe: $AM_OUT"
+fi
+
+# describe: Textausgabe ohne Beschreibung
+AM_OUT=$("$BIN" album describe Familie 2>&1) || true
+if echo "$AM_OUT" | grep -q "keine Beschreibung"; then
+    pass "album describe Textausgabe (keine Beschreibung)"
+else
+    fail "album describe Textausgabe" "Unerwartete Ausgabe: $AM_OUT"
+fi
+
+# Fehlerfälle describe
+AM_ERR=0
+"$BIN" album describe GibtEsNicht > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album describe unbekanntes Album (→ Fehler)"; else fail "album describe unbekanntes Album" "Hätte fehlschlagen sollen"; fi
+
+AM_ERR=0
+"$BIN" album describe Urlaub --set "x" --clear > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album describe --set + --clear (→ Fehler)"; else fail "album describe --set + --clear" "Hätte fehlschlagen sollen"; fi
+
+AM_ERR=0
+"$BIN" album describe Urlaub --set > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album describe --set ohne Text (→ Fehler)"; else fail "album describe --set ohne Text" "Hätte fehlschlagen sollen"; fi
+
+AM_ERR=0
+IPHOTO_ALBUMS_JSON="$TMPDIR/gibt_es_nicht.json" "$BIN" album describe Urlaub > /dev/null 2>&1 || AM_ERR=$?
+if [ $AM_ERR -ne 0 ]; then pass "album describe ohne albums.json (→ Fehler)"; else fail "album describe ohne albums.json" "Hätte fehlschlagen sollen"; fi
+
+unset IPHOTO_ALBUMFOLDERS_FILE IPHOTO_ALBUMS_JSON
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

@@ -51,6 +51,8 @@ private func printUsage() {
       iphoto-cli album purge-stale [--dry-run] [--json]
       iphoto-cli album duplicate <album-id|name> <neuer-name> [--json]
       iphoto-cli album merge <quelle> <ziel> [--keep-source] [--dry-run] [--json]
+      iphoto-cli album move <album-id|name> --folder <ordner-id|name> | --root [--json]
+      iphoto-cli album describe <album-id|name> [--set <text> | --clear] [--json]
       iphoto-cli quality scan|list|get [--json]
       iphoto-cli quality override list | <bildpfad> [--blur|--under|--over|--eyes-closed on|off] [--clear] [--json]
       iphoto-cli quality stats [--blur-threshold N] [--shadow R] [--highlight R] [--eye-threshold R] [--include-trashed] [--json]
@@ -216,6 +218,8 @@ private func printUsage() {
     metadata: IPTC/EXIF/GPS-Felder eines Bildes lesen (get) und schreiben (set); nur JPEG/PNG/TIFF
     albumfolder: move hängt einen Album-Ordner in einen anderen (--parent) oder auf die Root-Ebene (--root);
               Zyklen werden abgelehnt; Datei per IPHOTO_ALBUMFOLDERS_FILE
+    album:    move hängt ein Album der Seitenleiste (albums.json) in einen Album-Ordner (--folder) oder auf
+              die Root-Ebene (--root); describe liest/setzt/löscht die Beschreibung; Datei per IPHOTO_ALBUMS_JSON
     watched:  set schaltet Auto-Sync an/aus und setzt/löscht das Import-Ziel; Datei per IPHOTO_WATCHED_FILE
     project:  Projekte (projects.json, wie Projekt-Auswahl in der App) auflisten/anlegen/umbenennen/löschen,
               Ordner hinzufügen/entfernen; fehlende Ordner in --json als missing_folders; Datei per IPHOTO_PROJECTS_FILE
@@ -432,6 +436,27 @@ private func envAlbumsJSONURL() -> URL {
     }
     return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("iPhoto/albums.json")
+}
+
+/// Alben der App-Seitenleiste (albums.json). nil = Datei fehlt oder ist nicht lesbar.
+private func loadJSONAlbums() -> [Album]? {
+    guard let data = try? Data(contentsOf: envAlbumsJSONURL()) else { return nil }
+    return try? JSONDecoder().decode([Album].self, from: data)
+}
+
+private func saveJSONAlbums(_ albums: [Album]) -> Bool {
+    let url = envAlbumsJSONURL()
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                             withIntermediateDirectories: true)
+    guard let data = try? JSONEncoder().encode(albums) else { return false }
+    return (try? data.write(to: url, options: .atomic)) != nil
+}
+
+/// Album per UUID oder Name finden (Groß-/Kleinschreibung egal); ID hat Vorrang vor Name.
+private func jsonAlbumIndex(_ albums: [Album], query: String) -> Int? {
+    let q = query.lowercased()
+    return albums.firstIndex(where: { $0.id.uuidString.lowercased() == q })
+        ?? albums.firstIndex(where: { $0.name.lowercased() == q })
 }
 
 // MARK: - Commands
@@ -3245,14 +3270,14 @@ private func runAlbumFolder(_ args: [String]) -> Int32 {
         }
         saveAlbumFoldersList(folders)
         // Also promote albums
-        let albumsURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("iPhoto/albums.json")
-        if let data = try? Data(contentsOf: albumsURL),
-           var albums = try? JSONDecoder().decode([Album].self, from: data) {
+        // envAlbumsJSONURL respektiert IPHOTO_ALBUMS_JSON — Tests/Skripte fassen die echte albums.json nicht an
+        if var albums = loadJSONAlbums() {
+            var promoted = false
             for i in albums.indices where albums[i].parentID == removed.id {
                 albums[i].parentID = newParent
+                promoted = true
             }
-            if let out = try? JSONEncoder().encode(albums) { try? out.write(to: albumsURL) }
+            if promoted { _ = saveJSONAlbums(albums) }
         }
         if jsonMode {
             let obj: [String: Any] = ["id": removed.id.uuidString, "name": removed.name, "ok": true]
@@ -3631,6 +3656,125 @@ private func runAlbum(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "move":
+        // Album der App-Seitenleiste (albums.json) in einen Album-Ordner hängen oder auf die Root-Ebene holen
+        let usage = "Verwendung: iphoto-cli album move <album-id|name> --folder <ordner-id|name> | --root [--json]\n"
+        var positionals: [String] = []
+        var folderQuery: String? = nil
+        var toRoot = false
+        var i = 1
+        while i < args.count {
+            let a = args[i]
+            switch a {
+            case "--folder":
+                guard i + 1 < args.count else { fputs(usage, stderr); return 1 }
+                folderQuery = args[i + 1]
+                i += 1
+            case "--root":
+                toRoot = true
+            case "--json":
+                break
+            default:
+                if a.hasPrefix("--") { fputs("Fehler: Unbekannte Option '\(a)'\n", stderr); return 1 }
+                positionals.append(a)
+            }
+            i += 1
+        }
+        guard positionals.count == 1, (folderQuery != nil) != toRoot else { fputs(usage, stderr); return 1 }
+        guard var albums = loadJSONAlbums() else {
+            fputs("Keine albums.json gefunden\n", stderr); return 1
+        }
+        guard let idx = jsonAlbumIndex(albums, query: positionals[0]) else {
+            fputs("Fehler: Album '\(positionals[0])' nicht gefunden\n", stderr); return 1
+        }
+        var newParent: UUID? = nil
+        var targetName = "Root-Ebene"
+        if let fq = folderQuery {
+            let q = fq.lowercased()
+            guard let folder = loadAlbumFoldersList().first(where: {
+                $0.id.uuidString.lowercased() == q || $0.name.lowercased() == q
+            }) else {
+                fputs("Fehler: Album-Ordner '\(fq)' nicht gefunden\n", stderr); return 1
+            }
+            newParent = folder.id
+            targetName = folder.name
+        }
+        let changed = albums[idx].parentID != newParent
+        if changed {
+            albums[idx].parentID = newParent
+            guard saveJSONAlbums(albums) else {
+                fputs("Fehler: albums.json konnte nicht geschrieben werden\n", stderr); return 1
+            }
+        }
+        if jsonMode {
+            let obj: [String: Any] = ["id": albums[idx].id.uuidString, "name": albums[idx].name,
+                                      "parent_id": newParent.map { $0.uuidString as Any } ?? NSNull(),
+                                      "changed": changed, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else {
+            print("Album verschoben: \(albums[idx].name) → \(targetName)\(changed ? "" : " (unverändert)")")
+        }
+        return 0
+
+    case "describe":
+        // Beschreibung eines Albums (albums.json) lesen, setzen (--set) oder löschen (--clear)
+        let usage = "Verwendung: iphoto-cli album describe <album-id|name> [--set <text> | --clear] [--json]\n"
+        var positionals: [String] = []
+        var newText: String? = nil
+        var clear = false
+        var i = 1
+        while i < args.count {
+            let a = args[i]
+            switch a {
+            case "--set":
+                guard i + 1 < args.count else { fputs(usage, stderr); return 1 }
+                newText = args[i + 1]
+                i += 1
+            case "--clear":
+                clear = true
+            case "--json":
+                break
+            default:
+                if a.hasPrefix("--") { fputs("Fehler: Unbekannte Option '\(a)'\n", stderr); return 1 }
+                positionals.append(a)
+            }
+            i += 1
+        }
+        guard positionals.count == 1, !(newText != nil && clear) else { fputs(usage, stderr); return 1 }
+        guard var albums = loadJSONAlbums() else {
+            fputs("Keine albums.json gefunden\n", stderr); return 1
+        }
+        guard let idx = jsonAlbumIndex(albums, query: positionals[0]) else {
+            fputs("Fehler: Album '\(positionals[0])' nicht gefunden\n", stderr); return 1
+        }
+        var changed = false
+        if newText != nil || clear {
+            // Wie in der App: leerer Text bedeutet "keine Beschreibung"
+            let trimmed = (newText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let value: String? = trimmed.isEmpty ? nil : trimmed
+            changed = albums[idx].albumDescription != value
+            if changed {
+                albums[idx].albumDescription = value
+                guard saveJSONAlbums(albums) else {
+                    fputs("Fehler: albums.json konnte nicht geschrieben werden\n", stderr); return 1
+                }
+            }
+        }
+        let desc = albums[idx].albumDescription
+        if jsonMode {
+            let obj: [String: Any] = ["id": albums[idx].id.uuidString, "name": albums[idx].name,
+                                      "description": desc.map { $0 as Any } ?? NSNull(),
+                                      "changed": changed, "ok": true]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else if newText != nil || clear {
+            print("Beschreibung von '\(albums[idx].name)' \(desc == nil ? "gelöscht" : "gesetzt")\(changed ? "" : " (unverändert)")")
+        } else {
+            print(desc ?? "(keine Beschreibung)")
+        }
+        return 0
+
     case "purge-stale":
         // Remove references to deleted files from all albums; --dry-run only reports
         let dryRun = args.contains("--dry-run")
@@ -3665,7 +3809,7 @@ private func runAlbum(_ args: [String]) -> Int32 {
         return 0
 
     default:
-        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export|duplicate|merge|purge-stale\n", stderr)
+        fputs("Verwendung: iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export|duplicate|merge|move|describe|purge-stale\n", stderr)
         return 1
     }
 }
