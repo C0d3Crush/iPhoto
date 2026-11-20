@@ -340,6 +340,8 @@ people       (id PK, name, created_at)
 
 `build/iphoto-cli` ist ein eigenständiges Kommandozeilen-Tool. Kompiliert **ohne AppKit**.
 
+Für Skripte und Tests (`Tests/run_plugins.sh`) lassen sich die Datenquellen umleiten, ohne die echte Bibliothek anzufassen: `IPHOTO_CATALOG_DB`, `IPHOTO_ALBUMS_JSON`, `IPHOTO_ALBUMFOLDERS_FILE`, `IPHOTO_WATCHED_FILE`, `IPHOTO_PROJECTS_FILE`, `IPHOTO_BOOKMARKS_FILE`, `IPHOTO_BUGREPORT_DIR`, `IPHOTO_LOG_FILE`.
+
 ```
 # Export & Info
 iphoto-cli export <datei> --format jpeg|png|tiff|heif [--output <pfad>] [--quality 0.9] [--json]
@@ -387,13 +389,17 @@ iphoto-cli album list|create|delete|add|remove|images|reorder|rename|export [--j
 iphoto-cli album duplicate <album-id|name> <neuer-name> [--json]
 iphoto-cli album merge <quelle> <ziel> [--keep-source] [--dry-run] [--json]
 iphoto-cli album purge-stale [--dry-run] [--json]
+iphoto-cli album move <album-id|name> --folder <ordner-id|name> | --root [--json]
+iphoto-cli album describe <album-id|name> [--set <text> | --clear] [--json]
 iphoto-cli project list|show|create|rename|delete|add-folder|remove-folder [--json]
 iphoto-cli albumfolder list|create|rename|delete [--json]
+iphoto-cli albumfolder move <id|name> --parent <id|name> | --root [--json]
 iphoto-cli bookmarks list [--missing] [--json]
 iphoto-cli bookmarks stats|path [--json]
 iphoto-cli bookmarks remove <pfad|file-url> [...] [--json]
 iphoto-cli bookmarks prune [--dry-run] [--json]
 iphoto-cli watched list|add|remove|check [<pfad>] [--auto-sync] [--json]
+iphoto-cli watched set <name|id> [--auto-sync on|off] [--import-dest <pfad>|--clear-import-dest] [--json]
 iphoto-cli smartfolder list|query|create|update|rename|delete|sync [<name>] [--json]
 iphoto-cli smartfolder sql <name> [--count] [--json]
 iphoto-cli smartfolder count [<name>] [--json]
@@ -413,10 +419,12 @@ iphoto-cli gear focal|iso|aperture [--limit N] [--json]
 # Qualität & Analyse
 iphoto-cli analyse <datei|ordner> [--blur-threshold N] [--shadow N] [--highlight N] [--json]
 iphoto-cli quality scan|list|get|override [--blur|--under|--over|--eyes-closed on|off] [--json]
+iphoto-cli quality stats [--blur-threshold N] [--shadow R] [--highlight R] [--eye-threshold R] [--include-trashed] [--json]
 iphoto-cli hotpixel <ordner>
 
 # Gesichter / People
-iphoto-cli people scan|list|faces|cluster|rename|delete|reset|export-names|import-names [--json]
+iphoto-cli people scan|list|faces|cluster|rename|delete|merge|reset|export-names|import-names [--json]
+iphoto-cli people merge <quelle-id> <ziel-id> [--dry-run] [--json]
 
 # Motiv-Tags
 iphoto-cli motif get|list|set|find|stats <bildpfad> [<tags>] [--json]
