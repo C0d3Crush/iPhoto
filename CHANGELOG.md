@@ -2,6 +2,14 @@
 
 ---
 
+## 1.115.1
+**Bugfix: Bilder werden im Projekt-Modus mehrfach angezeigt (#122)**
+
+- `scanProjectFolder` überspringt jetzt `Alben/` und `Intelligente Ordner/` beim rekursiven Scan, wenn der Nutzer den übergeordneten `iPhoto/`-Ordner als Projekt öffnet — diese Verzeichnisse enthalten Datei-Kopien der Originale und führten zu N Einträgen pro Album-Mitgliedschaft
+- Zweiter Duplikat-Check direkt vor `appendDocuments` auf dem Main-Thread verhindert Race-Condition bei gleichzeitigen `scanProjectFolder`-Aufrufen
+
+---
+
 ## 1.115.0
 **Bugfix: Anpassungen einfügen — Adj-Cache und hasPersistedAdjustments nicht aktualisiert (#108)**
 
