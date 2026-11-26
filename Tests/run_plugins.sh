@@ -4160,6 +4160,67 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# export preserves EXIF metadata (Bug #104)
+# ---------------------------------------------------------------------------
+echo "--- export EXIF-Erhalt ---"
+EXIF_BASE="$TMPDIR/exif_base.jpg"
+EXIF_SRC="$TMPDIR/exif_source.jpg"
+EXIF_OUT="$TMPDIR/exif_exported.jpg"
+
+# Step 1: export INPUT_PNG to a valid baseline JPEG via CLI
+"$BIN" export "$INPUT_PNG" --output "$EXIF_BASE" --format jpeg 2>/dev/null
+
+if [ -f "$EXIF_BASE" ] && [ -s "$EXIF_BASE" ]; then
+    # Step 2: inject APP1/EXIF with DateTimeOriginal after the SOI marker
+    python3 - "$EXIF_BASE" "$EXIF_SRC" <<'PYEOF'
+import struct, sys
+
+with open(sys.argv[1], 'rb') as f:
+    base = f.read()
+assert base[:2] == b'\xff\xd8', "Not a JPEG"
+
+dt = b'2024:01:15 12:00:00\x00'  # DateTimeOriginal, 20 bytes ASCII+NUL
+tiff_header = b'II' + struct.pack('<HI', 42, 8)  # LE, IFD0 at offset 8
+
+exif_ifd_off = 8 + 2 + 1*12 + 4   # 26
+dt_off       = exif_ifd_off + 2 + 1*12 + 4  # 44
+
+ifd0     = struct.pack('<H', 1) + struct.pack('<HHII', 0x8769, 4, 1, exif_ifd_off) + struct.pack('<I', 0)
+exif_ifd = struct.pack('<H', 1) + struct.pack('<HHII', 0x9003, 2, len(dt), dt_off)  + struct.pack('<I', 0)
+
+tiff_data     = tiff_header + ifd0 + exif_ifd + dt
+exif_payload  = b'Exif\x00\x00' + tiff_data
+app1          = b'\xff\xe1' + struct.pack('>H', 2 + len(exif_payload)) + exif_payload
+
+# Insert APP1 right after SOI, before the rest of the file
+with open(sys.argv[2], 'wb') as f:
+    f.write(b'\xff\xd8' + app1 + base[2:])
+PYEOF
+
+    if [ -f "$EXIF_SRC" ] && [ -s "$EXIF_SRC" ]; then
+        if "$BIN" export "$EXIF_SRC" --output "$EXIF_OUT" --format jpeg 2>/dev/null; then
+            if [ -f "$EXIF_OUT" ] && [ -s "$EXIF_OUT" ]; then
+                if grep -qc "2024:01:15 12:00:00" "$EXIF_OUT" 2>/dev/null; then
+                    pass "export erhält DateTimeOriginal in JPEG (Bug #104)"
+                else
+                    fail "export EXIF-Erhalt" "DateTimeOriginal nicht in exportierter Datei"
+                fi
+            else
+                fail "export EXIF-Erhalt" "Ausgabedatei fehlt oder leer"
+            fi
+        else
+            fail "export EXIF-Erhalt" "CLI-Fehler beim export"
+        fi
+    else
+        fail "export EXIF-Erhalt" "EXIF-Injektion mit Python fehlgeschlagen"
+    fi
+else
+    fail "export EXIF-Erhalt" "Baseline-JPEG konnte nicht erstellt werden"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # clarity / texture negative values (Bug #107)
 # ---------------------------------------------------------------------------
 echo "--- clarity/texture negativ ---"

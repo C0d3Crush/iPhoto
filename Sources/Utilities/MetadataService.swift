@@ -390,6 +390,33 @@ final class MetadataService {
         return FujiMakerNoteValues()
     }
 
+    // Liest die rohen CGImageProperties einer Quelldatei für den Export-Metadaten-Erhalt.
+    // Für RAF auf macOS 11 wird das eingebettete JPEG genutzt (kein SIGSEGV).
+    static func rawSourceProperties(url: URL) -> [CFString: Any]? {
+        let ext = url.pathExtension.lowercased()
+        if ext == "raf" {
+            if #available(macOS 12.0, *) {
+                let opts = [kCGImageSourceShouldCache: false] as CFDictionary
+                if let src = CGImageSourceCreateWithURL(url as CFURL, opts),
+                   let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] {
+                    let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
+                    if !(exif[kCGImagePropertyExifDateTimeOriginal] as? String ?? "").isEmpty {
+                        return props
+                    }
+                }
+            }
+            // macOS 11 or empty EXIF: read from embedded JPEG (safe, no SIGSEGV)
+            let instance = MetadataService()
+            guard let jpegData = instance.rafEmbeddedJPEGData(url: url) else { return nil }
+            let opts = [kCGImageSourceShouldCache: false] as CFDictionary
+            guard let src = CGImageSourceCreateWithData(jpegData as CFData, opts) else { return nil }
+            return CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
+        }
+        let opts = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, opts) else { return nil }
+        return CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
+    }
+
     // Löst Film-Simulation aus Tag 0x1401 (primär) oder 0x1003 (Fallback für B&W/Acros).
     static func resolveFilmSim(filmSim: Int?, saturation: Int?) -> String? {
         if let fs = filmSim {

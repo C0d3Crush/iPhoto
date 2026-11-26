@@ -2,6 +2,18 @@
 
 ---
 
+## 1.114.4
+**Bugfix: Export verwirft EXIF/GPS/IPTC-Metadaten — alle Export-Formate (#104)**
+
+- `MetadataService.rawSourceProperties(url:)` liest EXIF/GPS/IPTC/TIFF aus Quelldatei (JPEG, TIFF, HEIC, PNG); für RAF auf macOS 11 sicherer Pfad über embedded JPEG
+- `ImageExporter.exportSingle` überträgt alle Quell-Metadaten in die Exportdatei; Orientierung wird auf 1 (bereits rotiert) normiert; Pixel-Dimensionen entfernt (ImageIO leitet sie aus den Bilddaten ab)
+- `ImageExporter+Batch`: übergibt `sourceURL` an `exportSingle`
+- CLI `iphoto-cli export`: alle drei Export-Aufrufe leiten `sourceURL` weiter
+- TIFF/PNG: Ausgabe jetzt 16 Bit wenn Quelle >8 bpc (z. B. RAW → TIFF verlustlos)
+- Neuer Test in `run_plugins.sh`: exportiert JPEG mit injiziertem `DateTimeOriginal`, prüft EXIF-Erhalt im Export
+
+---
+
 ## 1.114.3
 **Bugfix: Klarheit & Textur — negative Slider-Werte waren wirkungslos (#107)**
 

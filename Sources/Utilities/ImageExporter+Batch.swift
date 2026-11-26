@@ -56,7 +56,7 @@ extension ImageExporter {
                         } else {
                             image = try RAWImageDecoder.decode(url: doc.url)
                         }
-                        try exportSingle(image: image, to: outURL, format: format, quality: quality)
+                        try exportSingle(image: image, to: outURL, format: format, quality: quality, sourceURL: doc.url)
                         localOK = true
                     } catch {
                         localErr = (doc.filename, error.localizedDescription)

@@ -59,7 +59,8 @@ struct ImageExporter {
         image: CGImage,
         to url: URL,
         format: ExportFormat,
-        quality: Double
+        quality: Double,
+        sourceURL: URL? = nil
     ) throws {
         guard let dest = CGImageDestinationCreateWithURL(
             url as CFURL, format.uti as CFString, 1, nil
@@ -72,11 +73,24 @@ struct ImageExporter {
             props[kCGImageDestinationLossyCompressionQuality] = quality
         }
 
-        // Immer nach sRGB konvertieren — Adobe RGB und andere Profile
-        // werden von manchen Viewern (inkl. Preview auf macOS 11) nicht korrekt gelesen.
+        // Copy source EXIF/GPS/IPTC/TIFF metadata into the export file.
+        if let srcURL = sourceURL,
+           var meta = MetadataService.rawSourceProperties(url: srcURL) {
+            // Pixels are already rotated by the render pipeline — write "up" so viewers don't rotate again.
+            meta[kCGImagePropertyOrientation] = 1 as CFNumber
+            // Remove top-level pixel dimensions; ImageIO derives them from the actual image data.
+            meta.removeValue(forKey: kCGImagePropertyPixelWidth)
+            meta.removeValue(forKey: kCGImagePropertyPixelHeight)
+            for (k, v) in meta { props[k] = v }
+        }
+
         let t0 = Date()
-        let srgbImage = convertToSRGB(image) ?? image
-        Log.debug(String(format: "sRGB-Konvertierung: %.1f ms (%@)", Date().timeIntervalSince(t0) * 1000, url.lastPathComponent))
+        // Use 16-bit output for lossless formats when source has >8 bpc (e.g. RAW → TIFF/PNG).
+        let use16bit = !format.supportsQuality && image.bitsPerComponent > 8
+        let srgbImage = convertToSRGB(image, use16bit: use16bit) ?? image
+        Log.debug(String(format: "sRGB-Konvertierung: %.1f ms %dbit (%@)",
+                         Date().timeIntervalSince(t0) * 1000, use16bit ? 16 : 8,
+                         url.lastPathComponent))
         CGImageDestinationAddImage(dest, srgbImage, props.isEmpty ? nil : props as CFDictionary)
 
         guard CGImageDestinationFinalize(dest) else {
@@ -84,10 +98,11 @@ struct ImageExporter {
         }
     }
 
-    private static func convertToSRGB(_ image: CGImage) -> CGImage? {
+    private static func convertToSRGB(_ image: CGImage, use16bit: Bool = false) -> CGImage? {
         guard let srgb = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         let ci = CIImage(cgImage: image)
-        return sharedSRGBCIContext.createCGImage(ci, from: ci.extent, format: .RGBA8, colorSpace: srgb)
+        let fmt: CIFormat = use16bit ? .RGBA16 : .RGBA8
+        return sharedSRGBCIContext.createCGImage(ci, from: ci.extent, format: fmt, colorSpace: srgb)
     }
 
 }

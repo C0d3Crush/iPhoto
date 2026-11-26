@@ -515,7 +515,7 @@ private func runExport(_ args: CLIArgs) -> Int32 {
 private func exportOne(input: URL, output: URL, format: ExportFormat, quality: Double, silent: Bool = false) -> Bool {
     do {
         let image = try RAWImageDecoder.decode(url: input)
-        try ImageExporter.exportSingle(image: image, to: output, format: format, quality: quality)
+        try ImageExporter.exportSingle(image: image, to: output, format: format, quality: quality, sourceURL: input)
         guard FileManager.default.fileExists(atPath: output.path),
               let attrs = try? FileManager.default.attributesOfItem(atPath: output.path),
               (attrs[.size] as? Int ?? 0) > 0 else {
@@ -940,7 +940,7 @@ private func runAdjust(_ args: CLIArgs) -> Int32 {
             fputs("Fehler: Bild konnte nicht gerendert werden\n", stderr)
             return 1
         }
-        try ImageExporter.exportSingle(image: outCG, to: output, format: args.format, quality: args.quality)
+        try ImageExporter.exportSingle(image: outCG, to: output, format: args.format, quality: args.quality, sourceURL: input)
         guard FileManager.default.fileExists(atPath: output.path),
               let attrs = try? FileManager.default.attributesOfItem(atPath: output.path),
               (attrs[.size] as? Int ?? 0) > 0 else {
@@ -1070,7 +1070,7 @@ private func runPreset(_ subArgs: [String]) -> Int32 {
                 fputs("Fehler: Bild konnte nicht gerendert werden\n", stderr)
                 return 1
             }
-            try ImageExporter.exportSingle(image: outCG, to: output, format: format, quality: quality)
+            try ImageExporter.exportSingle(image: outCG, to: output, format: format, quality: quality, sourceURL: input)
             if jsonModeApply {
                 let obj: [String: Any] = ["input": input.lastPathComponent, "output": output.path,
                                           "preset": name, "ok": true]
