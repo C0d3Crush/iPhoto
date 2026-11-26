@@ -3042,11 +3042,18 @@ private func runArchive(_ args: [String]) -> Int32 {
             fputs("Verwendung: iphoto-cli archive mark <bildpfad> [...] [--json]\n", stderr); return 1
         }
         let catalog = CatalogStore(dbPath: envDBPath())
-        let unique = Array(Set(positional)).sorted()
-        catalog.setBackedUp(paths: unique, true)
-        if jsonMode { emit(["count": unique.count, "ok": true]) }
+        let knownPaths = Set(catalog.allImages().map { $0.path })
+        var normalized: [String] = []; var unknown: [String] = []
+        for p in positional {
+            let abs = URL(fileURLWithPath: (p as NSString).expandingTildeInPath).standardizedFileURL.path
+            if knownPaths.contains(abs) { normalized.append(abs) }
+            else { unknown.append(abs); fputs("Warnung: Bild nicht im Katalog: \(abs)\n", stderr) }
+        }
+        let unique = Array(Set(normalized)).sorted()
+        if !unique.isEmpty { catalog.setBackedUp(paths: unique, true) }
+        if jsonMode { emit(["count": unique.count, "unknown": unknown, "ok": unknown.isEmpty]) }
         else { print("\(unique.count) Bild(er) als archiviert markiert") }
-        return 0
+        return unknown.count == positional.count && !positional.isEmpty ? 1 : 0
 
     case "unmark":
         let all = rest.contains("--all")
@@ -3056,7 +3063,15 @@ private func runArchive(_ args: [String]) -> Int32 {
         }
         let catalog = CatalogStore(dbPath: envDBPath())
         let existing = catalog.backedUpPaths()
-        let targets = all ? Array(existing) : positional.filter { existing.contains($0) }
+        let targets: [String]
+        if all {
+            targets = Array(existing)
+        } else {
+            targets = positional.compactMap { p -> String? in
+                let abs = URL(fileURLWithPath: (p as NSString).expandingTildeInPath).standardizedFileURL.path
+                return existing.contains(abs) ? abs : nil
+            }
+        }
         catalog.setBackedUp(paths: targets, false)
         if jsonMode { emit(["count": targets.count, "ok": true]) }
         else { print("\(targets.count) Archiv-Markierung(en) entfernt") }

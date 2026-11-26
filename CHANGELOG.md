@@ -2,6 +2,16 @@
 
 ---
 
+## 1.115.8
+**Bugfix: CLI `archive mark/unmark` normalisierte Pfade nicht — Markierungen griffen in der App nie (#90)**
+
+- Relative Pfade (`./DSCF0001.RAF`), `~`-Präfix und `..`-Komponenten werden per `URL.standardizedFileURL` auf absolute Pfade normalisiert
+- `mark` prüft jeden Pfad gegen den Katalog: unbekannte Pfade werden mit Warnung auf stderr übersprungen, `--json` gibt `unknown: [...]` aus, Exit 1 wenn kein Pfad gültig war
+- `unmark` normalisiert ebenfalls; unbekannte Pfade werden still übersprungen (war schon so, aber durch Normalisierung jetzt korrekt)
+- Tests: relativer Pfad → absoluter Pfad in `archive list`; unbekannter Pfad → Exit 1 + count=0
+
+---
+
 ## 1.115.7
 **Bugfix: Inpaint-Ergebnis nach Bildwechsel über falschem Bild + Datenverlust (#100)**
 

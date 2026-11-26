@@ -3380,6 +3380,28 @@ AR_ERR=0
 arc archive frobnicate > /dev/null 2>&1 || AR_ERR=$?
 if [ $AR_ERR -ne 0 ]; then pass "archive unbekannter Unterbefehl (Fehler)"; else fail "archive unbekannter Unterbefehl" "Hätte fehlschlagen sollen"; fi
 
+# Relative path: mark via relative path, list must contain absolute path.
+arc archive unmark --all > /dev/null 2>&1 || true
+AR_REL_DIR="$(dirname "$AR_B")"
+AR_REL_NAME="$(basename "$AR_B")"
+AR_EXIT=0
+AR_OUT=$(cd "$AR_REL_DIR" && arc archive mark "./$AR_REL_NAME" --json 2>&1) || AR_EXIT=$?
+AR_LIST=$(arc archive list --json 2>&1) || true
+if [ $AR_EXIT -eq 0 ] && echo "$AR_LIST" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==1 and d['paths'][0]==sys.argv[1]" "$AR_B" 2>/dev/null; then
+    pass "archive mark relativer Pfad → absoluter Pfad in Liste"
+else
+    fail "archive mark relativer Pfad" "Exit $AR_EXIT: $AR_OUT | $AR_LIST"
+fi
+
+# Unknown path: mark a path not in catalog → exit 1 and count=0.
+AR_ERR=0
+AR_OUT=$(arc archive mark "$TMPDIR/does_not_exist.jpg" --json 2>/dev/null) || AR_ERR=$?
+if [ $AR_ERR -ne 0 ] && echo "$AR_OUT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['count']==0 and len(d['unknown'])==1" 2>/dev/null; then
+    pass "archive mark unbekannter Pfad (Exitcode != 0, count=0)"
+else
+    fail "archive mark unbekannter Pfad" "Exit $AR_ERR: $AR_OUT"
+fi
+
 echo ""
 
 # ---------------------------------------------------------------------------
