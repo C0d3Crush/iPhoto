@@ -52,56 +52,18 @@ extension ImageViewModel {
         }
     }
 
-    // Nach Wiederherstellen einer Datei-Version: Anpassungen zurücksetzen,
-    // gecachte Bitmaps verwerfen und alles neu laden.
-    private func refreshAfterFileRestore(idx: Int) {
-        resetAdjustments()
-        if idx < collection.documents.count {
-            var doc = collection.documents[idx]
-            doc.cgImage = nil
-            doc.thumbnail = nil
-            collection.documents[idx] = doc
-        }
-        loadVersionsForCurrentImage()
-        loadCurrentImage()
-    }
-
-    // MARK: - Save Adjusted Image to File
-
-    func saveAdjustedToFile(label: String, metaEntries: [MetadataEntry]? = nil) {
-        guard let doc = collection.currentDocument, !doc.isRAW else { return }
-        let image = adj.adjustedImage ?? currentImage
-        guard let image = image else { return }
-
-        let url = doc.url
-        let idx = collection.currentIndex
-
-        performFileOperation(on: url, errorLabel: "Speichern") { [weak self] accessURL in
-            guard let self = self else { return {} }
-            let meta = try VersionStore.shared.backupFile(at: accessURL, label: label)
-            try VersionStore.shared.writeImage(image, to: accessURL)
-            if let entries = metaEntries {
-                try self.metadataService.writePhotoMetadataSync(url: accessURL, entries: entries)
-                CatalogStore.shared.invalidateExifCache(path: accessURL.path)
-            }
-            Log.info("Bild gespeichert: \(url.lastPathComponent)")
-            let updatedMeta = self.metadataService.readPhotoMetadata(from: accessURL)
-            return { [weak self] in
-                guard let self = self else { return }
-                self.versions.undoStack.append(meta)
-                self.versions.redoStack.removeAll()
-                self.versions.pendingMetadataEntries = nil
-                if idx < self.collection.documents.count {
-                    var doc = self.collection.documents[idx]
-                    doc.cgImage = image
-                    doc.thumbnail = nil
-                    doc.metadata = updatedMeta
-                    self.collection.documents[idx] = doc
-                }
-                self.adj.adjustedImage = nil
-                self.adj.displayImageVersion = UUID()
-                self.loadVersionsForCurrentImage()
-            }
+    // Nach Wiederherstellen einer Datei-Version: Bitmaps des betroffenen Dokuments verwerfen
+    // und, wenn es noch das aktive Bild ist, Anpassungen + Versionshistorie neu laden.
+    private func refreshAfterFileRestore(url: URL) {
+        guard let idx = collection.documentIndexByURL[url] else { return }
+        var doc = collection.documents[idx]
+        doc.cgImage = nil
+        doc.thumbnail = nil
+        collection.documents[idx] = doc
+        if collection.currentDocument?.url == url {
+            resetAdjustments()
+            loadVersionsForCurrentImage()
+            loadCurrentImage()
         }
     }
 
@@ -109,14 +71,18 @@ extension ImageViewModel {
 
     func revertToVersion(_ meta: ImageVersionMeta) {
         guard let doc = collection.currentDocument else { return }
-        let idx = collection.currentIndex
+        let url = doc.url
 
-        performFileOperation(on: doc.url, errorLabel: "Version wiederherstellen") { accessURL in
+        performFileOperation(on: url, errorLabel: "Version wiederherstellen") { [weak self] accessURL in
             try VersionStore.shared.backupFile(at: accessURL)
             try VersionStore.shared.restoreVersion(meta, to: accessURL)
+            CatalogStore.shared.invalidateExifCache(path: accessURL.path)
+            let updatedMeta = self?.metadataService.readPhotoMetadata(from: accessURL) ?? []
             Log.info("Version wiederhergestellt: \(meta.date)")
             return { [weak self] in
-                self?.refreshAfterFileRestore(idx: idx)
+                guard let self = self, let idx = self.collection.documentIndexByURL[url] else { return }
+                self.collection.documents[idx].metadata = updatedMeta
+                self.refreshAfterFileRestore(url: url)
             }
         }
     }
@@ -141,12 +107,14 @@ extension ImageViewModel {
             Log.error("Undo/Redo: Version nicht in Versionsordner von \(doc.url.lastPathComponent) — Eintrag verworfen")
             return
         }
-        let idx = collection.currentIndex
+        let url = doc.url
 
-        performFileOperation(on: doc.url, errorLabel: isUndo ? "Undo" : "Redo") { accessURL in
+        performFileOperation(on: url, errorLabel: isUndo ? "Undo" : "Redo") { [weak self] accessURL in
             // Aktuellen Stand sichern, damit die Operation umkehrbar bleibt
             let counterpart = try VersionStore.shared.backupFile(at: accessURL)
             try VersionStore.shared.restoreVersion(meta, to: accessURL)
+            CatalogStore.shared.invalidateExifCache(path: accessURL.path)
+            let updatedMeta = self?.metadataService.readPhotoMetadata(from: accessURL) ?? []
             return { [weak self] in
                 guard let self = self else { return }
                 if isUndo {
@@ -154,7 +122,10 @@ extension ImageViewModel {
                 } else {
                     self.versions.undoStack.append(counterpart)
                 }
-                self.refreshAfterFileRestore(idx: idx)
+                if let idx = self.collection.documentIndexByURL[url] {
+                    self.collection.documents[idx].metadata = updatedMeta
+                }
+                self.refreshAfterFileRestore(url: url)
             }
         }
     }
@@ -169,7 +140,6 @@ extension ImageViewModel {
     func saveOnlyMeta(entries: [MetadataEntry], label: String) {
         guard let doc = collection.currentDocument else { return }
         let url = doc.url
-        let idx = collection.currentIndex
 
         performFileOperation(on: url, errorLabel: "Metadaten speichern") { [weak self] accessURL in
             guard let self = self else { return {} }
@@ -183,7 +153,7 @@ extension ImageViewModel {
                 self.versions.undoStack.append(meta)
                 self.versions.redoStack.removeAll()
                 self.versions.pendingMetadataEntries = nil
-                if idx < self.collection.documents.count {
+                if let idx = self.collection.documentIndexByURL[url] {
                     self.collection.documents[idx].metadata = updatedMeta
                 }
                 self.loadVersionsForCurrentImage()

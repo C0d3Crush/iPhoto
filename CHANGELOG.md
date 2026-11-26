@@ -2,6 +2,16 @@
 
 ---
 
+## 1.114.6
+**Bugfix: Version-Restore/Undo/Metadaten-Speichern — Index-über-async-Hop traf falsches Dokument nach Bildwechsel (#101)**
+
+- `refreshAfterFileRestore`: nimmt jetzt `url` statt `idx`; löst Index via `documentIndexByURL` auf; `resetAdjustments()` / `loadCurrentImage()` laufen nur wenn das URL noch das aktive Bild ist — andernfalls werden nur Bitmaps des betroffenen Dokuments invalidiert
+- `revertToVersion`, `restoreFromHistory`: capturen `url` statt `collection.currentIndex`; lesen `metadata` auf BG-Thread neu und schreiben per `documentIndexByURL` write-back; rufen `CatalogStore.invalidateExifCache` nach Restore auf
+- `saveOnlyMeta`: löst Index ebenfalls via `documentIndexByURL[url]` auf statt gecaptureten `idx`
+- `saveAdjustedToFile` (toter Code, kein Aufrufer) entfernt
+
+---
+
 ## 1.114.5
 **Bugfix: RatingStore entfernt — ratings.json-Fallback traf nach Neustart nie, Datei wuchs unbegrenzt (#103)**
 
