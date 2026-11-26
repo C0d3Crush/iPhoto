@@ -222,8 +222,7 @@ enum AdjustmentRenderer {
     static func applyRGBCurvesLUT(_ ci: CIImage, snap: AdjustmentState) -> CIImage {
         var out = ci
 
-        let curveDef = zip(snap.curvePoints, CurvesView.defaultPoints)
-            .allSatisfy { abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001 }
+        let curveDef = CurveMath.isDefault(snap.curvePoints)
         if !curveDef, let f = CIFilter(name: "CIToneCurve") {
             f.setValue(out, forKey: kCIInputImageKey)
             for (i, pt) in snap.curvePoints.enumerated() {
@@ -237,9 +236,9 @@ enum AdjustmentRenderer {
         let bDef = isDefaultCurve(snap.curveB)
         guard !rDef || !gDef || !bDef else { return out }
 
-        let lutR = CurvesView.evaluateSpline(snap.curveR)
-        let lutG = CurvesView.evaluateSpline(snap.curveG)
-        let lutB = CurvesView.evaluateSpline(snap.curveB)
+        let lutR = CurveMath.evaluateSpline(snap.curveR)
+        let lutG = CurveMath.evaluateSpline(snap.curveG)
+        let lutB = CurveMath.evaluateSpline(snap.curveB)
         let size = 32
         var cubeData = [Float]()
         cubeData.reserveCapacity(size * size * size * 4)
@@ -403,7 +402,5 @@ enum AdjustmentRenderer {
         }
     }
 
-    static func isDefaultCurve(_ pts: [CGPoint]) -> Bool {
-        zip(pts, CurvesView.defaultPoints).allSatisfy { abs($0.x - $1.x) < 0.001 && abs($0.y - $1.y) < 0.001 }
-    }
+    static func isDefaultCurve(_ pts: [CGPoint]) -> Bool { CurveMath.isDefault(pts) }
 }

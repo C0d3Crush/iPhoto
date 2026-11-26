@@ -169,6 +169,8 @@ CLI_SOURCES="\
     $ROOT/Sources/Models/MetadataEntry.swift \
     $ROOT/Sources/Models/AdjustmentState.swift \
     $ROOT/Sources/Models/AdjustmentHistory.swift \
+    $ROOT/Sources/Models/AdjustmentRenderer.swift \
+    $ROOT/Sources/Models/CurveMath.swift \
     $ROOT/Sources/Models/LocalAdjustment.swift \
     $ROOT/Sources/Models/Preset.swift \
     $ROOT/Sources/Models/ImageDocument.swift \
@@ -182,6 +184,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/Data+Extensions.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \
     $ROOT/Sources/Utilities/Log.swift \
+    $ROOT/Sources/Utilities/LensFilters.swift \
     $ROOT/Sources/Utilities/BookmarkStore.swift \
     $ROOT/Sources/Utilities/HotPixelAnalyzer.swift \
     $ROOT/Sources/Utilities/MetadataService.swift \

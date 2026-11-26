@@ -469,6 +469,57 @@ else
     fail "adjust --rotate ungültig" "Hätte fehlschlagen sollen (Exitcode 0)"
 fi
 
+# Dimension tests: use a known 100×80 PNG to verify crop/rotate actually change geometry.
+DIM_PNG="$TMPDIR/dim_100x80.png"
+python3 - <<'DIMEOF' > "$DIM_PNG"
+import struct, zlib, sys
+def chunk(name, data):
+    crc = zlib.crc32(name + data) & 0xffffffff
+    return struct.pack('>I', len(data)) + name + data + struct.pack('>I', crc)
+W, H = 100, 80
+sig  = b'\x89PNG\r\n\x1a\n'
+ihdr = chunk(b'IHDR', struct.pack('>IIBBBBB', W, H, 8, 2, 0, 0, 0))
+row  = b'\x00' + b'\x80\x80\x80' * W
+raw  = row * H
+idat = chunk(b'IDAT', zlib.compress(raw))
+iend = chunk(b'IEND', b'')
+sys.stdout.buffer.write(sig + ihdr + idat + iend)
+DIMEOF
+
+if [ -f "$DIM_PNG" ] && [ -s "$DIM_PNG" ]; then
+    # crop 0.0,0.0,0.5,1.0 → 50% width → 50×80
+    CROP_DIM_OUT="$TMPDIR/crop_dim.png"
+    "$BIN" adjust "$DIM_PNG" --output "$CROP_DIM_OUT" --format png --crop 0.0,0.0,0.5,1.0 2>/dev/null
+    if [ -f "$CROP_DIM_OUT" ]; then
+        CROP_W=$(sips -g pixelWidth "$CROP_DIM_OUT" 2>/dev/null | awk '/pixelWidth/{print $2}')
+        CROP_H=$(sips -g pixelHeight "$CROP_DIM_OUT" 2>/dev/null | awk '/pixelHeight/{print $2}')
+        if [ "$CROP_W" = "50" ] && [ "$CROP_H" = "80" ]; then
+            pass "adjust --crop Dimensionen korrekt (50×80 aus 100×80)"
+        else
+            fail "adjust --crop Dimensionen" "Erwartet 50×80, bekommen ${CROP_W}×${CROP_H}"
+        fi
+    else
+        fail "adjust --crop Dimensionen" "Ausgabedatei nicht erstellt"
+    fi
+
+    # rotate 90 on 100×80 → 80×100
+    ROT_DIM_OUT="$TMPDIR/rotate_dim.png"
+    "$BIN" adjust "$DIM_PNG" --output "$ROT_DIM_OUT" --format png --rotate 90 2>/dev/null
+    if [ -f "$ROT_DIM_OUT" ]; then
+        ROT_W=$(sips -g pixelWidth "$ROT_DIM_OUT" 2>/dev/null | awk '/pixelWidth/{print $2}')
+        ROT_H=$(sips -g pixelHeight "$ROT_DIM_OUT" 2>/dev/null | awk '/pixelHeight/{print $2}')
+        if [ "$ROT_W" = "80" ] && [ "$ROT_H" = "100" ]; then
+            pass "adjust --rotate 90 Dimensionen korrekt (80×100 aus 100×80)"
+        else
+            fail "adjust --rotate 90 Dimensionen" "Erwartet 80×100, bekommen ${ROT_W}×${ROT_H}"
+        fi
+    else
+        fail "adjust --rotate 90 Dimensionen" "Ausgabedatei nicht erstellt"
+    fi
+else
+    fail "adjust crop/rotate Dimensionstest" "Konnte Test-PNG 100×80 nicht erstellen"
+fi
+
 echo ""
 
 # ---------------------------------------------------------------------------

@@ -781,105 +781,6 @@ private func runRating(_ args: CLIArgs) -> Int32 {
 }
 
 // MARK: - Adjust Command
-// Note: AdjustmentRenderer.swift depends on CurvesView (SwiftUI) so we implement
-// a self-contained CI pipeline here for CLI use.
-
-private let cliCIContext: CIContext = {
-    var opts: [CIContextOption: Any] = [.useSoftwareRenderer: false]
-    if let linearSRGB = CGColorSpace(name: CGColorSpace.linearSRGB) {
-        opts[.workingColorSpace] = linearSRGB
-    }
-    opts[.workingFormat] = CIFormat.RGBAh
-    return CIContext(options: opts)
-}()
-
-/// Apply a subset of AdjustmentState parameters to a CIImage using CoreImage filters.
-/// Implements the same transforms as AdjustmentRenderer.pipeline() but without
-/// the CurvesView/RGB-LUT stages (which require the SwiftUI CurvesView).
-private func applyAdjustments(_ input: CIImage, state: AdjustmentState) -> CIImage {
-    var ci = input
-
-    // Exposure
-    if state.exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
-        f.setValue(ci, forKey: kCIInputImageKey)
-        f.setValue(state.exposure, forKey: kCIInputEVKey)
-        if let r = f.outputImage { ci = r }
-    }
-    // Brightness / Contrast / Saturation
-    if state.brightness != 0 || state.contrast != 1 || state.saturation != 1,
-       let f = CIFilter(name: "CIColorControls") {
-        f.setValue(ci, forKey: kCIInputImageKey)
-        f.setValue(state.brightness, forKey: kCIInputBrightnessKey)
-        f.setValue(state.contrast,   forKey: kCIInputContrastKey)
-        f.setValue(state.saturation, forKey: kCIInputSaturationKey)
-        if let r = f.outputImage { ci = r }
-    }
-    // Warmth / Tint (white balance)
-    if state.warmth != 0 || state.tint != 0, let f = CIFilter(name: "CITemperatureAndTint") {
-        f.setValue(ci, forKey: kCIInputImageKey)
-        f.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-        f.setValue(CIVector(x: CGFloat(6500 - state.warmth * 50),
-                            y: CGFloat(-state.tint * 3)),
-                   forKey: "inputTargetNeutral")
-        if let r = f.outputImage { ci = r }
-    }
-    // Vibrance — approximate via saturation boost on less-saturated pixels
-    if state.vibrance != 0, let f = CIFilter(name: "CIVibrance") {
-        f.setValue(ci, forKey: kCIInputImageKey)
-        f.setValue(state.vibrance, forKey: kCIInputAmountKey)
-        if let r = f.outputImage { ci = r }
-    }
-    // Hue
-    if state.hue != 0, let f = CIFilter(name: "CIHueAdjust") {
-        f.setValue(ci, forKey: kCIInputImageKey)
-        f.setValue(Float(state.hue * .pi / 180.0), forKey: kCIInputAngleKey)
-        if let r = f.outputImage { ci = r }
-    }
-    // Clarity: positive = local-contrast boost, negative = soft-glow
-    if state.clarity > 0, let f = CIFilter(name: "CIUnsharpMask") {
-        f.setValue(ci, forKey: kCIInputImageKey)
-        f.setValue(20.0, forKey: kCIInputRadiusKey)
-        f.setValue(state.clarity * 2.0, forKey: kCIInputIntensityKey)
-        if let r = f.outputImage { ci = r }
-    } else if state.clarity < 0,
-              let blur = CIFilter(name: "CIGaussianBlur"),
-              let dissolve = CIFilter(name: "CIDissolveTransition") {
-        blur.setValue(ci, forKey: kCIInputImageKey)
-        blur.setValue(20.0, forKey: kCIInputRadiusKey)
-        if let blurred = blur.outputImage?.cropped(to: ci.extent) {
-            dissolve.setValue(ci, forKey: kCIInputImageKey)
-            dissolve.setValue(blurred, forKey: kCIInputTargetImageKey)
-            dissolve.setValue(-state.clarity, forKey: kCIInputTimeKey)
-            if let r = dissolve.outputImage { ci = r }
-        }
-    }
-    // Texture: positive = fine-detail accentuation, negative = fine-detail suppression
-    if state.texture > 0, let f = CIFilter(name: "CIUnsharpMask") {
-        f.setValue(ci, forKey: kCIInputImageKey)
-        f.setValue(4.0, forKey: kCIInputRadiusKey)
-        f.setValue(state.texture * 2.5, forKey: kCIInputIntensityKey)
-        if let r = f.outputImage { ci = r }
-    } else if state.texture < 0,
-              let blur = CIFilter(name: "CIGaussianBlur"),
-              let dissolve = CIFilter(name: "CIDissolveTransition") {
-        blur.setValue(ci, forKey: kCIInputImageKey)
-        blur.setValue(4.0, forKey: kCIInputRadiusKey)
-        if let blurred = blur.outputImage?.cropped(to: ci.extent) {
-            dissolve.setValue(ci, forKey: kCIInputImageKey)
-            dissolve.setValue(blurred, forKey: kCIInputTargetImageKey)
-            dissolve.setValue(-state.texture, forKey: kCIInputTimeKey)
-            if let r = dissolve.outputImage { ci = r }
-        }
-    }
-    // Sharpening (sharpenAmount is 0–150 in AdjustmentState)
-    if state.sharpenAmount > 0, let f = CIFilter(name: "CIUnsharpMask") {
-        f.setValue(ci, forKey: kCIInputImageKey)
-        f.setValue(state.sharpenRadius, forKey: kCIInputRadiusKey)
-        f.setValue(state.sharpenAmount / 100.0, forKey: kCIInputIntensityKey)
-        if let r = f.outputImage { ci = r }
-    }
-    return ci
-}
 
 /// Build AdjustmentState from CLI args, optionally starting from a named preset.
 private func buildAdjustmentState(_ args: CLIArgs) -> AdjustmentState? {
@@ -935,8 +836,8 @@ private func runAdjust(_ args: CLIArgs) -> Int32 {
     do {
         let cg = try RAWImageDecoder.decode(url: input)
         let ci = CIImage(cgImage: cg)
-        let adjusted = applyAdjustments(ci, state: state)
-        guard let outCG = cliCIContext.createCGImage(adjusted, from: adjusted.extent) else {
+        let adjusted = AdjustmentRenderer.pipeline(ci, snap: state, exposureApplied: false, wbApplied: false)
+        guard let outCG = AdjustmentRenderer.context.createCGImage(adjusted, from: adjusted.extent) else {
             fputs("Fehler: Bild konnte nicht gerendert werden\n", stderr)
             return 1
         }
@@ -1065,8 +966,8 @@ private func runPreset(_ subArgs: [String]) -> Int32 {
         do {
             let cg = try RAWImageDecoder.decode(url: input)
             let ci = CIImage(cgImage: cg)
-            let adjusted = applyAdjustments(ci, state: preset.adjustments)
-            guard let outCG = cliCIContext.createCGImage(adjusted, from: adjusted.extent) else {
+            let adjusted = AdjustmentRenderer.pipeline(ci, snap: preset.adjustments, exposureApplied: false, wbApplied: false)
+            guard let outCG = AdjustmentRenderer.context.createCGImage(adjusted, from: adjusted.extent) else {
                 fputs("Fehler: Bild konnte nicht gerendert werden\n", stderr)
                 return 1
             }

@@ -2,6 +2,16 @@
 
 ---
 
+## 1.115.3
+**Bugfix: `iphoto-cli adjust --crop` und `--rotate` waren Leeroperationen (#105)**
+
+- `AdjustmentRenderer.swift` und `LensFilters.swift` jetzt im CLI-Build enthalten
+- Spline-Mathematik aus `CurvesView` nach `Sources/Models/CurveMath.swift` extrahiert (kein SwiftUI-Import), sodass `AdjustmentRenderer` im headless CLI kompiliert
+- CLI `adjust`-Befehl delegiert an `AdjustmentRenderer.pipeline()` statt an eine unvollständige lokale Kopie — Crop, Rotate, Curves, Lens-Korrekturen jetzt vollständig
+- Tests: Dimensionscheck für `--crop 0.0,0.0,0.5,1.0` (100×80 → 50×80) und `--rotate 90` (100×80 → 80×100)
+
+---
+
 ## 1.115.2
 **Performance: PluginStore.init — 13 synchrone Datei-Writes + JSON-Dekodierung vom Main-Thread weggenommen (#115)**
 
