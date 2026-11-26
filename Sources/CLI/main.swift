@@ -835,12 +835,41 @@ private func applyAdjustments(_ input: CIImage, state: AdjustmentState) -> CIIma
         f.setValue(Float(state.hue * .pi / 180.0), forKey: kCIInputAngleKey)
         if let r = f.outputImage { ci = r }
     }
-    // Clarity (midtone contrast via unsharp mask with large radius)
-    if state.clarity != 0, let f = CIFilter(name: "CIUnsharpMask") {
+    // Clarity: positive = local-contrast boost, negative = soft-glow
+    if state.clarity > 0, let f = CIFilter(name: "CIUnsharpMask") {
         f.setValue(ci, forKey: kCIInputImageKey)
         f.setValue(20.0, forKey: kCIInputRadiusKey)
-        f.setValue(max(0, state.clarity) * 2.0, forKey: kCIInputIntensityKey)
+        f.setValue(state.clarity * 2.0, forKey: kCIInputIntensityKey)
         if let r = f.outputImage { ci = r }
+    } else if state.clarity < 0,
+              let blur = CIFilter(name: "CIGaussianBlur"),
+              let dissolve = CIFilter(name: "CIDissolveTransition") {
+        blur.setValue(ci, forKey: kCIInputImageKey)
+        blur.setValue(20.0, forKey: kCIInputRadiusKey)
+        if let blurred = blur.outputImage?.cropped(to: ci.extent) {
+            dissolve.setValue(ci, forKey: kCIInputImageKey)
+            dissolve.setValue(blurred, forKey: kCIInputTargetImageKey)
+            dissolve.setValue(-state.clarity, forKey: kCIInputTimeKey)
+            if let r = dissolve.outputImage { ci = r }
+        }
+    }
+    // Texture: positive = fine-detail accentuation, negative = fine-detail suppression
+    if state.texture > 0, let f = CIFilter(name: "CIUnsharpMask") {
+        f.setValue(ci, forKey: kCIInputImageKey)
+        f.setValue(4.0, forKey: kCIInputRadiusKey)
+        f.setValue(state.texture * 2.5, forKey: kCIInputIntensityKey)
+        if let r = f.outputImage { ci = r }
+    } else if state.texture < 0,
+              let blur = CIFilter(name: "CIGaussianBlur"),
+              let dissolve = CIFilter(name: "CIDissolveTransition") {
+        blur.setValue(ci, forKey: kCIInputImageKey)
+        blur.setValue(4.0, forKey: kCIInputRadiusKey)
+        if let blurred = blur.outputImage?.cropped(to: ci.extent) {
+            dissolve.setValue(ci, forKey: kCIInputImageKey)
+            dissolve.setValue(blurred, forKey: kCIInputTargetImageKey)
+            dissolve.setValue(-state.texture, forKey: kCIInputTimeKey)
+            if let r = dissolve.outputImage { ci = r }
+        }
     }
     // Sharpening (sharpenAmount is 0–150 in AdjustmentState)
     if state.sharpenAmount > 0, let f = CIFilter(name: "CIUnsharpMask") {

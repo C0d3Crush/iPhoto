@@ -4160,6 +4160,46 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# clarity / texture negative values (Bug #107)
+# ---------------------------------------------------------------------------
+echo "--- clarity/texture negativ ---"
+CLARITY_NEG_OUT="$TMPDIR/clarity_neg.png"
+if "$BIN" adjust "$INPUT_PNG" --output "$CLARITY_NEG_OUT" --format png --clarity -0.5 2>/dev/null; then
+    if [ -f "$CLARITY_NEG_OUT" ] && [ -s "$CLARITY_NEG_OUT" ]; then
+        ORIG_MD5=$(md5 -q "$INPUT_PNG" 2>/dev/null || md5sum "$INPUT_PNG" | awk '{print $1}')
+        CLR_MD5=$(md5 -q "$CLARITY_NEG_OUT" 2>/dev/null || md5sum "$CLARITY_NEG_OUT" | awk '{print $1}')
+        if [ "$ORIG_MD5" != "$CLR_MD5" ]; then
+            pass "adjust --clarity -0.5 (Output unterscheidet sich vom Original)"
+        else
+            fail "adjust --clarity -0.5" "Output identisch mit Original — negativer Wert hat keine Wirkung"
+        fi
+    else
+        fail "adjust --clarity -0.5" "Ausgabedatei fehlt oder leer"
+    fi
+else
+    fail "adjust --clarity -0.5" "CLI-Fehler beim Ausführen"
+fi
+
+TEXTURE_NEG_OUT="$TMPDIR/texture_neg.png"
+if "$BIN" adjust "$INPUT_PNG" --output "$TEXTURE_NEG_OUT" --format png --texture -0.5 2>/dev/null; then
+    if [ -f "$TEXTURE_NEG_OUT" ] && [ -s "$TEXTURE_NEG_OUT" ]; then
+        ORIG_MD5=$(md5 -q "$INPUT_PNG" 2>/dev/null || md5sum "$INPUT_PNG" | awk '{print $1}')
+        TEX_MD5=$(md5 -q "$TEXTURE_NEG_OUT" 2>/dev/null || md5sum "$TEXTURE_NEG_OUT" | awk '{print $1}')
+        if [ "$ORIG_MD5" != "$TEX_MD5" ]; then
+            pass "adjust --texture -0.5 (Output unterscheidet sich vom Original)"
+        else
+            fail "adjust --texture -0.5" "Output identisch mit Original — negativer Wert hat keine Wirkung"
+        fi
+    else
+        fail "adjust --texture -0.5" "Ausgabedatei fehlt oder leer"
+    fi
+else
+    fail "adjust --texture -0.5" "CLI-Fehler beim Ausführen"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

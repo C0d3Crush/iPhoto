@@ -178,17 +178,43 @@ enum AdjustmentRenderer {
 
     static func applyDetailAndHaze(_ ci: CIImage, snap: AdjustmentState) -> CIImage {
         var out = ci
-        if snap.clarity != 0, let f = CIFilter(name: "CIUnsharpMask") {
+        // Positive clarity: local-contrast boost via UnsharpMask (radius=20).
+        // Negative clarity: soft-glow by blending toward a gaussian blur (radius=20).
+        if snap.clarity > 0, let f = CIFilter(name: "CIUnsharpMask") {
             f.setValue(out, forKey: kCIInputImageKey)
             f.setValue(20.0, forKey: kCIInputRadiusKey)
-            f.setValue(Swift.max(0, snap.clarity) * 2.0, forKey: kCIInputIntensityKey)
+            f.setValue(snap.clarity * 2.0, forKey: kCIInputIntensityKey)
             if let r = f.outputImage { out = r }
+        } else if snap.clarity < 0,
+                  let blur = CIFilter(name: "CIGaussianBlur"),
+                  let dissolve = CIFilter(name: "CIDissolveTransition") {
+            blur.setValue(out, forKey: kCIInputImageKey)
+            blur.setValue(20.0, forKey: kCIInputRadiusKey)
+            if let blurred = blur.outputImage?.cropped(to: out.extent) {
+                dissolve.setValue(out, forKey: kCIInputImageKey)
+                dissolve.setValue(blurred, forKey: kCIInputTargetImageKey)
+                dissolve.setValue(-snap.clarity, forKey: kCIInputTimeKey)
+                if let r = dissolve.outputImage { out = r }
+            }
         }
-        if snap.texture != 0, let f = CIFilter(name: "CIUnsharpMask") {
+        // Positive texture: fine-detail accentuation via UnsharpMask (radius=4).
+        // Negative texture: fine-detail suppression by blending toward a gaussian blur (radius=4).
+        if snap.texture > 0, let f = CIFilter(name: "CIUnsharpMask") {
             f.setValue(out, forKey: kCIInputImageKey)
             f.setValue(4.0, forKey: kCIInputRadiusKey)
-            f.setValue(Swift.max(0, snap.texture) * 2.5, forKey: kCIInputIntensityKey)
+            f.setValue(snap.texture * 2.5, forKey: kCIInputIntensityKey)
             if let r = f.outputImage { out = r }
+        } else if snap.texture < 0,
+                  let blur = CIFilter(name: "CIGaussianBlur"),
+                  let dissolve = CIFilter(name: "CIDissolveTransition") {
+            blur.setValue(out, forKey: kCIInputImageKey)
+            blur.setValue(4.0, forKey: kCIInputRadiusKey)
+            if let blurred = blur.outputImage?.cropped(to: out.extent) {
+                dissolve.setValue(out, forKey: kCIInputImageKey)
+                dissolve.setValue(blurred, forKey: kCIInputTargetImageKey)
+                dissolve.setValue(-snap.texture, forKey: kCIInputTimeKey)
+                if let r = dissolve.outputImage { out = r }
+            }
         }
         return out
     }
