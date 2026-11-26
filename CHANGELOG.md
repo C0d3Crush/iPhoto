@@ -2,6 +2,18 @@
 
 ---
 
+## 1.115.6
+**Bugfix: Tethering-Crash bei Kamera-Trennung — NSException wenn Session aktiv bleibt (#112)**
+
+- `capturePhoto()` und `startRecording()` laufen jetzt auf `sessionQueue` und prüfen `session.isRunning` + aktive Video-Connection bevor AVFoundation aufgerufen wird — kein „No active and enabled video connection"-Crash mehr
+- NotificationCenter-Observer für `AVCaptureSessionRuntimeError`, `Interrupted`, `InterruptionEnded`, `DidStopRunning` und `AVCaptureDeviceWasDisconnected` nachziehen `isSessionRunning`/`isRecording`/`activeDevice` korrekt nach
+- `configureSession` gibt `Bool` zurück; ohne erfolgreich hinzugefügten Input kein `startRunning()`
+- `startRecording()` setzt `isRecording = true` erst nach Connection-Prüfung auf sessionQueue
+- Movie-Delegate: `error!`-Force-Unwrap entfernt; `.mov` wird nicht mehr an `onCapture` übergeben (App zeigt keine Videos — Speicherort steht in der Statuszeile)
+- Media-Services-Reset: automatischer Reconnect-Versuch nach 1 Sekunde
+
+---
+
 ## 1.115.5
 **Bugfix: „Öffnen mit iPhoto" im Finder öffnete falsches Projekt oder ignorierte Ordner-Kontext (#127)**
 

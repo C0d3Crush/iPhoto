@@ -21,6 +21,7 @@ final class TetherManager: NSObject, ObservableObject {
     private override init() {
         super.init()
         session.sessionPreset = .photo
+        setupNotificationObservers()
         checkPermission()
     }
 
@@ -47,8 +48,6 @@ final class TetherManager: NSObject, ObservableObject {
 
     func refreshDevices() {
         var types: [AVCaptureDevice.DeviceType] = [.builtInWideAngleCamera]
-        // "AVCaptureDeviceTypeContinuityCamera" is the raw value for .continuityCamera (macOS 13+).
-        // We inject it via raw string so this file compiles against older SDKs too.
         if #available(macOS 13.0, *) {
             types.append(AVCaptureDevice.DeviceType(rawValue: "AVCaptureDeviceTypeContinuityCamera"))
         }
@@ -64,7 +63,8 @@ final class TetherManager: NSObject, ObservableObject {
         self.onCapture = onCapture
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
-            self.configureSession(device: device)
+            let ok = self.configureSession(device: device)
+            guard ok else { return }
             if !self.session.isRunning { self.session.startRunning() }
             DispatchQueue.main.async {
                 self.isSessionRunning = self.session.isRunning
@@ -77,15 +77,22 @@ final class TetherManager: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             if self.session.isRunning { self.session.stopRunning() }
-            DispatchQueue.main.async { self.isSessionRunning = false }
+            DispatchQueue.main.async {
+                self.isSessionRunning = false
+                self.activeDevice = nil
+                self.isRecording = false
+            }
         }
     }
 
-    private func configureSession(device: AVCaptureDevice) {
+    // Returns false if no valid input could be added — caller must not start the session.
+    @discardableResult
+    private func configureSession(device: AVCaptureDevice) -> Bool {
         session.beginConfiguration()
         defer { session.commitConfiguration() }
 
         if let old = currentInput { session.removeInput(old) }
+        currentInput = nil
 
         if session.outputs.isEmpty {
             if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
@@ -94,30 +101,131 @@ final class TetherManager: NSObject, ObservableObject {
 
         do {
             let input = try AVCaptureDeviceInput(device: device)
-            if session.canAddInput(input) {
-                session.addInput(input)
-                currentInput = input
+            guard session.canAddInput(input) else {
+                DispatchQueue.main.async { self.statusMessage = "Kamera kann nicht hinzugefügt werden" }
+                return false
             }
+            session.addInput(input)
+            currentInput = input
+            return true
         } catch {
-            DispatchQueue.main.async { self.statusMessage = "Kamerafehler: \(error.localizedDescription)" }
+            DispatchQueue.main.async {
+                self.statusMessage = "Kamerafehler: \(error.localizedDescription)"
+                self.isSessionRunning = false
+            }
+            return false
         }
+    }
+
+    // MARK: - Notifications (runtime errors, interruptions, disconnect)
+
+    private func setupNotificationObservers() {
+        let nc = NotificationCenter.default
+
+        nc.addObserver(self, selector: #selector(sessionRuntimeError(_:)),
+                       name: .AVCaptureSessionRuntimeError, object: session)
+        nc.addObserver(self, selector: #selector(sessionWasInterrupted(_:)),
+                       name: .AVCaptureSessionWasInterrupted, object: session)
+        nc.addObserver(self, selector: #selector(sessionInterruptionEnded(_:)),
+                       name: .AVCaptureSessionInterruptionEnded, object: session)
+        nc.addObserver(self, selector: #selector(sessionDidStopRunning(_:)),
+                       name: .AVCaptureSessionDidStopRunning, object: session)
+        nc.addObserver(self, selector: #selector(deviceWasDisconnected(_:)),
+                       name: NSNotification.Name.AVCaptureDeviceWasDisconnected, object: nil)
+    }
+
+    @objc private func sessionRuntimeError(_ notification: Notification) {
+        let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error
+        Log.error("TetherManager: session runtime error: \(error?.localizedDescription ?? "unknown")")
+        DispatchQueue.main.async {
+            self.isSessionRunning = false
+            self.isRecording = false
+            self.statusMessage = "Kamera-Fehler: \(error?.localizedDescription ?? "unbekannt")"
+        }
+        // Attempt reconnect once for media-services-reset errors.
+        // AVError.Code 107 = AVErrorMediaServicesWereReset (not available as Swift enum on macOS 11)
+        if let err = error as? AVError, err.code.rawValue == 107 {
+            sessionQueue.asyncAfter(deadline: .now() + 1) { [weak self] in
+                guard let self = self, let device = self.activeDevice else { return }
+                let ok = self.configureSession(device: device)
+                guard ok else { return }
+                self.session.startRunning()
+                DispatchQueue.main.async { self.isSessionRunning = self.session.isRunning }
+            }
+        }
+    }
+
+    @objc private func sessionWasInterrupted(_ notification: Notification) {
+        Log.info("TetherManager: session interrupted")
+        DispatchQueue.main.async {
+            self.isSessionRunning = false
+            self.isRecording = false
+            self.statusMessage = "Kamera unterbrochen"
+        }
+    }
+
+    @objc private func sessionInterruptionEnded(_ notification: Notification) {
+        Log.info("TetherManager: session interruption ended")
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            if !self.session.isRunning { self.session.startRunning() }
+            DispatchQueue.main.async { self.isSessionRunning = self.session.isRunning }
+        }
+    }
+
+    @objc private func sessionDidStopRunning(_ notification: Notification) {
+        DispatchQueue.main.async {
+            self.isSessionRunning = false
+            self.isRecording = false
+        }
+    }
+
+    @objc private func deviceWasDisconnected(_ notification: Notification) {
+        guard let disconnected = notification.object as? AVCaptureDevice,
+              disconnected == activeDevice else { return }
+        Log.info("TetherManager: active device disconnected — stopping session")
+        DispatchQueue.main.async {
+            self.isSessionRunning = false
+            self.isRecording = false
+            self.activeDevice = nil
+            self.statusMessage = "Kamera getrennt"
+        }
+        refreshDevices()
     }
 
     // MARK: - Capture
 
     func capturePhoto() {
-        let settings = AVCapturePhotoSettings()
-        photoOutput.capturePhoto(with: settings, delegate: self)
+        sessionQueue.async { [weak self] in
+            guard let self = self,
+                  self.session.isRunning,
+                  let conn = self.photoOutput.connection(with: .video),
+                  conn.isActive, conn.isEnabled else {
+                DispatchQueue.main.async { self?.statusMessage = "Kamera nicht bereit" }
+                return
+            }
+            let settings = AVCapturePhotoSettings()
+            self.photoOutput.capturePhoto(with: settings, delegate: self)
+        }
     }
 
     func startRecording() {
-        guard !isRecording else { return }
-        isRecording = true  // synchronous — prevents double-start on rapid taps
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd_HHmmss_SSS"
-        let name = "TETHER_\(formatter.string(from: Date())).mov"
-        let url = TetherManager.tetherDir.appendingPathComponent(name)
-        movieOutput.startRecording(to: url, recordingDelegate: self)
+        sessionQueue.async { [weak self] in
+            guard let self = self,
+                  !self.movieOutput.isRecording,
+                  self.session.isRunning,
+                  let conn = self.movieOutput.connection(with: .video),
+                  conn.isActive, conn.isEnabled else {
+                DispatchQueue.main.async { self?.statusMessage = "Kamera nicht bereit" }
+                return
+            }
+            DispatchQueue.main.async { self.isRecording = true }
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd_HHmmss_SSS"
+            let name = "TETHER_\(formatter.string(from: Date())).mov"
+            let url = TetherManager.tetherDir.appendingPathComponent(name)
+            self.movieOutput.startRecording(to: url, recordingDelegate: self)
+        }
     }
 
     func stopRecording() {
@@ -173,11 +281,12 @@ extension TetherManager: AVCaptureFileOutputRecordingDelegate {
                     error: Error?) {
         DispatchQueue.main.async {
             self.isRecording = false
-            if error == nil {
-                self.statusMessage = "Video gespeichert: \(outputFileURL.lastPathComponent)"
-                self.onCapture?(outputFileURL)
+            if let error = error {
+                self.statusMessage = "Videofehler: \(error.localizedDescription)"
             } else {
-                self.statusMessage = "Videofehler: \(error!.localizedDescription)"
+                // Videos (.mov) are not in ImageDocument.supportedExtensions — don't pass to
+                // onCapture. Report save location in status so the user knows where to find it.
+                self.statusMessage = "Video gespeichert: \(outputFileURL.lastPathComponent)"
             }
         }
     }
