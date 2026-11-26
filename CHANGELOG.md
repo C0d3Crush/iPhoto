@@ -2,6 +2,16 @@
 
 ---
 
+## 1.114.3
+**Bugfix: Klarheit & Textur — negative Slider-Werte waren wirkungslos (#107)**
+
+- Negative Klarheit (−1…0): weicher Glow-Effekt via CIGaussianBlur (Radius 20) + CIDissolveTransition statt stummem CIUnsharpMask mit Intensität 0
+- Negative Textur (−1…0): Feindetail-Dämpfung via CIGaussianBlur (Radius 4) + CIDissolveTransition
+- CLI `iphoto-cli adjust --texture`: war bisher vollständig unimplementiert — jetzt identisch zum App-Renderer
+- 2 neue Tests in `Tests/run_plugins.sh` prüfen, dass `--clarity -0.5` und `--texture -0.5` sich vom unbearbeiteten Original unterscheiden
+
+---
+
 ## 1.114.2
 **Bugfix: SIGILL-Crashes beim RAF-Decode — dangling CGImage in applyExifOrientation + GFX-Sensor-Absturz (#43 #44)**
 
