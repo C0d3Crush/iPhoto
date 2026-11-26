@@ -11,6 +11,10 @@ import Combine
 final class QualityDetectionState: ObservableObject {
     @Published var duplicateGroups: [[ImageDocument]] = []       { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var similarGroups: [[ImageDocument]] = []         { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
+
+    // Incremented before each detection run; stale completions compare against this.
+    var duplicateGroupingToken: UUID = UUID()
+    var similarGroupingToken: UUID = UUID()
     @Published var blurryDocuments: [ImageDocument] = []         { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var underexposedDocuments: [ImageDocument] = []   { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }
     @Published var overexposedDocuments: [ImageDocument] = []    { didSet { dispatchPrecondition(condition: .onQueue(.main)) } }

@@ -16,6 +16,8 @@ extension ImageViewModel {
             quality.duplicateGroups = []
             return
         }
+        let token = UUID()
+        quality.duplicateGroupingToken = token
         let taskID = UUID()
         activity.enqueue(id: taskID, label: "Duplikate suchen…",
                          icon: "square.on.square",
@@ -138,8 +140,11 @@ extension ImageViewModel {
             let paths = groups.map { $0.map { $0.url.path } }
             CatalogStore.shared.setDuplicateGroups(paths)
             DispatchQueue.main.async { [weak self] in
-                self?.quality.duplicateGroups = groups
-                self?.activity.dequeue(id: taskID)
+                guard let self = self, self.quality.duplicateGroupingToken == token else {
+                    self?.activity.dequeue(id: taskID); return
+                }
+                self.quality.duplicateGroups = groups
+                self.activity.dequeue(id: taskID)
             }
         }
     }
@@ -248,6 +253,8 @@ extension ImageViewModel {
             }
             return
         }
+        let token = UUID()
+        quality.similarGroupingToken = token
         let taskID = UUID()
         activity.enqueue(id: taskID, label: "Ähnliche Bilder gruppieren…",
                          icon: "square.on.square.dashed",
@@ -257,11 +264,28 @@ extension ImageViewModel {
             let paths = groups.map { $0.map { $0.url.path } }
             CatalogStore.shared.setSimilarGroups(paths)
             Log.info("Ähnliche Bilder: \(groups.count) Gruppen aus \(docs.count) Bildern (Ø \(groups.isEmpty ? 0 : groups.reduce(0) { $0 + $1.count } / groups.count) pro Gruppe)")
-            DispatchQueue.main.async {
-                self?.quality.similarGroups = groups
-                self?.activity.dequeue(id: taskID)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.quality.similarGroupingToken == token else {
+                    self?.activity.dequeue(id: taskID); return
+                }
+                self.quality.similarGroups = groups
+                self.activity.dequeue(id: taskID)
             }
         }
+    }
+
+    /// Remove trashed documents from existing similar groups without re-running detection.
+    /// Groups that shrink below 2 members are dropped.
+    func pruneSimilarGroupsAfterTrash(_ trashed: [ImageDocument]) {
+        guard !quality.similarGroups.isEmpty else { return }
+        let trashedURLs = Set(trashed.map { $0.url })
+        let updated = quality.similarGroups
+            .map { $0.filter { !trashedURLs.contains($0.url) } }
+            .filter { $0.count >= 2 }
+        quality.similarGroups = updated
+        // Also update catalog so the pruned state survives a restart.
+        let paths = updated.map { $0.map { $0.url.path } }
+        DispatchQueue.global(qos: .utility).async { CatalogStore.shared.setSimilarGroups(paths) }
     }
 
     /// Für Thumbnail-Badges: wendet aktuelle Schwellenwerte + Overrides an, ohne die

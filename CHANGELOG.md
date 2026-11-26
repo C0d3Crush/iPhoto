@@ -2,6 +2,15 @@
 
 ---
 
+## 1.115.9
+**Bugfix: detectSimilarImages/detectDuplicates ohne Generation-Token — veraltete Ergebnisse überschrieben neue (#92)**
+
+- `similarGroupingToken` und `duplicateGroupingToken` in `QualityDetectionState`: jede Completion prüft das Token und verwirft veraltete Ergebnisse
+- `pruneSimilarGroupsAfterTrash()`: entfernt weggeworfene Bilder direkt aus den Gruppen (Gruppen <2 werden gedroppt), persistiert den neuen Stand — kein Re-Grouping nötig
+- `SimilarView.trashRest` ersetzt `asyncAfter(0.25) { detectSimilarImages() }` durch `pruneSimilarGroupsAfterTrash()` — kein Timing-Workaround mehr
+
+---
+
 ## 1.115.8
 **Bugfix: CLI `archive mark/unmark` normalisierte Pfade nicht — Markierungen griffen in der App nie (#90)**
 

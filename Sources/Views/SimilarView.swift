@@ -133,9 +133,7 @@ struct SimilarView: View {
         let toTrash = group.enumerated().filter { $0.offset != keep }.map { $0.element }
         viewModel.moveToAppTrash(toTrash)
         pickOverrides.removeValue(forKey: groupKey(group))
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            viewModel.detectSimilarImages()
-        }
+        viewModel.pruneSimilarGroupsAfterTrash(toTrash)
     }
 }
 
