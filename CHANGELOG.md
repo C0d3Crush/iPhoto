@@ -2,6 +2,15 @@
 
 ---
 
+## 1.115.10
+**Performance: `CatalogStore.setBackedUp` blockierte Main mit synchronem SQLite (#88)**
+
+- Statement wird einmal vor der Schleife kompiliert; pro Pfad nur `sqlite3_reset` + `bind` + `step` — kein per-Zeile-`prepare`/`finalize` mehr
+- `queue.sync` → `queue.async`: Main wird nicht mehr blockiert
+- `BACKUP-MARK <n> <ms>` Perf-Log für Regressionserkennung
+
+---
+
 ## 1.115.9
 **Bugfix: detectSimilarImages/detectDuplicates ohne Generation-Token — veraltete Ergebnisse überschrieben neue (#92)**
 

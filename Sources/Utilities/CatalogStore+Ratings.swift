@@ -226,18 +226,25 @@ extension CatalogStore {
 
     func setBackedUp(paths: [String], _ value: Bool) {
         guard !paths.isEmpty else { return }
-        queue.sync {
-            exec("BEGIN")
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            let t0 = Date()
+            let sql = value
+                ? "INSERT OR REPLACE INTO backed_up(image_path, backed_at) VALUES(?, datetime('now'))"
+                : "DELETE FROM backed_up WHERE image_path=?"
+            self.exec("BEGIN")
+            let stmt = self.prepare(sql)
             for path in paths {
-                let stmt = value
-                    ? prepare("INSERT OR REPLACE INTO backed_up(image_path, backed_at) VALUES(?, datetime('now'))")
-                    : prepare("DELETE FROM backed_up WHERE image_path=?")
-                bind(stmt, 1, path)
-                step(stmt); sqlite3_finalize(stmt)
+                sqlite3_reset(stmt)
+                sqlite3_clear_bindings(stmt)
+                self.bind(stmt, 1, path)
+                self.step(stmt)
             }
-            exec("COMMIT")
-            sfOrderedPathsCache.removeAll(keepingCapacity: true)
-            sfCountCache.removeAll(keepingCapacity: true)
+            sqlite3_finalize(stmt)
+            self.exec("COMMIT")
+            self.sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            self.sfCountCache.removeAll(keepingCapacity: true)
+            Log.perf(String(format: "BACKUP-MARK %d %.0f ms", paths.count, Date().timeIntervalSince(t0) * 1000))
         }
     }
 
