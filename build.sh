@@ -213,6 +213,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Utilities/ProjectStore.swift \
     $ROOT/Sources/Utilities/BackupService.swift \
     $ROOT/Sources/Models/BackupSettings.swift \
+    $ROOT/Sources/Utilities/CardSync.swift \
     $ROOT/Sources/CLI/main.swift"
 
 # Überspringen, wenn Binary aktueller als alle CLI-Quellen ist

@@ -88,8 +88,8 @@ extension ImageViewModel {
     }
 
     // Kopiert neue Bilder der Karte in die iPhoto-Bibliothek (~/Pictures/iPhoto).
-    // freeUpSpace: löscht danach nur Dateien, deren Name verifiziert im Ziel liegt —
-    // fehlgeschlagene Kopien bleiben auf der Karte erhalten.
+    // freeUpSpace: löscht danach nur Dateien, die per Inhaltsvergleich (nicht nur Größe)
+    // verifiziert in der Bibliothek liegen — fehlgeschlagene Kopien bleiben auf der Karte.
     func syncVolumeToLibrary(_ volume: DetectedVolume, freeUpSpace: Bool) {
         let volumeID = volume.id
         let volumeName = volume.name
@@ -106,72 +106,23 @@ extension ImageViewModel {
             let sourceFiles = self.imageFiles(on: volumeURL)
             try? fm.createDirectory(at: destURL, withIntermediateDirectories: true)
 
-            // Determine which files need copying. Same name + same size = already present.
-            var filesToCopy: [(src: URL, dest: URL)] = []
-            var alreadyPresent: [String: URL] = [:]  // srcPath → verified destURL
-            for file in sourceFiles {
-                let srcSize = (try? fm.attributesOfItem(atPath: file.path))?[.size] as? Int ?? -1
-                let destExact = destURL.appendingPathComponent(file.lastPathComponent)
-                if fm.fileExists(atPath: destExact.path) {
-                    let dstSize = (try? fm.attributesOfItem(atPath: destExact.path))?[.size] as? Int ?? -2
-                    if srcSize == dstSize {
-                        alreadyPresent[file.path] = destExact
-                        continue  // verified duplicate — skip copy
-                    }
-                    // Same name, different content: copy under a unique name
-                    var suffix = 1
-                    var uniqueDest: URL
-                    let base = (file.lastPathComponent as NSString).deletingPathExtension
-                    let ext  = (file.lastPathComponent as NSString).pathExtension
-                    repeat {
-                        let name = ext.isEmpty ? "\(base)_\(suffix)" : "\(base)_\(suffix).\(ext)"
-                        uniqueDest = destURL.appendingPathComponent(name)
-                        suffix += 1
-                    } while fm.fileExists(atPath: uniqueDest.path)
-                    filesToCopy.append((src: file, dest: uniqueDest))
-                } else {
-                    filesToCopy.append((src: file, dest: destExact))
-                }
-            }
+            let (filesToCopy, alreadyPresent) = CardSync.plan(sourceFiles: sourceFiles, dest: destURL)
             DispatchQueue.main.async { self.activity.update(id: volumeID, done: 0, total: filesToCopy.count) }
 
-            var newURLs: [URL] = []
-            // copiedMap tracks source → dest for files verified in this run (for safe freeUpSpace)
-            var copiedMap: [String: URL] = alreadyPresent
-            var failedCount = 0
-            var done = 0
-            for (src, dest) in filesToCopy {
-                if (try? fm.copyItem(at: src, to: dest)) != nil {
-                    // Verify by size
-                    let srcSize = (try? fm.attributesOfItem(atPath: src.path))?[.size] as? Int ?? -1
-                    let dstSize = (try? fm.attributesOfItem(atPath: dest.path))?[.size] as? Int ?? -2
-                    if srcSize == dstSize {
-                        newURLs.append(dest)
-                        copiedMap[src.path] = dest
-                    } else {
-                        failedCount += 1
-                        try? fm.removeItem(at: dest)
-                    }
-                } else {
-                    failedCount += 1
+            let result = CardSync.execute(
+                sourceFiles: sourceFiles,
+                toCopy: filesToCopy,
+                alreadyPresent: alreadyPresent,
+                freeUpSpace: freeUpSpace,
+                progress: { done, total in
+                    DispatchQueue.main.async { self.activity.update(id: volumeID, done: done, total: total) }
                 }
-                done += 1
-                let d = done
-                DispatchQueue.main.async { self.activity.update(id: volumeID, done: d, total: filesToCopy.count) }
-            }
+            )
 
-            var freedCount = 0
-            var keptCount = 0
-            if freeUpSpace {
-                // Only delete source files whose copy was verified in this run
-                for file in sourceFiles {
-                    if copiedMap[file.path] != nil, (try? fm.removeItem(at: file)) != nil {
-                        freedCount += 1
-                    } else if copiedMap[file.path] == nil {
-                        keptCount += 1
-                    }
-                }
-            }
+            let newURLs = result.copied
+            let failedCount = result.failed
+            let freedCount = result.freed
+            let keptCount = result.kept
 
             for url in newURLs {
                 CatalogStore.shared.saveRating(path: url.path, rating: 3, flag: "none", colorLabel: "none")
@@ -207,20 +158,7 @@ extension ImageViewModel {
     }
 
     private func imageFiles(on url: URL) -> [URL] {
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else { return [] }
-        var found: [URL] = []
-        for case let fileURL as URL in enumerator {
-            if (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true,
-               ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {
-                found.append(fileURL)
-            }
-        }
-        return found
+        CardSync.imageFiles(on: url, extensions: ImageDocument.supportedExtensions)
     }
 
     func ejectVolume(_ volume: DetectedVolume) {

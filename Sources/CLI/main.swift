@@ -175,6 +175,7 @@ private func printUsage() {
       iphoto-cli perf switch [--log <datei>] [--last-session] [--label <tag>] [--slowest N] [--json]
       iphoto-cli collect --output-dir <ordner> [--flag pick|reject|none] [--color farbe] [--min-rating N]
                          [--include-trashed] [--dry-run] [--overwrite] [--json]
+      iphoto-cli card sync <quelle> [--dest <ordner>] [--free-up-space] [--dry-run] [--json]
 
     Formate:  jpeg (Standard), png, tiff, heif
     Quality:  0.0–1.0, nur für jpeg und heif (Standard: 0.9)
@@ -7730,6 +7731,103 @@ private func runProject(_ args: [String]) -> Int32 {
     }
 }
 
+// MARK: - Card Sync
+
+private func runCardSync(_ args: [String]) -> Int32 {
+    var source: String? = nil
+    var dest: String? = nil
+    var freeUpSpace = false
+    var dryRun = false
+    var jsonMode = false
+    var i = 0
+    while i < args.count {
+        switch args[i] {
+        case "sync":
+            i += 1
+            if i < args.count && !args[i].hasPrefix("-") { source = args[i] }
+        case "--dest":
+            i += 1
+            if i < args.count { dest = args[i] }
+        case "--free-up-space": freeUpSpace = true
+        case "--dry-run":       dryRun = true
+        case "--json":          jsonMode = true
+        default:
+            if source == nil && !args[i].hasPrefix("-") { source = args[i] }
+        }
+        i += 1
+    }
+
+    guard let src = source else {
+        fputs("Verwendung: iphoto-cli card sync <quelle> [--dest <ordner>] [--free-up-space] [--dry-run] [--json]\n", stderr)
+        return 1
+    }
+
+    let srcURL = URL(fileURLWithPath: (src as NSString).expandingTildeInPath)
+    let destURL: URL
+    if let d = dest {
+        destURL = URL(fileURLWithPath: (d as NSString).expandingTildeInPath)
+    } else {
+        destURL = FileManager.default
+            .urls(for: .picturesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto")
+    }
+
+    let extensions = ImageDocument.supportedExtensions
+    let sourceFiles = CardSync.imageFiles(on: srcURL, extensions: extensions)
+
+    if sourceFiles.isEmpty {
+        if jsonMode {
+            print("{\"ok\":true,\"source\":\"\(src)\",\"found\":0,\"copied\":0,\"already_present\":0,\"failed\":0,\"freed\":0}")
+        } else {
+            print("Keine Bilddateien in \(src) gefunden.")
+        }
+        return 0
+    }
+
+    try? FileManager.default.createDirectory(at: destURL, withIntermediateDirectories: true)
+    let (toCopy, alreadyPresent) = CardSync.plan(sourceFiles: sourceFiles, dest: destURL)
+
+    if dryRun {
+        if jsonMode {
+            var arr = "["
+            arr += toCopy.map { p in
+                "{\"src\":\"\(p.src.path)\",\"dest\":\"\(p.dest.path)\"}"
+            }.joined(separator: ",")
+            arr += "]"
+            print("{\"ok\":true,\"dry_run\":true,\"would_copy\":\(toCopy.count),\"already_present\":\(alreadyPresent.count),\"files\":\(arr)}")
+        } else {
+            print("Trockenlauf — nichts wird kopiert oder gelöscht.")
+            print("Zu kopieren:    \(toCopy.count)")
+            print("Bereits vorhanden: \(alreadyPresent.count)")
+            for (src, dest) in toCopy {
+                print("  \(src.lastPathComponent) → \(dest.path)")
+            }
+        }
+        return 0
+    }
+
+    let result = CardSync.execute(
+        sourceFiles: sourceFiles,
+        toCopy: toCopy,
+        alreadyPresent: alreadyPresent,
+        freeUpSpace: freeUpSpace
+    )
+
+    if jsonMode {
+        print("{\"ok\":true,\"copied\":\(result.copied.count),\"already_present\":\(alreadyPresent.count),\"failed\":\(result.failed),\"freed\":\(result.freed),\"kept\":\(result.kept)}")
+    } else {
+        print("Karten-Sync abgeschlossen:")
+        print("  Kopiert:         \(result.copied.count)")
+        print("  Bereits vorhanden: \(alreadyPresent.count)")
+        if result.failed > 0 { print("  Fehlgeschlagen:  \(result.failed)") }
+        if freeUpSpace {
+            print("  Von Karte gelöscht: \(result.freed)")
+            if result.kept > 0 { print("  Auf Karte behalten: \(result.kept) (nicht verifiziert)") }
+        }
+    }
+    return result.failed > 0 ? 1 : 0
+}
+
 // MARK: - Entry Point
 
 let rawArgs = CommandLine.arguments
@@ -7860,6 +7958,9 @@ if firstArg == "perf" {
 }
 if firstArg == "collect" {
     exit(runCollect(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "card" {
+    exit(runCardSync(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "project" {
     exit(runProject(Array(rawArgs.dropFirst(2))))

@@ -4073,6 +4073,90 @@ IPHOTO_ALBUMS_JSON="$TMPDIR/gibt_es_nicht.json" "$BIN" album describe Urlaub > /
 if [ $AM_ERR -ne 0 ]; then pass "album describe ohne albums.json (→ Fehler)"; else fail "album describe ohne albums.json" "Hätte fehlschlagen sollen"; fi
 
 unset IPHOTO_ALBUMFOLDERS_FILE IPHOTO_ALBUMS_JSON
+
+# card sync
+# ---------------------------------------------------------------------------
+echo "--- card sync ---"
+CARD_SRC="$TMPDIR/card_src"
+CARD_DST="$TMPDIR/card_dst"
+mkdir -p "$CARD_SRC/DCIM/100_CAM" "$CARD_SRC/DCIM/101_CAM" "$CARD_DST"
+
+# Create two images with identical name + identical content (truly same file)
+echo "JPEG_CONTENT_A" > "$CARD_SRC/DCIM/100_CAM/DSCF0001.jpg"
+cp "$CARD_SRC/DCIM/100_CAM/DSCF0001.jpg" "$CARD_SRC/DCIM/101_CAM/DSCF0001.jpg"
+
+# Create a file with same name but different content (same size is not guaranteed, but test logic)
+echo "JPEG_CONTENT_B" > "$CARD_SRC/DCIM/101_CAM/DSCF0002.jpg"
+echo "JPEG_CONTENT_C" > "$CARD_SRC/DCIM/100_CAM/DSCF0002.jpg"
+
+# --- dry-run should not copy anything ---
+CARD_DRY_EXIT=0
+CARD_DRY=$("$BIN" card sync "$CARD_SRC" --dest "$CARD_DST" --dry-run --json 2>&1) || CARD_DRY_EXIT=$?
+if [ "$CARD_DRY_EXIT" -eq 0 ] && echo "$CARD_DRY" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['dry_run'] is True" 2>/dev/null; then
+    pass "card sync --dry-run (json ok)"
+else
+    fail "card sync --dry-run" "Exit $CARD_DRY_EXIT: $CARD_DRY"
+fi
+if [ -z "$(ls -A "$CARD_DST")" ]; then
+    pass "card sync --dry-run (keine Dateien kopiert)"
+else
+    fail "card sync --dry-run (keine Dateien kopiert)" "Zielordner ist nicht leer"
+fi
+
+# --- first real sync ---
+CARD_SYNC1_EXIT=0
+CARD_SYNC1=$("$BIN" card sync "$CARD_SRC" --dest "$CARD_DST" --json 2>&1) || CARD_SYNC1_EXIT=$?
+CARD_COPIED1=$(echo "$CARD_SYNC1" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('copied',0))" 2>/dev/null || echo "?")
+if [ "$CARD_SYNC1_EXIT" -eq 0 ] && [ "$CARD_COPIED1" -gt 0 ] 2>/dev/null; then
+    pass "card sync erster Lauf (kopiert: $CARD_COPIED1)"
+else
+    fail "card sync erster Lauf" "Exit $CARD_SYNC1_EXIT, kopiert=$CARD_COPIED1: $CARD_SYNC1"
+fi
+
+# --- second sync must not create _2, _3 duplicates for same-content files ---
+CARD_SYNC2_EXIT=0
+CARD_SYNC2=$("$BIN" card sync "$CARD_SRC" --dest "$CARD_DST" --json 2>&1) || CARD_SYNC2_EXIT=$?
+CARD_COPIED2=$(echo "$CARD_SYNC2" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('copied',0))" 2>/dev/null || echo "?")
+CARD_PRESENT2=$(echo "$CARD_SYNC2" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('already_present',0))" 2>/dev/null || echo "?")
+if [ "$CARD_SYNC2_EXIT" -eq 0 ] && [ "$CARD_COPIED2" -eq 0 ] 2>/dev/null; then
+    pass "card sync zweiter Lauf erzeugt keine Duplikate (copied=$CARD_COPIED2, already_present=$CARD_PRESENT2)"
+else
+    fail "card sync zweiter Lauf" "Exit $CARD_SYNC2_EXIT, copied=$CARD_COPIED2, present=$CARD_PRESENT2: $CARD_SYNC2"
+fi
+
+# --- same name, different content → must be copied separately ---
+CARD_SRC2="$TMPDIR/card_src2"
+CARD_DST2="$TMPDIR/card_dst2"
+mkdir -p "$CARD_SRC2" "$CARD_DST2"
+# Pre-populate dest with file A
+echo "CONTENT_A_12345" > "$CARD_DST2/IMG_0001.jpg"
+# Source has same name but different content
+echo "CONTENT_B_99999" > "$CARD_SRC2/IMG_0001.jpg"
+CARD_DIFF_EXIT=0
+CARD_DIFF=$("$BIN" card sync "$CARD_SRC2" --dest "$CARD_DST2" --json 2>&1) || CARD_DIFF_EXIT=$?
+CARD_DIFF_COPIED=$(echo "$CARD_DIFF" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('copied',0))" 2>/dev/null || echo "?")
+CARD_DIFF_PRESENT=$(echo "$CARD_DIFF" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('already_present',0))" 2>/dev/null || echo "?")
+# Different content → must be copied (not marked as already_present)
+if [ "$CARD_DIFF_EXIT" -eq 0 ] && [ "$CARD_DIFF_COPIED" -eq 1 ] && [ "$CARD_DIFF_PRESENT" -eq 0 ] 2>/dev/null; then
+    pass "card sync gleicher Name, anderer Inhalt → kopiert (nicht als vorhanden gewertet)"
+else
+    fail "card sync gleicher Name, anderer Inhalt" "Exit $CARD_DIFF_EXIT, copied=$CARD_DIFF_COPIED, present=$CARD_DIFF_PRESENT: $CARD_DIFF"
+fi
+
+# --- free-up-space only deletes hash-verified files ---
+CARD_SRC3="$TMPDIR/card_src3"
+CARD_DST3="$TMPDIR/card_dst3"
+mkdir -p "$CARD_SRC3" "$CARD_DST3"
+echo "FREE_ME" > "$CARD_SRC3/keep.jpg"
+CARD_FREE_EXIT=0
+CARD_FREE=$("$BIN" card sync "$CARD_SRC3" --dest "$CARD_DST3" --free-up-space --json 2>&1) || CARD_FREE_EXIT=$?
+CARD_FREED=$(echo "$CARD_FREE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('freed',0))" 2>/dev/null || echo "?")
+if [ "$CARD_FREE_EXIT" -eq 0 ] && [ "$CARD_FREED" -eq 1 ] 2>/dev/null && [ ! -f "$CARD_SRC3/keep.jpg" ]; then
+    pass "card sync --free-up-space löscht verifizierte Datei von Quelle"
+else
+    fail "card sync --free-up-space" "Exit $CARD_FREE_EXIT, freed=$CARD_FREED, Datei noch da=$(ls "$CARD_SRC3" 2>/dev/null || echo none): $CARD_FREE"
+fi
+
 echo ""
 
 # ---------------------------------------------------------------------------

@@ -2,6 +2,18 @@
 
 ---
 
+## 1.114.1
+**Bugfix: Karten-Sync löscht Fotos ohne Inhaltsvergleich – stiller Datenverlust bei RAW-Dateien (#110)**
+
+- `CardSync.swift` (neu): Shared-Utility für App und CLI; `plan()` erkennt „bereits vorhanden" nur noch per Byte-identischem Inhaltsvergleich (nicht mehr Name + Größe) — gleiche Größe bei verschiedenen RAFs führt nicht mehr zum falschen „verifiziert"
+- `plan()` prüft auch `_N`-Varianten in `dest` und in-plan-Zuweisungen gegen Dateiinhalt: wiederholte Syncs erzeugen keine `_2`, `_3`-Duplikate mehr
+- `execute()`: Kopier-Verifikation per vollständigem Byte-Vergleich (Quelle == Ziel) statt Größenvergleich — defekte Kopien bei korrekter Länge werden erkannt
+- `syncVolumeToLibrary`: delegiert jetzt an `CardSync.plan` + `CardSync.execute`; eigene Enumerations-Logik entfernt
+- `iphoto-cli card sync <quelle> [--dest <ordner>] [--free-up-space] [--dry-run] [--json]` — neuer CLI-Befehl für headless Karten-Sync
+- 6 neue Tests in `Tests/run_plugins.sh` decken: dry-run, erster Sync, Duplikat-Prävention, gleicher Name/anderer Inhalt → korrekt kopiert, `--free-up-space` löscht nur verifizierte Dateien
+
+---
+
 ## 1.114.0
 **CLI: Alben in Ordner verschieben & Album-Beschreibung pflegen**
 
