@@ -97,7 +97,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `ImageViewModel+MetadataScan.swift` | Hintergrund-EXIF-Scan |
 | `ImageViewModel+QualityDetection.swift` | Blur-/Belichtungs-/Closed-Eye-Scan |
 | `ImageViewModel+Save.swift` | Nicht-destruktives Speichern, Versionierung |
-| `ImageViewModel+Volumes.swift` | Eingehängte Volumes erkennen |
+| `ImageViewModel+Volumes.swift` | Eingehängte Volumes erkennen, Karten-Sync-Aufruf (nutzt `CardSync`) |
 | `ImageViewModel+WatchedFolders.swift` | Überwachte Ordner, Auto-Import |
 | `ImageLoadingOrchestrator.swift` | Koordiniert Phase-1/2/3-Laden; emittiert `SWITCH`-Metriken |
 | `ImageLoadingOrchestrator+LibraryScans.swift` | Bibliotheksweite Hintergrund-Scans (`scanExifForLibrary`, `scanQualityForLibrary`, `scanMotifForLibrary`); 100er-Batch-Flush mit einem Array-Write auf Main |
@@ -176,6 +176,7 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | `ImageAutoEnhancer.swift` | Auto-Enhance (Bildanalyse → vorgeschlagene Anpassungen) |
 | `BackupService.swift` | Backup-Job ausführen (Resizing, Metadaten, Zielordner) |
 | `SmartFolderSQLGenerator.swift` | Übersetzt SmartFolder-Filter in SQL-Abfragen |
+| `CardSync.swift` | Speicherkarten-Sync (geteilt von App und CLI): `plan()` erkennt „bereits vorhanden“ nur per Byte-Vergleich (auch `_N`-Varianten), `execute()` verifiziert Kopien per vollständigem Byte-Vergleich, bevor Originale freigegeben werden |
 | `SmartFolderFileSync.swift` | Synchronisiert Smart-Folder-Ergebnisse auf Disk |
 | `AppConfig.swift` | Key-Value-Konfigurationsdatei (`config.json`) |
 | `ProjectStore.swift` | Projekte laden/speichern (`projects.json`), zuletzt geöffnetes Projekt |
@@ -400,6 +401,7 @@ iphoto-cli bookmarks remove <pfad|file-url> [...] [--json]
 iphoto-cli bookmarks prune [--dry-run] [--json]
 iphoto-cli watched list|add|remove|check [<pfad>] [--auto-sync] [--json]
 iphoto-cli watched set <name|id> [--auto-sync on|off] [--import-dest <pfad>|--clear-import-dest] [--json]
+iphoto-cli card sync <quelle> [--dest <ordner>] [--free-up-space] [--dry-run] [--json]
 iphoto-cli smartfolder list|query|create|update|rename|delete|sync [<name>] [--json]
 iphoto-cli smartfolder sql <name> [--count] [--json]
 iphoto-cli smartfolder count [<name>] [--json]
