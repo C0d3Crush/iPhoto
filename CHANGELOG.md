@@ -2,6 +2,16 @@
 
 ---
 
+## 1.115.7
+**Bugfix: Inpaint-Ergebnis nach Bildwechsel über falschem Bild + Datenverlust (#100)**
+
+- `startInpaint()` capturt URL + UUID-Token; Completion prüft `runToken == token && currentDocument?.url == url` — veraltete CMT-Ergebnisse werden verworfen
+- `clearInpaint()` invalidiert das Token, ruft `cancelProcess()` auf und setzt `isRunning = false` — kein verwaister Subprocess mehr nach Bildwechsel
+- `InpaintProcessor.run` akzeptiert `taskStarted`-Callback, über den das `Process`-Handle zur Laufzeit übergeben wird
+- Neuer Button „Als Datei sichern" im Inpaint-Panel: `saveInpaintResult()` exportiert das Ergebnis als `NAME_inpaint.jpg` neben dem Original und importiert es in die Collection
+
+---
+
 ## 1.115.6
 **Bugfix: Tethering-Crash bei Kamera-Trennung — NSException wenn Session aktiv bleibt (#112)**
 

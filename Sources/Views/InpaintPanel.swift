@@ -177,8 +177,12 @@ struct InpaintPanel: View {
         if viewModel.inpaint.resultImage != nil, !viewModel.inpaint.isRunning {
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
-                Text("Ergebnis bereit — wird angezeigt")
+                Text("Ergebnis bereit")
                     .font(.caption2).foregroundColor(.secondary)
+                Spacer()
+                Button("Als Datei sichern") { viewModel.saveInpaintResult() }
+                    .buttonStyle(BorderlessButtonStyle())
+                    .font(.caption2)
             }
         }
     }

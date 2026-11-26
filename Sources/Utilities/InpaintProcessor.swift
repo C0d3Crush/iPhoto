@@ -46,7 +46,8 @@ struct InpaintProcessor {
     }
 
     // Synchronous — must be called on a background queue.
-    static func run(image: CGImage, mask: CGImage, config: Config) throws -> CGImage {
+    static func run(image: CGImage, mask: CGImage, config: Config,
+                    taskStarted: ((Process) -> Void)? = nil) throws -> CGImage {
         try validateSetup(config: config)
 
         let fm = FileManager.default
@@ -89,6 +90,7 @@ struct InpaintProcessor {
         task.standardError  = errPipe
         task.standardOutput = outPipe
 
+        taskStarted?(task)
         try task.run()
         // Drain pipes BEFORE waitUntilExit to prevent deadlock when output exceeds 64 KB.
         let stdout = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
