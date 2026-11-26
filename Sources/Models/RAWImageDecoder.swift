@@ -165,6 +165,10 @@ struct RAWImageDecoder {
     // maxDimension == nil → Vollbild-Pfad: CGImageSourceCreateImageAtIndex + applyExifOrientation
     // (nur für decode() genutzt).
     private static func decodeEmbeddedJPEG(url: URL, maxDimension: Int? = nil) -> CGImage? {
+        // Guard: decodeEmbeddedJPEG must NEVER run on the main thread.
+        // CGImageSourceCreateThumbnailAtIndex and CIContext.createCGImage SIGILL on macOS 11
+        // when called from main (Bugs #43, #44). Fail fast here rather than in ImageIO internals.
+        dispatchPrecondition(condition: .notOnQueue(.main))
         guard let ext = url.pathExtension.lowercased() as String?,
               ext == "raf" else { return nil }
 
@@ -238,18 +242,23 @@ struct RAWImageDecoder {
             Log.trace("CGImageSourceCreateThumbnailAtIndex: \(maxDim)px \(name)")
             let t0 = Date()
             // Step 1: use IFD1 thumbnail if present (fast, never crashes).
+            // Skip for large embedded JPEGs (> 4 MB, e.g. GFX 102 MP sensor): those files have no
+            // IFD1 thumbnail, so IfAbsent falls back to full DCT decode — identical to IfAlways —
+            // which SIGILL on macOS 11 in ImageIO's DCT path (Bug #44). Go straight to SubsampleFactor.
             // Step 2 (fallback): CGImageSourceCreateThumbnailFromImageAlways crashes on macOS 11
             // for Fujifilm RAFs with offset=148 (newer compact bodies, 3–6 MB embedded JPEG) —
             // SIGILL in ImageIO's DCT path. Use kCGImageSourceSubsampleFactor:8 instead:
             // decodes at 1/8 resolution (~780×520 for 26 MP), no OOM, no SIGILL.
-            let optsIfAbsent: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxDim
-            ]
-            if let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, optsIfAbsent as CFDictionary) {
-                Log.trace("CreateThumbnailAtIndex (IfAbsent) fertig: \(Int(Date().timeIntervalSince(t0) * 1000)) ms \(name)")
-                return materialize(thumb)
+            if jpegLength <= 4_000_000 {
+                let optsIfAbsent: [CFString: Any] = [
+                    kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: maxDim
+                ]
+                if let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, optsIfAbsent as CFDictionary) {
+                    Log.trace("CreateThumbnailAtIndex (IfAbsent) fertig: \(Int(Date().timeIntervalSince(t0) * 1000)) ms \(name)")
+                    return materialize(thumb)
+                }
             }
             // No IFD1 thumbnail — fall back to 1/8-subsampled full decode.
             Log.trace("CreateThumbnailAtIndex fehlgeschlagen, Fallback Subsample+Scale: \(name)")
@@ -291,7 +300,11 @@ struct RAWImageDecoder {
         guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let raw = props[kCGImagePropertyOrientation] as? UInt32,
               let orientation = CGImagePropertyOrientation(rawValue: raw),
-              orientation != .up else { return image }
+              orientation != .up else {
+            // .up rotation: return image as-is, but materialize first so the caller gets an
+            // independent CGImage that survives after jpegData/source are freed (Bug #43).
+            return materialize(image) ?? image
+        }
         ciSemaphore.wait()
         defer { ciSemaphore.signal() }
         iphotoBreadcrumb("applyExifOrientation: CIImage.oriented (raw=\(raw))")
@@ -301,7 +314,10 @@ struct RAWImageDecoder {
         Log.trace("CIContext.createCGImage: \(Int(ci.extent.width))×\(Int(ci.extent.height))")
         let result = sharedSRGBCIContext.createCGImage(ci, from: ci.extent)
         iphotoBreadcrumb("applyExifOrientation: done")
-        return result ?? image
+        // CIContext can return nil on macOS 11 under memory pressure. Fall back to materializing
+        // the lazy CGImage (source still alive here) rather than returning the dangling original
+        // (Bug #43: dangling lazy CGImage → SIGILL on main thread when SwiftUI renders).
+        return result ?? materialize(image) ?? image
     }
 
     private static func scaledDown(_ image: CGImage, maxDimension: Int) -> CGImage {

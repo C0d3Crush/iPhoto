@@ -2,6 +2,15 @@
 
 ---
 
+## 1.114.2
+**Bugfix: SIGILL-Crashes beim RAF-Decode — dangling CGImage in applyExifOrientation + GFX-Sensor-Absturz (#43 #44)**
+
+- `RAWImageDecoder.applyExifOrientation`: `.up`-Rotation und CIContext-Fehler-Fallback gaben ein lazy CGImage zurück, das nach `decodeEmbeddedJPEG`-Rückkehr auf freigegebenen Speicher zeigt → SIGILL beim SwiftUI-Render auf Main-Thread (Bug #43). Fix: `materialize(image) ?? image` in beiden Pfaden, solange `source` noch im Scope ist
+- `RAWImageDecoder.decodeEmbeddedJPEG`: `kCGImageSourceCreateThumbnailFromImageIfAbsent` für GFX-RAFs mit >4 MB embedded JPEG (kein IFD1-Thumbnail) fiel auf vollen DCT-Decode zurück → SIGILL auf macOS 11 (Bug #44). Fix: Schwellwert 4 MB — größere JPEGs überspringen `IfAbsent` und nutzen direkt `SubsampleFactor:8`
+- `dispatchPrecondition(condition: .notOnQueue(.main))` am Eingang von `decodeEmbeddedJPEG` als Frühwarnung für zukünftige Main-Thread-Regressionen
+
+---
+
 ## 1.114.1
 **Bugfix: Karten-Sync löscht Fotos ohne Inhaltsvergleich – stiller Datenverlust bei RAW-Dateien (#110)**
 
