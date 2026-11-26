@@ -11,6 +11,10 @@ import anthropic
 ACTORS_FILE = ".github/actors.json"
 DRY_RUN = "--dry-run" in sys.argv
 
+# Only process issues from trusted repository members.
+# External users need manual approval via the "approved" label.
+TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+
 api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 if not api_key:
     print("FEHLER: ANTHROPIC_API_KEY ist nicht gesetzt.", file=sys.stderr)
@@ -69,6 +73,10 @@ def get_unrouted_issues() -> list[dict]:
         i for i in pages
         if not i.get("pull_request")  # skip PRs
         and not any(l["name"].startswith("actor:") for l in i.get("labels", []))
+        and (
+            i.get("author_association", "NONE") in TRUSTED_ASSOCIATIONS
+            or any(l["name"] == "approved" for l in i.get("labels", []))
+        )
     ]
     return sorted(unrouted, key=sort_key)
 

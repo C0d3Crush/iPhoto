@@ -1,0 +1,35 @@
+name: Issue Guard
+
+on:
+  issues:
+    types: [opened, reopened]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Check author_association
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSOC: ${{ github.event.issue.author_association }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: |
+          case "$ASSOC" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "Trusted ($ASSOC) – no action."
+              ;;
+            *)
+              echo "External user ($ASSOC) – blocking bot processing."
+              gh issue edit "$NUMBER" \
+                --repo "${{ github.repository }}" \
+                --add-label "needs-triage"
+              gh issue comment "$NUMBER" \
+                --repo "${{ github.repository }}" \
+                --body "Dieses Issue stammt von einem externen Account und wird von den Bots **nicht automatisch verarbeitet**.
+
+Maintainer: Füge das Label \`approved\` hinzu, um die Verarbeitung manuell freizugeben."
+              ;;
+          esac
