@@ -12,6 +12,10 @@ final class Log {
     // Internal so CrashReporter can call writeSync from the exception handler.
     static let shared = Log()
 
+    // Set once during init() — lets CrashReporter.buildReport() identify the current session's
+    // marker and pick the preceding (crashed) session instead.
+    static private(set) var currentSessionID: String? = nil
+
     let fileURL: URL
     private let queue = DispatchQueue(label: "iphoto.logger", qos: .utility)
     private var fileHandle: FileHandle?
@@ -26,13 +30,17 @@ final class Log {
             .appendingPathComponent("Logs/iPhoto")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         fileURL = dir.appendingPathComponent("iPhoto.log")
-        // Rotate if over 10 MB
+        // Rotate if over 10 MB: rename to .1 (keep one backup) so crash diagnostics survive.
         if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 10_000_000 {
-            try? FileManager.default.removeItem(at: fileURL)
+            let backup = dir.appendingPathComponent("iPhoto.log.1")
+            try? FileManager.default.removeItem(at: backup)
+            try? FileManager.default.moveItem(at: fileURL, to: backup)
         }
-        // Write session boundary as a RAW line (not through write() so it never appears inside a
-        // timestamped log entry — CrashReporter.buildReport() splits on this exact string).
-        let boundary = "\n\(Log.sessionMarker) \(fileURL.path)\n"
+        // Write session boundary with a stable UUID so CrashReporter can always find the
+        // previous (crashed) session regardless of whether Log was already initialized.
+        let sessionID = UUID().uuidString
+        Log.currentSessionID = sessionID
+        let boundary = "\n\(Log.sessionMarker) \(sessionID)\n"
         appendRaw(boundary)
         // Open a persistent handle for all subsequent writes — serialized through the queue.
         // Keeps the fd open for the app's lifetime; avoids per-call open/seek/close overhead

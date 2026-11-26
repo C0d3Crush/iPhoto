@@ -2,6 +2,17 @@
 
 ---
 
+## 1.114.7
+**Bugfix: CrashReporter — Session-Index falsch nach frühem Log.init(), Log-Rotation löschte Datei (#119)**
+
+- `Log.init()` schreibt Session-Marker jetzt mit stabiler UUID (`###SESSION_START### <uuid>`); UUID in `Log.currentSessionID` gespeichert
+- Log-Rotation: umbenennen nach `iPhoto.log.1` statt löschen — Crash-Diagnose überlebt Rotation; `buildReport()` fällt auf `.log.1` zurück wenn aktuelle Datei nur die neue Sitzung enthält
+- `CrashReporter.crashedSession(from:currentID:)`: wenn `currentID` nil (Log noch nicht initialisiert) → letzte Segment; wenn gesetzt → letztes Segment dessen UUID ≠ currentID
+- `buildReport()` liest nur noch die letzten 512 KB via FileHandle statt die gesamte Datei (bis 10 MB) synchron auf dem Main-Thread
+- CLI `iphoto-cli crashreport build [--log <datei>] [--json]` + 3 Tests in `run_plugins.sh`
+
+---
+
 ## 1.114.6
 **Bugfix: Version-Restore/Undo/Metadaten-Speichern — Index-über-async-Hop traf falsches Dokument nach Bildwechsel (#101)**
 

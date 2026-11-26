@@ -4158,6 +4158,44 @@ private func runQualityOverride(_ args: [String], catalog: CatalogStore, jsonMod
 
 // MARK: - Version
 
+private func runCrashReport(_ args: [String]) -> Int32 {
+    let sub = args.first ?? ""
+    let jsonMode = args.contains("--json")
+    if sub == "build" {
+        let logFlag = args.firstIndex(of: "--log").flatMap { idx -> String? in
+            let next = args.index(after: idx)
+            return next < args.endIndex ? args[next] : nil
+        }
+        let logText: String
+        if let path = logFlag {
+            logText = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+        } else {
+            let logURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Logs/iPhoto/iPhoto.log")
+            logText = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
+        }
+        // Extract last session segment (currentID nil = checkAndMark ran before Log.init())
+        let sessionMarker = "###SESSION_START###"
+        let session: String = {
+            let parts = logText.components(separatedBy: sessionMarker)
+            guard parts.count >= 2 else { return logText }
+            return sessionMarker + parts[parts.count - 1]
+        }()
+        if jsonMode {
+            let escaped = session
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\n", with: "\\n")
+            print("{\"session\":\"\(escaped)\"}")
+        } else {
+            print(session)
+        }
+        return 0
+    }
+    fputs("Verwendung: iphoto-cli crashreport build [--log <datei>] [--json]\n", stderr)
+    return 1
+}
+
 private func runVersion(_ args: [String]) -> Int32 {
     let sub = args.first ?? ""
     let jsonMode = args.contains("--json")
@@ -7883,6 +7921,9 @@ if firstArg == "quality" {
 }
 if firstArg == "version" {
     exit(runVersion(Array(rawArgs.dropFirst(2))))
+}
+if firstArg == "crashreport" {
+    exit(runCrashReport(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "search" {
     exit(runSearch(Array(rawArgs.dropFirst(2))))

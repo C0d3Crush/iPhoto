@@ -4261,6 +4261,46 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# crashreport build — Segment-Auswahl (#119)
+# ---------------------------------------------------------------------------
+echo "--- crashreport build ---"
+
+# Synthetic log: two sessions, first is "crashed", second is current.
+SESSION1_ID="AAAA-BBBB-1111"
+SESSION2_ID="CCCC-DDDD-2222"
+CRASH_LOG="$TMPDIR/crash_test.log"
+printf '\n###SESSION_START### %s\nLog Zeile aus Absturz\nSIGILL\n\n###SESSION_START### %s\nAktueller Start\n' \
+    "$SESSION1_ID" "$SESSION2_ID" > "$CRASH_LOG"
+
+# Case 1: currentID=nil → letzte Session (SESSION2)
+SESSION_OUT=$("$BIN" crashreport build --log "$CRASH_LOG" 2>/dev/null)
+if echo "$SESSION_OUT" | grep -q "Aktueller Start"; then
+    pass "crashreport build (kein currentID → letzte Session)"
+else
+    fail "crashreport build (kein currentID → letzte Session)" "Erwartete 'Aktueller Start' in Ausgabe"
+fi
+
+# Case 2: single-session log → that session is returned
+SINGLE_LOG="$TMPDIR/single_session.log"
+printf '\n###SESSION_START### SINGLE-UUID\nEinzige Sitzung\n' > "$SINGLE_LOG"
+SINGLE_OUT=$("$BIN" crashreport build --log "$SINGLE_LOG" 2>/dev/null)
+if echo "$SINGLE_OUT" | grep -q "Einzige Sitzung"; then
+    pass "crashreport build (eine Session)"
+else
+    fail "crashreport build (eine Session)" "Session nicht in Ausgabe"
+fi
+
+# Case 3: --json output contains 'session' key
+JSON_OUT=$("$BIN" crashreport build --log "$CRASH_LOG" --json 2>/dev/null)
+if echo "$JSON_OUT" | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); assert 'session' in d" 2>/dev/null; then
+    pass "crashreport build --json (valides JSON mit 'session')"
+else
+    fail "crashreport build --json (valides JSON mit 'session')" "Kein valides JSON oder kein 'session'-Key"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

@@ -14,6 +14,11 @@ enum CrashReporter {
             .appendingPathComponent("Logs/iPhoto/iPhoto.log")
     }
 
+    private static var logBackupURL: URL {
+        FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Logs/iPhoto/iPhoto.log.1")
+    }
+
     // Called on launch — returns crash report string if previous session crashed
     static func checkAndMark() -> String? {
         let crashed = FileManager.default.fileExists(atPath: sentinelURL.path)
@@ -43,22 +48,49 @@ enum CrashReporter {
         return url
     }
 
-    private static func buildReport() -> String {
-        let log = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
-        // Split on the dedicated session boundary (never appears inside a timestamped log entry).
-        let sessions = log.components(separatedBy: Log.sessionMarker)
+    // Extracts the last session in `log` whose session ID ≠ `currentID`.
+    // `currentID` is nil when Log.shared has not been initialized yet — in that case the last
+    // segment is the crashed session (checkAndMark() ran before Log.init()).
+    // Internal for testability via CLI.
+    static func crashedSession(from log: String, currentID: String?) -> String? {
+        // parts[0] = everything before first marker (usually empty)
+        // parts[1..] = session body preceded by marker token
+        let parts = log.components(separatedBy: Log.sessionMarker)
+        guard parts.count >= 2 else { return nil }
+        let sessions = parts.dropFirst()
 
-        // sessions[0]  = everything before first session (usually empty)
-        // sessions[n-1] = current (non-crashed) session
-        // sessions[n-2] = the crashed session
-        let crashedSession: String
-        if sessions.count >= 3 {
-            crashedSession = Log.sessionMarker + sessions[sessions.count - 2]
-        } else if sessions.count == 2 {
-            crashedSession = Log.sessionMarker + sessions[0]  // only one full session
+        if let id = currentID {
+            for segment in sessions.reversed() {
+                // Marker line: " <uuid>\n..." — first whitespace-delimited token is the UUID.
+                let token = segment.trimmingCharacters(in: .init(charactersIn: " \t"))
+                    .components(separatedBy: .whitespacesAndNewlines).first ?? ""
+                if token != id {
+                    return Log.sessionMarker + segment
+                }
+            }
+            return nil
         } else {
-            crashedSession = log
+            return Log.sessionMarker + sessions[sessions.index(before: sessions.endIndex)]
         }
+    }
+
+    private static func readTail(url: URL, maxBytes: Int) -> String {
+        guard let fh = try? FileHandle(forReadingFrom: url) else { return "" }
+        defer { fh.closeFile() }
+        let size = Int(fh.seekToEndOfFile())
+        let offset = max(0, size - maxBytes)
+        fh.seek(toFileOffset: UInt64(offset))
+        let data = fh.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private static func buildReport() -> String {
+        let currentID = Log.currentSessionID
+        // Read last 512 KB — enough for crash diagnostics, avoids blocking main thread.
+        let log = readTail(url: logURL, maxBytes: 512 * 1024)
+        let crashedText = crashedSession(from: log, currentID: currentID)
+            ?? crashedSession(from: readTail(url: logBackupURL, maxBytes: 512 * 1024), currentID: currentID)
+            ?? log
 
         let header = """
         iPhoto Crash Report
@@ -69,7 +101,7 @@ enum CrashReporter {
         === Log der abgestürzten Session ===
 
         """
-        return header + crashedSession.trimmingCharacters(in: .whitespacesAndNewlines)
+        return header + crashedText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Exception / Signal handlers
