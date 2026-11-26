@@ -194,20 +194,37 @@ extension ImageViewModel {
         let targets: [Int] = collection.selectedIndices.isEmpty
             ? [collection.currentIndex]
             : Array(collection.selectedIndices)
-        var otherPaths: [String] = []
+
+        // Collect (index, path) pairs for non-current targets.
+        var otherTargets: [(idx: Int, path: String)] = []
         for idx in targets where idx < collection.documents.count {
             if idx == collection.currentIndex {
                 adj.adjustments = src
             } else {
-                otherPaths.append(collection.documents[idx].url.path)
+                otherTargets.append((idx, collection.documents[idx].url.path))
             }
         }
-        if !otherPaths.isEmpty {
-            let snapshot = src
-            DispatchQueue.global(qos: .userInitiated).async {
+
+        guard !otherTargets.isEmpty else { return }
+        let snapshot = src
+        let otherPaths = otherTargets.map { $0.path }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            for path in otherPaths {
+                CatalogStore.shared.saveAdjustments(path: path, adjustments: snapshot)
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                // Update adj cache so next image switch picks up the new state.
                 for path in otherPaths {
-                    CatalogStore.shared.saveAdjustments(path: path, adjustments: snapshot)
+                    self.loader.notifyAdjustmentPersisted(path: path, state: snapshot)
                 }
+                // Batch write-back: set hasPersistedAdjustments flag in one array mutation.
+                var docs = self.collection.documents
+                for (idx, _) in otherTargets where idx < docs.count {
+                    docs[idx].hasPersistedAdjustments = true
+                }
+                self.collection.documents = docs
             }
         }
     }

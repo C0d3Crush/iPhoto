@@ -2,6 +2,15 @@
 
 ---
 
+## 1.115.0
+**Bugfix: Anpassungen einfügen — Adj-Cache und hasPersistedAdjustments nicht aktualisiert (#108)**
+
+- `pasteAdjustments()`: nach dem Background-Write wird auf dem Main-Thread `loader.notifyAdjustmentPersisted` für jeden Zielpfad aufgerufen → Cache-Hit beim nächsten Bildwechsel liefert die eingefügten Werte statt den alten Stand
+- `hasPersistedAdjustments` wird für alle Zielbilder in einem einzigen Batch-Write-back gesetzt → Zauberstab-Badge erscheint sofort im Grid
+- Batch-Write-back als einmalige Array-Zuweisung statt N einzelner Subscript-Writes (kein O(N²)-Risiko)
+
+---
+
 ## 1.114.9
 **Performance: trashedCount/backedUpCount — O(N)-Scan pro Render durch O(1)-Counter ersetzt (#121)**
 
