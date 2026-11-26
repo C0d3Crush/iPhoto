@@ -175,7 +175,6 @@ CLI_SOURCES="\
     $ROOT/Sources/Models/DetectedVolume.swift \
     $ROOT/Sources/Models/WatchedFolder.swift \
     $ROOT/Sources/Models/Album.swift \
-    $ROOT/Sources/Models/RatingStore.swift \
     $ROOT/Sources/Models/StackDetector.swift \
     $ROOT/Sources/Models/SmartFolder.swift \
     $ROOT/Sources/Models/SearchParser.swift \

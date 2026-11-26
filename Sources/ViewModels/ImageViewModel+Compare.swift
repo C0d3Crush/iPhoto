@@ -214,14 +214,11 @@ extension ImageViewModel {
         doc.elo = newElo
         doc.eloMatches += 1
         collection.documents[idx] = doc
-        let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel,
-                                elo: doc.elo, eloMatches: doc.eloMatches)
         let url = doc.url
         let elo = doc.elo
         let matches = doc.eloMatches
         iphotoBreadcrumb("applyEloUpdate: persist \(doc.filename)")
         DispatchQueue.global(qos: .userInitiated).async {
-            RatingStore.shared.save(entry, for: url)
             CatalogStore.shared.saveElo(path: url.path, elo: elo, eloMatches: matches)
         }
     }

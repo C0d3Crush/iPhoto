@@ -680,12 +680,6 @@ class ImageViewModel: ObservableObject {
                     doc.rating = r.rating
                     doc.flagStatus = FlagStatus(rawValue: r.flag) ?? .none
                     doc.colorLabel = ColorLabel(rawValue: r.colorLabel) ?? .none
-                } else if let entry = RatingStore.shared.load(for: url) {
-                    doc.rating = entry.rating
-                    doc.flagStatus = entry.flagStatus
-                    doc.colorLabel = entry.colorLabel
-                    doc.elo = entry.elo
-                    doc.eloMatches = entry.eloMatches
                 }
                 if let e = catalogElos[url.path] {
                     doc.elo = e.elo

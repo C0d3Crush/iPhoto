@@ -341,7 +341,6 @@ final class ImageLoadingOrchestrator {
                 // SQLite-Zugriffe noch im BG-Thread erledigen — nicht auf dem Main-Thread blockieren
                 let catalogRating = CatalogStore.shared.rating(forPath: url.path)
                 let catalogElo = CatalogStore.shared.elo(forPath: url.path)
-                let fallbackRating = catalogRating == nil ? RatingStore.shared.load(for: url) : nil
                 let sizeBytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).flatMap { Int64($0) } ?? 0
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, let host = self.host, self.loadToken == token else {
@@ -365,12 +364,6 @@ final class ImageLoadingOrchestrator {
                         updated.rating = r.rating
                         updated.flagStatus = FlagStatus(rawValue: r.flag) ?? .none
                         updated.colorLabel = ColorLabel(rawValue: r.colorLabel) ?? .none
-                    } else if let entry = fallbackRating {
-                        updated.rating = entry.rating
-                        updated.flagStatus = entry.flagStatus
-                        updated.colorLabel = entry.colorLabel
-                        updated.elo = entry.elo
-                        updated.eloMatches = entry.eloMatches
                     }
                     if let e = catalogElo {
                         updated.elo = e.elo

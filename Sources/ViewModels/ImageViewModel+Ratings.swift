@@ -125,14 +125,11 @@ extension ImageViewModel {
         guard idx < collection.documents.count else { return }
         invalidateVisibleOrder()
         let doc = collection.documents[idx]
-        let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel,
-                                elo: doc.elo, eloMatches: doc.eloMatches)
         let url   = doc.url
         let path  = doc.url.path
         let rating = doc.rating, flag = doc.flagStatus.rawValue, colorLabel = doc.colorLabel.rawValue
         // Always persist asynchronously — no sync SQLite on main (#4).
         DispatchQueue.global(qos: .userInitiated).async {
-            RatingStore.shared.save(entry, for: url)
             CatalogStore.shared.saveRating(path: path, rating: rating,
                                            flag: flag, colorLabel: colorLabel)
         }
@@ -142,13 +139,11 @@ extension ImageViewModel {
     func persistRatings(at indices: [Int], label: String, icon: String) {
         guard !indices.isEmpty else { return }
         invalidateVisibleOrder()
-        struct Snap { let url: URL; let entry: RatingEntry; let path: String; let rating: Int; let flag: String; let colorLabel: String }
+        struct Snap { let url: URL; let path: String; let rating: Int; let flag: String; let colorLabel: String }
         let snaps: [Snap] = indices.compactMap { idx in
             guard idx < collection.documents.count else { return nil }
             let doc = collection.documents[idx]
-            let entry = RatingEntry(rating: doc.rating, flagStatus: doc.flagStatus, colorLabel: doc.colorLabel,
-                                    elo: doc.elo, eloMatches: doc.eloMatches)
-            return Snap(url: doc.url, entry: entry, path: doc.url.path,
+            return Snap(url: doc.url, path: doc.url.path,
                         rating: doc.rating, flag: doc.flagStatus.rawValue, colorLabel: doc.colorLabel.rawValue)
         }
         guard !snaps.isEmpty else { return }
@@ -161,7 +156,6 @@ extension ImageViewModel {
         }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             for (i, s) in snaps.enumerated() {
-                RatingStore.shared.save(s.entry, for: s.url)
                 CatalogStore.shared.saveRating(path: s.path, rating: s.rating, flag: s.flag, colorLabel: s.colorLabel)
                 if showProgress {
                     let done = i + 1

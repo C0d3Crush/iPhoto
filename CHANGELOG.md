@@ -2,6 +2,16 @@
 
 ---
 
+## 1.114.5
+**Bugfix: RatingStore entfernt — ratings.json-Fallback traf nach Neustart nie, Datei wuchs unbegrenzt (#103)**
+
+- `RatingStore` komplett entfernt: Schlüssel basierte auf `hashValue` (in Swift pro Prozess zufällig geseedet) → Fallback-Lookup traf nach Neustart nie
+- Alle Aufrufer (`persistRating`, `persistRatings`, `applyEloUpdate`, Lade-Pfade) schreiben/lesen ausschließlich über CatalogStore (SQLite) — bereits die einzige funktionierende Quelle
+- Beim ersten App-Start nach dem Update wird die verwaiste `ratings.json` gelöscht; alle Bewertungen bleiben in `catalog.db` vollständig erhalten
+- Batch-Bewertung: N unnötige JSON-Komplett-Rewrites pro Vorgang entfallen
+
+---
+
 ## 1.114.4
 **Bugfix: Export verwirft EXIF/GPS/IPTC-Metadaten — alle Export-Formate (#104)**
 

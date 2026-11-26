@@ -11,6 +11,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         CrashReporter.installCrashHandlers()
         Heartbeat.shared.start()
+        // Stale ratings.json (keyed by non-stable Swift hashValue) — remove once on upgrade.
+        let ratingsURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto/ratings.json")
+        try? FileManager.default.removeItem(at: ratingsURL)
 
         // View-Rendering-Smoketest: wenn per Umgebungsvariable aktiviert, wartet die
         // App 2 s (Zeit fuer Combine-Subscriptions, LazyStacks, Toolbar-Layout) und

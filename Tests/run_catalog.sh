@@ -40,7 +40,6 @@ echo "==> Kompiliere iphoto-catalog-test …"
     "$ROOT/Sources/Models/SmartFolder.swift" \
     "$ROOT/Sources/Models/MetadataEntry.swift" \
     "$ROOT/Sources/Models/ImageDocument.swift" \
-    "$ROOT/Sources/Models/RatingStore.swift" \
     "$ROOT/Sources/Models/FaceRecord.swift" \
     "$ROOT/Tests/catalog/main.swift" \
     -o "$BIN"
