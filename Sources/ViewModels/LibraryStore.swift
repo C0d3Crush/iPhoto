@@ -105,6 +105,8 @@ final class LibraryStore: ObservableObject {
     // Datei dürfen sich nicht überholen (sonst gewinnt evtl. der ältere Stand).
     private static let persistQueue = DispatchQueue(label: "iPhoto.LibraryStore.persist", qos: .utility)
 
+    static func flushPendingSaves() { persistQueue.sync {} }
+
     private func asyncPersist<T: Encodable>(_ value: T, to url: URL, description: String) {
         let capturedURL = url
         LibraryStore.persistQueue.async { [weak self] in

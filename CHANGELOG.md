@@ -2,6 +2,16 @@
 
 ---
 
+## 1.115.4
+**Bugfix: App-Beenden verwarf letzte Album-/Ordner-Änderungen (stiller Datenverlust) (#89)**
+
+- `LibraryStore.flushPendingSaves()` draint die asynchrone `persistQueue` blockierend
+- `CatalogStore.flush()` draint die asynchrone SQLite-Queue blockierend
+- `applicationWillTerminate` ruft beide Flushes vor `markCleanExit()` auf — ⌘Q + sofortiges Beenden verliert jetzt keine Daten mehr
+- Test in `run_librarystore.sh`: Save → `flushPendingSaves()` → Datei lesen muss den neuen Stand enthalten
+
+---
+
 ## 1.115.3
 **Bugfix: `iphoto-cli adjust --crop` und `--rotate` waren Leeroperationen (#105)**
 

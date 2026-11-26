@@ -215,6 +215,21 @@ test("onError feuert bei nicht beschreibbarem Verzeichnis") {
     try assert(errorMessage!.contains("Album-Datei"), "Meldung nennt Datei nicht: \(errorMessage!)")
 }
 
+// ── 6. flushPendingSaves ──────────────────────────────────────
+print("\n[6  flushPendingSaves]")
+test("flushPendingSaves — Datei enthält neuen Stand nach Flush") {
+    let dir = freshDir(name: "flush")
+    let s = LibraryStore(directory: dir)
+    s.albums = [Album(name: "FlushAlbum")]
+    s.saveAlbums()
+    // Without flush the async write may not have landed on disk yet.
+    LibraryStore.flushPendingSaves()
+    let s2 = LibraryStore(directory: dir)
+    s2.loadAlbums()
+    try assertEqual(s2.albums.count, 1)
+    try assertEqual(s2.albums[0].name, "FlushAlbum")
+}
+
 // ── Ergebnis ─────────────────────────────────────────────────
 print("")
 print(String(repeating: "=", count: 55))

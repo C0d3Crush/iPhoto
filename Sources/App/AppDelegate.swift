@@ -33,6 +33,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        LibraryStore.flushPendingSaves()
+        CatalogStore.shared.flush()
         CrashReporter.markCleanExit()
     }
 

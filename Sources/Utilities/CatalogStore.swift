@@ -22,6 +22,9 @@ struct CatalogImage {
 final class CatalogStore {
     static let shared = CatalogStore()
 
+    /// Drain all pending async DB writes — call before process exit to avoid data loss.
+    func flush() { queue.sync {} }
+
     private var db: OpaquePointer?
     // Serial queue serialises all DB access; WAL lets concurrent readers not block writers.
     let queue = DispatchQueue(label: "com.c0d3cru5h.iphoto.catalog", qos: .utility)
