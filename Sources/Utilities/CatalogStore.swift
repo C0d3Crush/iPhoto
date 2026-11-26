@@ -593,6 +593,9 @@ final class CatalogStore {
             sfOrderedPathsCache.removeAll(keepingCapacity: true)
             sfCountCache.removeAll(keepingCapacity: true)
         }
+        imageCacheLock.lock()
+        for path in paths { imageCache.removeValue(forKey: path) }
+        imageCacheLock.unlock()
     }
 
     // Bulk-insert inside a single transaction — several orders of magnitude faster than N individual calls.
@@ -631,6 +634,15 @@ final class CatalogStore {
             sfOrderedPathsCache.removeAll(keepingCapacity: true)
             sfCountCache.removeAll(keepingCapacity: true)
         }
+        imageCacheLock.lock()
+        for item in items {
+            imageCache[item.path] = CatalogImage(id: "", path: item.path, filename: item.filename,
+                                                 sizeBytes: item.sizeBytes, width: item.width, height: item.height,
+                                                 dateTaken: item.dateTaken, cameraMake: item.cameraMake,
+                                                 cameraModel: item.cameraModel, isRAW: item.isRAW, importedAt: "")
+            imageCacheMisses.remove(item.path)
+        }
+        imageCacheLock.unlock()
     }
 
 

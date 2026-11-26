@@ -460,6 +460,30 @@ test("sequenceNumber nil bleibt nil (Einzelbild)") {
     try assert(e!.sequenceNumber == nil && !e!.autoBracketing)
 }
 
+// ── imageCache-Sync (#83) ────────────────────────────────────
+print("\n[imageCache-Sync]")
+test("batchUpsertImages invalidiert Miss-Cache") {
+    let s = freshStore(name: "cache_miss_batch")
+    // Prime a cache miss
+    let result1 = s.image(forPath: "/tmp/batch_miss.raf")
+    try assert(result1 == nil, "Erwartet nil vor Insert")
+    // Now batch-upsert the same path
+    s.batchUpsertImages([(path: "/tmp/batch_miss.raf", filename: "batch_miss.raf",
+                          isRAW: true, width: 100, height: 100, sizeBytes: 1024,
+                          dateTaken: nil, cameraMake: nil, cameraModel: nil)])
+    let result2 = s.image(forPath: "/tmp/batch_miss.raf")
+    try assert(result2 != nil, "batchUpsert hat Miss-Cache nicht invalidiert — image(forPath:) gibt immer noch nil zurück")
+}
+test("deleteImages entfernt Einträge aus imageCache") {
+    let s = freshStore(name: "cache_delete")
+    s.upsertImage(path: "/tmp/del_me.raf", filename: "del_me.raf", isRAW: true)
+    let before = s.image(forPath: "/tmp/del_me.raf")
+    try assert(before != nil, "Bild sollte vor Delete im Cache sein")
+    s.deleteImages(paths: ["/tmp/del_me.raf"])
+    let after = s.image(forPath: "/tmp/del_me.raf")
+    try assert(after == nil, "deleteImages hat Eintrag nicht aus imageCache entfernt")
+}
+
 // ── Ergebnis ─────────────────────────────────────────────────
 print("")
 print(String(repeating: "=", count: 55))

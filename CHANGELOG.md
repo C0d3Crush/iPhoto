@@ -2,6 +2,15 @@
 
 ---
 
+## 1.115.13
+**Bugfix: `batchUpsertImages`/`deleteImages` hielten In-Memory-Cache nicht synchron — Datum/Kamera-Spalten fielen für neue Bilder auf leer zurück (#83)**
+
+- `batchUpsertImages` aktualisiert nach COMMIT den `imageCache` und räumt `imageCacheMisses` auf — Pfade, die vorher als Miss gecacht wurden, werden sofort wieder auflösbar
+- `deleteImages` entfernt gelöschte Pfade aus `imageCache`, damit `image(forPath:)` sie nicht weiter als vorhanden zurückliefert
+- Tests in `Tests/catalog/main.swift`: Miss-Cache-Invalidierung nach `batchUpsertImages`; Cache-Entfernung nach `deleteImages`
+
+---
+
 ## 1.115.12
 **Bugfix: CLI `backup set` / `viewmode set` schrieben in falsche UserDefaults-Domain — App sah Änderungen nie (#77)**
 
