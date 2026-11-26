@@ -319,7 +319,7 @@ class ImageViewModel: ObservableObject {
             .sink { [weak self] urls in
                 guard let self = self else { return }
                 if self.projectInitialized {
-                    self.importFiles(urls)
+                    self.openURLsFromFinder(urls)
                 } else {
                     // Project picker not yet dismissed — buffer; drained in openProject/openWithoutProject.
                     self.pendingOpenURLs.append(contentsOf: urls)

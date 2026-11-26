@@ -36,7 +36,7 @@ extension ImageViewModel {
         }
         projectInitialized = true
         let pending = pendingOpenURLs; pendingOpenURLs = []
-        if !pending.isEmpty { importFiles(pending, selectFirst: true) }
+        if !pending.isEmpty { openURLsFromFinder(pending) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             self?.syncBackupCatalog()
         }
@@ -57,7 +57,7 @@ extension ImageViewModel {
         restoreCatalogImages()
         projectInitialized = true
         let pending = pendingOpenURLs; pendingOpenURLs = []
-        if !pending.isEmpty { importFiles(pending, selectFirst: true) }
+        if !pending.isEmpty { openURLsFromFinder(pending) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             self?.syncBackupCatalog()
         }

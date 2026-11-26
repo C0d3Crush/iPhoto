@@ -26,6 +26,14 @@ struct iPhotoApp: App {
                     }
                 )
                 .frame(minWidth: 700, minHeight: 480)
+                .onReceive(NotificationCenter.default.publisher(for: .openURLs)) { _ in
+                    // "Open with iPhoto" arrived while the project picker was showing —
+                    // skip it and open without a project; pendingOpenURLs will be drained.
+                    ProjectStore.shared.lastProjectID = nil
+                    viewModel.openWithoutProject()
+                    loadingInitiated = true
+                    showProjectPicker = false
+                }
             } else {
                 ContentView()
                     .environmentObject(viewModel)

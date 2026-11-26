@@ -2,6 +2,15 @@
 
 ---
 
+## 1.115.5
+**Bugfix: „Öffnen mit iPhoto" im Finder öffnete falsches Projekt oder ignorierte Ordner-Kontext (#127)**
+
+- Neues `openURLsFromFinder(_:)`: navigiert zum Ziel-Bild wenn es schon in der Collection ist (war bisher ein No-Op wegen Dedup-Check), lädt sonst den vollständigen Elternordner für Nachbar-Navigation
+- `openProject` und `openWithoutProject` drainten `pendingOpenURLs` jetzt über `openURLsFromFinder` statt `importFiles` → Ordner-Kontext bleibt erhalten
+- Projekt-Picker wird automatisch geschlossen wenn „Öffnen mit" beim App-Start eintrifft
+
+---
+
 ## 1.115.4
 **Bugfix: App-Beenden verwarf letzte Album-/Ordner-Änderungen (stiller Datenverlust) (#89)**
 
