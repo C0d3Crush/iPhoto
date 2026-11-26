@@ -2,7 +2,7 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="iPhoto Α"
+APP_NAME="Photo α"
 BUILD_DIR="$ROOT/build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
