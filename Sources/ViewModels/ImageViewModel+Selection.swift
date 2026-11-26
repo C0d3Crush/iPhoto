@@ -85,9 +85,7 @@ extension ImageViewModel {
 
     // MARK: - Interner Papierkorb
 
-    var trashedCount: Int {
-        collection.documents.reduce(0) { $0 + ($1.isTrashed ? 1 : 0) }
-    }
+    var trashedCount: Int { collection.trashedCount }
 
     /// Markiert Bilder als getrasht — Dateien bleiben auf dem Datenträger, sind
     /// aber nur noch im Trash-Tab sichtbar und dort wiederherstellbar.

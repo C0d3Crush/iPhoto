@@ -20,9 +20,7 @@ extension ImageViewModel {
         var failed: [(filename: String, reason: String)] = []
     }
 
-    var backedUpCount: Int {
-        collection.documents.reduce(0) { $0 + ($1.isBackedUp ? 1 : 0) }
-    }
+    var backedUpCount: Int { collection.backedUpCount }
 
     func backupDocuments(_ docs: [ImageDocument], deleteOriginal: Bool) {
         guard !docs.isEmpty else { return }

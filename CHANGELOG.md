@@ -2,6 +2,16 @@
 
 ---
 
+## 1.114.9
+**Performance: trashedCount/backedUpCount — O(N)-Scan pro Render durch O(1)-Counter ersetzt (#121)**
+
+- `ImageCollection.didSet`: zählt `trashedCount` und `backedUpCount` während des ohnehin nötigen Index-Aufbaus mit (kein Extra-Durchlauf); beide Counter sind `private(set)`
+- `trashedCount` / `backedUpCount` in `ImageViewModel` delegieren an die Collection-Counter statt `reduce` aufzurufen
+- `ModeSwitcherView`: `filter{}.count` durch `documents.count - trashedCount` ersetzt (kein Array-Alloc mehr)
+- `TrashSizeBar`: `trashedDocs` computed property (4× O(N) Allokation pro Body) entfernt; `trashedCount` für Guard-Check; URL-Liste nur noch in `recalculate()`; `ByteCountFormatter` als `static let`
+
+---
+
 ## 1.114.8
 **Bugfix: PluginPanelView — Data Race auf collection + Prozess-Stau bei schneller Navigation (#111)**
 

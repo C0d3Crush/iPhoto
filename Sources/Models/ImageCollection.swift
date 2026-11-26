@@ -15,12 +15,18 @@ class ImageCollection: ObservableObject {
             var byURL = documentIndexByURL
             byID.removeAll(keepingCapacity: true)
             byURL.removeAll(keepingCapacity: true)
+            var trashed = 0
+            var backedUp = 0
             for (i, doc) in documents.enumerated() {
                 byID[doc.id] = i
                 byURL[doc.url] = i
+                if doc.isTrashed  { trashed  += 1 }
+                if doc.isBackedUp { backedUp += 1 }
             }
-            documentIndexByID = byID
+            documentIndexByID  = byID
             documentIndexByURL = byURL
+            trashedCount  = trashed
+            backedUpCount = backedUp
         }
     }
     /// Zählt jede Mutation von documents — erlaubt Cache-Konsumenten (visibleDocuments)
@@ -30,6 +36,9 @@ class ImageCollection: ObservableObject {
     private(set) var documentIndexByID: [UUID: Int] = [:]
     /// O(1)-Nachschlag: URL → Index in documents. Immer synchron mit documents (#3).
     private(set) var documentIndexByURL: [URL: Int] = [:]
+    /// Cached counters — maintained in documents.didSet, O(1) reads.
+    private(set) var trashedCount:  Int = 0
+    private(set) var backedUpCount: Int = 0
     @Published var currentIndex: Int = 0 {
         didSet { dispatchPrecondition(condition: .onQueue(.main)) }
     }

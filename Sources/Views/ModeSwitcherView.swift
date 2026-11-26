@@ -16,7 +16,7 @@ struct ModeSwitcherView: View {
         var tiles: [ModeTile] = [
             ModeTile(
                 title: "Bibliothek",
-                subtitle: "\(viewModel.collection.documents.filter { !$0.isTrashed }.count) Bilder",
+                subtitle: "\(viewModel.collection.documents.count - viewModel.trashedCount) Bilder",
                 icon: "photo.stack",
                 color: Color(red: 0.2, green: 0.45, blue: 0.85)
             ) {
