@@ -2,6 +2,15 @@
 
 ---
 
+## 1.115.15
+**Performance: `ImageLoadingOrchestrator` — verbleibende Single-Property-Subscript-Writes auf `@Published`-Array beseitigt (#79)**
+
+- Preview-Completion: `documents[idx].previewImage = preview` → `var doc = ...; doc.previewImage = ...; documents[idx] = doc` — ein Publish statt Copy-on-Write + Publish pro Eigenschaft
+- Error-Completion (Thumbnail): gleiche Bündelung für `errorMessage`
+- Alle anderen Schreibpfade im Orchestrator waren bereits korrekt gebündelt
+
+---
+
 ## 1.115.14
 **Bugfix: SmartFolder-Cache wurde bei Album- und Motiv-Writes nicht invalidiert — Smart-Folder-Inhalte veralteten (#82)**
 

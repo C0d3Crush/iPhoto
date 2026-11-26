@@ -256,7 +256,9 @@ final class ImageLoadingOrchestrator {
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, let host = self.host, self.loadToken == token else { return }
                     guard let idx = host.collection.documentIndexByURL[url] else { return }
-                    host.collection.documents[idx].previewImage = preview
+                    var previewDoc = host.collection.documents[idx]
+                    previewDoc.previewImage = preview
+                    host.collection.documents[idx] = previewDoc
                     host.isLoading = false
                     host.fitToWindowRequested = true
                     host.adj.displayImageVersion = UUID()
@@ -621,7 +623,9 @@ final class ImageLoadingOrchestrator {
                         self.hiResInFlight.remove(url)
                         if let idx = host.collection.documentIndexByURL[url],
                            host.collection.documents[idx].errorMessage == nil {
-                            host.collection.documents[idx].errorMessage = error.localizedDescription
+                            var errDoc = host.collection.documents[idx]
+                            errDoc.errorMessage = error.localizedDescription
+                            host.collection.documents[idx] = errDoc
                         }
                     }
                     return
