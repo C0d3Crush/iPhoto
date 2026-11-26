@@ -460,6 +460,52 @@ test("sequenceNumber nil bleibt nil (Einzelbild)") {
     try assert(e!.sequenceNumber == nil && !e!.autoBracketing)
 }
 
+// ── SmartFolder-Cache-Invalidierung (#82) ────────────────────
+print("\n[SmartFolder-Cache-Invalidierung]")
+test("addImage(toAlbum) invalidiert sfOrderedPathsCache") {
+    let s = freshStore(name: "sf_album_add")
+    let albumID = "album-sf-test"
+    s.saveAlbum(id: albumID, name: "SF Test Album")
+    s.upsertImage(path: "/tmp/sf_img.raf", filename: "sf_img.raf", isRAW: true)
+    var sf = SmartFolder(name: "In Album")
+    var crit = SmartFolderCriterion(); crit.attribute = .album; crit.op = .isExact; crit.textValue = "SF Test Album"
+    sf.criteria = [crit]
+    // Prime the cache with an empty result
+    let before = s.orderedPathsForSmartFolder(sf)
+    try assert(before?.isEmpty == true, "Erwartet leeres Ergebnis vor addImage")
+    // Add image to album — must invalidate cache
+    s.addImage(path: "/tmp/sf_img.raf", toAlbum: albumID)
+    let after = s.orderedPathsForSmartFolder(sf)
+    try assert(after?.contains("/tmp/sf_img.raf") == true, "SmartFolder-Cache nach addImage(toAlbum) nicht invalidiert")
+}
+test("removeImage(fromAlbum) invalidiert sfOrderedPathsCache") {
+    let s = freshStore(name: "sf_album_remove")
+    let albumID = "album-sf-rm"
+    s.saveAlbum(id: albumID, name: "SF Remove Album")
+    s.upsertImage(path: "/tmp/sf_rm.raf", filename: "sf_rm.raf", isRAW: true)
+    s.addImage(path: "/tmp/sf_rm.raf", toAlbum: albumID)
+    var sf = SmartFolder(name: "In Remove Album")
+    var crit = SmartFolderCriterion(); crit.attribute = .album; crit.op = .isExact; crit.textValue = "SF Remove Album"
+    sf.criteria = [crit]
+    let before = s.orderedPathsForSmartFolder(sf)
+    try assert(before?.contains("/tmp/sf_rm.raf") == true, "Bild sollte vor Remove im SF-Ergebnis sein")
+    s.removeImage(path: "/tmp/sf_rm.raf", fromAlbum: albumID)
+    let after = s.orderedPathsForSmartFolder(sf)
+    try assert(after?.contains("/tmp/sf_rm.raf") != true, "SmartFolder-Cache nach removeImage(fromAlbum) nicht invalidiert")
+}
+test("upsertMotifs invalidiert sfOrderedPathsCache") {
+    let s = freshStore(name: "sf_motif")
+    s.upsertImage(path: "/tmp/sf_motif.raf", filename: "sf_motif.raf", isRAW: true)
+    var sf = SmartFolder(name: "Motiv Sky")
+    var crit = SmartFolderCriterion(); crit.attribute = .motif; crit.op = .contains; crit.textValue = "sky"
+    sf.criteria = [crit]
+    let before = s.orderedPathsForSmartFolder(sf)
+    try assert(before?.isEmpty == true, "Erwartet leeres Ergebnis vor upsertMotifs")
+    s.upsertMotifs(path: "/tmp/sf_motif.raf", tags: ["sky", "cloud"])
+    let after = s.orderedPathsForSmartFolder(sf)
+    try assert(after?.contains("/tmp/sf_motif.raf") == true, "SmartFolder-Cache nach upsertMotifs nicht invalidiert")
+}
+
 // ── imageCache-Sync (#83) ────────────────────────────────────
 print("\n[imageCache-Sync]")
 test("batchUpsertImages invalidiert Miss-Cache") {

@@ -2,6 +2,16 @@
 
 ---
 
+## 1.115.14
+**Bugfix: SmartFolder-Cache wurde bei Album- und Motiv-Writes nicht invalidiert — Smart-Folder-Inhalte veralteten (#82)**
+
+- `saveAlbum`, `deleteAlbum`, `addImage(toAlbum:)`, `removeImage(fromAlbum:)` leeren jetzt `sfOrderedPathsCache` und `sfCountCache` nach jedem Schreibvorgang
+- `upsertMotifs` und `upsertMotifsBatch` leeren den Cache ebenfalls nach COMMIT
+- `deleteOrphanRows` in `CatalogStore+Integrity.swift` leert den Cache nach COMMIT
+- Tests in `Tests/catalog/main.swift`: SmartFolder mit Album-Kriterium überprüft Cache-Invalidierung nach `addImage`/`removeImage`; Motiv-Kriterium nach `upsertMotifs`
+
+---
+
 ## 1.115.13
 **Bugfix: `batchUpsertImages`/`deleteImages` hielten In-Memory-Cache nicht synchron — Datum/Kamera-Spalten fielen für neue Bilder auf leer zurück (#83)**
 

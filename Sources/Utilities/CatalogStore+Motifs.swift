@@ -32,6 +32,8 @@ extension CatalogStore {
             bind(stmt, 1, tagsStr)
             bind(stmt, 2, path)
             step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
         Self.motifCacheLock.lock()
         Self.motifCache[path] = tags
@@ -54,6 +56,8 @@ extension CatalogStore {
             }
             sqlite3_finalize(stmt)
             exec("COMMIT")
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
         Self.motifCacheLock.lock()
         for e in entries {

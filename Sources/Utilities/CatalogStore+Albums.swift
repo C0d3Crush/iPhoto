@@ -13,6 +13,8 @@ extension CatalogStore {
             """)
             bind(stmt, 1, id); bind(stmt, 2, name); bind(stmt, 3, iso8601())
             step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 
@@ -20,6 +22,8 @@ extension CatalogStore {
         queue.sync {
             let stmt = prepare("DELETE FROM albums WHERE id=?")
             bind(stmt, 1, id); step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 
@@ -41,6 +45,8 @@ extension CatalogStore {
             bind(stmt, 1, albumID); bind(stmt, 2, path)
             sqlite3_bind_int(stmt, 3, Int32(order))
             step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 
@@ -49,6 +55,8 @@ extension CatalogStore {
             let stmt = prepare("DELETE FROM album_images WHERE album_id=? AND image_path=?")
             bind(stmt, 1, albumID); bind(stmt, 2, path)
             step(stmt); sqlite3_finalize(stmt)
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
         }
     }
 

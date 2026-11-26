@@ -56,6 +56,8 @@ extension CatalogStore {
                 result[c.key] = n
             }
             exec("COMMIT")
+            sfOrderedPathsCache.removeAll(keepingCapacity: true)
+            sfCountCache.removeAll(keepingCapacity: true)
             return result
         }
     }
