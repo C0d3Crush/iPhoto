@@ -71,9 +71,17 @@ extension ImageViewModel {
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
             let fm = FileManager.default
+            // System-managed subtrees (album copies, smart-folder copies) must not be
+            // counted when the user opens a parent directory — they'd produce 1 entry per
+            // album membership.  Skip these subtrees unless the user opened them directly.
+            let albumRoot   = self.albumsSystemRoot.standardized.path
+            let smartRoot   = SmartFolderFileSync.root.standardized.path
+            let scanRoot    = folderURL.standardized.path
+            let skipAlbums  = !scanRoot.hasPrefix(albumRoot)
+            let skipSmart   = !scanRoot.hasPrefix(smartRoot)
             guard let enumerator = fm.enumerator(
                 at: folderURL,
-                includingPropertiesForKeys: [.isRegularFileKey],
+                includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
             ) else {
                 DispatchQueue.main.async { self.activity.dequeue(id: taskID) }
@@ -82,7 +90,16 @@ extension ImageViewModel {
             var found: [URL] = []
             for case let fileURL as URL in enumerator {
                 guard self.projectLoadToken == token else { break }
-                let vals = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                let vals = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey])
+                // Skip system-managed subtrees to avoid duplicate album/smart-folder copies.
+                if vals?.isDirectory == true {
+                    let p = fileURL.standardized.path
+                    if (skipAlbums && (p == albumRoot || p.hasPrefix(albumRoot + "/")))
+                        || (skipSmart  && (p == smartRoot  || p.hasPrefix(smartRoot  + "/"))) {
+                        enumerator.skipDescendants()
+                    }
+                    continue
+                }
                 if vals?.isRegularFile == true,
                    vals?.isSymbolicLink != true,
                    ImageDocument.supportedExtensions.contains(fileURL.pathExtension.lowercased()) {

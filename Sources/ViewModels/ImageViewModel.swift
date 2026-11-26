@@ -709,20 +709,25 @@ class ImageViewModel: ObservableObject {
 
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                // Re-check on main thread: a concurrent importFiles call may have appended
+                // the same URLs while this background task was running.
+                let alreadyPresent = Set(self.collection.documents.map { $0.url })
+                let dedupedDocs = newDocs.filter { !alreadyPresent.contains($0.url) }
+                guard !dedupedDocs.isEmpty else { return }
                 let firstNewIndex = self.collection.documents.count
-                self.collection.appendDocuments(newDocs)
+                self.collection.appendDocuments(dedupedDocs)
                 // Persistierte Qualitätsflags der eben importierten Docs sofort in die Listen aufnehmen.
                 self.refreshQualityLists()
                 self.loadPersistedGroupsIfAvailable()
                 self.loadPeople()
-                if selectFirst || self.collection.documents.count == newDocs.count {
+                if selectFirst || self.collection.documents.count == dedupedDocs.count {
                     self.collection.select(index: firstNewIndex)
                     self.loadCurrentImage()
                 }
-                let metaURLs = newDocs.map { $0.url }
+                let metaURLs = dedupedDocs.map { $0.url }
                 self.activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
                 self.activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
-                Log.perf(String(format: "IMPORT %d Dateien %.0f ms", newDocs.count, Date().timeIntervalSince(importStart) * 1000))
+                Log.perf(String(format: "IMPORT %d Dateien %.0f ms", dedupedDocs.count, Date().timeIntervalSince(importStart) * 1000))
             }
         }
     }
