@@ -2,6 +2,15 @@
 
 ---
 
+## 1.114.8
+**Bugfix: PluginPanelView — Data Race auf collection + Prozess-Stau bei schneller Navigation (#111)**
+
+- `loadResults()`: Stale-Token-Prüfung von BG-Thread auf Main-Thread verschoben — kein direkter Zugriff auf `collection.documents`/`currentIndex` mehr vom Background aus (war undefiniertes Verhalten)
+- Alle Shell-Befehle laufen auf `PluginStore.shared.pluginQueue` (serielle Queue) — parallele Prozess-Stürme bei Pfeiltasten-Dauerfeuer entfallen
+- Beispiel-Plugin `example-exif.json`: `defaultEnabled: false` hinzugefügt — `exiftool`-Spawns nicht mehr standardmäßig aktiv
+
+---
+
 ## 1.114.7
 **Bugfix: CrashReporter — Session-Index falsch nach frühem Log.init(), Log-Rotation löschte Datei (#119)**
 

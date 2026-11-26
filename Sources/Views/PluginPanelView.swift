@@ -6,6 +6,8 @@ struct PluginPanelView: View {
 
     @State private var rowResults: [String: String] = [:]
     @State private var loading = false
+    // Token incremented on each load; captured value compared before writing results.
+    @State private var loadToken: UUID = UUID()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -68,6 +70,7 @@ struct PluginPanelView: View {
     }
 
     private func loadResults() {
+        // Safe: called on Main thread only (onAppear / onChange).
         guard let url = viewModel.collection.currentDocument?.url else {
             rowResults = [:]
             return
@@ -77,32 +80,35 @@ struct PluginPanelView: View {
 
         loading = true
         rowResults = [:]
-        let loadURL = url  // capture as token — stale results are discarded if URL changed
+        let token = UUID()
+        loadToken = token
 
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.15) {
-            guard self.viewModel.collection.currentDocument?.url == loadURL else {
-                DispatchQueue.main.async { self.loading = false }
+        // Debounce on Main — safe read of currentDocument here.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [self] in
+            guard loadToken == token,
+                  viewModel.collection.currentDocument?.url == url else {
+                if loadToken == token { loading = false }
                 return
             }
-            var results: [String: String] = [:]
-            for row in commandRows {
-                guard let cmd = row.command else { continue }
-                results[row.label] = PluginStore.shared.run(command: cmd, imageURL: loadURL)
-            }
-            DispatchQueue.main.async {
-                guard self.viewModel.collection.currentDocument?.url == loadURL else {
-                    self.loading = false
-                    return
+            // Hand off to the serial plugin queue — no further viewModel access here.
+            PluginStore.shared.pluginQueue.async {
+                var results: [String: String] = [:]
+                for row in commandRows {
+                    guard let cmd = row.command else { continue }
+                    results[row.label] = PluginStore.shared.run(command: cmd, imageURL: url)
                 }
-                self.rowResults = results
-                self.loading = false
+                DispatchQueue.main.async {
+                    guard self.loadToken == token else { self.loading = false; return }
+                    self.rowResults = results
+                    self.loading = false
+                }
             }
         }
     }
 
     private func runAction(_ action: Plugin.PluginAction) {
         guard let url = viewModel.collection.currentDocument?.url else { return }
-        DispatchQueue.global(qos: .utility).async {
+        PluginStore.shared.pluginQueue.async {
             _ = PluginStore.shared.run(command: action.command, imageURL: url)
         }
     }

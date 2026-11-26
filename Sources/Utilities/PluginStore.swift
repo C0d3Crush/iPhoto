@@ -8,6 +8,9 @@ final class PluginStore: ObservableObject {
     @Published private(set) var plugins: [Plugin] = []
     @Published var enabledIDs: Set<String> = []
 
+    // Serial queue for all shell-command runs — prevents parallel process storms on fast navigation.
+    let pluginQueue = DispatchQueue(label: "iphoto.plugins", qos: .utility)
+
     var pluginDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("iPhoto/Plugins")
@@ -305,6 +308,7 @@ final class PluginStore: ObservableObject {
           "name": "EXIF Extended",
           "icon": "info.circle",
           "order": 50,
+          "defaultEnabled": false,
           "rows": [
             { "label": "Objektiv",   "command": "exiftool -LensModel -s3 {path}" },
             { "label": "Blende",     "command": "exiftool -Aperture -s3 {path}" },
