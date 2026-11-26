@@ -2,6 +2,17 @@
 
 ---
 
+## 1.115.2
+**Performance: PluginStore.init — 13 synchrone Datei-Writes + JSON-Dekodierung vom Main-Thread weggenommen (#115)**
+
+- Builtins werden direkt aus eingebetteten Strings dekodiert (`static let builtinPlugins`) — kein Disk-Roundtrip für initialen Plugin-Stand
+- `PluginStore.init()` setzt `plugins` sofort aus In-Memory-Builtins; Disk-Zugriffe auf Utility-Queue
+- `writeBuiltinsIfNeeded`: schreibt Builtin-JSONs nur wenn Inhalt abweicht — nach dem ersten Start kein Write mehr
+- `reload()` läuft auf BG-Queue; Decode-Fehler in Nutzer-Plugins mit `Log.warning` gemeldet
+- CLI `plugins list` respektiert `IPHOTO_PLUGINS_DIR`-Override; PERF-Log; Test: ungültige JSON-Datei blockiert `plugins list` nicht
+
+---
+
 ## 1.115.1
 **Bugfix: Bilder werden im Projekt-Modus mehrfach angezeigt (#122)**
 

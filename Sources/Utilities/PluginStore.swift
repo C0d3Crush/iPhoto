@@ -16,14 +16,49 @@ final class PluginStore: ObservableObject {
             .appendingPathComponent("iPhoto/Plugins")
     }
 
+    // Builtins decoded from embedded strings — no file I/O, available immediately.
+    static let builtinPlugins: [Plugin] = builtins.compactMap {
+        try? JSONDecoder().decode(Plugin.self, from: $0.json.data(using: .utf8)!)
+    }.sorted { $0.order != $1.order ? $0.order < $1.order : $0.name < $1.name }
+
     init() {
-        createDirectoryIfNeeded()
-        writeBuiltins()
-        writeExampleIfNeeded()
+        let t0 = Date()
+        // Synchronous fast path: builtins decoded from strings, no file I/O.
         Self.applyMigrations()
-        let (loaded, enabled) = Self.loadFromDisk(at: pluginDirectory)
-        plugins = loaded
+        let builtins = Self.builtinPlugins
+        var enabled = Set<String>()
+        for p in builtins {
+            let stored = UserDefaults.standard.object(forKey: p.resolvedStorageKey) as? Bool
+            if stored ?? p.defaultEnabled { enabled.insert(p.id) }
+        }
+        plugins = builtins
         enabledIDs = enabled
+
+        // Sync builtin JSONs to disk — skips unchanged files (typically a no-op after first install).
+        let dir = pluginDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        Self.writeBuiltinsIfNeeded(in: dir)
+
+        // Background: load user plugins from disk, write example if absent.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            // Write example plugin if not present.
+            self?.writeExampleIfNeeded(in: dir)
+
+            // Load user (non-builtin) plugins.
+            let userPlugins = Self.loadUserPluginsFromDisk(at: dir)
+            let all = (builtins + userPlugins).sorted { $0.order != $1.order ? $0.order < $1.order : $0.name < $1.name }
+            var allEnabled = enabled
+            for p in userPlugins {
+                let stored = UserDefaults.standard.object(forKey: p.resolvedStorageKey) as? Bool
+                if stored ?? p.defaultEnabled { allEnabled.insert(p.id) }
+            }
+            Log.perf(String(format: "pluginstore-init %.0f ms (%d builtins + %d user)",
+                           Date().timeIntervalSince(t0) * 1000, builtins.count, userPlugins.count))
+            DispatchQueue.main.async { [weak self] in
+                self?.plugins = all
+                self?.enabledIDs = allEnabled
+            }
+        }
     }
 
     private static func applyMigrations() {
@@ -45,29 +80,44 @@ final class PluginStore: ObservableObject {
 
     func reload() {
         let dir = pluginDirectory
-        let (loaded, enabled) = Self.loadFromDisk(at: dir)
-        DispatchQueue.main.async {
-            self.plugins = loaded
-            self.enabledIDs = enabled
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let (loaded, enabled) = Self.loadFromDisk(at: dir)
+            DispatchQueue.main.async {
+                self?.plugins = loaded
+                self?.enabledIDs = enabled
+            }
         }
     }
 
-    private static func loadFromDisk(at dir: URL) -> ([Plugin], Set<String>) {
+    // Loads only user (non-builtin) JSON plugins from disk. Logs warnings on decode failure.
+    private static func loadUserPluginsFromDisk(at dir: URL) -> [Plugin] {
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
-        ).filter { $0.pathExtension == "json" }) ?? []
+        ).filter { $0.pathExtension == "json" && !$0.lastPathComponent.hasPrefix("builtin-") }) ?? []
 
-        let loaded = urls.compactMap { url -> Plugin? in
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return try? JSONDecoder().decode(Plugin.self, from: data)
+        return urls.compactMap { url -> Plugin? in
+            guard let data = try? Data(contentsOf: url) else {
+                Log.warning("Plugin laden fehlgeschlagen: \(url.lastPathComponent)")
+                return nil
+            }
+            do {
+                return try JSONDecoder().decode(Plugin.self, from: data)
+            } catch {
+                Log.warning("Plugin JSON ungültig (\(url.lastPathComponent)): \(error.localizedDescription)")
+                return nil
+            }
         }.sorted { $0.order != $1.order ? $0.order < $1.order : $0.name < $1.name }
+    }
 
+    private static func loadFromDisk(at dir: URL) -> ([Plugin], Set<String>) {
+        let userPlugins = loadUserPluginsFromDisk(at: dir)
+        let all = (builtinPlugins + userPlugins).sorted { $0.order != $1.order ? $0.order < $1.order : $0.name < $1.name }
         var enabled = Set<String>()
-        for plugin in loaded {
+        for plugin in all {
             let stored = UserDefaults.standard.object(forKey: plugin.resolvedStorageKey) as? Bool
             if stored ?? plugin.defaultEnabled { enabled.insert(plugin.id) }
         }
-        return (loaded, enabled)
+        return (all, enabled)
     }
 
     func revealPluginDirectory() {
@@ -292,15 +342,18 @@ final class PluginStore: ObservableObject {
         """),
     ]
 
-    private func writeBuiltins() {
-        for (filename, json) in PluginStore.builtins {
-            let url = pluginDirectory.appendingPathComponent(filename)
-            try? json.write(to: url, atomically: true, encoding: .utf8)
+    private static func writeBuiltinsIfNeeded(in dir: URL) {
+        for (filename, json) in builtins {
+            let url = dir.appendingPathComponent(filename)
+            let data = json.data(using: .utf8)!
+            // Skip write if file already has the same content.
+            if let existing = try? Data(contentsOf: url), existing == data { continue }
+            try? data.write(to: url, options: .atomic)
         }
     }
 
-    private func writeExampleIfNeeded() {
-        let exampleURL = pluginDirectory.appendingPathComponent("example-exif.json")
+    private func writeExampleIfNeeded(in dir: URL) {
+        let exampleURL = dir.appendingPathComponent("example-exif.json")
         guard !FileManager.default.fileExists(atPath: exampleURL.path) else { return }
         let example = """
         {

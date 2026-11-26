@@ -1566,8 +1566,13 @@ private func runHDR(_ args: CLIArgs) -> Int32 {
 // MARK: - Plugins Command
 
 private func runPlugins(_ subArgs: [String]) -> Int32 {
-    let pluginDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("iPhoto/Plugins")
+    let pluginDir: URL
+    if let override = ProcessInfo.processInfo.environment["IPHOTO_PLUGINS_DIR"] {
+        pluginDir = URL(fileURLWithPath: override)
+    } else {
+        pluginDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("iPhoto/Plugins")
+    }
 
     let sub = subArgs.first ?? "list"
     let jsonOutput = subArgs.contains("--json")

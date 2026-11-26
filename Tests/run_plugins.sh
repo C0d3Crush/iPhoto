@@ -4261,6 +4261,25 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# plugins list — ungültige JSON-Datei wird nicht blockiert (#115)
+# ---------------------------------------------------------------------------
+echo "--- plugins list mit ungültiger JSON ---"
+INVALID_DIR="$TMPDIR/invalid_plugins"
+mkdir -p "$INVALID_DIR"
+# valid plugin
+printf '{"id":"test.ok","name":"OK","order":1}' > "$INVALID_DIR/ok.json"
+# invalid JSON
+printf '{broken json' > "$INVALID_DIR/broken.json"
+OUT=$(IPHOTO_PLUGINS_DIR="$INVALID_DIR" "$BIN" plugins list 2>&1) || true
+if echo "$OUT" | grep -qi "ok\|test\.ok"; then
+    pass "plugins list läuft durch trotz ungültiger JSON"
+else
+    fail "plugins list läuft durch trotz ungültiger JSON" "Erwartet Plugin 'OK' in Ausgabe: $OUT"
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
 # crashreport build — Segment-Auswahl (#119)
 # ---------------------------------------------------------------------------
 echo "--- crashreport build ---"
