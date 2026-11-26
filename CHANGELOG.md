@@ -2,6 +2,16 @@
 
 ---
 
+## 1.115.12
+**Bugfix: CLI `backup set` / `viewmode set` schrieben in falsche UserDefaults-Domain — App sah Änderungen nie (#77)**
+
+- `appDefaults()` Hilfsfunktion im CLI: liest `IPHOTO_DEFAULTS_SUITE`-Env-Variable (Fallback: `com.c0d3cru5h.iPhoto12`), gibt `UserDefaults(suiteName:)` zurück
+- `runBackupConfig`, `runViewMode` verwenden jetzt `appDefaults()` statt `UserDefaults.standard`
+- `backup set` ruft `d.synchronize()` nach allen Writes auf
+- Tests: `IPHOTO_DEFAULTS_SUITE=com.c0d3cru5h.iPhoto12.test.<PID>` für Isolierung; `defaults read <suite>` verifiziert dass Wert in korrekter Domain landet; Suite wird nach Test gelöscht
+
+---
+
 ## 1.115.11
 **Bugfix: Bildvergleich zeigte nur 1500px-Preview statt Vollbild beim Zoom (#85); CLI `archive mark/unmark` wartete nicht auf async SQLite-Write (#88 follow-up)**
 

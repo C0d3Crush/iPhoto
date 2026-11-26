@@ -431,6 +431,11 @@ private func envDBPath() -> String? {
     ProcessInfo.processInfo.environment["IPHOTO_CATALOG_DB"]
 }
 
+private func appDefaults() -> UserDefaults {
+    let suite = ProcessInfo.processInfo.environment["IPHOTO_DEFAULTS_SUITE"] ?? "com.c0d3cru5h.iPhoto12"
+    return UserDefaults(suiteName: suite) ?? UserDefaults.standard
+}
+
 private func envAlbumsJSONURL() -> URL {
     if let p = ProcessInfo.processInfo.environment["IPHOTO_ALBUMS_JSON"] {
         return URL(fileURLWithPath: p)
@@ -1674,7 +1679,7 @@ private func runViewMode(_ subArgs: [String]) -> Int32 {
     let jsonMode = subArgs.contains("--json")
     switch sub {
     case "get":
-        let current = UserDefaults.standard.string(forKey: viewModeKey) ?? "gallery"
+        let current = appDefaults().string(forKey: viewModeKey) ?? "gallery"
         if jsonMode {
             let obj: [String: Any] = ["mode": current]
             if let d = try? JSONSerialization.data(withJSONObject: obj, options: []),
@@ -1694,8 +1699,8 @@ private func runViewMode(_ subArgs: [String]) -> Int32 {
             fputs("Fehler: Unbekannter Modus '\(lowMode)'. Erlaubt: grid, list, columns, gallery\n", stderr)
             return 1
         }
-        UserDefaults.standard.set(lowMode, forKey: viewModeKey)
-        UserDefaults.standard.synchronize()
+        appDefaults().set(lowMode, forKey: viewModeKey)
+        appDefaults().synchronize()
         if jsonMode {
             let obj: [String: Any] = ["mode": lowMode, "ok": true]
             if let d = try? JSONSerialization.data(withJSONObject: obj, options: []),
@@ -2311,7 +2316,7 @@ private func runWatched(_ args: [String]) -> Int32 {
 private func runBackupConfig(_ args: [String]) -> Int32 {
     let sub = args.first ?? "get"
     let jsonMode = args.contains("--json")
-    let d = UserDefaults.standard
+    let d = appDefaults()
 
     switch sub {
     case "get":
@@ -2389,6 +2394,7 @@ private func runBackupConfig(_ args: [String]) -> Int32 {
             }
             i += 1
         }
+        d.synchronize()
         if jsonMode {
             let obj: [String: Any] = ["ok": true]
             if let data = try? JSONSerialization.data(withJSONObject: obj),

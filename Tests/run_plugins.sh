@@ -219,17 +219,21 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "--- ViewMode ---"
 
-# viewmode set grid — exit 0
-VIEWMODE_SET=$("$BIN" viewmode set grid 2>&1)
+VM_SUITE="com.c0d3cru5h.iPhoto12.test.viewmode.$$"
+
+# viewmode set grid — exit 0, schreibt in korrekte Domain
+VIEWMODE_SET=$(IPHOTO_DEFAULTS_SUITE="$VM_SUITE" "$BIN" viewmode set grid 2>&1)
 VIEWMODE_EXIT=$?
-if [ $VIEWMODE_EXIT -eq 0 ]; then
-    pass "viewmode set grid (Exitcode 0)"
+VM_DOMAIN_VAL=$(defaults read "$VM_SUITE" library.viewMode 2>/dev/null || echo "")
+defaults delete "$VM_SUITE" 2>/dev/null || true
+if [ $VIEWMODE_EXIT -eq 0 ] && [ "$VM_DOMAIN_VAL" = "grid" ]; then
+    pass "viewmode set grid (Exitcode 0, Domain korrekt)"
 else
-    fail "viewmode set grid" "Exitcode $VIEWMODE_EXIT: $VIEWMODE_SET"
+    fail "viewmode set grid" "Exitcode $VIEWMODE_EXIT, Domain-Wert: '$VM_DOMAIN_VAL'"
 fi
 
 # viewmode get — returns one of the valid modes
-VIEWMODE_GET=$("$BIN" viewmode get 2>&1)
+VIEWMODE_GET=$(IPHOTO_DEFAULTS_SUITE="$VM_SUITE" "$BIN" viewmode get 2>&1)
 if echo "$VIEWMODE_GET" | grep -qE '^(grid|list|columns|gallery)$'; then
     pass "viewmode get (gibt gültigen Modus zurück: $VIEWMODE_GET)"
 else
@@ -238,7 +242,7 @@ fi
 
 # viewmode set invalid — exit != 0
 VIEWMODE_BAD_EXIT=0
-"$BIN" viewmode set bogusmode > /dev/null 2>&1 || VIEWMODE_BAD_EXIT=$?
+IPHOTO_DEFAULTS_SUITE="$VM_SUITE" "$BIN" viewmode set bogusmode > /dev/null 2>&1 || VIEWMODE_BAD_EXIT=$?
 if [ $VIEWMODE_BAD_EXIT -ne 0 ]; then
     pass "viewmode set <ungültig> (Exitcode != 0)"
 else
@@ -623,7 +627,9 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "--- Backup Config ---"
 
-BACKUP_GET=$("$BIN" backup get --json 2>&1)
+BK_SUITE="com.c0d3cru5h.iPhoto12.test.backup.$$"
+
+BACKUP_GET=$(IPHOTO_DEFAULTS_SUITE="$BK_SUITE" "$BIN" backup get --json 2>&1)
 BACKUP_GET_EXIT=$?
 if [ $BACKUP_GET_EXIT -eq 0 ] && echo "$BACKUP_GET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'jpeg_quality' in d and 'collision_mode' in d" 2>/dev/null; then
     pass "backup get --json (Exitcode 0, Felder vorhanden)"
@@ -631,17 +637,21 @@ else
     fail "backup get --json" "Exit $BACKUP_GET_EXIT: $BACKUP_GET"
 fi
 
-BACKUP_SET=$("$BIN" backup set --quality 0.9 --mode skip --json 2>&1)
+BACKUP_SET=$(IPHOTO_DEFAULTS_SUITE="$BK_SUITE" "$BIN" backup set --quality 0.9 --mode skip --json 2>&1)
 BACKUP_SET_EXIT=$?
-if [ $BACKUP_SET_EXIT -eq 0 ] && echo "$BACKUP_SET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null; then
-    pass "backup set --quality --mode (Exitcode 0, JSON ok:true)"
+BK_DOMAIN_VAL=$(defaults read "$BK_SUITE" backup.jpegQuality 2>/dev/null || echo "")
+defaults delete "$BK_SUITE" 2>/dev/null || true
+if [ $BACKUP_SET_EXIT -eq 0 ] \
+   && echo "$BACKUP_SET" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') == True" 2>/dev/null \
+   && echo "$BK_DOMAIN_VAL" | python3 -c "import sys; v=float(sys.stdin.read().strip()); assert abs(v-0.9)<0.01" 2>/dev/null; then
+    pass "backup set --quality --mode (Exitcode 0, JSON ok:true, Domain korrekt)"
 else
-    fail "backup set" "Exit $BACKUP_SET_EXIT: $BACKUP_SET"
+    fail "backup set" "Exit $BACKUP_SET_EXIT: $BACKUP_SET | Domain-Wert: '$BK_DOMAIN_VAL'"
 fi
 
 # set ungültiger Mode → Fehler
 BACKUP_SET_BAD_EXIT=0
-"$BIN" backup set --mode invalidmode > /dev/null 2>&1 || BACKUP_SET_BAD_EXIT=$?
+IPHOTO_DEFAULTS_SUITE="$BK_SUITE" "$BIN" backup set --mode invalidmode > /dev/null 2>&1 || BACKUP_SET_BAD_EXIT=$?
 if [ $BACKUP_SET_BAD_EXIT -ne 0 ]; then
     pass "backup set ungültiger Mode (Exitcode != 0)"
 else
