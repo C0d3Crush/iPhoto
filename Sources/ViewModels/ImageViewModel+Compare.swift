@@ -236,6 +236,8 @@ extension ImageViewModel {
             autoreleasepool {
                 let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                 defer { stopAccess() }
+
+                // Stage 1: quick 1500px preview for immediate display.
                 let preview: CGImage?
                 do {
                     preview = try RAWImageDecoder.thumbnail(url: accessURL, maxDimension: 1500)
@@ -243,11 +245,10 @@ extension ImageViewModel {
                     Log.error("Vergleichs-Preview fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
                     preview = nil
                 }
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     self.compare.loadInFlight.remove(url)
                     guard let preview = preview else {
-                        // Permanently exclude unloadable files so compare never hangs on a nil-preview pair.
                         self.compare.failedPreviewURLs.insert(url)
                         self.nextComparePair()
                         return
@@ -256,6 +257,23 @@ extension ImageViewModel {
                           self.collection.documents[idx].previewImage == nil else { return }
                     var doc = self.collection.documents[idx]
                     doc.previewImage = preview
+                    self.collection.documents[idx] = doc
+                }
+
+                // Stage 2: decode full-res into cgImage for crisp zoom.
+                guard preview != nil else { return }
+                let (accessURL2, stopAccess2) = BookmarkStore.shared.access(url: url)
+                defer { stopAccess2() }
+                let fullRes: CGImage?
+                do { fullRes = try RAWImageDecoder.decode(url: accessURL2) }
+                catch { fullRes = nil }
+                guard let fullRes = fullRes else { return }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self,
+                          let idx = self.collection.documentIndexByURL[url],
+                          self.collection.documents[idx].cgImage == nil else { return }
+                    var doc = self.collection.documents[idx]
+                    doc.cgImage = fullRes
                     self.collection.documents[idx] = doc
                 }
             }

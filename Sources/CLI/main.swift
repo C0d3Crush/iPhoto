@@ -3050,7 +3050,7 @@ private func runArchive(_ args: [String]) -> Int32 {
             else { unknown.append(abs); fputs("Warnung: Bild nicht im Katalog: \(abs)\n", stderr) }
         }
         let unique = Array(Set(normalized)).sorted()
-        if !unique.isEmpty { catalog.setBackedUp(paths: unique, true) }
+        if !unique.isEmpty { catalog.setBackedUp(paths: unique, true); catalog.flush() }
         if jsonMode { emit(["count": unique.count, "unknown": unknown, "ok": unknown.isEmpty]) }
         else { print("\(unique.count) Bild(er) als archiviert markiert") }
         return unknown.count == positional.count && !positional.isEmpty ? 1 : 0
@@ -3073,6 +3073,7 @@ private func runArchive(_ args: [String]) -> Int32 {
             }
         }
         catalog.setBackedUp(paths: targets, false)
+        catalog.flush()
         if jsonMode { emit(["count": targets.count, "ok": true]) }
         else { print("\(targets.count) Archiv-Markierung(en) entfernt") }
         return 0

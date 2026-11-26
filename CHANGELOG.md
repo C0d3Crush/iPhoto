@@ -2,6 +2,15 @@
 
 ---
 
+## 1.115.11
+**Bugfix: Bildvergleich zeigte nur 1500px-Preview statt Vollbild beim Zoom (#85); CLI `archive mark/unmark` wartete nicht auf async SQLite-Write (#88 follow-up)**
+
+- `ensureComparePreview` lädt jetzt in zwei Stufen: Stage 1 wie bisher 1500px-Preview → `previewImage` für sofortige Anzeige; Stage 2 dekodiert Full-Res → `cgImage` für scharfen Zoom
+- Stage 2 öffnet einen eigenen Security-Scoped Bookmark Access, damit der Stage-1-`defer` ihn nicht vorzeitig schließt
+- CLI `archive mark/unmark` ruft nach `setBackedUp` jetzt `catalog.flush()` auf — behebt Testfehler durch async-Write-Race
+
+---
+
 ## 1.115.10
 **Performance: `CatalogStore.setBackedUp` blockierte Main mit synchronem SQLite (#88)**
 
