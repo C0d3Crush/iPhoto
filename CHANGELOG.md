@@ -2,6 +2,12 @@
 
 ---
 
+## 1.124.2
+**Refactoring: Wartbarkeit AlbumGridExpandedView und SmartFolderSheet**
+
+- `AlbumGridExpandedView`: Dreifach duplizierte `mosaicTile`-Funktion (in `LibraryGridCell`, `SmartFolderGridCell`, `AlbumGridCell`) in eine gemeinsame private Hilfsfunktion auf Dateiebene extrahiert
+- `SmartFolderSheet`: `intFormatter` von einer Computed Property (erzeugte bei jedem Zugriff eine neue Instanz) in eine `static let`-Konstante umgewandelt – Formatter wird einmalig erstellt
+
 ## 1.124.1
 **Refactoring: Wartbarkeit NavSidebarView und ContentView**
 
