@@ -63,15 +63,6 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ---
 
-## Pausierte Agents
-
-### iPhoto-Daily-Architecture-Review
-**Trigger-ID:** `trig_012HmxSNyn3W7LCNct9ZgLrs`
-**Takt:** Täglich 9:19 Uhr (Berlin) — **pausiert**
-**Aufgabe:** Software-Architekt der täglich Code-Qualität prüft und Refactoring-Commits macht.
-
----
-
 ## Log-Sync (lokal)
 
 Damit der Performance-Doktor auf echte Laufzeit-Daten zugreifen kann, müssen Logs regelmäßig ins Repo gepusht werden:
