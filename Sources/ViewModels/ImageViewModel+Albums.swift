@@ -32,6 +32,7 @@ extension ImageViewModel {
     }
 
     func createAlbum(name: String) {
+        Log.info("EVENT album-create name=\(name)")
         let album = Album(name: name)
         library.albums.append(album)
         library.saveAlbums()
@@ -114,6 +115,7 @@ extension ImageViewModel {
         DispatchQueue.global(qos: .userInitiated).async {
             CatalogStore.shared.addImage(path: path, toAlbum: albumIDStr, order: order)
         }
+        Log.info("EVENT album-add count=1")
         syncAlbumToFilesystem(library.albums[idx])
     }
 
@@ -138,6 +140,7 @@ extension ImageViewModel {
         }
         library.albums[idx].photoURLs.append(contentsOf: newURLs)
         library.saveAlbums()
+        Log.info("EVENT album-add count=\(newURLs.count)")
         syncAlbumToFilesystem(library.albums[idx])
     }
 

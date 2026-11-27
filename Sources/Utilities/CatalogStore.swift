@@ -86,9 +86,16 @@ final class CatalogStore {
         exec("PRAGMA foreign_keys=ON")
         createSchema()
         if isDefaultCatalog { migrateFromJSON() }
+        let cacheT0 = Date()
         loadExifCache()
+        let exifMs = Int(Date().timeIntervalSince(cacheT0) * 1000)
+        let motifT0 = Date()
         loadMotifCache()
+        let motifMs = Int(Date().timeIntervalSince(motifT0) * 1000)
+        let imageT0 = Date()
         loadImageCache()
+        let imageMs = Int(Date().timeIntervalSince(imageT0) * 1000)
+        Log.perf(String(format: "PERF catalog-open exif=%dms motif=%dms image=%dms", exifMs, motifMs, imageMs))
     }
 
     private func loadImageCache() {

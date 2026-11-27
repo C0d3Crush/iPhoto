@@ -106,6 +106,7 @@ class ImageViewModel: ObservableObject {
 
     /// Anpassungs-Session des aktuellen Bildes (Regler, Historie, Presets, Renderer)
     let adj = AdjustmentSessionState()
+    var adjLastEventState: AdjustmentState? = nil
 
     // MARK: - Version history
 
@@ -474,6 +475,24 @@ class ImageViewModel: ObservableObject {
             .sink { [weak self] newState in
                 guard let self = self, !self.adj.isUndoRedoing else { return }
                 self.adj.history.commit(newState)
+                let prev = self.adjLastEventState ?? AdjustmentState()
+                self.adjLastEventState = newState
+                var adjType = "other"
+                if newState.exposure != prev.exposure            { adjType = "exposure" }
+                else if newState.brightness != prev.brightness   { adjType = "brightness" }
+                else if newState.contrast != prev.contrast       { adjType = "contrast" }
+                else if newState.saturation != prev.saturation   { adjType = "saturation" }
+                else if newState.warmth != prev.warmth           { adjType = "warmth" }
+                else if newState.tint != prev.tint               { adjType = "tint" }
+                else if newState.clarity != prev.clarity         { adjType = "clarity" }
+                else if newState.texture != prev.texture         { adjType = "texture" }
+                else if newState.dehaze != prev.dehaze           { adjType = "dehaze" }
+                else if newState.vibrance != prev.vibrance       { adjType = "vibrance" }
+                else if newState.hue != prev.hue                 { adjType = "hue" }
+                else if newState.turns != prev.turns             { adjType = "rotation" }
+                else if newState.cropRect != prev.cropRect       { adjType = "crop" }
+                else if newState.curvePoints != prev.curvePoints { adjType = "curve" }
+                Log.info("EVENT adjustment-applied type=\(adjType)")
             }
             .store(in: &cancellables)
 
@@ -782,6 +801,7 @@ class ImageViewModel: ObservableObject {
         Log.trace("selectDocument(\(index)) — Klick angekommen")
         sidebarNavigationFocused = false
         persistAdjustmentsForCurrent()
+        Log.info("EVENT image-switch direction=jump index=\(index) total=\(collection.documents.count)")
         collection.select(index: index)
         loadCurrentImage()
     }
@@ -795,6 +815,7 @@ class ImageViewModel: ObservableObject {
               visPos + 1 < visible.count,
               let nextIdx = collectionIndex(for: visible[visPos + 1]) else { return }
         collection.select(index: nextIdx)
+        Log.info("EVENT image-switch direction=next index=\(visPos + 1) total=\(visible.count)")
         evictDistantImages()
         loadCurrentImage()
     }
@@ -808,6 +829,7 @@ class ImageViewModel: ObservableObject {
               visPos > 0,
               let prevIdx = collectionIndex(for: visible[visPos - 1]) else { return }
         collection.select(index: prevIdx)
+        Log.info("EVENT image-switch direction=prev index=\(visPos - 1) total=\(visible.count)")
         evictDistantImages()
         loadCurrentImage()
     }

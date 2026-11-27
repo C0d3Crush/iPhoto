@@ -59,6 +59,7 @@ extension ImageExporter {
                         try exportSingle(image: image, to: outURL, format: format, quality: quality, sourceURL: doc.url)
                         localOK = true
                     } catch {
+                        Log.error("ERROR export format=\(format.rawValue.lowercased()) file=\(doc.filename) detail=\(error.localizedDescription)")
                         localErr = (doc.filename, error.localizedDescription)
                     }
                     lock.lock()

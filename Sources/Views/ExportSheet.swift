@@ -343,18 +343,21 @@ struct ExportSheet: View {
                         image = try RAWImageDecoder.decode(url: doc.url)
                     }
                 } catch {
+                    Log.error("ERROR export format=\(fmt.fileExtension) detail=decode-failed: \(error.localizedDescription)")
                     DispatchQueue.main.async { state.phase = .failed(error.localizedDescription) }
                     return
                 }
 
                 do {
                     try ImageExporter.exportSingle(image: image, to: url, format: fmt, quality: q)
+                    Log.info("EVENT export format=\(fmt.fileExtension) count=1")
                     DispatchQueue.main.async {
                         state.completedCount = 1
                         state.result = ExportResult(total: 1, succeeded: 1, failed: [])
                         state.phase = .done
                     }
                 } catch {
+                    Log.error("ERROR export format=\(fmt.fileExtension) detail=write-failed: \(error.localizedDescription)")
                     DispatchQueue.main.async { state.phase = .failed(error.localizedDescription) }
                 }
             }
@@ -389,6 +392,10 @@ struct ExportSheet: View {
                     DispatchQueue.main.async { state.completedCount = completed }
                 },
                 completion: { result in
+                    Log.info("EVENT export format=\(fmt.fileExtension) count=\(result.succeeded) failed=\(result.failed.count)")
+                    if !result.failed.isEmpty {
+                        Log.error("ERROR export format=\(fmt.fileExtension) detail=\(result.failed.count) Dateien fehlgeschlagen")
+                    }
                     DispatchQueue.main.async {
                         state.result = result
                         state.phase = .done

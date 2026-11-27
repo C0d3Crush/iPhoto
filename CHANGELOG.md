@@ -2,6 +2,19 @@
 
 ---
 
+## 1.116.0
+**Logging: Strukturierte Event-, Perf- und Error-Logs in allen Kern-Subsystemen**
+
+- Navigation: `EVENT image-switch direction=<next|prev|jump> index=<n> total=<n>` bei jedem Bildwechsel (Pfeil, Klick, Sprung)
+- Anpassungen: `EVENT adjustment-applied type=<exposure|brightness|contrast|…>` beim 500-ms-Debounce-Commit — erkennt, welcher Regler aktiv ist
+- Alben: `EVENT album-create name=<n>` und `EVENT album-add count=<n>` bei Erstellungs- und Hinzufüge-Aktionen
+- Suche: `EVENT search query-length=<n> results=<n>` nach jeder abgeschlossenen Suche
+- Export: `EVENT export format=<jpeg|png|tiff|heif> count=<n>` nach erfolgreichem Einzel- oder Batch-Export; `ERROR export` in allen Fehlerpfaden (Decode- und Schreibfehler)
+- Performance: `PERF catalog-open exif=<ms> motif=<ms> image=<ms>` beim Katalog-Start; `PERF smartfolder-count <n> folders <ms>` nach jeder Smart-Folder-Zählung
+- Fehlerpfade: Alle bisher stillen `catch`-Blöcke im Export-Pipeline mit `ERROR export`-Zeilen versehen (ExportSheet + ImageExporter+Batch)
+
+---
+
 ## 1.115.16
 **Performance: Batch-Export lädt Anpassungen jetzt in einer einzigen SQLite-Abfrage (#93)**
 

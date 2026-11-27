@@ -75,6 +75,7 @@ extension ImageViewModel {
             let elapsed = Date().timeIntervalSince(start)
             let count = result.count
             searchStartTime = nil
+            Log.info("EVENT search query-length=\(searchQuery.count) results=\(count)")
             DispatchQueue.main.async { [weak self] in
                 let secs = String(format: "%.2f", elapsed).replacingOccurrences(of: ".", with: ",")
                 self?.searchResultSummary = "\(count) Bilder in \(secs) Sek."
@@ -517,6 +518,7 @@ extension ImageViewModel {
             )
             DispatchQueue.global(qos: .utility).async { [weak self] in
                 guard let self = self else { return }
+                let sfT0 = Date()
                 var counts: [UUID: Int] = [:]
                 // Compute cover IDs per smart folder (first 4 matching docs)
                 var sfCoverIDs: [UUID: [UUID]] = [:]
@@ -536,8 +538,10 @@ extension ImageViewModel {
                     }
                     sfCoverIDs[sf.id] = ids
                 }
+                let sfMs = Int(Date().timeIntervalSince(sfT0) * 1000)
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
+                    Log.perf(String(format: "PERF smartfolder-count %d folders %dms", folders.count, sfMs))
                     var changed = false
                     if counts != self.smartFolderCounts {
                         self.smartFolderCounts = counts
