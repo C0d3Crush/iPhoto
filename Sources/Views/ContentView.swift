@@ -441,7 +441,7 @@ struct ContentView: View {
             ExposureView()
                 .environmentObject(viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if isLibrary && !viewModel.showingLibraryDetail {
+        } else if !isLibrary || !viewModel.showingLibraryDetail {
             switch viewModel.libraryViewMode {
             case .grid:
                 LibraryFullGridView()
@@ -457,23 +457,6 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .gallery:
                 detailWithStrip
-            }
-        } else if !isLibrary {
-            switch viewModel.libraryViewMode {
-            case .gallery:
-                detailWithStrip
-            case .grid:
-                LibraryFullGridView()
-                    .environmentObject(viewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .list:
-                LibraryListView()
-                    .environmentObject(viewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .columns:
-                LibraryColumnsView()
-                    .environmentObject(viewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }

@@ -30,6 +30,8 @@ struct NavSidebarView: View {
     @State private var sectionOrder: [NavSidebarSection] = NavSidebarSection.loadOrder()
     @State private var draggingSection: NavSidebarSection?
 
+    private static let collapseAnimation = Animation.easeInOut(duration: 0.18)
+
     private func loadSmartFolderID(from providers: [NSItemProvider], completion: @escaping (SmartFolder?) -> Void) {
         providers.first?.loadDataRepresentation(forTypeIdentifier: kSmartFolderIDType) { data, _ in
             guard let data = data,
@@ -323,7 +325,7 @@ struct NavSidebarView: View {
 
     @ViewBuilder private var albumsSection: some View {
         collapsibleSectionHeader("Alben", isCollapsed: albumsCollapsed,
-            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { albumsCollapsed.toggle() } },
+            onToggle: { withAnimation(Self.collapseAnimation) { albumsCollapsed.toggle() } },
             trailing: AnyView(
                 Button(action: { newAlbumName = ""; showCreateAlbum = true }) {
                     Image(systemName: "plus").font(.caption)
@@ -357,7 +359,7 @@ struct NavSidebarView: View {
     @ViewBuilder private var foldersSection: some View {
         let regularFolders = viewModel.library.watchedFolders.filter { !$0.isRemovableMedia && !$0.isDefaultLibrary }
         collapsibleSectionHeader("Ordner", isCollapsed: foldersCollapsed,
-            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { foldersCollapsed.toggle() } },
+            onToggle: { withAnimation(Self.collapseAnimation) { foldersCollapsed.toggle() } },
             trailing: AnyView(
                 Button(action: { viewModel.addFolderDialog() }) {
                     Image(systemName: "plus").font(.caption)
@@ -378,7 +380,7 @@ struct NavSidebarView: View {
     @ViewBuilder private var iFoldersSection: some View {
         let iFolders = viewModel.library.smartFolders.filter { $0.baseFolderPath != nil }
         collapsibleSectionHeader("iOrdner", isCollapsed: iFoldersCollapsed,
-            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { iFoldersCollapsed.toggle() } },
+            onToggle: { withAnimation(Self.collapseAnimation) { iFoldersCollapsed.toggle() } },
             trailing: AnyView(
                 Button(action: {
                     let panel = NSOpenPanel()
@@ -403,7 +405,7 @@ struct NavSidebarView: View {
 
     @ViewBuilder private var smartFoldersSection: some View {
         collapsibleSectionHeader("iAlben", isCollapsed: smartFoldersCollapsed,
-            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { smartFoldersCollapsed.toggle() } },
+            onToggle: { withAnimation(Self.collapseAnimation) { smartFoldersCollapsed.toggle() } },
             trailing: AnyView(
                 Button(action: { smartFolderSheetItem = SmartFolderSheetItem(folder: nil) }) {
                     Image(systemName: "plus").font(.caption)
@@ -442,7 +444,7 @@ struct NavSidebarView: View {
         ForEach(groups, id: \.self) { groupName in
             collapsibleSectionHeader(groupName, isCollapsed: collapsedGroups.contains(groupName),
                 onToggle: {
-                    withAnimation(.easeInOut(duration: 0.18)) {
+                    withAnimation(Self.collapseAnimation) {
                         if collapsedGroups.contains(groupName) { collapsedGroups.remove(groupName) }
                         else { collapsedGroups.insert(groupName) }
                     }
@@ -466,53 +468,11 @@ struct NavSidebarView: View {
         }
     }
 
-    @ViewBuilder private func groupHeaderRow(_ groupName: String) -> some View {
-        let isDropTarget = dropTargetGroups.contains(groupName)
-        Button(action: {
-            if collapsedGroups.contains(groupName) { collapsedGroups.remove(groupName) }
-            else { collapsedGroups.insert(groupName) }
-        }) {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .rotationEffect(.degrees(collapsedGroups.contains(groupName) ? 0 : 90))
-                    .frame(width: 12)
-                Label(groupName, systemImage: "folder")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 5)
-            .background(isDropTarget ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .padding(.horizontal, 4)
-        .onDrop(of: [kSmartFolderIDType],
-                isTargeted: Binding(
-                    get: { dropTargetGroups.contains(groupName) },
-                    set: { v in
-                        if v { dropTargetGroups.insert(groupName) }
-                        else { dropTargetGroups.remove(groupName) }
-                    }
-                )) { providers in
-            loadSmartFolderID(from: providers) { sf in
-                guard let sf = sf else { return }
-                viewModel.moveSmartFolder(sf, toGroup: groupName)
-            }
-            return true
-        }
-        .contextMenu {
-            Button("Umbenennen") { renameGroupText = groupName; renamingGroupName = groupName }
-            Button("Auflösen") { viewModel.dissolveGroup(groupName) }
-        }
-    }
-
     @ViewBuilder private var volumesSection: some View {
         let removableFolders = viewModel.library.watchedFolders.filter { $0.isRemovableMedia }
         if !viewModel.library.detectedVolumes.isEmpty || !removableFolders.isEmpty {
             collapsibleSectionHeader("Wechseldatenträger", isCollapsed: volumesCollapsed,
-                onToggle: { withAnimation(.easeInOut(duration: 0.18)) { volumesCollapsed.toggle() } })
+                onToggle: { withAnimation(Self.collapseAnimation) { volumesCollapsed.toggle() } })
             if !volumesCollapsed {
                 ForEach(viewModel.library.detectedVolumes) { volume in
                     VolumeRow(volume: volume, isSelected: viewModel.navSelection == .volume(volume.id))
@@ -573,7 +533,7 @@ struct NavSidebarView: View {
 
     @ViewBuilder private var trashSection: some View {
         collapsibleSectionHeader("Papierkorb", isCollapsed: trashCollapsed,
-            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { trashCollapsed.toggle() } })
+            onToggle: { withAnimation(Self.collapseAnimation) { trashCollapsed.toggle() } })
         if !trashCollapsed {
         Button(action: { viewModel.navSelection = .trash }) {
             HStack(spacing: 4) {
@@ -602,7 +562,7 @@ struct NavSidebarView: View {
 
     @ViewBuilder private var backupSection: some View {
         collapsibleSectionHeader("Backup", isCollapsed: backupCollapsed,
-            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { backupCollapsed.toggle() } })
+            onToggle: { withAnimation(Self.collapseAnimation) { backupCollapsed.toggle() } })
         if !backupCollapsed {
             Button(action: { viewModel.navSelection = .backup }) {
                 HStack(spacing: 4) {
@@ -628,18 +588,9 @@ struct NavSidebarView: View {
         } // !backupCollapsed
     }
 
-    // Sidebar-Highlight bleibt auf "Ähnliche Bilder", auch wenn der Nutzer in eine
-    // konkrete Gruppe hineinzoomt (nav = .similarGroup(_)). Ohne dieses Mapping
-    // würde nach Klick auf ein Gruppen-Tile die Sidebar den aktiven Bereich verlieren.
-    private var isSimilarSelected: Bool {
-        if case .similar = viewModel.navSelection { return true }
-        if case .similarGroup = viewModel.navSelection { return true }
-        return false
-    }
-
     @ViewBuilder private var duplicatesSection: some View {
         collapsibleSectionHeader("Duplikate", isCollapsed: duplicatesCollapsed,
-            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { duplicatesCollapsed.toggle() } })
+            onToggle: { withAnimation(Self.collapseAnimation) { duplicatesCollapsed.toggle() } })
         if !duplicatesCollapsed {
         Button(action: { viewModel.navSelection = .duplicates }) {
             HStack(spacing: 4) {
@@ -671,96 +622,58 @@ struct NavSidebarView: View {
 
     @ViewBuilder private var blurrySection: some View {
         collapsibleSectionHeader("Qualität", isCollapsed: qualityCollapsed,
-            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { qualityCollapsed.toggle() } })
+            onToggle: { withAnimation(Self.collapseAnimation) { qualityCollapsed.toggle() } })
         if !qualityCollapsed {
-        Button(action: { viewModel.navSelection = .blurry }) {
-            HStack(spacing: 4) {
-                Label("Unscharf", systemImage: "drop.triangle")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.quality.blurryDocuments.isEmpty {
-                    Text("\(viewModel.quality.blurryDocuments.count)")
-                        .font(.caption2)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Color.purple)
-                        .cornerRadius(4)
-                        .padding(.trailing, 2)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(viewModel.navSelection == .blurry ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .padding(.horizontal, 4)
-        .contextMenu {
-            Button("Neu scannen") { viewModel.detectBlurryImages() }
-        }
-
-        Button(action: { viewModel.navSelection = .underexposed }) {
-            HStack(spacing: 4) {
-                Label("Unterbelichtet", systemImage: "moon.fill")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.quality.underexposedDocuments.isEmpty {
-                    Text("\(viewModel.quality.underexposedDocuments.count)")
-                        .font(.caption2).foregroundColor(.white)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Color.purple).cornerRadius(4)
-                        .padding(.trailing, 2)
-                }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(viewModel.navSelection == .underexposed ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
-        .contextMenu { Button("Neu scannen") { viewModel.detectExposureIssues() } }
-
-        Button(action: { viewModel.navSelection = .overexposed }) {
-            HStack(spacing: 4) {
-                Label("Überbelichtet", systemImage: "sun.max.fill")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.quality.overexposedDocuments.isEmpty {
-                    Text("\(viewModel.quality.overexposedDocuments.count)")
-                        .font(.caption2).foregroundColor(.white)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Color.yellow.opacity(0.9)).cornerRadius(4)
-                        .padding(.trailing, 2)
-                }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(viewModel.navSelection == .overexposed ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
-        .contextMenu { Button("Neu scannen") { viewModel.detectExposureIssues() } }
-
-        Button(action: { viewModel.navSelection = .closedEyes }) {
-            HStack(spacing: 4) {
-                Label("Augen zu", systemImage: "eye.slash.fill")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if !viewModel.quality.closedEyeDocuments.isEmpty {
-                    Text("\(viewModel.quality.closedEyeDocuments.count)")
-                        .font(.caption2).foregroundColor(.white)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Color.pink).cornerRadius(4)
-                        .padding(.trailing, 2)
-                }
-            }
-            .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(viewModel.navSelection == .closedEyes ? Color.accentColor.opacity(0.2) : Color.clear)
-            .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
-        .contextMenu { Button("Neu scannen") { viewModel.detectClosedEyes() } }
+            qualityItemRow(label: "Unscharf", icon: "drop.triangle",
+                           navTarget: .blurry,
+                           count: viewModel.quality.blurryDocuments.count,
+                           badgeColor: .purple) { viewModel.detectBlurryImages() }
+            qualityItemRow(label: "Unterbelichtet", icon: "moon.fill",
+                           navTarget: .underexposed,
+                           count: viewModel.quality.underexposedDocuments.count,
+                           badgeColor: .purple) { viewModel.detectExposureIssues() }
+            qualityItemRow(label: "Überbelichtet", icon: "sun.max.fill",
+                           navTarget: .overexposed,
+                           count: viewModel.quality.overexposedDocuments.count,
+                           badgeColor: .yellow.opacity(0.9)) { viewModel.detectExposureIssues() }
+            qualityItemRow(label: "Augen zu", icon: "eye.slash.fill",
+                           navTarget: .closedEyes,
+                           count: viewModel.quality.closedEyeDocuments.count,
+                           badgeColor: .pink) { viewModel.detectClosedEyes() }
         } // !qualityCollapsed
+    }
+
+    private func qualityItemRow(
+        label: String,
+        icon: String,
+        navTarget: NavSelection,
+        count: Int,
+        badgeColor: Color,
+        onRescan: @escaping () -> Void
+    ) -> some View {
+        Button(action: { viewModel.navSelection = navTarget }) {
+            HStack(spacing: 4) {
+                Label(label, systemImage: icon)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.caption2).foregroundColor(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(badgeColor).cornerRadius(4)
+                        .padding(.trailing, 2)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(viewModel.navSelection == navTarget ? Color.accentColor.opacity(0.2) : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(PlainButtonStyle()).padding(.horizontal, 4)
+        .contextMenu { Button("Neu scannen") { onRescan() } }
     }
 
     @ViewBuilder private var peopleSection: some View {
         collapsibleSectionHeader("Menschen", isCollapsed: peopleCollapsed,
-            onToggle: { withAnimation(.easeInOut(duration: 0.18)) { peopleCollapsed.toggle() } })
+            onToggle: { withAnimation(Self.collapseAnimation) { peopleCollapsed.toggle() } })
         if !peopleCollapsed {
         Button(action: { viewModel.navSelection = .people }) {
             HStack(spacing: 4) {
