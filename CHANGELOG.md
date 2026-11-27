@@ -2,6 +2,18 @@
 
 ---
 
+## 1.124.0
+**Logging: Stille Fehler geschlossen und fehlende Nutzerereignisse ergänzt**
+
+- Neu: `RAWImageDecoder.thumbnail()` loggt `ERROR decoder thumbnail-all-paths-failed` wenn alle Decode-Pfade scheitern
+- Neu: `ThumbnailDiskCache.save()` loggt `ERROR thumbnail-cache save-finalize-failed` wenn das Schreiben des Thumbnail-JPEGs fehlschlägt
+- Neu: Album-Verzeichnis löschen (`removeAlbumFromFilesystem`) loggt `ERROR album-fs album-dir-remove-failed` statt den Fehler still zu verwerfen
+- Neu: `setRating()` loggt `EVENT rating value=N`
+- Neu: `toggleFlag()` loggt `EVENT flag status=pick|reject|none count=N`
+- Neu: `setColorLabel()` loggt `EVENT color-label label=red|yellow|green|blue|none`
+- Neu: `batchUpsertImages()` loggt `PERF catalog-batch-upsert N items Xms` für SQLite-Batch-Schreibzeiten beim Import
+- Neu: `syncFolder()` loggt `PERF SYNC-FOLDER "Name" N files Xms` für Verzeichnis-Scan-Dauer beim Watched-Folder-Sync
+
 ## 1.123.0
 **Logging: Weitere Lücken geschlossen – Aktionen, Fehler und Ladezeiten**
 

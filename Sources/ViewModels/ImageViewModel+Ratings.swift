@@ -14,6 +14,7 @@ extension ImageViewModel {
         collection.documents[idx] = doc
         persistRating(at: idx)
         advanceIfCurrentExcluded(previousVisible: prev)
+        Log.info("EVENT rating value=\(r)")
     }
 
     func toggleFlag(_ flag: FlagStatus) {
@@ -30,6 +31,7 @@ extension ImageViewModel {
         collection.documents = docs
         persistRatings(at: indices, label: "Markierungen speichern…", icon: "flag.fill")
         advanceIfCurrentExcluded(previousVisible: prev)
+        Log.info("EVENT flag status=\(newStatus.rawValue) count=\(indices.count)")
     }
 
     func setColorLabel(_ label: ColorLabel) {
@@ -44,6 +46,7 @@ extension ImageViewModel {
         persistRating(at: idx)
         applyFinderColorLabel(newLabel, to: collection.documents[idx].url)
         advanceIfCurrentExcluded(previousVisible: prev)
+        Log.info("EVENT color-label label=\(newLabel.rawValue)")
     }
 
     func advanceIfCurrentExcluded(previousVisible: [ImageDocument]) {

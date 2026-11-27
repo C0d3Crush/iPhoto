@@ -39,6 +39,7 @@ final class ThumbnailDiskCache {
         let opts: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: 0.75]
         CGImageDestinationAddImage(dest, image, opts as CFDictionary)
         guard CGImageDestinationFinalize(dest) else {
+            Log.error("ERROR thumbnail-cache save-finalize-failed detail=\(url.lastPathComponent)")
             try? FileManager.default.removeItem(at: tmpURL)
             return
         }

@@ -613,6 +613,7 @@ final class CatalogStore {
     func batchUpsertImages(_ items: [(path: String, filename: String, isRAW: Bool,
                                       width: Int, height: Int, sizeBytes: Int64,
                                       dateTaken: String?, cameraMake: String?, cameraModel: String?)]) {
+        let batchT0 = Date()
         queue.sync {
             exec("BEGIN")
             let stmt = prepare("""
@@ -645,6 +646,7 @@ final class CatalogStore {
             sfOrderedPathsCache.removeAll(keepingCapacity: true)
             sfCountCache.removeAll(keepingCapacity: true)
         }
+        Log.perf(String(format: "PERF catalog-batch-upsert %d items %.0f ms", items.count, Date().timeIntervalSince(batchT0) * 1000))
         imageCacheLock.lock()
         for item in items {
             imageCache[item.path] = CatalogImage(id: "", path: item.path, filename: item.filename,

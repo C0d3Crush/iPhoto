@@ -318,7 +318,11 @@ extension ImageViewModel {
             return
         }
         albumFSQueue.async {
-            try? FileManager.default.removeItem(at: dir)
+            do {
+                try FileManager.default.removeItem(at: dir)
+            } catch {
+                Log.error("ERROR album-fs album-dir-remove-failed detail=\(dir.lastPathComponent): \(error.localizedDescription)")
+            }
         }
     }
 }

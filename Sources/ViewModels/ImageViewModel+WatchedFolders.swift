@@ -296,6 +296,7 @@ extension ImageViewModel {
         guard let (folderURL, stop) = folder.resolveURL() else { return }
         let folderID   = folder.id
         let folderName = folder.name
+        let syncStart  = Date()
         DispatchQueue.main.async { self.activity.enqueue(id: folderID, label: "Lade \"\(folderName)\"", icon: "folder", done: 0, total: 0) }
         DispatchQueue.global(qos: .utility).async {
             defer { stop() }
@@ -325,6 +326,7 @@ extension ImageViewModel {
             // Set-Abgleich außerhalb des Filters — found.map im Closure war O(N×M)
             // und blockierte den Main-Thread bei großen Bibliotheken sekundenlang.
             let foundPaths = Set(found.map { $0.standardized.path })
+            Log.perf(String(format: "PERF SYNC-FOLDER \"%@\" %d files %.0f ms", folderName, found.count, Date().timeIntervalSince(syncStart) * 1000))
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 let removeIDs = Set(self.collection.documents.compactMap { doc -> UUID? in

@@ -130,6 +130,7 @@ struct RAWImageDecoder {
             }
         }
 
+        Log.error("ERROR decoder thumbnail-all-paths-failed ext=\(url.pathExtension.lowercased()) detail=\(url.lastPathComponent)")
         throw DecoderError.cannotDecodeImage
     }
 
