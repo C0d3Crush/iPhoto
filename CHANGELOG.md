@@ -2,6 +2,13 @@
 
 ---
 
+## 1.122.0
+**Logging: Fehlende Ereignisse und stille Fehler geschlossen**
+
+- Neu: Fehlgeschlagene Qualitätsanalyse (`QualityAssessor.assess` gibt nil zurück) wird jetzt als `ERROR quality-scan assess-failed` geloggt statt still ignoriert
+- Neu: Album-Ordner-Aktionen werden vollständig protokolliert: `EVENT albumfolder-create`, `albumfolder-rename`, `albumfolder-delete`
+- Neu: Album- und Ordner-Verschiebungen loggen jetzt `EVENT album-move` bzw. `EVENT albumfolder-move` mit Zielordner
+
 ## 1.121.0
 **Logging: Pro-Session-Dateien, Error-Log und automatisches Aufräumen**
 

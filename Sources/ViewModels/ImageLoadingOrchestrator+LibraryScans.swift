@@ -145,6 +145,7 @@ extension ImageLoadingOrchestrator {
                     let (accessURL, stopAccess) = BookmarkStore.shared.access(url: url)
                     defer { stopAccess() }
                     guard let result = QualityAssessor.assess(url: accessURL) else {
+                        Log.error("ERROR quality-scan assess-failed detail=\(url.lastPathComponent)")
                         done += 1
                         return
                     }

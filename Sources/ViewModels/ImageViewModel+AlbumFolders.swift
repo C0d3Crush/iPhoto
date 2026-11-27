@@ -48,6 +48,7 @@ extension ImageViewModel {
     // MARK: - Create / Rename / Delete
 
     func createAlbumFolder(name: String, parentID: UUID? = nil) {
+        Log.info("EVENT albumfolder-create name=\(name)")
         let folder = AlbumFolder(name: name, parentID: parentID)
         library.albumFolders.append(folder)
         library.saveAlbumFolders()
@@ -55,6 +56,7 @@ extension ImageViewModel {
     }
 
     func renameAlbumFolder(_ folder: AlbumFolder, to name: String) {
+        Log.info("EVENT albumfolder-rename old=\(folder.name) new=\(name)")
         guard let idx = library.albumFolders.firstIndex(where: { $0.id == folder.id }) else { return }
         library.albumFolders[idx].name = name
         library.saveAlbumFolders()
@@ -64,6 +66,7 @@ extension ImageViewModel {
     /// des gelöschten Ordners hochgezogen (verhindert Datenverlust — Nutzer erwartet
     /// „Ordner weg", nicht „Alben weg").
     func deleteAlbumFolder(_ folder: AlbumFolder) {
+        Log.info("EVENT albumfolder-delete name=\(folder.name)")
         let newParent = folder.parentID
         var albums = library.albums
         for i in albums.indices where albums[i].parentID == folder.id {
@@ -90,6 +93,7 @@ extension ImageViewModel {
         // Ziel-Ordner muss existieren (oder nil sein).
         if let parent = newParentID,
            !library.albumFolders.contains(where: { $0.id == parent }) { return }
+        Log.info("EVENT album-move name=\(album.name) toFolder=\(newParentID?.uuidString ?? "root")")
         library.albums[idx].parentID = newParentID
         library.saveAlbums()
     }
@@ -107,6 +111,7 @@ extension ImageViewModel {
             let descendants = collectDescendantFolderIDs(folderID: folder.id)
             if descendants.contains(parent) { return }
         }
+        Log.info("EVENT albumfolder-move name=\(folder.name) toFolder=\(newParentID?.uuidString ?? "root")")
         library.albumFolders[idx].parentID = newParentID
         library.saveAlbumFolders()
     }
