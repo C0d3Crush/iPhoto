@@ -8,7 +8,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ### iPhoto-CLI-Entwickler
 **Trigger-ID:** `trig_01NP6YvxPjHpoFrT3P241iUR`
-**Takt:** Di + Fr 20 Uhr (Berlin)
+**Takt:** Dienstag 20 Uhr (Berlin)
 **Aufgabe:** Sucht Lücken in der CLI-Abdeckung (`iphoto-cli`), implementiert 1–2 neue Subcommands pro Run, schreibt Tests in `Tests/run_plugins.sh`, fügt Logging hinzu, pusht direkt auf `main`.
 **Schreibt:** `Sources/CLI/main.swift`, `Tests/run_plugins.sh`, `CHANGELOG.md`, `Resources/Info.plist`
 
@@ -16,7 +16,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ### iPhoto-Logging-Verbesserer
 **Trigger-ID:** `trig_01EKDTLxf1Th219NLP7uwqnr`
-**Takt:** Mo + Do 4 Uhr (Berlin)
+**Takt:** Montag 4 Uhr (Berlin)
 **Aufgabe:** Auditiert Log-Ausgaben im Code — Bug-IDs, Ladezeiten, Nutzerverhalten. Verbessert Konsistenz und Vollständigkeit der Log-Einträge.
 **Schreibt:** Swift-Quelldateien, pusht auf `main`
 
@@ -24,7 +24,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ### iPhoto-Project-Manager
 **Trigger-ID:** `trig_018Dm79VAkcmwKncx2nYg8QZ`
-**Takt:** Mo / Mi / Fr 9:19 Uhr (Berlin)
+**Takt:** Freitag 9:19 Uhr (Berlin)
 **Aufgabe:** Automatischer Project Manager — prüft offene Issues, priorisiert, erstellt neue Issues, koordiniert zwischen Agents.
 **Schreibt:** GitHub Issues
 
@@ -32,7 +32,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ### iPhoto-Dokumentations-Agent
 **Trigger-ID:** `trig_01CHEznbasPtXHUEJUa5hbyn`
-**Takt:** Di + Do 16:00 Uhr (Berlin)
+**Takt:** Donnerstag 16:00 Uhr (Berlin)
 **Aufgabe:** Analysiert neuen Code und verfeinert Dokumentation — ARCHITECTURE.md, PHILOSOPHY.md, STRATEGY.md, DEVPLAN.md.
 **Schreibt:** Markdown-Dateien, pusht auf `main`
 
