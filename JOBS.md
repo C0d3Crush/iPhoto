@@ -63,6 +63,14 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ---
 
+### iPhoto-Release-Manager
+**Trigger-ID:** `trig_01Urhii7vxAN4k5gzq9rgdG2`
+**Takt:** Sonntag 10 Uhr (Berlin)
+**Aufgabe:** Analysiert Commits seit letztem Tag, entscheidet ob ein Release sinnvoll ist (≥2 neue Commits). Bestimmt Release-Typ (major/minor/patch), schreibt WhatsNew.json (Apple-Stil, max 5 Items), bumpt Version in Info.plist, aktualisiert CHANGELOG.md, erstellt GitHub Release + Git-Tag. Bei Major-Release X.0.0 ≥ 2.0.0: promotet α → β im App-Namen.
+**Schreibt:** `Resources/WhatsNew.json`, `Resources/Info.plist`, `CHANGELOG.md`, Git-Tag, GitHub Release
+
+---
+
 ## Log-Sync (lokal)
 
 Damit der Performance-Doktor auf echte Laufzeit-Daten zugreifen kann, müssen Logs regelmäßig ins Repo gepusht werden:

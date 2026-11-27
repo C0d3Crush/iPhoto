@@ -1,0 +1,30 @@
+{
+  "version": "1.124.2",
+  "releaseType": "minor",
+  "items": [
+    {
+      "icon": "terminal.fill",
+      "color": "purple",
+      "title": "Vollständige CLI",
+      "description": "Alben, Ordner, Watched Folders, Plugins, Stacks, ELO, HDR, Inpaint — alle App-Funktionen jetzt über iphoto-cli skriptierbar."
+    },
+    {
+      "icon": "folder.badge.gearshape",
+      "color": "blue",
+      "title": "Album-Organisation",
+      "description": "Alben in Ordner verschieben, verschachteln und mit Beschreibungen pflegen — direkt in der Seitenleiste und per CLI."
+    },
+    {
+      "icon": "arrow.triangle.2.circlepath",
+      "color": "green",
+      "title": "Auto-Sync für überwachte Ordner",
+      "description": "Watched Folders synchronisieren sich jetzt automatisch. Import-Ziel pro Ordner konfigurierbar."
+    },
+    {
+      "icon": "checkmark.shield.fill",
+      "color": "orange",
+      "title": "Zuverlässigere Fehlerbehandlung",
+      "description": "Stille Fehler im Decoder, Cache und Katalog werden jetzt protokolliert — Abstürze lassen sich schneller reproduzieren und beheben."
+    }
+  ]
+}

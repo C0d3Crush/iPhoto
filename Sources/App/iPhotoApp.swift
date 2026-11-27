@@ -7,6 +7,8 @@ struct iPhotoApp: App {
     @StateObject private var projectStore = ProjectStore.shared
     @State private var showProjectPicker: Bool = ProjectStore.shared.lastProject == nil
     @State private var loadingInitiated: Bool = false
+    @State private var showWhatsNew: Bool = false
+    @State private var whatsNewData: WhatsNewData? = nil
 
     var body: some Scene {
         WindowGroup {
@@ -45,6 +47,15 @@ struct iPhotoApp: App {
                             viewModel.openProject(p)
                         } else {
                             viewModel.openWithoutProject()
+                        }
+                        checkWhatsNew()
+                    }
+                    .sheet(isPresented: $showWhatsNew) {
+                        if let data = whatsNewData {
+                            WhatsNewView(data: data) {
+                                WhatsNewLoader.markSeen(data.version)
+                                showWhatsNew = false
+                            }
                         }
                     }
             }
@@ -127,6 +138,14 @@ struct iPhotoApp: App {
                 }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
             }
+        }
+    }
+
+    private func checkWhatsNew() {
+        guard let data = WhatsNewLoader.load(), WhatsNewLoader.shouldShow(data) else { return }
+        whatsNewData = data
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            showWhatsNew = true
         }
     }
 }
