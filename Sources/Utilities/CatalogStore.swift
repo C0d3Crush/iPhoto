@@ -95,7 +95,7 @@ final class CatalogStore {
         let imageT0 = Date()
         loadImageCache()
         let imageMs = Int(Date().timeIntervalSince(imageT0) * 1000)
-        Log.perf(String(format: "PERF catalog-open exif=%dms motif=%dms image=%dms", exifMs, motifMs, imageMs))
+        Log.perf(String(format: "catalog-open exif=%dms motif=%dms image=%dms", exifMs, motifMs, imageMs))
     }
 
     private func loadImageCache() {
@@ -317,9 +317,13 @@ final class CatalogStore {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("iPhoto")
         let albumsFile = dir.appendingPathComponent("albums.json")
-        guard let data = try? Data(contentsOf: albumsFile),
-              let albums = try? JSONDecoder().decode([AlbumJSON].self, from: data),
-              !albums.isEmpty else { return }
+        guard let data = try? Data(contentsOf: albumsFile) else { return }
+        guard let albums = try? JSONDecoder().decode([AlbumJSON].self, from: data) else {
+            Log.error("ERROR catalog migration JSON-decode-failed detail=albums.json")
+            return
+        }
+        guard !albums.isEmpty else { return }
+        Log.info("JSON-Migration: \(albums.count) Alben aus albums.json importiert")
 
         exec("BEGIN")
         for album in albums {

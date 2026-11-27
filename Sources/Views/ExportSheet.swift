@@ -305,6 +305,7 @@ struct ExportSheet: View {
                         } ?? "Export fehlgeschlagen")
                         return
                     }
+                    Log.info("EVENT export format=\(fmt.fileExtension) count=\(result.succeeded) via=airdrop")
                     state.result = result
                     state.phase = .done
                     service.perform(withItems: urls)

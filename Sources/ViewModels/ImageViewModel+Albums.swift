@@ -45,6 +45,7 @@ extension ImageViewModel {
     }
 
     func deleteAlbum(_ album: Album) {
+        Log.info("EVENT album-delete name=\(album.name) count=\(album.photoURLs.count)")
         removeAlbumFromFilesystem(album)
         library.albums.removeAll { $0.id == album.id }
         if navSelection == .album(album.id) { navSelection = .library as NavSelection? }
@@ -146,6 +147,7 @@ extension ImageViewModel {
 
     func removeFromAlbum(_ document: ImageDocument, albumID: UUID) {
         guard let idx = library.albums.firstIndex(where: { $0.id == albumID }) else { return }
+        Log.info("EVENT album-remove count=1 album=\(library.albums[idx].name)")
         library.albums[idx].photoURLs.removeAll { $0 == document.url }
         library.saveAlbums()
         let path = document.url.path, albumIDStr = albumID.uuidString

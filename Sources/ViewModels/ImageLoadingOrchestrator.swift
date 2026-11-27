@@ -249,6 +249,7 @@ final class ImageLoadingOrchestrator {
                 preview = decoded
                 previewLabel = "preview-decoded"
             } else {
+                Log.error("ERROR preview-decode failed detail=\(url.lastPathComponent)")
                 preview = nil
                 previewLabel = "preview-decoded"
             }

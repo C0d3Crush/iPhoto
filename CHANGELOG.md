@@ -2,6 +2,19 @@
 
 ---
 
+## 1.120.0
+**Logging: Lücken geschlossen — Fehler, Perf-Metriken und Nutzeraktionen vollständig protokolliert**
+
+- Fehlerbehebung: doppeltes `PERF PERF`-Präfix in `catalog-open`-Zeile korrigiert
+- Neu: stille JSON-Migrationsfehler (korrupte `albums.json`) werden jetzt als `ERROR catalog migration` geloggt; erfolgreiche Migration als `INFO`
+- Neu: Vorschau-Decode-Fehler (1500-px-Thumbnail für Preview-Phase) werden als `ERROR preview-decode failed` geloggt statt still ignoriert
+- Neu: Motiv-Scan gibt jetzt eine `PERF SCAN MOTIF N Bilder Xms`-Zeile aus (analog zu EXIF- und Quality-Scan)
+- Neu: AirDrop-Export loggt jetzt `EVENT export format=... count=... via=airdrop`
+- Neu: iAlbum-Erstellung loggt `EVENT smartfolder-create name=... criteria=N`
+- Neu: iAlbum-Löschen loggt `EVENT smartfolder-delete name=...`
+- Neu: Album-Löschen loggt `EVENT album-delete name=... count=N`
+- Neu: Bild aus Album entfernen loggt `EVENT album-remove count=1 album=...`
+
 ## 1.119.0
 **CLI: `catalog folders` und `catalog megapixels` — Ordner- und Auflösungsübersicht**
 

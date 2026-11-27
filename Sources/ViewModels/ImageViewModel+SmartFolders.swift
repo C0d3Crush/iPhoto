@@ -6,6 +6,7 @@ import Foundation
 extension ImageViewModel {
 
     func createSmartFolder(_ sf: SmartFolder) {
+        Log.info("EVENT smartfolder-create name=\(sf.name) criteria=\(sf.criteria.count)")
         library.smartFolders.append(sf)
         library.saveSmartFolders()
         navSelection = .smartFolder(sf.id)
@@ -13,6 +14,7 @@ extension ImageViewModel {
     }
 
     func deleteSmartFolder(_ sf: SmartFolder) {
+        Log.info("EVENT smartfolder-delete name=\(sf.name)")
         DispatchQueue.global(qos: .utility).async {
             SmartFolderFileSync.remove(sf)
         }

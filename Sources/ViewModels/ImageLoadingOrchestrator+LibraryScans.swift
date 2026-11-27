@@ -205,6 +205,7 @@ extension ImageLoadingOrchestrator {
                                              icon: "eye.fill",
                                              done: 0, total: total, summaryVerb: "analysiert")
             }
+            let scanStart = Date()
             var done = 0
             var pending: [(String, [String])] = []
             pending.reserveCapacity(128)
@@ -254,6 +255,7 @@ extension ImageLoadingOrchestrator {
                 host.activity.dequeue(id: taskID)
                 host.scheduleSmartFolderCountRefresh()
                 Log.info("Motiv-Scan abgeschlossen: \(total) Bilder")
+                Log.perf(String(format: "SCAN MOTIF %d Bilder %.0f ms", total, Date().timeIntervalSince(scanStart) * 1000))
             }
         }
     }
