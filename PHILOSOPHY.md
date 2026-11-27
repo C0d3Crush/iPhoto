@@ -70,7 +70,19 @@ Blur-Score (Laplacian-Varianz), pHash, BT.709-Luma-Histogramm und Hotpixel-Erken
 
 Rust bietet C-Performance, Speichersicherheit ohne GC, und einen sauberen C-FFI (`libiphoto_rs`). Der Rust-Core ist bewusst klein gehalten — nur Algorithmen, die messbar von der nativen Performance profitieren. Kein Rust für Business-Logik, keine Rust-UI.
 
-**Konsequenz:** Der Rust-Core ist ein Werkzeugkasten, kein Fundament. Neue Algorithmen kommen nur dann dorthin, wenn Swift/CoreImage nachweislich zu langsam ist.
+**Entscheidungsregel — Rust wenn:**
+- Der Code CPU-bound ist und keine Apple-Frameworks benötigt (kein CoreImage, Vision, AVFoundation, PDFKit)
+- Pixel-Level-Iteration stattfindet (Histogramme, Hashing, Sampling, Farbanalyse)
+- Parallelisierung mit `rayon` einfacher ist als manuelle GCD-Queues
+- O(N²) oder höhere Komplexität auf großen Datensätzen läuft (z. B. Distanzmatrizen, Clustering)
+
+**Swift bleibt zuständig für:**
+- Alles was Apple-Frameworks berührt
+- UI, ViewModels, State-Management
+- SQLite (Flaschenhals ist die serielle Queue, nicht die CPU)
+- Koordinationslogik und I/O
+
+**Konsequenz:** Der Rust-Core ist ein Werkzeugkasten, kein Fundament. Vor jeder neuen Implementierung fragen: CPU-bound und Apple-unabhängig? → `iphoto_rs`. Sonst → Swift.
 
 ---
 

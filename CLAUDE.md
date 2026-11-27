@@ -19,6 +19,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Built-in speed metrics.** `ImageLoadingOrchestrator` emits `SWITCH <path> <ms>` info-lines per image switch, tagged with the display path (`cache-hit`, `thumbnail-hit`, `preview-hit`, `preview-decoded`, `full-res`) plus `full-res-decode <ms>` for the decoder itself. This is a programmer build — keep these metrics in and read them (`tail -f ~/Library/Logs/iPhoto/iPhoto.log | grep SWITCH`) whenever you touch the load pipeline. If you add a new hot path, add its own SWITCH-style line so regressions cannot hide.
 
+## Rust wo es Sinn macht
+
+Die App hat einen Rust-Core (`Rust/crates/iphoto_rs`) der per C-FFI aus Swift aufgerufen wird. **Rust verwenden wenn:** CPU-bound + keine Apple-Frameworks (kein CoreImage/Vision/AVFoundation) + Pixel-Iteration oder O(N²)+ Komplexität auf großen Daten. **Swift behalten für:** alles mit Apple-Frameworks, UI, ViewModels, SQLite, I/O. Details: `PHILOSOPHY.md` → „Warum Rust für den Performance-Kern?"
+
 ## CLI & Tests sind Pflicht
 
 **Jedes neue Feature bekommt CLI-Support und einen Test — ohne Ausnahme.**
