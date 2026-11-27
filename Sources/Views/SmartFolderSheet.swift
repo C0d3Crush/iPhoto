@@ -597,11 +597,11 @@ private struct CriterionRow: View {
         }
     }
 
-    private var intFormatter: NumberFormatter {
+    private static let intFormatter: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .decimal
         f.allowsFloats = false
         f.minimum = 0
         return f
-    }
+    }()
 }

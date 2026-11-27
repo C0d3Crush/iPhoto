@@ -171,6 +171,21 @@ private func gridSectionHeader<Trailing: View>(_ title: String, icon: String? = 
     .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
 }
 
+private func mosaicTile(_ image: NSImage?, size: CGFloat) -> some View {
+    Group {
+        if let img = image {
+            Image(nsImage: img)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipped()
+        } else {
+            Color(NSColor.separatorColor).opacity(0.2)
+                .frame(width: size, height: size)
+        }
+    }
+}
+
 // MARK: - Library cell
 
 struct LibraryGridCell: View {
@@ -259,21 +274,6 @@ struct LibraryGridCell: View {
                 }
             }
             .background(Color(NSColor.separatorColor).opacity(0.3))
-        }
-    }
-
-    private func mosaicTile(_ image: NSImage?, size: CGFloat) -> some View {
-        Group {
-            if let img = image {
-                Image(nsImage: img)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size, height: size)
-                    .clipped()
-            } else {
-                Color(NSColor.separatorColor).opacity(0.2)
-                    .frame(width: size, height: size)
-            }
         }
     }
 }
@@ -410,21 +410,6 @@ private struct SmartFolderGridCell: View {
         }
     }
 
-    private func mosaicTile(_ image: NSImage?, size: CGFloat) -> some View {
-        Group {
-            if let img = image {
-                Image(nsImage: img)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size, height: size)
-                    .clipped()
-            } else {
-                Color(NSColor.separatorColor).opacity(0.2)
-                    .frame(width: size, height: size)
-            }
-        }
-    }
-
     private func requestThumbnails() {
         for doc in coverDocs {
             if let idx = viewModel.collectionIndex(for: doc) {
@@ -551,21 +536,6 @@ private struct AlbumGridCell: View {
                 }
             }
             .background(Color(NSColor.separatorColor).opacity(0.3))
-        }
-    }
-
-    private func mosaicTile(_ image: NSImage?, size: CGFloat) -> some View {
-        Group {
-            if let img = image {
-                Image(nsImage: img)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size, height: size)
-                    .clipped()
-            } else {
-                Color(NSColor.separatorColor).opacity(0.2)
-                    .frame(width: size, height: size)
-            }
         }
     }
 
