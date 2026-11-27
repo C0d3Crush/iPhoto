@@ -6,7 +6,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ## Aktive Agents
 
-### CLI-Entwickler
+### iPhoto-CLI-Entwickler
 **Trigger-ID:** `trig_01NP6YvxPjHpoFrT3P241iUR`
 **Takt:** Di + Fr 20 Uhr (Berlin)
 **Aufgabe:** Sucht Lücken in der CLI-Abdeckung (`iphoto-cli`), implementiert 1–2 neue Subcommands pro Run, schreibt Tests in `Tests/run_plugins.sh`, fügt Logging hinzu, pusht direkt auf `main`.
@@ -14,7 +14,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ---
 
-### Logging-Verbesserer
+### iPhoto-Logging-Verbesserer
 **Trigger-ID:** `trig_01EKDTLxf1Th219NLP7uwqnr`
 **Takt:** Mo + Do 4 Uhr (Berlin)
 **Aufgabe:** Auditiert Log-Ausgaben im Code — Bug-IDs, Ladezeiten, Nutzerverhalten. Verbessert Konsistenz und Vollständigkeit der Log-Einträge.
@@ -22,7 +22,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ---
 
-### Project Manager
+### iPhoto-Project-Manager
 **Trigger-ID:** `trig_018Dm79VAkcmwKncx2nYg8QZ`
 **Takt:** Mo / Mi / Fr 9:19 Uhr (Berlin)
 **Aufgabe:** Automatischer Project Manager — prüft offene Issues, priorisiert, erstellt neue Issues, koordiniert zwischen Agents.
@@ -30,7 +30,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ---
 
-### Dokumentations-Agent
+### iPhoto-Dokumentations-Agent
 **Trigger-ID:** `trig_01CHEznbasPtXHUEJUa5hbyn`
 **Takt:** Di + Do 16:00 Uhr (Berlin)
 **Aufgabe:** Analysiert neuen Code und verfeinert Dokumentation — ARCHITECTURE.md, PHILOSOPHY.md, STRATEGY.md, DEVPLAN.md.
@@ -38,7 +38,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ---
 
-### Refactor-Agent
+### iPhoto-Refactor-Agent
 **Trigger-ID:** `trig_01Wr5AwDaUmKHPZdaGCqQaaY`
 **Takt:** Jeden Montag 10 Uhr (Berlin)
 **Aufgabe:** Wartbarkeits-Refactors — Komplexität reduzieren, Views/ViewModels aufräumen, ohne Features zu ändern.
@@ -46,7 +46,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ---
 
-### Rust-Doktor
+### iPhoto-Rust-Doktor
 **Trigger-ID:** `trig_016AUQ4THEAXRNxoLfxz1pqx`
 **Takt:** Jeden Dienstag 9 Uhr (Berlin)
 **Aufgabe:** Scannt Swift-Code auf Stellen wo Rust messbaren Gewinn bringt (CPU-bound, Apple-unabhängig, Pixel-Iteration, O(N²)+). Erstellt GitHub Issues mit konkretem Migrationsplan.
@@ -54,7 +54,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ---
 
-### Performance-Doktor
+### iPhoto-Performance-Doktor
 **Trigger-ID:** `trig_01NH1cWXdjFgxrwjqgqwB3sF`
 **Takt:** Jeden Mittwoch 9 Uhr (Berlin)
 **Aufgabe:** Analysiert Hot-Path-Code und `logs/latest.log` auf Performance-Probleme (Main-Thread-I/O, O(N²)-Loops, per-frame Observer, fehlende Debounces). Erstellt GitHub Issues mit Datei+Zeile, Beweis und Fix-Vorschlag.
@@ -65,7 +65,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ## Pausierte Agents
 
-### Daily Architecture Review
+### iPhoto-Daily-Architecture-Review
 **Trigger-ID:** `trig_012HmxSNyn3W7LCNct9ZgLrs`
 **Takt:** Täglich 9:19 Uhr (Berlin) — **pausiert**
 **Aufgabe:** Software-Architekt der täglich Code-Qualität prüft und Refactoring-Commits macht.
