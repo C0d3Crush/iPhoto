@@ -2,6 +2,14 @@
 
 ---
 
+## 1.124.1
+**Refactoring: Wartbarkeit NavSidebarView und ContentView**
+
+- `NavSidebarView`: Animations-Dauer (`0.18`) in statische Konstante `collapseAnimation` extrahiert – eine Stelle zum Anpassen statt elf
+- `NavSidebarView`: Vier nahezu identische Qualitäts-Zeilen (Unscharf, Unterbelichtet, Überbelichtet, Augen zu) in wiederverwendbare Hilfsfunktion `qualityItemRow(...)` zusammengeführt
+- `NavSidebarView`: Toten Code entfernt – `groupHeaderRow` und `isSimilarSelected` waren definiert, aber nirgendwo aufgerufen
+- `ContentView`: Zwei identische `switch libraryViewMode`-Blöcke in `mainContent` zu einem zusammengeführt
+
 ## 1.124.0
 **Logging: Stille Fehler geschlossen und fehlende Nutzerereignisse ergänzt**
 
