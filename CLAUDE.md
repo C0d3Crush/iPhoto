@@ -127,6 +127,22 @@ Prefix all commit messages with a type label: `bugfix:`, `feature:`, `refactor:`
    - Bullet points describing changes (user-facing language, German)
    - Group multiple same-type commits in one version block when they form a logical unit
 
+## Automatisierte Cloud-Agents
+
+Dieses Repo wird von mehreren Cloud-Agents auf claude.ai mitbetreut. Alle Agents sind dokumentiert in **[JOBS.md](JOBS.md)**.
+
+**Zentrale Config aller Agents (alle Projekte):** `~/.config/claude/agents.yaml`
+
+Diese Datei ist die einzige Quelle der Wahrheit für alle Scheduled Triggers auf dem Claude-Account. Sie enthält Trigger-IDs, Cron-Ausdruck, Beschreibung und Schreibrechte jedes Agents.
+
+**Wenn du als Agent Trigger anlegen, ändern oder deaktivieren willst:**
+1. Lies `~/.config/claude/agents.yaml` — dort findest du alle Trigger-IDs
+2. Nutze das `RemoteTrigger`-Tool (via `ToolSearch select:RemoteTrigger`) für API-Calls
+3. Trage Änderungen zurück in `~/.config/claude/agents.yaml` ein
+4. Aktualisiere `JOBS.md` im Repo entsprechend
+
+**Niemals** einen Trigger anlegen oder löschen ohne Eintrag in `agents.yaml` und `JOBS.md`.
+
 ## Bug-Tracking
 
 Bug-Reports und die Tabelle bekannter Fehler: siehe **[BUGS.md](BUGS.md)**
