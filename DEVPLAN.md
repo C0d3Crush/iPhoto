@@ -27,28 +27,28 @@
 
 | Issue | Titel | Status |
 |---|---|---|
-| #104 | Export verliert alle Metadaten (EXIF, GPS, Datum, Copyright) | ⬜ offen |
-| #101 | Version-Restore/Undo trifft nach Index-Shift falsches Dokument | ⬜ offen |
-| #103 | RatingStore-Key basiert auf hashValue (zufällig pro Prozess) → Ratings-Datei wächst unbegrenzt | ⬜ offen |
-| #89  | App-Beenden wartet nicht auf async-Saves → letzte Änderungen gehen verloren | ⬜ offen |
+| #104 | Export verliert alle Metadaten (EXIF, GPS, Datum, Copyright) | ✅ erledigt |
+| #101 | Version-Restore/Undo trifft nach Index-Shift falsches Dokument | ✅ erledigt |
+| #103 | RatingStore-Key basiert auf hashValue (zufällig pro Prozess) → Ratings-Datei wächst unbegrenzt | ✅ erledigt |
+| #89  | App-Beenden wartet nicht auf async-Saves → letzte Änderungen gehen verloren | ✅ erledigt |
 
 ### B. Crash- und Stabilitäts-Bugs
 
 | Issue | Titel | Status |
 |---|---|---|
 | #1   | SIGILL nach fehlgeschlagenen Vergleichs-Previews (gelöschte Quelldateien) | ⬜ offen |
-| #111 | PluginPanelView: Data Race + nicht abbrechbare zsh-Prozesskette | ⬜ offen |
-| #112 | Tethering: NSException-Crash bei Kamera-Trennung während Session | ⬜ offen |
-| #119 | CrashReporter: falsche Session im Report oder Log-Rotation löscht Report | ⬜ offen |
+| #111 | PluginPanelView: Data Race + nicht abbrechbare zsh-Prozesskette | ✅ erledigt |
+| #112 | Tethering: NSException-Crash bei Kamera-Trennung während Session | ✅ erledigt |
+| #119 | CrashReporter: falsche Session im Report oder Log-Rotation löscht Report | ✅ erledigt |
 
 ### C. Core-UX-Bugs (kaputte Basisfunktionen)
 
 | Issue | Titel | Status |
 |---|---|---|
-| #127 | „Öffnen mit Photo α" öffnet falsches Projekt / ignoriert Ordner-Kontext | ⬜ offen |
-| #82  | SmartFolder-Cache wird von Album- und Motiv-Writes nicht invalidiert | ⬜ offen |
-| #83  | CatalogStore.imageCache nicht synchron nach batchUpsert/delete | ⬜ offen |
-| #92  | Duplicate-Detection: überlappende Läufe überschreiben sich (last-finisher wins) | ⬜ offen |
+| #127 | „Öffnen mit Photo α" öffnet falsches Projekt / ignoriert Ordner-Kontext | ✅ erledigt |
+| #82  | SmartFolder-Cache wird von Album- und Motiv-Writes nicht invalidiert | ✅ erledigt |
+| #83  | CatalogStore.imageCache nicht synchron nach batchUpsert/delete | ✅ erledigt |
+| #92  | Duplicate-Detection: überlappende Läufe überschreiben sich (last-finisher wins) | ✅ erledigt |
 
 ### D. Performance-Schwellen für Beta
 
@@ -58,7 +58,7 @@ Die App muss auf dem Zielgerät (MBP 15" Mid-2015, Intel Iris Pro, macOS 11) sp�
 |---|---|---|---|
 | #2   | Synchroner SQLite-Read auf Main-Thread bei jedem Bild-Switch | Jeder Switch blockt UI | ⬜ offen |
 | #3   | Thumbnail-Completion: O(N)-firstIndex + 3× @Published-Write (O(N²) bei großen Alben) | Grid friert bei >200 Bildern ein | ⬜ offen |
-| #79  | Bild-Switch-Pipeline: O(N)-firstIndex + mehrfache Subscript-Writes | Jeder Switch | ⬜ offen |
+| #79  | Bild-Switch-Pipeline: O(N)-firstIndex + mehrfache Subscript-Writes | Jeder Switch | ✅ erledigt |
 | #124 | Preview-Prewarming fehlt: Nachbarbilder werden erst nach Switch geladen | Wahrnehmbare Ladezeit beim Navigieren | ⬜ offen |
 
 Performance-Issues, die Beta *nicht* blockieren (können nach Beta behoben werden):
@@ -76,7 +76,7 @@ Diese Features sind Teil der Beta-Geschichte — ohne sie ist die App „noch ei
 |---|---|---|
 | Film-Look Starter-Presets (Classic-Chrome-, Acros-, Velvia-, Classic-Neg-artig) | STRATEGY.md §12 | ⬜ offen |
 | Lokale Anpassungen: Pinsel-/Gradient-UI vollständig ausgebaut | Phase 4 | ⬜ offen |
-| Klarheit/Textur: negative Slider-Werte funktionieren (#107) | #107 | ⬜ offen |
+| Klarheit/Textur: negative Slider-Werte funktionieren (#107) | #107 | ✅ erledigt |
 
 ---
 

@@ -79,13 +79,13 @@ Single Source of Truth. Alle `@Published` Properties; SwiftUI leitet alle Änder
 | Datei | Zuständigkeit |
 |-------|--------------|
 | `ImageViewModel.swift` | Kern-State, Init, `importFiles()`, Dispatch |
-| `ImageViewModel+Loading.swift` | 3-Phasen-Ladelogik, `loadCurrentImage()`, `loadThumbnails()` |
+| `ImageViewModel+Loading.swift` | Dünne Wrapper (`loadCurrentImage()`, `loadFullRes()`, `prefetchAdjacent()`) → `ImageLoadingOrchestrator`, wo die 3-Phasen-Logik liegt |
 | `ImageViewModel+Adjustments.swift` | `AdjustmentState`, Live-Pipeline, `applyAdjustments()` |
 | `ImageViewModel+Albums.swift` | Album-CRUD, Zuordnung |
 | `ImageViewModel+AlbumFolders.swift` | Album-Ordner-Verwaltung |
 | `ImageViewModel+Ratings.swift` | Sterne, Flags, Farbmarken |
 | `ImageViewModel+Selection.swift` | Mehrfachauswahl |
-| `ImageViewModel+Thumbnails.swift` | Thumbnail-Cache, `ThumbnailDiskCache`-Integration |
+| `ImageViewModel+Thumbnails.swift` | Dünner Wrapper → Thumbnail-Laden im `ImageLoadingOrchestrator` (`ThumbnailDiskCache`-Integration) |
 | `ImageViewModel+Projects.swift` | Projekt öffnen/schließen, Projektordner-Scan |
 | `ImageViewModel+People.swift` | Gesichtserkennung, Clustering, Namen |
 | `ImageViewModel+SmartFolders.swift` | Smart-Folder-Abfragen + Sync |
@@ -376,10 +376,14 @@ iphoto-cli elo stats [--bucket N] [--json]
 iphoto-cli elo suggest [--count N] [--include-trashed] [--json]
 
 # Katalog & Suche
-iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans [--json]
+iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans|formats|largest|folders|megapixels [--json]
 iphoto-cli catalog cameras [--json]
 iphoto-cli catalog timeline [--by year|month|day] [--json]
 iphoto-cli catalog orphans [--fix] [--json]
+iphoto-cli catalog formats [--json]            # Bilder pro Dateiendung (RAW-Anteil, Bytes)
+iphoto-cli catalog largest [--limit N] [--json]  # größte Dateien (Standard 10)
+iphoto-cli catalog folders [--limit N] [--json]  # Bilder pro Ordner, absteigend
+iphoto-cli catalog megapixels [--json]           # Verteilung nach Auflösungsklassen
 iphoto-cli search <text> [--flag ...] [--rating N] [--color ...] [--camera ...] [--date ...] [--json]
 iphoto-cli duplicate list|similar [--json]
 iphoto-cli duplicate regroup [--threshold 0-64] [--dry-run] [--json]
@@ -423,6 +427,7 @@ iphoto-cli analyse <datei|ordner> [--blur-threshold N] [--shadow N] [--highlight
 iphoto-cli quality scan|list|get|override [--blur|--under|--over|--eyes-closed on|off] [--json]
 iphoto-cli quality stats [--blur-threshold N] [--shadow R] [--highlight R] [--eye-threshold R] [--include-trashed] [--json]
 iphoto-cli hotpixel <ordner>
+iphoto-cli autoenhance <datei|ordner> [--json]   # Auto-Licht/Farbe-Analyse (ImageAutoEnhancer)
 
 # Gesichter / People
 iphoto-cli people scan|list|faces|cluster|rename|delete|merge|reset|export-names|import-names [--json]
