@@ -566,7 +566,7 @@ private struct CriterionRow: View {
     @ViewBuilder
     private func numericSingleInput(unit: String) -> some View {
         HStack(spacing: 4) {
-            TextField("", value: $criterion.numericValue, formatter: intFormatter)
+            TextField("", value: $criterion.numericValue, formatter: Self.intFormatter)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .frame(width: 70)
             Text(unit).font(.caption).foregroundColor(.secondary)
@@ -576,11 +576,11 @@ private struct CriterionRow: View {
     @ViewBuilder
     private func numericRangeInput(unit: String) -> some View {
         HStack(spacing: 4) {
-            TextField("", value: $criterion.numericValue, formatter: intFormatter)
+            TextField("", value: $criterion.numericValue, formatter: Self.intFormatter)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .frame(width: 65)
             Text("–").font(.caption).foregroundColor(.secondary)
-            TextField("", value: $criterion.numericValue2, formatter: intFormatter)
+            TextField("", value: $criterion.numericValue2, formatter: Self.intFormatter)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .frame(width: 65)
             Text(unit).font(.caption).foregroundColor(.secondary)
