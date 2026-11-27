@@ -128,10 +128,12 @@ extension ImageViewModel {
     // MARK: - Presets
 
     func applyPreset(_ preset: Preset) {
+        Log.info("EVENT preset-apply name=\(preset.name)")
         adj.adjustments = preset.adjustments
     }
 
     func saveCurrentAsPreset(name: String, author: String? = nil) {
+        Log.info("EVENT preset-save name=\(name)")
         let p = Preset(name: name, author: author, adjustments: adj.adjustments)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             CatalogStore.shared.savePreset(p)

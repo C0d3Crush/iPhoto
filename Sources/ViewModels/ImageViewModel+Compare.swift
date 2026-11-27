@@ -119,6 +119,7 @@ extension ImageViewModel {
     /// ELO-Update beider Bilder nach dem Verdict. Sterne (rating) werden bewusst
     /// nicht angefasst — ELO ist ein separater Ranking-Score.
     func resolveCompare(_ verdict: CompareVerdict) {
+        Log.info("EVENT compare-resolve verdict=\(verdict)")
         iphotoBreadcrumb("resolveCompare: start (\(verdict))")
         // Tageslimit prüfen (0 = unbegrenzt)
         if compareDailyLimit > 0 {
@@ -266,7 +267,10 @@ extension ImageViewModel {
                 defer { stopAccess2() }
                 let fullRes: CGImage?
                 do { fullRes = try RAWImageDecoder.decode(url: accessURL2) }
-                catch { fullRes = nil }
+                catch {
+                    Log.error("ERROR compare full-res-decode-failed detail=\(url.lastPathComponent) reason=\(error.localizedDescription)")
+                    fullRes = nil
+                }
                 guard let fullRes = fullRes else { return }
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self,

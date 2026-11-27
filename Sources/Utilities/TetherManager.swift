@@ -247,7 +247,11 @@ final class TetherManager: NSObject, ObservableObject {
         formatter.dateFormat = "yyyyMMdd_HHmmss_SSS"
         let name = "TETHER_\(formatter.string(from: Date())).jpg"
         let url = TetherManager.tetherDir.appendingPathComponent(name)
-        do { try data.write(to: url); return url } catch {
+        do {
+            try data.write(to: url)
+            Log.info("EVENT tether-capture filename=\(name) bytes=\(data.count)")
+            return url
+        } catch {
             Log.error("Tether-Foto speichern fehlgeschlagen '\(url.lastPathComponent)': \(error.localizedDescription)")
             return nil
         }

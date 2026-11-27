@@ -62,6 +62,7 @@ struct ImageExporter {
         quality: Double,
         sourceURL: URL? = nil
     ) throws {
+        let exportSingleStart = Date()
         guard let dest = CGImageDestinationCreateWithURL(
             url as CFURL, format.uti as CFString, 1, nil
         ) else {
@@ -96,6 +97,9 @@ struct ImageExporter {
         guard CGImageDestinationFinalize(dest) else {
             throw ExportError.finalizeFailed(url)
         }
+        Log.perf(String(format: "EXPORT-SINGLE %@ %.0f ms: %@",
+                        format.rawValue, Date().timeIntervalSince(exportSingleStart) * 1000,
+                        url.lastPathComponent))
     }
 
     private static func convertToSRGB(_ image: CGImage, use16bit: Bool = false) -> CGImage? {

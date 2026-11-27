@@ -2,6 +2,20 @@
 
 ---
 
+## 1.123.0
+**Logging: Weitere Lücken geschlossen – Aktionen, Fehler und Ladezeiten**
+
+- Neu: Album umbenennen loggt jetzt `EVENT album-rename old=… new=…`
+- Neu: Mehrere Alben gleichzeitig löschen loggt `EVENT album-delete-batch count=…`
+- Neu: Album-Filesystem-Sync loggt Kopierfehler als `ERROR album-fs-sync copy-failed`
+- Neu: Bildimport loggt `EVENT import count=…` (ergänzend zum bestehenden PERF-Eintrag)
+- Neu: Preset anwenden loggt `EVENT preset-apply name=…`
+- Neu: Preset speichern loggt `EVENT preset-save name=…`
+- Neu: Vergleichs-Auflösung loggt `EVENT compare-resolve verdict=…`
+- Neu: Fehlgeschlagener Full-Res-Decode im Vergleichsmodus wird als `ERROR compare full-res-decode-failed` geloggt statt still ignoriert
+- Neu: Tether-Aufnahme loggt `EVENT tether-capture filename=… bytes=…` nach erfolgreichem Speichern
+- Neu: `exportSingle` loggt `PERF EXPORT-SINGLE` mit Format und Dauer (für HDR-Merge, Inpaint und CLI-Exporte)
+
 ## 1.122.0
 **Logging: Fehlende Ereignisse und stille Fehler geschlossen**
 

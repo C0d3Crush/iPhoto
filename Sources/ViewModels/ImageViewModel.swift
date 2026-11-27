@@ -747,6 +747,7 @@ class ImageViewModel: ObservableObject {
                 self.activity.enqueueWork { [weak self] in self?.loadMetadataInBackground(for: metaURLs) }
                 self.activity.enqueueWork { [weak self] in self?.scanExifForLibrary() }
                 Log.perf(String(format: "IMPORT %d Dateien %.0f ms", dedupedDocs.count, Date().timeIntervalSince(importStart) * 1000))
+                Log.info("EVENT import count=\(dedupedDocs.count)")
             }
         }
     }

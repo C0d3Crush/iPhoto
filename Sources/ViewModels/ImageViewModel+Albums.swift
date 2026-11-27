@@ -60,6 +60,7 @@ extension ImageViewModel {
         let ids = sidebarSelectedAlbumIDs
         guard ids.count > 1 else { return }
         let toDelete = library.albums.filter { ids.contains($0.id) }
+        Log.info("EVENT album-delete-batch count=\(toDelete.count)")
         for album in toDelete { removeAlbumFromFilesystem(album) }
         let idStrs = toDelete.map { $0.id.uuidString }
         DispatchQueue.global(qos: .userInitiated).async {
@@ -73,6 +74,7 @@ extension ImageViewModel {
     }
 
     func renameAlbum(_ album: Album, to name: String) {
+        Log.info("EVENT album-rename old=\(album.name) new=\(name)")
         guard let idx = library.albums.firstIndex(where: { $0.id == album.id }) else { return }
         let oldDir = albumSystemPath(for: album)
         library.albums[idx].name = name
@@ -298,6 +300,8 @@ extension ImageViewModel {
                 } else if (try? fm.copyItem(at: photoURL, to: destURL)) != nil {
                     manifest[srcPath] = destName
                     usedNames.insert(destName)
+                } else {
+                    Log.error("ERROR album-fs-sync copy-failed detail=\(photoURL.lastPathComponent) album=\(album.name)")
                 }
             }
 
