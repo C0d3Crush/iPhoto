@@ -8,9 +8,39 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ### CLI-Entwickler
 **Trigger-ID:** `trig_01NP6YvxPjHpoFrT3P241iUR`
-**Takt:** Jede Stunde (`:19`)
+**Takt:** Stündlich
 **Aufgabe:** Sucht Lücken in der CLI-Abdeckung (`iphoto-cli`), implementiert 1–2 neue Subcommands pro Run, schreibt Tests in `Tests/run_plugins.sh`, fügt Logging hinzu, pusht direkt auf `main`.
 **Schreibt:** `Sources/CLI/main.swift`, `Tests/run_plugins.sh`, `CHANGELOG.md`, `Resources/Info.plist`
+
+---
+
+### Logging-Verbesserer
+**Trigger-ID:** `trig_01EKDTLxf1Th219NLP7uwqnr`
+**Takt:** Täglich 4 Uhr (Berlin)
+**Aufgabe:** Auditiert Log-Ausgaben im Code — Bug-IDs, Ladezeiten, Nutzerverhalten. Verbessert Konsistenz und Vollständigkeit der Log-Einträge.
+**Schreibt:** Swift-Quelldateien, pusht auf `main`
+
+---
+
+### Project Manager
+**Takt:** Täglich 9:19 Uhr (Berlin)
+**Aufgabe:** Automatischer Project Manager — prüft offene Issues, priorisiert, erstellt neue Issues, koordiniert zwischen Agents.
+**Schreibt:** GitHub Issues
+
+---
+
+### Dokumentations-Agent
+**Takt:** Täglich 16:00 Uhr (Berlin)
+**Aufgabe:** Analysiert neuen Code und verfeinert Dokumentation — ARCHITECTURE.md, PHILOSOPHY.md, Inline-Docs.
+**Schreibt:** Markdown-Dateien, pusht auf `main`
+
+---
+
+### Refactor-Agent
+**Trigger-ID:** `trig_01Wr5AwDaUmKHPZdaGCqQaaY`
+**Takt:** Jeden Montag 10 Uhr (Berlin)
+**Aufgabe:** Wartbarkeits-Refactors — Komplexität reduzieren, Views/ViewModels aufräumen, ohne Features zu ändern.
+**Schreibt:** Swift-Quelldateien, pusht auf `main`
 
 ---
 
@@ -31,27 +61,11 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ---
 
-### Logging-Verbesserer
-**Trigger-ID:** `trig_01EKDTLxf1Th219NLP7uwqnr`
-**Takt:** Täglich 4 Uhr (Berlin)
-**Aufgabe:** Verbessert Log-Ausgaben im Code — Bug-IDs, Ladezeiten, Nutzerverhalten.
-**Schreibt:** Swift-Quelldateien, pusht auf `main`
+## Pausierte Agents
 
----
-
-### Refactor-Agent
-**Trigger-ID:** `trig_01Wr5AwDaUmKHPZdaGCqQaaY`
-**Takt:** Jeden Montag 10 Uhr (Berlin)
-**Aufgabe:** Wartbarkeits-Refactors — Komplexität reduzieren, Views/ViewModels aufräumen.
-**Schreibt:** Swift-Quelldateien, pusht auf `main`
-
----
-
-### Philosophie-Wächter
-**Trigger-ID:** `trig_017RD4R1FQqJP26vxWarxTRa`
-**Takt:** Jeden Mittwoch 10 Uhr (Berlin)
-**Aufgabe:** Prüft ob neue Features und Architekturentscheidungen mit `PHILOSOPHY.md` übereinstimmen. Ergänzt offene Fragen und beantwortet sie aus dem aktuellen Code-Stand.
-**Schreibt:** `PHILOSOPHY.md`
+### Daily Architecture Review
+**Takt:** Täglich 9:19 Uhr (Berlin) — **pausiert**
+**Aufgabe:** Software-Architekt der täglich Code-Qualität prüft und Architektur-Issues erstellt.
 
 ---
 
