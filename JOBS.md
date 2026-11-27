@@ -8,7 +8,7 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ### CLI-Entwickler
 **Trigger-ID:** `trig_01NP6YvxPjHpoFrT3P241iUR`
-**Takt:** Stündlich
+**Takt:** Di + Fr 20 Uhr (Berlin)
 **Aufgabe:** Sucht Lücken in der CLI-Abdeckung (`iphoto-cli`), implementiert 1–2 neue Subcommands pro Run, schreibt Tests in `Tests/run_plugins.sh`, fügt Logging hinzu, pusht direkt auf `main`.
 **Schreibt:** `Sources/CLI/main.swift`, `Tests/run_plugins.sh`, `CHANGELOG.md`, `Resources/Info.plist`
 
@@ -16,22 +16,24 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 
 ### Logging-Verbesserer
 **Trigger-ID:** `trig_01EKDTLxf1Th219NLP7uwqnr`
-**Takt:** Täglich 4 Uhr (Berlin)
+**Takt:** Mo + Do 4 Uhr (Berlin)
 **Aufgabe:** Auditiert Log-Ausgaben im Code — Bug-IDs, Ladezeiten, Nutzerverhalten. Verbessert Konsistenz und Vollständigkeit der Log-Einträge.
 **Schreibt:** Swift-Quelldateien, pusht auf `main`
 
 ---
 
 ### Project Manager
-**Takt:** Täglich 9:19 Uhr (Berlin)
+**Trigger-ID:** `trig_018Dm79VAkcmwKncx2nYg8QZ`
+**Takt:** Mo / Mi / Fr 9:19 Uhr (Berlin)
 **Aufgabe:** Automatischer Project Manager — prüft offene Issues, priorisiert, erstellt neue Issues, koordiniert zwischen Agents.
 **Schreibt:** GitHub Issues
 
 ---
 
 ### Dokumentations-Agent
-**Takt:** Täglich 16:00 Uhr (Berlin)
-**Aufgabe:** Analysiert neuen Code und verfeinert Dokumentation — ARCHITECTURE.md, PHILOSOPHY.md, Inline-Docs.
+**Trigger-ID:** `trig_01CHEznbasPtXHUEJUa5hbyn`
+**Takt:** Di + Do 16:00 Uhr (Berlin)
+**Aufgabe:** Analysiert neuen Code und verfeinert Dokumentation — ARCHITECTURE.md, PHILOSOPHY.md, STRATEGY.md, DEVPLAN.md.
 **Schreibt:** Markdown-Dateien, pusht auf `main`
 
 ---
@@ -64,8 +66,9 @@ Alle Cloud-Agenten die auf dem iPhoto-Repo laufen. Verwaltung: https://claude.ai
 ## Pausierte Agents
 
 ### Daily Architecture Review
+**Trigger-ID:** `trig_012HmxSNyn3W7LCNct9ZgLrs`
 **Takt:** Täglich 9:19 Uhr (Berlin) — **pausiert**
-**Aufgabe:** Software-Architekt der täglich Code-Qualität prüft und Architektur-Issues erstellt.
+**Aufgabe:** Software-Architekt der täglich Code-Qualität prüft und Refactoring-Commits macht.
 
 ---
 
