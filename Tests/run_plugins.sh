@@ -4403,6 +4403,32 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# autoenhance — Auto-Licht/Farbe-Analyse
+# ---------------------------------------------------------------------------
+echo "--- autoenhance ---"
+AE_JSON=$("$BIN" autoenhance "$INPUT_PNG" --json 2>/dev/null) || AE_JSON=""
+if echo "$AE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); assert len(d)==1 and all(k in d[0] for k in ('exposure','contrast','saturation','vibrance'))" 2>/dev/null; then
+    pass "autoenhance --json (valide Felder)"
+else
+    fail "autoenhance --json (valide Felder)" "Ausgabe: $AE_JSON"
+fi
+AE_RC=0
+"$BIN" autoenhance "$TMPDIR/gibts_nicht.png" >/dev/null 2>&1 || AE_RC=$?
+if [ "$AE_RC" -ne 0 ]; then
+    pass "autoenhance fehlende Datei → Exit != 0"
+else
+    fail "autoenhance fehlende Datei → Exit != 0" "Exit war 0"
+fi
+AE_RC=0
+"$BIN" autoenhance >/dev/null 2>&1 || AE_RC=$?
+if [ "$AE_RC" -ne 0 ]; then
+    pass "autoenhance ohne Argument → Exit != 0"
+else
+    fail "autoenhance ohne Argument → Exit != 0" "Exit war 0"
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

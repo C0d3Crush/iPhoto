@@ -183,6 +183,7 @@ CLI_SOURCES="\
     $ROOT/Sources/Models/Project.swift \
     $ROOT/Sources/Utilities/Data+Extensions.swift \
     $ROOT/Sources/Utilities/ImageExporter.swift \
+    $ROOT/Sources/Utilities/ImageAutoEnhancer.swift \
     $ROOT/Sources/Utilities/Log.swift \
     $ROOT/Sources/Utilities/LensFilters.swift \
     $ROOT/Sources/Utilities/BookmarkStore.swift \

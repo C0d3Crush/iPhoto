@@ -107,6 +107,7 @@ private func printUsage() {
       iphoto-cli rating histogram [--json]
       iphoto-cli rating export [--output <datei.json|.csv>] [--format json|csv] [--include-unrated] [--json]
       iphoto-cli rating import <datei.json|.csv> [--skip-existing] [--dry-run] [--json]
+      iphoto-cli autoenhance <datei|ordner> [--json]
       iphoto-cli exif get <bildpfad> [--json]
       iphoto-cli exif set <bildpfad> [--iso N] [--focal MM] [--aperture F] [--lens NAME]
                           [--film NAME] [--hdr true|false] [--json]
@@ -6273,6 +6274,50 @@ private func printExifJSON(_ obj: Any) {
        let s = String(data: dd, encoding: .utf8) { print(s) }
 }
 
+private func runAutoEnhance(_ args: [String]) -> Int32 {
+    let jsonMode = args.contains("--json")
+    let paths = args.filter { !$0.hasPrefix("--") }
+    guard let first = paths.first else {
+        fputs("Verwendung: iphoto-cli autoenhance <datei|ordner> [--json]\n", stderr)
+        return 1
+    }
+    let input = URL(fileURLWithPath: first)
+    guard FileManager.default.fileExists(atPath: input.path) else {
+        fputs("Fehler: '\(first)' nicht gefunden\n", stderr)
+        return 1
+    }
+    let urls = collectImageURLs(at: input)
+    guard !urls.isEmpty else {
+        fputs("Fehler: Keine Bilddateien gefunden in '\(first)'\n", stderr)
+        return 1
+    }
+    var rows: [[String: Any]] = []
+    var failed = 0
+    for url in urls {
+        guard let cg = try? RAWImageDecoder.decode(url: url) else {
+            fputs("Warnung: '\(url.lastPathComponent)' nicht lesbar\n", stderr)
+            failed += 1
+            continue
+        }
+        let l = ImageAutoEnhancer.analyzeLight(cg)
+        let c = ImageAutoEnhancer.analyzeColor(cg)
+        rows.append(["path": url.path, "exposure": l.exposure, "brightness": l.brightness,
+                     "contrast": l.contrast, "saturation": c.saturation, "vibrance": c.vibrance])
+    }
+    if jsonMode {
+        if let d = try? JSONSerialization.data(withJSONObject: rows, options: [.prettyPrinted, .sortedKeys]),
+           let str = String(data: d, encoding: .utf8) { print(str) } else { print("[]") }
+    } else {
+        for r in rows {
+            print(String(format: "%@  exposure=%+.2f contrast=%.2f saturation=%.2f vibrance=%.2f",
+                         (r["path"] as? String ?? ""), r["exposure"] as? Double ?? 0,
+                         r["contrast"] as? Double ?? 1, r["saturation"] as? Double ?? 1,
+                         r["vibrance"] as? Double ?? 0))
+        }
+    }
+    return rows.isEmpty ? 1 : 0
+}
+
 private func runExif(_ args: [String]) -> Int32 {
     let jsonMode = args.contains("--json")
     let sub = args.first ?? ""
@@ -7935,6 +7980,9 @@ if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "import" {
 }
 if firstArg == "rating", rawArgs.count >= 3, rawArgs[2] == "histogram" {
     exit(runRatingHistogram(Array(rawArgs.dropFirst(3))))
+}
+if firstArg == "autoenhance" {
+    exit(runAutoEnhance(Array(rawArgs.dropFirst(2))))
 }
 if firstArg == "exif" {
     exit(runExif(Array(rawArgs.dropFirst(2))))

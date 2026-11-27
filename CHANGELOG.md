@@ -2,6 +2,12 @@
 
 ---
 
+## 1.117.0
+**CLI: `autoenhance` — Auto-Licht/Farbe-Analyse per Kommandozeile**
+
+- Neu: `iphoto-cli autoenhance <datei|ordner> [--json]` gibt die vorgeschlagenen Werte (Belichtung, Kontrast, Sättigung, Dynamik) der Auto-Verbessern-Funktion aus
+- Test in `Tests/run_plugins.sh` (Happy-Path + Fehlerfälle)
+
 ## 1.116.0
 **Logging: Strukturierte Event-, Perf- und Error-Logs in allen Kern-Subsystemen**
 
