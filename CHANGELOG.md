@@ -2,6 +2,14 @@
 
 ---
 
+## 1.125.0
+**What's New Sheet + automatischer Release-Manager**
+
+- Neu: What's New Sheet erscheint beim ersten Start einer neuen Version — Apple-Keynote-Stil mit SF Symbol Bubbles pro Feature, Weiter-Button
+- Neu: `releaseType` in `WhatsNew.json` steuert den Inhalt: Major zeigt alle Features seit letztem Major, Minor seit letztem Minor, Patch zeigt keinen Sheet
+- Neu: `iPhoto-Release-Manager` Cloud-Agent (Sonntag 10 Uhr) analysiert Commits wöchentlich, erstellt GitHub Releases, bumpt Versionen und schreibt WhatsNew.json automatisch
+- Automatische α→β Promotion wenn Version 2.0.0 erreicht wird
+
 ## 1.124.2
 **Refactoring: Wartbarkeit AlbumGridExpandedView und SmartFolderSheet**
 
