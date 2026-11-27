@@ -9,14 +9,27 @@ enum CrashReporter {
         return support.appendingPathComponent("running.lock")
     }
 
+    // Fallback URLs for installs upgrading from pre-1.121 (single iPhoto.log).
     private static var logURL: URL {
         FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/iPhoto/iPhoto.log")
     }
-
     private static var logBackupURL: URL {
         FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/iPhoto/iPhoto.log.1")
+    }
+
+    // All per-session log files, sorted oldest → newest by filename (timestamp in name).
+    private static func allSessionFiles() -> [URL] {
+        let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Logs/iPhoto")
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil)) ?? []
+        return files
+            .filter { $0.lastPathComponent.hasPrefix("iPhoto-")
+                      && $0.pathExtension == "log"
+                      && !$0.lastPathComponent.contains("errors") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     // Called on launch — returns crash report string if previous session crashed
@@ -86,11 +99,24 @@ enum CrashReporter {
 
     private static func buildReport() -> String {
         let currentID = Log.currentSessionID
-        // Read last 512 KB — enough for crash diagnostics, avoids blocking main thread.
-        let log = readTail(url: logURL, maxBytes: 512 * 1024)
-        let crashedText = crashedSession(from: log, currentID: currentID)
-            ?? crashedSession(from: readTail(url: logBackupURL, maxBytes: 512 * 1024), currentID: currentID)
-            ?? log
+        // currentID != nil means Log.shared was already initialized; its fileURL is the current session.
+        // Don't access Log.shared when currentID is nil — that would trigger Log.init() prematurely.
+        let currentPath: String? = currentID != nil ? Log.shared.fileURL.path : nil
+        let allFiles = allSessionFiles()
+        // Crashed session = newest file that isn't the current session.
+        let crashedFile = allFiles.last { currentPath == nil || $0.path != currentPath }
+
+        let crashedText: String
+        if let url = crashedFile {
+            let text = readTail(url: url, maxBytes: 512 * 1024)
+            crashedText = crashedSession(from: text, currentID: currentID) ?? text
+        } else {
+            // Fallback: pre-1.121 single-file layout (iPhoto.log / iPhoto.log.1).
+            let log = readTail(url: logURL, maxBytes: 512 * 1024)
+            crashedText = crashedSession(from: log, currentID: currentID)
+                ?? crashedSession(from: readTail(url: logBackupURL, maxBytes: 512 * 1024), currentID: currentID)
+                ?? log
+        }
 
         let header = """
         iPhoto Crash Report

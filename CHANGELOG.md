@@ -2,6 +2,15 @@
 
 ---
 
+## 1.121.0
+**Logging: Pro-Session-Dateien, Error-Log und automatisches Aufräumen**
+
+- Neu: Jede App-Session schreibt in eine eigene Datei `iPhoto-yyyy-MM-dd_HHmmss.log` statt alles in eine einzige `iPhoto.log` zu häufen
+- Neu: Separates `iPhoto-errors.log` — nur WARN + ERROR-Einträge, aus allen Sessions, bleibt immer übersichtlich (`tail -f ~/Library/Logs/iPhoto/iPhoto-errors.log`)
+- Neu: Automatisches Aufräumen beim App-Start — es werden nur die 10 neuesten Session-Dateien behalten, ältere werden gelöscht
+- `iPhoto-errors.log` rotiert eigenständig bei 2 MB (→ `iPhoto-errors.log.1`), unabhängig von den Session-Dateien
+- `CrashReporter` sucht die abgestürzte Session jetzt dynamisch in den vorhandenen Session-Dateien; Rückwärtskompatibilität mit dem alten `iPhoto.log`-Format bleibt erhalten
+
 ## 1.120.0
 **Logging: Lücken geschlossen — Fehler, Perf-Metriken und Nutzeraktionen vollständig protokolliert**
 
