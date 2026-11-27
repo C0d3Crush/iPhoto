@@ -2,6 +2,15 @@
 
 ---
 
+## 1.115.16
+**Performance: Batch-Export lädt Anpassungen jetzt in einer einzigen SQLite-Abfrage (#93)**
+
+- `CatalogStore.loadAdjustments(paths:)` — neue Bulk-Variante: ein Full-Scan der `adjustments`-Tabelle statt N serielle `queue.sync`-Calls; filtert per Set-Lookup auf die angeforderten Pfade
+- `ExportSheet.batchAdjustmentsProvider()` — Snapshot aller Anpassungen vor dem Export auf Main-Thread; parallele Worker lesen nur noch aus dem Dictionary, kein weiterer Katalogzugriff während des Exports
+- `EXPORT-BATCH adjustments-preload <n> <ms>` Perf-Log für Regressionserkennung
+
+---
+
 ## 1.115.15
 **Performance: `ImageLoadingOrchestrator` — verbleibende Single-Property-Subscript-Writes auf `@Published`-Array beseitigt (#79)**
 

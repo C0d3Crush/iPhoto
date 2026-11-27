@@ -69,6 +69,29 @@ extension CatalogStore {
         }
     }
 
+    /// Lädt Anpassungen für eine Liste von Pfaden in einer einzigen Abfrage.
+    /// Liefert ein Dictionary path → AdjustmentState (nur Einträge mit gültigem JSON).
+    func loadAdjustments(paths: [String]) -> [String: AdjustmentState] {
+        guard !paths.isEmpty else { return [:] }
+        return queue.sync {
+            let stmt = prepare("SELECT image_path, data FROM adjustments")
+            var result: [String: AdjustmentState] = [:]
+            let pathSet = Set(paths)
+            while step(stmt) == SQLITE_ROW {
+                guard let pathPtr = sqlite3_column_text(stmt, 0),
+                      let dataPtr = sqlite3_column_text(stmt, 1) else { continue }
+                let path = String(cString: pathPtr)
+                guard pathSet.contains(path) else { continue }
+                let json = String(cString: dataPtr)
+                if let adj = try? JSONDecoder().decode(AdjustmentState.self, from: Data(json.utf8)) {
+                    result[path] = adj
+                }
+            }
+            sqlite3_finalize(stmt)
+            return result
+        }
+    }
+
     /// Alle Pfade, für die Anpassungen gespeichert sind — für die Batch-Initialisierung
     /// des `hasPersistedAdjustments`-Flags beim Startup. Eine SQLite-Abfrage statt N.
     func allModifiedPaths() -> Set<String> {

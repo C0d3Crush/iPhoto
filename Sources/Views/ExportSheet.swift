@@ -216,6 +216,28 @@ struct ExportSheet: View {
         return result
     }
 
+    /// Erstellt einen Adjustments-Provider für einen Batch-Export: lädt alle gespeicherten
+    /// Anpassungen in einer einzigen SQLite-Abfrage vor — vermeidet N serielle queue.sync-Calls
+    /// aus parallelen Worker-Threads.
+    private func batchAdjustmentsProvider(
+        for docs: [ImageDocument],
+        currentURL: URL?,
+        currentAdj: AdjustmentState?
+    ) -> (ImageDocument) -> AdjustmentState? {
+        let t0 = Date()
+        let paths = docs.map { $0.url.path }
+        var snapshot = CatalogStore.shared.loadAdjustments(paths: paths)
+        Log.perf(String(format: "EXPORT-BATCH adjustments-preload %d %.0f ms", snapshot.count, Date().timeIntervalSince(t0) * 1000))
+        if let url = currentURL, let adj = currentAdj, adj != AdjustmentState() {
+            snapshot[url.path] = adj
+        }
+        let neutral = AdjustmentState()
+        return { doc in
+            guard let adj = snapshot[doc.url.path], adj != neutral else { return nil }
+            return adj
+        }
+    }
+
     private func beginExport() {
         if state.destination == .airdrop {
             exportViaAirDrop()
@@ -259,12 +281,13 @@ struct ExportSheet: View {
         state.totalCount = docs.count
         state.completedCount = 0
 
+        let adjProvider = batchAdjustmentsProvider(for: docs, currentURL: currentDocument?.url, currentAdj: currentAdjustments)
         ImageExporter.exportBatch(
             documents: docs,
             to: tempDir,
             format: fmt,
             quality: q,
-            adjustmentsProvider: { effectiveAdjustments(for: $0) },
+            adjustmentsProvider: adjProvider,
             progressHandler: { completed, _ in
                 DispatchQueue.main.async { state.completedCount = completed }
             },
@@ -355,12 +378,13 @@ struct ExportSheet: View {
             state.totalCount = docs.count
             state.completedCount = 0
 
+            let adjProvider = batchAdjustmentsProvider(for: docs, currentURL: currentDocument?.url, currentAdj: currentAdjustments)
             ImageExporter.exportBatch(
                 documents: docs,
                 to: folder,
                 format: fmt,
                 quality: q,
-                adjustmentsProvider: { effectiveAdjustments(for: $0) },
+                adjustmentsProvider: adjProvider,
                 progressHandler: { completed, _ in
                     DispatchQueue.main.async { state.completedCount = completed }
                 },
