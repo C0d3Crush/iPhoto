@@ -2,6 +2,13 @@
 
 ---
 
+## 1.119.0
+**CLI: `catalog folders` und `catalog megapixels` — Ordner- und Auflösungsübersicht**
+
+- Neu: `iphoto-cli catalog folders [--limit N] [--json]` zeigt Bilder und Bytes pro Ordner
+- Neu: `iphoto-cli catalog megapixels [--json]` zeigt die Verteilung nach Megapixel-Klassen
+- Tests in `Tests/run_plugins.sh` (Happy-Path + Fehlerfälle)
+
 ## 1.118.0
 **CLI: `catalog formats` und `catalog largest` — Format- und Größenübersicht**
 

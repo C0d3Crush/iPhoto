@@ -4463,6 +4463,52 @@ ct catalog formats --bogus >/dev/null 2>&1 || CF_RC=$?
 if [ "$CF_RC" -ne 0 ]; then pass "catalog formats unbekanntes Flag → Exit != 0"; else fail "catalog formats unbekanntes Flag" "Exit war 0"; fi
 echo ""
 
+echo "--- catalog folders / megapixels ---"
+
+CF_EXIT=0
+CF_OUT=$(ct catalog folders --json 2>&1) || CF_EXIT=$?
+if [ $CF_EXIT -eq 0 ] && echo "$CF_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['total']==3 and sum(f['count'] for f in d['folders'])==3 and d['total_folders']==len(d['folders'])
+" 2>/dev/null; then
+    pass "catalog folders --json"
+else
+    fail "catalog folders --json" "Exit $CF_EXIT: $CF_OUT"
+fi
+
+CF_EXIT=0
+CF_OUT=$(ct catalog folders --limit 1 --json 2>&1) || CF_EXIT=$?
+if [ $CF_EXIT -eq 0 ] && echo "$CF_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert len(d['folders'])==1
+" 2>/dev/null; then
+    pass "catalog folders --limit 1 --json"
+else
+    fail "catalog folders --limit 1" "Exit $CF_EXIT: $CF_OUT"
+fi
+
+CF_EXIT=0
+CF_OUT=$(ct catalog megapixels --json 2>&1) || CF_EXIT=$?
+if [ $CF_EXIT -eq 0 ] && echo "$CF_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['total']==3 and sum(b['count'] for b in d['buckets'])==3 and len(d['buckets'])==7
+" 2>/dev/null; then
+    pass "catalog megapixels --json"
+else
+    fail "catalog megapixels --json" "Exit $CF_EXIT: $CF_OUT"
+fi
+
+CF_RC=0
+ct catalog folders --limit 0 >/dev/null 2>&1 || CF_RC=$?
+if [ "$CF_RC" -ne 0 ]; then pass "catalog folders ungültiges --limit → Exit != 0"; else fail "catalog folders ungültiges --limit" "Exit war 0"; fi
+CF_RC=0
+ct catalog megapixels --bogus >/dev/null 2>&1 || CF_RC=$?
+if [ "$CF_RC" -ne 0 ]; then pass "catalog megapixels unbekanntes Flag → Exit != 0"; else fail "catalog megapixels unbekanntes Flag" "Exit war 0"; fi
+echo ""
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------

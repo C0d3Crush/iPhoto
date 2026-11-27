@@ -158,6 +158,8 @@ private func printUsage() {
       iphoto-cli catalog orphans [--fix] [--json]
       iphoto-cli catalog formats [--json]
       iphoto-cli catalog largest [--limit N] [--json]
+      iphoto-cli catalog folders [--limit N] [--json]
+      iphoto-cli catalog megapixels [--json]
       iphoto-cli query filters [--json]
       iphoto-cli query parse <suchtext> [--json]
       iphoto-cli query run <suchtext> [--blur-threshold 80] [--include-trashed] [--json]
@@ -4829,8 +4831,70 @@ private func runCatalog(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "folders":
+        // catalog folders [--limit N] [--json] — Bilder pro Ordner, absteigend (Standard: alle), ein Durchlauf O(N)
+        var limit = Int.max
+        var i = 1
+        while i < args.count {
+            if args[i] == "--json" { i += 1; continue }
+            if args[i] == "--limit", i + 1 < args.count, let n = Int(args[i + 1]), n > 0 { limit = n; i += 2; continue }
+            fputs("Verwendung: iphoto-cli catalog folders [--limit N] [--json]\n", stderr); return 1
+        }
+        var byDir: [String: (count: Int, bytes: Int64)] = [:]
+        let images = catalog.allImages()
+        for img in images {
+            let dir = (img.path as NSString).deletingLastPathComponent
+            var b = byDir[dir] ?? (count: 0, bytes: 0)
+            b.count += 1
+            b.bytes += img.sizeBytes
+            byDir[dir] = b
+        }
+        let rows = byDir.sorted { $0.value.count != $1.value.count ? $0.value.count > $1.value.count : $0.key < $1.key }
+            .prefix(limit)
+        if jsonMode {
+            let arr: [[String: Any]] = rows.map { ["folder": $0.key, "count": $0.value.count, "size_bytes": $0.value.bytes] as [String: Any] }
+            let obj: [String: Any] = ["folders": arr, "total_folders": byDir.count, "total": images.count]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else if images.isEmpty {
+            print("(keine Bilder im Katalog)")
+        } else {
+            for (dir, b) in rows { print(String(format: "%6ld  ", b.count) + dir) }
+            print("Ordner: \(byDir.count)  Bilder: \(images.count)")
+        }
+        return 0
+
+    case "megapixels":
+        // catalog megapixels [--json] — Verteilung der Bilder nach Auflösungsklassen
+        guard args.dropFirst().allSatisfy({ $0 == "--json" }) else {
+            fputs("Verwendung: iphoto-cli catalog megapixels [--json]\n", stderr); return 1
+        }
+        let labels = ["<2 MP", "2–6 MP", "6–12 MP", "12–24 MP", "24–48 MP", "≥48 MP", "unbekannt"]
+        var counts = [Int](repeating: 0, count: labels.count)
+        let images = catalog.allImages()
+        for img in images {
+            let mp = Double(img.width) * Double(img.height) / 1_000_000.0
+            let idx: Int
+            if img.width <= 0 || img.height <= 0 { idx = 6 }
+            else if mp < 2 { idx = 0 } else if mp < 6 { idx = 1 } else if mp < 12 { idx = 2 }
+            else if mp < 24 { idx = 3 } else if mp < 48 { idx = 4 } else { idx = 5 }
+            counts[idx] += 1
+        }
+        if jsonMode {
+            let arr: [[String: Any]] = zip(labels, counts).map { ["range": $0, "count": $1] as [String: Any] }
+            let obj: [String: Any] = ["buckets": arr, "total": images.count]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else if images.isEmpty {
+            print("(keine Bilder im Katalog)")
+        } else {
+            for (l, c) in zip(labels, counts) where c > 0 { print(String(format: "%6ld  ", c) + l) }
+            print("Bilder: \(images.count)")
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans|formats|largest [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans|formats|largest|folders|megapixels [--json]\n", stderr)
         return 1
     }
 }
