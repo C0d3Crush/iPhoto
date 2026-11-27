@@ -58,7 +58,7 @@ private func printUsage() {
       iphoto-cli quality stats [--blur-threshold N] [--shadow R] [--highlight R] [--eye-threshold R] [--include-trashed] [--json]
       iphoto-cli version list|backup|restore|delete [--json]
       iphoto-cli search <text> [--flag pick|reject|none] [--rating N] [--color farbe] [--camera modell] [--date YYYY-MM-DD] [--json]
-      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans [--json]
+      iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans|formats|largest [--json]
       iphoto-cli albumfolder list|create|rename|delete [--json]
       iphoto-cli albumfolder move <id|name> --parent <id|name> | --root [--json]
       iphoto-cli motif get <bildpfad> [--json]
@@ -156,6 +156,8 @@ private func printUsage() {
       iphoto-cli catalog cameras [--json]
       iphoto-cli catalog timeline [--by year|month|day] [--json]
       iphoto-cli catalog orphans [--fix] [--json]
+      iphoto-cli catalog formats [--json]
+      iphoto-cli catalog largest [--limit N] [--json]
       iphoto-cli query filters [--json]
       iphoto-cli query parse <suchtext> [--json]
       iphoto-cli query run <suchtext> [--blur-threshold 80] [--include-trashed] [--json]
@@ -4770,8 +4772,65 @@ private func runCatalog(_ args: [String]) -> Int32 {
         }
         return 0
 
+    case "formats":
+        // catalog formats [--json] — Bilder pro Dateiendung (RAW-Flag, Bytes), ein Durchlauf O(N)
+        guard args.dropFirst().allSatisfy({ $0 == "--json" }) else {
+            fputs("Verwendung: iphoto-cli catalog formats [--json]\n", stderr); return 1
+        }
+        var buckets: [String: (count: Int, raw: Int, bytes: Int64)] = [:]
+        let images = catalog.allImages()
+        for img in images {
+            let ext = (img.filename as NSString).pathExtension.lowercased()
+            let key = ext.isEmpty ? "(ohne)" : ext
+            var b = buckets[key] ?? (count: 0, raw: 0, bytes: 0)
+            b.count += 1
+            if img.isRAW { b.raw += 1 }
+            b.bytes += img.sizeBytes
+            buckets[key] = b
+        }
+        let sorted = buckets.sorted { $0.value.count != $1.value.count ? $0.value.count > $1.value.count : $0.key < $1.key }
+        if jsonMode {
+            let arr: [[String: Any]] = sorted.map {
+                ["extension": $0.key, "count": $0.value.count, "raw": $0.value.raw, "size_bytes": $0.value.bytes] as [String: Any]
+            }
+            let obj: [String: Any] = ["formats": arr, "total": images.count]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else if images.isEmpty {
+            print("(keine Bilder im Katalog)")
+        } else {
+            for (ext, b) in sorted { print(String(format: "%6ld  ", b.count) + ext + (b.raw > 0 ? " (RAW)" : "")) }
+            print("Formate: \(sorted.count)  Bilder: \(images.count)")
+        }
+        return 0
+
+    case "largest":
+        // catalog largest [--limit N] [--json] — die größten Dateien im Katalog (Standard: 10)
+        var limit = 10
+        var i = 1
+        while i < args.count {
+            if args[i] == "--json" { i += 1; continue }
+            if args[i] == "--limit", i + 1 < args.count, let n = Int(args[i + 1]), n > 0 { limit = n; i += 2; continue }
+            fputs("Verwendung: iphoto-cli catalog largest [--limit N] [--json]\n", stderr); return 1
+        }
+        let top = catalog.allImages()
+            .sorted { $0.sizeBytes != $1.sizeBytes ? $0.sizeBytes > $1.sizeBytes : $0.path < $1.path }
+            .prefix(limit)
+        if jsonMode {
+            let arr: [[String: Any]] = top.map { ["path": $0.path, "size_bytes": $0.sizeBytes] as [String: Any] }
+            let obj: [String: Any] = ["largest": arr, "count": arr.count]
+            if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]),
+               let s = String(data: d, encoding: .utf8) { print(s) }
+        } else if top.isEmpty {
+            print("(keine Bilder im Katalog)")
+        } else {
+            let fmt = ByteCountFormatter(); fmt.countStyle = .file
+            for img in top { print(fmt.string(fromByteCount: img.sizeBytes) + "  " + img.path) }
+        }
+        return 0
+
     default:
-        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans [--json]\n", stderr)
+        fputs("Verwendung: iphoto-cli catalog stats|path|vacuum|export|scan-needed|backup-now|list|remove|get|add|prune|cameras|timeline|orphans|formats|largest [--json]\n", stderr)
         return 1
     }
 }

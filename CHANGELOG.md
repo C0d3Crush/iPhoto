@@ -2,6 +2,13 @@
 
 ---
 
+## 1.118.0
+**CLI: `catalog formats` und `catalog largest` — Format- und Größenübersicht**
+
+- Neu: `iphoto-cli catalog formats [--json]` zeigt Bilder pro Dateiendung (inkl. RAW-Anzahl und Bytes)
+- Neu: `iphoto-cli catalog largest [--limit N] [--json]` listet die größten Dateien im Katalog
+- Tests in `Tests/run_plugins.sh` (Happy-Path + Fehlerfälle)
+
 ## 1.117.0
 **CLI: `autoenhance` — Auto-Licht/Farbe-Analyse per Kommandozeile**
 

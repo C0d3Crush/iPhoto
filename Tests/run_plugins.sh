@@ -4428,6 +4428,41 @@ else
 fi
 echo ""
 
+echo "--- catalog formats / largest ---"
+
+CF_EXIT=0
+CF_OUT=$(ct catalog formats --json 2>&1) || CF_EXIT=$?
+if [ $CF_EXIT -eq 0 ] && echo "$CF_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['total']==3 and len(d['formats'])==1
+f=d['formats'][0]; assert f['extension']=='png' and f['count']==3 and f['raw']==0
+" 2>/dev/null; then
+    pass "catalog formats --json (3× png)"
+else
+    fail "catalog formats --json" "Exit $CF_EXIT: $CF_OUT"
+fi
+
+CF_EXIT=0
+CF_OUT=$(ct catalog largest --limit 2 --json 2>&1) || CF_EXIT=$?
+if [ $CF_EXIT -eq 0 ] && echo "$CF_OUT" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+assert d['count']==2 and len(d['largest'])==2 and d['largest'][0]['size_bytes']>=d['largest'][1]['size_bytes']
+" 2>/dev/null; then
+    pass "catalog largest --limit 2 --json"
+else
+    fail "catalog largest --limit 2" "Exit $CF_EXIT: $CF_OUT"
+fi
+
+CF_RC=0
+ct catalog largest --limit abc >/dev/null 2>&1 || CF_RC=$?
+if [ "$CF_RC" -ne 0 ]; then pass "catalog largest ungültiges --limit → Exit != 0"; else fail "catalog largest ungültiges --limit" "Exit war 0"; fi
+CF_RC=0
+ct catalog formats --bogus >/dev/null 2>&1 || CF_RC=$?
+if [ "$CF_RC" -ne 0 ]; then pass "catalog formats unbekanntes Flag → Exit != 0"; else fail "catalog formats unbekanntes Flag" "Exit war 0"; fi
+echo ""
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
